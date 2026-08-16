@@ -1,0 +1,645 @@
+{
+  "generatedAt": "2026-08-16T20:52:03.983Z",
+  "season": "2025/26",
+  "competition": "Premier League",
+  "sources": {
+    "matchAndIncidentData": "olbauday/FPL-Core-Insights — 2025/26 Premier League GW1-GW38",
+    "refereeAndTeamTotals": "football-data.co.uk — 2025/26 Premier League E0.csv"
+  },
+  "sourcePlayerMatchRows": 12613,
+  "exactMatchDates": 380,
+  "identifiedCardIncidentRows": 1470,
+  "identifiedPlayerMatchCardPairs": 1454,
+  "unresolvedCardIncidentRows": 48,
+  "quarantinedCardMatches": 44,
+  "h2hRows": 12613,
+  "h2hYellowTrueRows": 1408,
+  "h2hRedTrueRows": 42,
+  "h2hRowsWithUnknownYellowBecausePlayerWasUnlocated": 1213,
+  "h2hRowsWithUnknownRedBecausePlayerWasUnlocated": 62,
+  "refereeMatchesMapped": 380,
+  "refereeRows": 23,
+  "playerRefereeRows": 6988,
+  "sourcePlayerRowsWithoutReferee": 0,
+  "unmappedFootballDataMatches": 0,
+  "baselineCardAuditMismatchCount": 38,
+  "baselineCardAuditMismatches": [
+    {
+      "player_id": "241",
+      "player_name": "Moisés Caicedo Corozo",
+      "team": "Chelsea",
+      "baseline_yellows": 11,
+      "identified_match_yellows": 10,
+      "yellow_difference": -1,
+      "baseline_reds": 1,
+      "identified_match_reds": 1,
+      "red_difference": 0
+    },
+    {
+      "player_id": "713",
+      "player_name": "Álex Jiménez Sánchez",
+      "team": "Bournemouth",
+      "baseline_yellows": 10,
+      "identified_match_yellows": 9,
+      "yellow_difference": -1,
+      "baseline_reds": 0,
+      "identified_match_reds": 0,
+      "red_difference": 0
+    },
+    {
+      "player_id": "457",
+      "player_name": "Carlos Henrique Casimiro",
+      "team": "Man Utd",
+      "baseline_yellows": 9,
+      "identified_match_yellows": 10,
+      "yellow_difference": 1,
+      "baseline_reds": 1,
+      "identified_match_reds": 1,
+      "red_difference": 0
+    },
+    {
+      "player_id": "569",
+      "player_name": "Cristian Romero",
+      "team": "Spurs",
+      "baseline_yellows": 9,
+      "identified_match_yellows": 10,
+      "yellow_difference": 1,
+      "baseline_reds": 2,
+      "identified_match_reds": 2,
+      "red_difference": 0
+    },
+    {
+      "player_id": "476",
+      "player_name": "Dan Burn",
+      "team": "Newcastle",
+      "baseline_yellows": 9,
+      "identified_match_yellows": 10,
+      "yellow_difference": 1,
+      "baseline_reds": 1,
+      "identified_match_reds": 1,
+      "red_difference": 0
+    },
+    {
+      "player_id": "673",
+      "player_name": "João Maria Lobo Alves Palhares Costa Palhinha Gonçalves",
+      "team": "Spurs",
+      "baseline_yellows": 8,
+      "identified_match_yellows": 7,
+      "yellow_difference": -1,
+      "baseline_reds": 0,
+      "identified_match_reds": 0,
+      "red_difference": 0
+    },
+    {
+      "player_id": "82",
+      "player_name": "Antoine Semenyo",
+      "team": "Man City",
+      "baseline_yellows": 7,
+      "identified_match_yellows": 1,
+      "yellow_difference": -6,
+      "baseline_reds": 0,
+      "identified_match_reds": 0,
+      "red_difference": 0
+    },
+    {
+      "player_id": "209",
+      "player_name": "Josh Laurent",
+      "team": "Burnley",
+      "baseline_yellows": 6,
+      "identified_match_yellows": 7,
+      "yellow_difference": 1,
+      "baseline_reds": 1,
+      "identified_match_reds": 1,
+      "red_difference": 0
+    },
+    {
+      "player_id": "580",
+      "player_name": "Brennan Johnson",
+      "team": "Crystal Palace",
+      "baseline_yellows": 6,
+      "identified_match_yellows": 4,
+      "yellow_difference": -2,
+      "baseline_reds": 0,
+      "identified_match_reds": 0,
+      "red_difference": 0
+    },
+    {
+      "player_id": "260",
+      "player_name": "Marc Guéhi",
+      "team": "Man City",
+      "baseline_yellows": 6,
+      "identified_match_yellows": 2,
+      "yellow_difference": -4,
+      "baseline_reds": 0,
+      "identified_match_reds": 0,
+      "red_difference": 0
+    },
+    {
+      "player_id": "293",
+      "player_name": "Jake O'Brien",
+      "team": "Everton",
+      "baseline_yellows": 6,
+      "identified_match_yellows": 5,
+      "yellow_difference": -1,
+      "baseline_reds": 1,
+      "identified_match_reds": 1,
+      "red_difference": 0
+    },
+    {
+      "player_id": "612",
+      "player_name": "Lucas Tolentino Coelho de Lima",
+      "team": "West Ham",
+      "baseline_yellows": 5,
+      "identified_match_yellows": 6,
+      "yellow_difference": 1,
+      "baseline_reds": 1,
+      "identified_match_reds": 1,
+      "red_difference": 0
+    },
+    {
+      "player_id": "230",
+      "player_name": "Wesley Fofana",
+      "team": "Chelsea",
+      "baseline_yellows": 5,
+      "identified_match_yellows": 7,
+      "yellow_difference": 2,
+      "baseline_reds": 2,
+      "identified_match_reds": 2,
+      "red_difference": 0
+    },
+    {
+      "player_id": "597",
+      "player_name": "Richarlison de Andrade",
+      "team": "Spurs",
+      "baseline_yellows": 5,
+      "identified_match_yellows": 4,
+      "yellow_difference": -1,
+      "baseline_reds": 0,
+      "identified_match_reds": 0,
+      "red_difference": 0
+    },
+    {
+      "player_id": "449",
+      "player_name": "Bruno Borges Fernandes",
+      "team": "Man Utd",
+      "baseline_yellows": 5,
+      "identified_match_yellows": 4,
+      "yellow_difference": -1,
+      "baseline_reds": 0,
+      "identified_match_reds": 0,
+      "red_difference": 0
+    },
+    {
+      "player_id": "609",
+      "player_name": "Jean-Clair Todibo",
+      "team": "West Ham",
+      "baseline_yellows": 5,
+      "identified_match_yellows": 5,
+      "yellow_difference": 0,
+      "baseline_reds": 1,
+      "identified_match_reds": 0,
+      "red_difference": -1
+    },
+    {
+      "player_id": "654",
+      "player_name": "Jørgen Strand Larsen",
+      "team": "Crystal Palace",
+      "baseline_yellows": 4,
+      "identified_match_yellows": 2,
+      "yellow_difference": -2,
+      "baseline_reds": 0,
+      "identified_match_reds": 0,
+      "red_difference": 0
+    },
+    {
+      "player_id": "273",
+      "player_name": "Adam Wharton",
+      "team": "Crystal Palace",
+      "baseline_yellows": 4,
+      "identified_match_yellows": 5,
+      "yellow_difference": 1,
+      "baseline_reds": 1,
+      "identified_match_reds": 1,
+      "red_difference": 0
+    },
+    {
+      "player_id": "347",
+      "player_name": "Gabriel Gudmundsson",
+      "team": "Leeds",
+      "baseline_yellows": 4,
+      "identified_match_yellows": 5,
+      "yellow_difference": 1,
+      "baseline_reds": 1,
+      "identified_match_reds": 1,
+      "red_difference": 0
+    },
+    {
+      "player_id": "335",
+      "player_name": "Josh King",
+      "team": "Fulham",
+      "baseline_yellows": 4,
+      "identified_match_yellows": 3,
+      "yellow_difference": -1,
+      "baseline_reds": 0,
+      "identified_match_reds": 0,
+      "red_difference": 0
+    },
+    {
+      "player_id": "624",
+      "player_name": "Jarrod Bowen",
+      "team": "West Ham",
+      "baseline_yellows": 4,
+      "identified_match_yellows": 5,
+      "yellow_difference": 1,
+      "baseline_reds": 0,
+      "identified_match_reds": 0,
+      "red_difference": 0
+    },
+    {
+      "player_id": "31",
+      "player_name": "Gabriel Fernando de Jesus",
+      "team": "Arsenal",
+      "baseline_yellows": 3,
+      "identified_match_yellows": 2,
+      "yellow_difference": -1,
+      "baseline_reds": 0,
+      "identified_match_reds": 0,
+      "red_difference": 0
+    },
+    {
+      "player_id": "699",
+      "player_name": "Douglas Luiz Soares de Paulo",
+      "team": "Aston Villa",
+      "baseline_yellows": 3,
+      "identified_match_yellows": 1,
+      "yellow_difference": -2,
+      "baseline_reds": 0,
+      "identified_match_reds": 0,
+      "red_difference": 0
+    },
+    {
+      "player_id": "709",
+      "player_name": "Ladislav Krejcí",
+      "team": "Wolves",
+      "baseline_yellows": 3,
+      "identified_match_yellows": 4,
+      "yellow_difference": 1,
+      "baseline_reds": 1,
+      "identified_match_reds": 1,
+      "red_difference": 0
+    },
+    {
+      "player_id": "519",
+      "player_name": "Nicolás Domínguez",
+      "team": "Nott'm Forest",
+      "baseline_yellows": 3,
+      "identified_match_yellows": 2,
+      "yellow_difference": -1,
+      "baseline_reds": 0,
+      "identified_match_reds": 0,
+      "red_difference": 0
+    },
+    {
+      "player_id": "52",
+      "player_name": "Jacob Ramsey",
+      "team": "Newcastle",
+      "baseline_yellows": 3,
+      "identified_match_yellows": 4,
+      "yellow_difference": 1,
+      "baseline_reds": 1,
+      "identified_match_reds": 1,
+      "red_difference": 0
+    },
+    {
+      "player_id": "228",
+      "player_name": "Malo Gusto",
+      "team": "Chelsea",
+      "baseline_yellows": 3,
+      "identified_match_yellows": 4,
+      "yellow_difference": 1,
+      "baseline_reds": 1,
+      "identified_match_reds": 1,
+      "red_difference": 0
+    },
+    {
+      "player_id": "419",
+      "player_name": "Jack Grealish",
+      "team": "Everton",
+      "baseline_yellows": 3,
+      "identified_match_yellows": 4,
+      "yellow_difference": 1,
+      "baseline_reds": 1,
+      "identified_match_reds": 1,
+      "red_difference": 0
+    },
+    {
+      "player_id": "218",
+      "player_name": "Ashley Barnes",
+      "team": "Burnley",
+      "baseline_yellows": 2,
+      "identified_match_yellows": 1,
+      "yellow_difference": -1,
+      "baseline_reds": 0,
+      "identified_match_reds": 0,
+      "red_difference": 0
+    },
+    {
+      "player_id": "243",
+      "player_name": "Tyrique George",
+      "team": "Everton",
+      "baseline_yellows": 2,
+      "identified_match_yellows": 0,
+      "yellow_difference": -2,
+      "baseline_reds": 0,
+      "identified_match_reds": 0,
+      "red_difference": 0
+    },
+    {
+      "player_id": "796",
+      "player_name": "Conor Gallagher",
+      "team": "Spurs",
+      "baseline_yellows": 2,
+      "identified_match_yellows": 1,
+      "yellow_difference": -1,
+      "baseline_reds": 0,
+      "identified_match_reds": 0,
+      "red_difference": 0
+    },
+    {
+      "player_id": "236",
+      "player_name": "Pedro Lomba Neto",
+      "team": "Chelsea",
+      "baseline_yellows": 2,
+      "identified_match_yellows": 3,
+      "yellow_difference": 1,
+      "baseline_reds": 1,
+      "identified_match_reds": 1,
+      "red_difference": 0
+    },
+    {
+      "player_id": "737",
+      "player_name": "Jonah Kusi-Asare",
+      "team": "Fulham",
+      "baseline_yellows": 1,
+      "identified_match_yellows": 0,
+      "yellow_difference": -1,
+      "baseline_reds": 0,
+      "identified_match_reds": 0,
+      "red_difference": 0
+    },
+    {
+      "player_id": "676",
+      "player_name": "Lesley Ugochukwu",
+      "team": "Burnley",
+      "baseline_yellows": 1,
+      "identified_match_yellows": 2,
+      "yellow_difference": 1,
+      "baseline_reds": 1,
+      "identified_match_reds": 1,
+      "red_difference": 0
+    },
+    {
+      "player_id": "539",
+      "player_name": "Luke O'Nien",
+      "team": "Sunderland",
+      "baseline_yellows": 1,
+      "identified_match_yellows": 2,
+      "yellow_difference": 1,
+      "baseline_reds": 1,
+      "identified_match_reds": 0,
+      "red_difference": -1
+    },
+    {
+      "player_id": "631",
+      "player_name": "Emmanuel Agbadou",
+      "team": "Wolves",
+      "baseline_yellows": 1,
+      "identified_match_yellows": 0,
+      "yellow_difference": -1,
+      "baseline_reds": 1,
+      "identified_match_reds": 1,
+      "red_difference": 0
+    },
+    {
+      "player_id": "424",
+      "player_name": "Oscar Bobb",
+      "team": "Fulham",
+      "baseline_yellows": 1,
+      "identified_match_yellows": 0,
+      "yellow_difference": -1,
+      "baseline_reds": 0,
+      "identified_match_reds": 0,
+      "red_difference": 0
+    },
+    {
+      "player_id": "637",
+      "player_name": "Toti Gomes",
+      "team": "Wolves",
+      "baseline_yellows": 1,
+      "identified_match_yellows": 2,
+      "yellow_difference": 1,
+      "baseline_reds": 1,
+      "identified_match_reds": 1,
+      "red_difference": 0
+    }
+  ],
+  "gameweeks": [
+    {
+      "gw": 1,
+      "matches": 10,
+      "identifiedCardIncidents": 31
+    },
+    {
+      "gw": 2,
+      "matches": 10,
+      "identifiedCardIncidents": 40
+    },
+    {
+      "gw": 3,
+      "matches": 10,
+      "identifiedCardIncidents": 37
+    },
+    {
+      "gw": 4,
+      "matches": 10,
+      "identifiedCardIncidents": 37
+    },
+    {
+      "gw": 5,
+      "matches": 10,
+      "identifiedCardIncidents": 42
+    },
+    {
+      "gw": 6,
+      "matches": 10,
+      "identifiedCardIncidents": 51
+    },
+    {
+      "gw": 7,
+      "matches": 10,
+      "identifiedCardIncidents": 39
+    },
+    {
+      "gw": 8,
+      "matches": 10,
+      "identifiedCardIncidents": 23
+    },
+    {
+      "gw": 9,
+      "matches": 10,
+      "identifiedCardIncidents": 31
+    },
+    {
+      "gw": 10,
+      "matches": 10,
+      "identifiedCardIncidents": 37
+    },
+    {
+      "gw": 11,
+      "matches": 10,
+      "identifiedCardIncidents": 43
+    },
+    {
+      "gw": 12,
+      "matches": 10,
+      "identifiedCardIncidents": 46
+    },
+    {
+      "gw": 13,
+      "matches": 10,
+      "identifiedCardIncidents": 44
+    },
+    {
+      "gw": 14,
+      "matches": 10,
+      "identifiedCardIncidents": 27
+    },
+    {
+      "gw": 15,
+      "matches": 10,
+      "identifiedCardIncidents": 39
+    },
+    {
+      "gw": 16,
+      "matches": 10,
+      "identifiedCardIncidents": 33
+    },
+    {
+      "gw": 17,
+      "matches": 10,
+      "identifiedCardIncidents": 50
+    },
+    {
+      "gw": 18,
+      "matches": 10,
+      "identifiedCardIncidents": 35
+    },
+    {
+      "gw": 19,
+      "matches": 10,
+      "identifiedCardIncidents": 33
+    },
+    {
+      "gw": 20,
+      "matches": 10,
+      "identifiedCardIncidents": 31
+    },
+    {
+      "gw": 21,
+      "matches": 10,
+      "identifiedCardIncidents": 46
+    },
+    {
+      "gw": 22,
+      "matches": 10,
+      "identifiedCardIncidents": 46
+    },
+    {
+      "gw": 23,
+      "matches": 10,
+      "identifiedCardIncidents": 30
+    },
+    {
+      "gw": 24,
+      "matches": 10,
+      "identifiedCardIncidents": 43
+    },
+    {
+      "gw": 25,
+      "matches": 10,
+      "identifiedCardIncidents": 38
+    },
+    {
+      "gw": 26,
+      "matches": 11,
+      "identifiedCardIncidents": 40
+    },
+    {
+      "gw": 27,
+      "matches": 10,
+      "identifiedCardIncidents": 42
+    },
+    {
+      "gw": 28,
+      "matches": 10,
+      "identifiedCardIncidents": 49
+    },
+    {
+      "gw": 29,
+      "matches": 10,
+      "identifiedCardIncidents": 44
+    },
+    {
+      "gw": 30,
+      "matches": 10,
+      "identifiedCardIncidents": 33
+    },
+    {
+      "gw": 31,
+      "matches": 8,
+      "identifiedCardIncidents": 35
+    },
+    {
+      "gw": 32,
+      "matches": 10,
+      "identifiedCardIncidents": 36
+    },
+    {
+      "gw": 33,
+      "matches": 13,
+      "identifiedCardIncidents": 38
+    },
+    {
+      "gw": 34,
+      "matches": 7,
+      "identifiedCardIncidents": 39
+    },
+    {
+      "gw": 35,
+      "matches": 10,
+      "identifiedCardIncidents": 44
+    },
+    {
+      "gw": 36,
+      "matches": 11,
+      "identifiedCardIncidents": 45
+    },
+    {
+      "gw": 37,
+      "matches": 10,
+      "identifiedCardIncidents": 37
+    },
+    {
+      "gw": 38,
+      "matches": 10,
+      "identifiedCardIncidents": 36
+    }
+  ],
+  "integrityRules": [
+    "Cards are joined by exact match_id + player_id.",
+    "yellowRed counts as both yellow_card=1 and red_card=1.",
+    "If the source confirms a card happened but cannot identify the player, the affected card field stays blank/NULL rather than being converted to 0.",
+    "Known no-card rows are written as 0.",
+    "The builder refuses to generate H2H if a source row has no match date or no player profile."
+  ]
+}
