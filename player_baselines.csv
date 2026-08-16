@@ -1,1 +1,566 @@
-player_name,team,competition,season,appearances,starts,minutes,yellow_cards,red_cards,fouls_committed,fouls_drawn,fouls_per_90,cards_per_90,position,external_player_id
+﻿player_name,team,competition,season,appearances,starts,minutes,yellow_cards,red_cards,fouls_committed,fouls_drawn,fouls_per_90,cards_per_90,position,external_player_id
+André Trindade da Costa Neto,Wolves,Premier League,2025/26,35,35,2760,12,0,47,43,1.53,0.39,Midfielder,643
+Yerson Mosquera Valdelamar,Wolves,Premier League,2025/26,27,26,2137,12,0,34,44,1.43,0.51,Defender,634
+James Garner,Everton,Premier League,2025/26,38,38,3413,12,0,39,42,1.03,0.32,Midfielder,303
+Moisés Caicedo Corozo,Chelsea,Premier League,2025/26,33,33,2796,11,1,54,55,1.74,0.35,Midfielder,241
+João Victor Gomes da Silva,Wolves,Premier League,2025/26,35,34,2829,10,0,69,49,2.2,0.32,Midfielder,646
+Joelinton Cássio Apolinário de Lira,Newcastle,Premier League,2025/26,27,25,1950,10,0,47,27,2.17,0.46,Midfielder,490
+Hannibal Mejbri,Burnley,Premier League,2025/26,27,25,1219,10,0,24,47,1.77,0.74,Midfielder,207
+Ethan Ampadu,Leeds,Premier League,2025/26,35,35,3119,10,0,50,36,1.44,0.29,Midfielder,354
+Álex Jiménez Sánchez,Bournemouth,Premier League,2025/26,31,31,2315,10,0,35,20,1.36,0.39,Defender,713
+Bernardo Mota Veiga de Carvalho e Silva,Man City,Premier League,2025/26,38,38,2869,10,0,37,22,1.16,0.31,Midfielder,416
+Enzo Fernández,Chelsea,Premier League,2025/26,36,36,3114,10,0,36,45,1.04,0.29,Midfielder,237
+Pedro Porro Sauceda,Spurs,Premier League,2025/26,34,34,2793,10,0,32,26,1.03,0.32,Defender,568
+Lewis Dunk,Brighton,Premier League,2025/26,33,32,2837,10,0,15,12,0.48,0.32,Defender,146
+Saša Lukić,Fulham,Premier League,2025/26,26,24,1730,9,0,53,25,2.76,0.47,Midfielder,332
+Diego Gómez Amarilla,Brighton,Premier League,2025/26,32,32,2117,9,0,48,11,2.04,0.38,Midfielder,169
+Tim Iroegbunam,Everton,Premier League,2025/26,29,24,1477,9,0,29,20,1.77,0.55,Midfielder,304
+Carlos Henrique Casimiro,Man Utd,Premier League,2025/26,34,34,2575,9,1,46,36,1.61,0.31,Midfielder,457
+Cristian Romero,Spurs,Premier League,2025/26,23,23,1869,9,2,32,16,1.54,0.43,Defender,569
+Dan Burn,Newcastle,Premier League,2025/26,29,26,2195,9,1,36,13,1.48,0.37,Defender,476
+Luke Shaw,Man Utd,Premier League,2025/26,38,38,3220,9,0,48,20,1.34,0.25,Defender,443
+Matty Cash,Aston Villa,Premier League,2025/26,35,34,3016,9,0,41,30,1.22,0.27,Defender,36
+Noah Sadiki,Sunderland,Premier League,2025/26,33,33,2891,9,0,32,40,1,0.28,Midfielder,552
+Kyle Walker,Burnley,Premier League,2025/26,36,35,3095,9,0,32,22,0.93,0.26,Defender,187
+Trai Hume,Sunderland,Premier League,2025/26,38,36,3032,9,0,31,39,0.92,0.27,Defender,532
+Micky van de Ven,Spurs,Premier League,2025/26,35,35,3041,9,1,29,22,0.86,0.27,Defender,575
+Jan Paul van Hecke,Brighton,Premier League,2025/26,36,36,3210,9,0,27,43,0.76,0.25,Defender,151
+Tyler Adams,Bournemouth,Premier League,2025/26,25,21,1769,8,0,35,13,1.78,0.41,Midfielder,85
+Elliot Anderson,Nott'm Forest,Premier League,2025/26,38,37,3332,8,0,57,80,1.54,0.22,Midfielder,517
+Marc Cucurella Saseta,Chelsea,Premier League,2025/26,34,33,2706,8,1,45,29,1.5,0.27,Defender,224
+Mats Wieffer,Brighton,Premier League,2025/26,26,26,1901,8,0,30,22,1.42,0.38,Midfielder,173
+Kevin Danso,Spurs,Premier League,2025/26,24,21,1489,8,0,21,13,1.27,0.48,Defender,570
+Vitaly Janelt,Brentford,Premier League,2025/26,25,24,1434,8,0,20,13,1.26,0.5,Midfielder,125
+João Maria Lobo Alves Palhares Costa Palhinha Gonçalves,Spurs,Premier League,2025/26,33,32,2192,8,0,28,36,1.15,0.33,Midfielder,673
+Dominik Szoboszlai,Liverpool,Premier League,2025/26,36,36,3232,8,1,41,30,1.14,0.22,Midfielder,387
+Marcos Senesi Barón,Bournemouth,Premier League,2025/26,37,37,3288,8,0,34,37,0.93,0.22,Defender,72
+James Tarkowski,Everton,Premier League,2025/26,37,37,3330,8,0,32,35,0.86,0.22,Defender,291
+Michael Kayode,Brentford,Premier League,2025/26,37,37,3258,8,0,26,50,0.72,0.22,Defender,110
+Granit Xhaka,Sunderland,Premier League,2025/26,34,32,2901,8,0,23,42,0.71,0.25,Midfielder,668
+Gianluigi Donnarumma,Man City,Premier League,2025/26,34,34,3060,8,0,0,4,0,0.24,Goalkeeper,736
+Igor Thiago Nascimento Rodrigues,Brentford,Premier League,2025/26,38,38,3282,7,0,73,26,2,0.19,Forward,136
+Antoine Semenyo,Man City,Premier League,2025/26,37,37,3200,7,0,56,21,1.57,0.2,Midfielder,82
+Mateus Gonçalo Espanha Fernandes,West Ham,Premier League,2025/26,36,36,3017,7,0,49,49,1.46,0.21,Midfielder,708
+Reinildo Mandava,Sunderland,Premier League,2025/26,25,23,1966,7,1,32,35,1.46,0.32,Defender,541
+Will Hughes,Crystal Palace,Premier League,2025/26,31,27,1560,7,0,23,25,1.33,0.4,Midfielder,270
+Jefferson Lerma Solís,Crystal Palace,Premier League,2025/26,31,28,1722,7,0,25,25,1.31,0.37,Midfielder,272
+Daniel Muñoz Mejía,Crystal Palace,Premier League,2025/26,29,29,2400,7,0,34,18,1.27,0.26,Defender,256
+Morgan Rogers,Aston Villa,Premier League,2025/26,37,37,3280,7,0,46,49,1.26,0.19,Midfielder,47
+Yehor Yarmoliuk,Brentford,Premier League,2025/26,37,34,2652,7,0,37,12,1.26,0.24,Midfielder,129
+Alexis Mac Allister,Liverpool,Premier League,2025/26,37,35,2654,7,0,35,32,1.19,0.24,Midfielder,386
+Jorrel Hato,Chelsea,Premier League,2025/26,22,19,1139,7,0,15,2,1.19,0.55,Defender,672
+Joachim Andersen,Fulham,Premier League,2025/26,33,33,2882,7,1,31,13,0.97,0.22,Defender,317
+Ibrahima Konaté,Liverpool,Premier League,2025/26,36,36,3090,7,0,33,41,0.96,0.2,Defender,374
+Rodrigo Bentancur,Spurs,Premier League,2025/26,26,26,1880,7,0,19,8,0.91,0.34,Midfielder,585
+David Brooks,Bournemouth,Premier League,2025/26,31,21,1188,7,0,11,13,0.83,0.53,Midfielder,86
+Nathan Collins,Brentford,Premier League,2025/26,35,34,2971,7,0,20,17,0.61,0.21,Defender,106
+Harry Wilson,Fulham,Premier League,2025/26,36,34,2674,7,0,13,37,0.44,0.24,Midfielder,329
+Emiliano Buendía Stati,Aston Villa,Premier League,2025/26,36,36,1753,6,0,41,45,2.1,0.31,Midfielder,50
+Valentín Castellanos,West Ham,Premier League,2025/26,18,18,1384,6,0,32,16,2.08,0.39,Forward,791
+Crysencio Summerville,West Ham,Premier League,2025/26,31,31,2470,6,0,49,67,1.79,0.22,Midfielder,615
+Nico González Iglesias,Man City,Premier League,2025/26,25,22,1561,6,0,30,18,1.73,0.35,Midfielder,423
+Florentino Ibrain Morris Luís,Burnley,Premier League,2025/26,31,27,2100,6,0,40,8,1.71,0.26,Midfielder,722
+Bruno Guimarães Rodriguez Moura,Newcastle,Premier League,2025/26,29,29,2456,6,0,45,75,1.65,0.22,Midfielder,488
+Kevin Schade,Brentford,Premier League,2025/26,35,33,2744,6,1,50,43,1.64,0.2,Midfielder,120
+Josh Laurent,Burnley,Premier League,2025/26,33,29,1752,6,1,31,11,1.59,0.31,Midfielder,209
+Brian Brobbey,Sunderland,Premier League,2025/26,31,31,1920,6,0,32,37,1.5,0.28,Forward,730
+Habib Diarra,Sunderland,Premier League,2025/26,20,17,1403,6,0,20,27,1.28,0.38,Midfielder,544
+Jayden Bogle,Leeds,Premier League,2025/26,34,33,2795,6,0,39,29,1.26,0.19,Defender,342
+Kiernan Dewsbury-Hall,Everton,Premier League,2025/26,31,31,2629,6,0,32,48,1.1,0.21,Midfielder,242
+Omar Alderete,Sunderland,Premier League,2025/26,33,33,2797,6,0,34,10,1.09,0.19,Defender,683
+Brennan Johnson,Crystal Palace,Premier League,2025/26,34,30,1710,6,0,20,15,1.05,0.32,Midfielder,580
+Marcus Tavernier,Bournemouth,Premier League,2025/26,34,33,2732,6,0,31,35,1.02,0.2,Midfielder,84
+Jorge Cuenca Barreno,Fulham,Premier League,2025/26,15,12,935,6,0,10,1,0.96,0.58,Defender,321
+El Hadji Malick Diouf,West Ham,Premier League,2025/26,32,32,2706,6,0,28,25,0.93,0.2,Defender,603
+Vitalii Mykolenko,Everton,Premier League,2025/26,33,33,2959,6,0,29,28,0.88,0.18,Defender,292
+Neco Williams,Nott'm Forest,Premier League,2025/26,37,36,3203,6,1,30,52,0.84,0.17,Defender,508
+Bashir Humphreys,Burnley,Premier League,2025/26,20,19,1574,6,0,14,10,0.8,0.34,Defender,193
+Marc Guéhi,Man City,Premier League,2025/26,35,35,3150,6,0,25,38,0.71,0.17,Defender,260
+Jake O'Brien,Everton,Premier League,2025/26,37,37,3118,6,1,23,17,0.66,0.17,Defender,293
+Tyrick Mitchell,Crystal Palace,Premier League,2025/26,38,36,3253,6,0,23,28,0.64,0.17,Defender,258
+Ferdi Kadıoğlu,Brighton,Premier League,2025/26,37,37,3130,6,0,22,36,0.63,0.17,Defender,148
+Jordan Henderson,Brentford,Premier League,2025/26,32,28,1911,6,0,13,7,0.61,0.28,Midfielder,124
+Nikola Milenković,Nott'm Forest,Premier League,2025/26,38,37,3375,6,0,21,20,0.56,0.16,Defender,505
+Zian Flemming,Burnley,Premier League,2025/26,29,29,1764,5,0,50,26,2.55,0.26,Forward,215
+Raúl Jiménez Rodríguez,Fulham,Premier League,2025/26,36,31,2183,5,0,46,34,1.9,0.21,Forward,337
+Ibrahim Sangaré,Nott'm Forest,Premier League,2025/26,28,26,2073,5,0,42,18,1.82,0.22,Midfielder,521
+Conor Bradley,Liverpool,Premier League,2025/26,15,15,928,5,0,18,20,1.75,0.48,Defender,375
+Hwang Hee-chan,Wolves,Premier League,2025/26,26,23,1439,5,0,28,18,1.75,0.31,Midfielder,642
+Justin Kluivert,Bournemouth,Premier League,2025/26,20,18,945,5,0,18,10,1.71,0.48,Midfielder,81
+Carlos Baleba,Brighton,Premier League,2025/26,31,26,1646,5,0,31,24,1.7,0.27,Midfielder,167
+Mitoma Kaoru,Brighton,Premier League,2025/26,25,22,1714,5,0,31,21,1.63,0.26,Midfielder,157
+Lucas Tolentino Coelho de Lima,West Ham,Premier League,2025/26,18,18,1513,5,1,27,30,1.61,0.3,Midfielder,612
+Nico O'Reilly,Man City,Premier League,2025/26,34,34,2643,5,0,45,18,1.53,0.17,Defender,411
+Lamare Bogarde,Aston Villa,Premier League,2025/26,28,25,1042,5,0,17,20,1.47,0.43,Defender,44
+Junior Kroupi,Bournemouth,Premier League,2025/26,33,30,1663,5,0,27,12,1.46,0.27,Forward,100
+Jean-Ricner Bellegarde,Wolves,Premier League,2025/26,26,23,1239,5,0,20,41,1.45,0.36,Midfielder,644
+Patrick Dorgu,Man Utd,Premier League,2025/26,26,21,1440,5,0,23,47,1.44,0.31,Defender,441
+Alex Scott,Bournemouth,Premier League,2025/26,37,36,2848,5,0,45,60,1.42,0.16,Midfielder,90
+Viktor Gyökeres,Arsenal,Premier League,2025/26,36,31,2217,5,0,35,31,1.42,0.2,Forward,666
+Wesley Fofana,Chelsea,Premier League,2025/26,25,24,1718,5,2,27,17,1.41,0.26,Defender,230
+Jurriën Timber,Arsenal,Premier League,2025/26,30,30,2452,5,0,38,29,1.39,0.18,Defender,8
+Riccardo Calafiori,Arsenal,Premier League,2025/26,26,23,1697,5,0,26,10,1.38,0.27,Defender,7
+John McGinn,Aston Villa,Premier League,2025/26,30,29,2136,5,0,31,48,1.31,0.21,Midfielder,54
+João Pedro Junqueira de Jesus,Chelsea,Premier League,2025/26,35,35,2658,5,0,38,55,1.29,0.17,Forward,249
+Danny Welbeck,Brighton,Premier League,2025/26,37,35,2249,5,0,30,10,1.2,0.2,Forward,178
+Ryan Gravenberch,Liverpool,Premier League,2025/26,36,34,2991,5,0,38,42,1.14,0.15,Midfielder,390
+Nordi Mukiele,Sunderland,Premier League,2025/26,32,32,2784,5,0,35,26,1.13,0.16,Defender,694
+Boubacar Kamara,Aston Villa,Premier League,2025/26,18,18,1410,5,0,17,30,1.09,0.32,Midfielder,58
+Sander Berge,Fulham,Premier League,2025/26,35,35,2904,5,0,35,14,1.08,0.15,Midfielder,330
+Xavi Simons,Spurs,Premier League,2025/26,28,24,1747,5,1,21,44,1.08,0.26,Midfielder,717
+Dango Ouattara,Brentford,Premier League,2025/26,32,30,2271,5,0,27,39,1.07,0.2,Midfielder,83
+Felipe Rodrigues da Silva,Nott'm Forest,Premier League,2025/26,21,16,1340,5,0,16,7,1.07,0.34,Defender,511
+Richarlison de Andrade,Spurs,Premier League,2025/26,32,28,1954,5,0,23,33,1.06,0.23,Forward,597
+Adrien Truffert,Bournemouth,Premier League,2025/26,38,38,3378,5,0,39,32,1.04,0.13,Defender,74
+Calvin Bassey,Fulham,Premier League,2025/26,30,30,2532,5,0,28,40,1,0.18,Defender,318
+Murillo Costa dos Santos,Nott'm Forest,Premier League,2025/26,25,25,2130,5,0,23,7,0.97,0.21,Defender,506
+Enzo Le Fée,Sunderland,Premier League,2025/26,36,35,2930,5,0,31,37,0.95,0.15,Midfielder,547
+Antonee Robinson,Fulham,Premier League,2025/26,22,20,1487,5,0,15,9,0.91,0.3,Defender,316
+Diogo Dalot Teixeira,Man Utd,Premier League,2025/26,34,32,2609,5,0,25,14,0.86,0.17,Defender,440
+Joël Veltman,Brighton,Premier League,2025/26,24,15,1047,5,0,10,22,0.86,0.43,Defender,152
+Pascal Struijk,Leeds,Premier League,2025/26,34,34,2935,5,0,27,22,0.83,0.15,Defender,343
+Archie Gray,Spurs,Premier League,2025/26,24,22,1471,5,0,12,2,0.73,0.31,Midfielder,591
+Bruno Borges Fernandes,Man Utd,Premier League,2025/26,35,35,3065,5,0,25,35,0.73,0.15,Midfielder,449
+James Hill,Bournemouth,Premier League,2025/26,29,28,2102,5,0,17,13,0.73,0.21,Defender,77
+Cole Palmer,Chelsea,Premier League,2025/26,26,26,1954,5,0,13,37,0.6,0.23,Midfielder,235
+Matheus Nunes,Man City,Premier League,2025/26,34,34,2861,5,0,17,30,0.53,0.16,Defender,407
+Jean-Clair Todibo,West Ham,Premier League,2025/26,23,22,1817,5,1,9,3,0.45,0.25,Defender,609
+Dean Henderson,Crystal Palace,Premier League,2025/26,37,37,3330,5,0,2,5,0.05,0.14,Goalkeeper,253
+Joe Gomez,Liverpool,Premier League,2025/26,21,13,594,4,0,14,0,2.12,0.61,Defender,376
+Liam Delap,Chelsea,Premier League,2025/26,28,19,1092,4,0,25,19,2.06,0.33,Forward,250
+Jørgen Strand Larsen,Crystal Palace,Premier League,2025/26,36,34,2301,4,0,52,21,2.03,0.16,Forward,654
+Matt Doherty,Wolves,Premier League,2025/26,11,11,786,4,0,16,6,1.83,0.46,Defender,632
+Soungoutou Magassa,West Ham,Premier League,2025/26,22,16,971,4,0,17,17,1.58,0.37,Midfielder,718
+Cristhian Mosquera,Arsenal,Premier League,2025/26,20,14,986,4,0,17,7,1.55,0.37,Defender,662
+Lyle Foster,Burnley,Premier League,2025/26,26,21,1361,4,0,22,13,1.45,0.26,Forward,217
+Carlos Alcaraz Durán,Everton,Premier League,2025/26,20,20,679,4,0,10,12,1.33,0.53,Midfielder,301
+Yéremy Pino Santos,Crystal Palace,Premier League,2025/26,34,29,2074,4,0,30,24,1.3,0.17,Midfielder,712
+Estêvão Almeida de Oliveira Gonçalves,Chelsea,Premier League,2025/26,22,22,839,4,0,12,9,1.29,0.43,Midfielder,238
+Reece James,Chelsea,Premier League,2025/26,29,27,1957,4,0,27,22,1.24,0.18,Defender,225
+Adam Wharton,Crystal Palace,Premier League,2025/26,34,29,2552,4,1,35,31,1.23,0.14,Midfielder,273
+Djed Spence,Spurs,Premier League,2025/26,30,26,2049,4,0,28,21,1.23,0.18,Defender,573
+Daniel Ballard,Sunderland,Premier League,2025/26,29,28,2144,4,1,29,30,1.22,0.17,Defender,531
+Yves Bissouma,Spurs,Premier League,2025/26,11,9,600,4,0,8,6,1.2,0.6,Midfielder,587
+Destiny Udogie,Spurs,Premier League,2025/26,20,19,1335,4,0,17,22,1.15,0.27,Defender,574
+Kristoffer Ajer,Brentford,Premier League,2025/26,27,24,1805,4,0,23,5,1.15,0.2,Defender,108
+Ollie Watkins,Aston Villa,Premier League,2025/26,37,36,2833,4,0,35,32,1.11,0.13,Forward,64
+Gabriel Gudmundsson,Leeds,Premier League,2025/26,32,32,2637,4,1,31,56,1.06,0.14,Defender,347
+Santiago Ignacio Bueno,Wolves,Premier League,2025/26,29,29,2552,4,0,30,11,1.06,0.14,Defender,636
+Aaron Wan-Bissaka,West Ham,Premier League,2025/26,25,24,2080,4,0,23,12,1,0.17,Defender,610
+Martín Zubimendi Ibáñez,Arsenal,Premier League,2025/26,38,38,2991,4,0,33,15,0.99,0.12,Midfielder,26
+Maxence Lacroix,Crystal Palace,Premier League,2025/26,35,35,3085,4,1,34,19,0.99,0.12,Defender,257
+Matheus Santos Carneiro da Cunha,Man Utd,Premier League,2025/26,33,33,2493,4,0,27,54,0.97,0.14,Midfielder,450
+Andrey Nascimento dos Santos,Chelsea,Premier League,2025/26,27,24,1247,4,0,13,22,0.94,0.29,Midfielder,246
+Jaidon Anthony,Burnley,Premier League,2025/26,37,37,2717,4,0,28,47,0.93,0.13,Midfielder,200
+Maximilian Kilman,West Ham,Premier League,2025/26,21,19,1559,4,0,16,2,0.92,0.23,Defender,605
+Jaka Bijol,Leeds,Premier League,2025/26,25,22,1888,4,0,19,10,0.91,0.19,Defender,344
+Josh King,Fulham,Premier League,2025/26,32,24,1290,4,0,13,30,0.91,0.28,Midfielder,335
+Milos Kerkez,Liverpool,Premier League,2025/26,34,30,2251,4,0,22,30,0.88,0.16,Defender,371
+Timothy Castagne,Fulham,Premier League,2025/26,30,26,1838,4,0,18,11,0.88,0.2,Defender,319
+Sandro Tonali,Newcastle,Premier League,2025/26,35,33,2534,4,0,24,42,0.85,0.14,Midfielder,491
+Bryan Mbeumo,Man Utd,Premier League,2025/26,33,31,2611,4,0,23,28,0.79,0.14,Midfielder,119
+Phil Foden,Man City,Premier League,2025/26,33,26,2078,4,0,18,31,0.78,0.17,Midfielder,414
+Malick Thiaw,Newcastle,Premier League,2025/26,35,34,2963,4,0,24,11,0.73,0.12,Defender,684
+Lewis Hall,Newcastle,Premier League,2025/26,30,28,2176,4,0,17,40,0.7,0.17,Defender,473
+Gabriel dos Santos Magalhães,Arsenal,Premier League,2025/26,32,31,2750,4,0,21,34,0.69,0.13,Defender,5
+James Justin,Leeds,Premier League,2025/26,29,29,1893,4,0,13,30,0.62,0.19,Defender,706
+Chris Richards,Crystal Palace,Premier League,2025/26,33,31,2825,4,0,18,5,0.57,0.13,Defender,261
+Jarrod Bowen,West Ham,Premier League,2025/26,38,38,3406,4,0,19,49,0.5,0.11,Forward,624
+Virgil van Dijk,Liverpool,Premier League,2025/26,38,38,3420,4,0,19,18,0.5,0.11,Defender,373
+Jordan Pickford,Everton,Premier League,2025/26,38,38,3420,4,0,1,6,0.03,0.11,Goalkeeper,287
+Robin Roefs,Sunderland,Premier League,2025/26,35,35,3150,4,0,0,14,0,0.11,Goalkeeper,670
+Federico Chiesa,Liverpool,Premier League,2025/26,26,18,317,3,0,11,7,3.12,0.85,Midfielder,385
+Thierno Barry,Everton,Premier League,2025/26,38,29,1898,3,0,47,8,2.23,0.14,Forward,310
+Randal Kolo Muani,Spurs,Premier League,2025/26,30,26,1655,3,0,40,17,2.18,0.16,Forward,726
+Gabriel Fernando de Jesus,Arsenal,Premier League,2025/26,14,11,418,3,0,9,1,1.94,0.65,Forward,31
+Ryan Yates,Nott'm Forest,Premier League,2025/26,22,14,602,3,0,13,13,1.94,0.45,Midfielder,522
+Norberto Bercique Gomes Betuncal,Everton,Premier League,2025/26,37,34,1551,3,0,33,12,1.91,0.17,Forward,311
+Pape Matar Sarr,Spurs,Premier League,2025/26,26,21,1388,3,0,29,13,1.88,0.19,Midfielder,593
+Adam Smith,Bournemouth,Premier League,2025/26,22,17,1073,3,0,19,11,1.59,0.25,Defender,73
+Tomáš Souček,West Ham,Premier League,2025/26,35,35,2190,3,1,37,22,1.52,0.12,Midfielder,613
+Dominic Calvert-Lewin,Leeds,Premier League,2025/26,35,35,2721,3,0,45,38,1.49,0.1,Forward,691
+Joe Willock,Newcastle,Premier League,2025/26,24,19,972,3,0,16,11,1.48,0.28,Midfielder,494
+Ryan Christie,Bournemouth,Premier League,2025/26,26,23,978,3,1,16,22,1.47,0.28,Midfielder,87
+Daichi Kamada,Crystal Palace,Premier League,2025/26,28,23,1899,3,0,30,28,1.42,0.14,Midfielder,271
+Cody Gakpo,Liverpool,Premier League,2025/26,36,36,2736,3,0,42,44,1.38,0.1,Midfielder,384
+Anton Stach,Leeds,Premier League,2025/26,29,29,2369,3,0,36,24,1.37,0.11,Midfielder,660
+Mohammed Kudus,Spurs,Premier League,2025/26,19,19,1535,3,0,23,15,1.35,0.18,Midfielder,582
+Omar Marmoush,Man City,Premier League,2025/26,21,15,691,3,0,10,21,1.3,0.39,Midfielder,413
+Myles Lewis-Skelly,Arsenal,Premier League,2025/26,20,16,697,3,0,10,16,1.29,0.39,Defender,10
+Douglas Luiz Soares de Paulo,Aston Villa,Premier League,2025/26,21,15,913,3,0,13,15,1.28,0.3,Midfielder,699
+Ladislav Krejcí,Wolves,Premier League,2025/26,28,28,2356,3,1,33,7,1.26,0.11,Defender,709
+Kieran Trippier,Newcastle,Premier League,2025/26,21,19,1586,3,0,22,19,1.25,0.17,Defender,478
+Nicolás Domínguez,Nott'm Forest,Premier League,2025/26,27,20,1168,3,0,16,11,1.23,0.23,Midfielder,519
+Wilfried Gnonto,Leeds,Premier League,2025/26,23,13,521,3,0,7,11,1.21,0.52,Midfielder,351
+Yankuba Minteh,Brighton,Premier League,2025/26,34,31,2389,3,0,32,22,1.21,0.11,Midfielder,160
+Joshua Zirkzee,Man Utd,Premier League,2025/26,24,15,607,3,0,8,6,1.19,0.44,Forward,466
+Tom Cairney,Fulham,Premier League,2025/26,24,19,756,3,0,10,11,1.19,0.36,Midfielder,331
+Noussair Mazraoui,Man Utd,Premier League,2025/26,20,17,977,3,0,12,14,1.11,0.28,Defender,438
+Ilia Gruev,Leeds,Premier League,2025/26,23,19,1318,3,0,16,9,1.09,0.2,Midfielder,356
+Noah Okafor,Leeds,Premier League,2025/26,28,26,1553,3,0,18,14,1.04,0.17,Midfielder,698
+Yoane Wissa,Newcastle,Premier League,2025/26,19,11,517,3,0,6,2,1.04,0.52,Forward,135
+Amadou Onana,Aston Villa,Premier League,2025/26,25,24,1755,3,0,20,25,1.03,0.15,Midfielder,59
+Jacob Ramsey,Newcastle,Premier League,2025/26,28,25,1441,3,1,16,14,1,0.19,Midfielder,52
+Adam Armstrong,Wolves,Premier League,2025/26,14,14,1141,3,0,12,3,0.95,0.24,Forward,817
+Harry Maguire,Man Utd,Premier League,2025/26,23,23,1649,3,1,16,16,0.87,0.16,Defender,442
+Gabriel Martinelli Silva,Arsenal,Premier League,2025/26,30,23,1065,3,0,10,14,0.85,0.25,Midfielder,19
+Rodrigo 'Rodri' Hernandez Cascante,Man City,Premier League,2025/26,21,21,1510,3,0,14,31,0.83,0.18,Midfielder,421
+Jaydee Canvot,Crystal Palace,Premier League,2025/26,20,20,1331,3,0,12,7,0.81,0.2,Defender,723
+Malo Gusto,Chelsea,Premier League,2025/26,34,33,2255,3,1,20,20,0.8,0.12,Defender,228
+Mathias Jensen,Brentford,Premier League,2025/26,36,36,2239,3,0,20,15,0.8,0.12,Midfielder,126
+Declan Rice,Arsenal,Premier League,2025/26,36,36,3093,3,0,26,11,0.76,0.09,Midfielder,21
+Ola Aina,Nott'm Forest,Premier League,2025/26,18,18,1587,3,0,13,15,0.74,0.17,Defender,507
+Brenden Aaronson,Leeds,Premier League,2025/26,37,35,2449,3,0,20,51,0.73,0.11,Midfielder,350
+Jack Grealish,Everton,Premier League,2025/26,20,20,1627,3,1,13,58,0.72,0.17,Midfielder,419
+Hugo Bueno López,Wolves,Premier League,2025/26,35,33,2359,3,0,18,24,0.69,0.11,Defender,633
+Lucas Digne,Aston Villa,Premier League,2025/26,31,29,1842,3,0,14,12,0.68,0.15,Defender,37
+Anthony Gordon,Newcastle,Premier League,2025/26,26,26,1798,3,1,13,40,0.65,0.15,Midfielder,485
+Trevoh Chalobah,Chelsea,Premier League,2025/26,34,31,2780,3,1,20,18,0.65,0.1,Defender,226
+Rúben dos Santos Gato Alves Dias,Man City,Premier League,2025/26,26,26,2139,3,0,15,9,0.63,0.13,Defender,408
+Joe Rodon,Leeds,Premier League,2025/26,35,33,2952,3,0,17,19,0.52,0.09,Defender,348
+Jackson Tchatchoua,Wolves,Premier League,2025/26,31,29,1834,3,0,8,9,0.39,0.15,Defender,695
+Alex Iwobi,Fulham,Premier League,2025/26,29,29,2420,3,0,8,10,0.3,0.11,Midfielder,324
+Robert Lynch Sánchez,Chelsea,Premier League,2025/26,35,35,3040,3,1,2,14,0.06,0.09,Goalkeeper,220
+Bart Verbruggen,Brighton,Premier League,2025/26,38,38,3420,3,0,2,3,0.05,0.08,Goalkeeper,139
+Bernd Leno,Fulham,Premier League,2025/26,38,38,3420,3,0,0,6,0,0.08,Goalkeeper,314
+Đorđe Petrović,Bournemouth,Premier League,2025/26,38,38,3420,3,0,0,2,0,0.08,Goalkeeper,67
+Dário Luís Essugo,Chelsea,Premier League,2025/26,3,3,26,2,0,3,1,10.38,6.92,Midfielder,247
+Mohamadou Kanté,West Ham,Premier League,2025/26,11,9,67,2,0,4,1,5.37,2.69,Midfielder,758
+Ashley Barnes,Burnley,Premier League,2025/26,7,2,40,2,0,2,2,4.5,4.5,Forward,218
+Tyler Dibling,Everton,Premier League,2025/26,14,13,349,2,0,11,11,2.84,0.52,Midfielder,707
+Amine Adli,Bournemouth,Premier League,2025/26,31,23,1074,2,0,29,22,2.43,0.17,Midfielder,697
+Simon Adingra,Sunderland,Premier League,2025/26,14,14,649,2,0,17,3,2.36,0.28,Midfielder,543
+Tyrique George,Everton,Premier League,2025/26,15,6,351,2,0,9,2,2.31,0.51,Midfielder,243
+Lucas Bergvall,Spurs,Premier League,2025/26,23,18,955,2,0,24,7,2.26,0.19,Midfielder,586
+Conor Gallagher,Spurs,Premier League,2025/26,16,14,1183,2,0,26,22,1.98,0.15,Midfielder,796
+Marshall Munetsi,Wolves,Premier League,2025/26,13,13,872,2,0,19,10,1.96,0.21,Midfielder,648
+Rodrigo Muniz Carvalho,Fulham,Premier League,2025/26,21,14,987,2,0,21,18,1.91,0.18,Forward,338
+Taiwo Awoniyi,Nott'm Forest,Premier League,2025/26,17,10,480,2,0,10,7,1.88,0.38,Forward,527
+Diego Coppola,Brighton,Premier League,2025/26,5,4,193,2,0,4,0,1.87,0.93,Defender,144
+Charalampos Kostoulas,Brighton,Premier League,2025/26,21,15,351,2,0,7,7,1.79,0.51,Forward,181
+James Milner,Brighton,Premier League,2025/26,20,18,772,2,0,15,3,1.75,0.23,Midfielder,170
+Igor Jesus Maciel da Cruz,Nott'm Forest,Premier League,2025/26,37,35,2293,2,0,42,40,1.65,0.08,Forward,526
+Rayan Aït-Nouri,Man City,Premier League,2025/26,17,14,971,2,0,17,10,1.58,0.19,Defender,402
+Eddie Nketiah,Crystal Palace,Premier League,2025/26,12,12,414,2,0,7,7,1.52,0.43,Forward,284
+Georginio Rutter,Brighton,Premier League,2025/26,32,25,1776,2,0,30,34,1.52,0.1,Midfielder,158
+Mason Mount,Man Utd,Premier League,2025/26,23,18,1010,2,0,16,12,1.43,0.18,Midfielder,455
+Brajan Gruda,Brighton,Premier League,2025/26,18,18,708,2,0,11,14,1.4,0.25,Midfielder,162
+Kenny Tete,Fulham,Premier League,2025/26,22,22,1791,2,0,27,31,1.36,0.1,Defender,322
+Bukayo Saka,Arsenal,Premier League,2025/26,31,29,2218,2,0,33,54,1.34,0.08,Midfielder,16
+Sean Longstaff,Leeds,Premier League,2025/26,23,14,1003,2,0,13,17,1.17,0.18,Midfielder,493
+Benoît Badiashile Mukinayi,Chelsea,Premier League,2025/26,8,8,470,2,0,6,2,1.15,0.38,Defender,229
+Maxim De Cuyper,Brighton,Premier League,2025/26,30,24,1404,2,0,18,21,1.15,0.13,Defender,145
+Dennis Cirkin,Sunderland,Premier League,2025/26,8,6,319,2,0,4,2,1.13,0.56,Defender,535
+Rico Lewis,Man City,Premier League,2025/26,11,10,401,2,0,5,9,1.12,0.45,Defender,410
+Joško Gvardiol,Man City,Premier League,2025/26,18,17,1370,2,0,16,7,1.05,0.13,Defender,403
+Nicolò Savona,Nott'm Forest,Premier League,2025/26,14,14,1025,2,0,12,5,1.05,0.18,Defender,716
+Tijjani Reijnders,Man City,Premier League,2025/26,28,25,1623,2,0,19,15,1.05,0.11,Midfielder,427
+Rico Henry,Brentford,Premier League,2025/26,25,24,1322,2,0,15,17,1.02,0.14,Defender,109
+Issa Diop,Fulham,Premier League,2025/26,13,12,812,2,0,9,3,1,0.22,Defender,320
+Sávio Moreira de Oliveira,Man City,Premier League,2025/26,24,17,817,2,0,9,15,0.99,0.22,Midfielder,415
+Iliman Ndiaye,Everton,Premier League,2025/26,32,32,2781,2,0,30,37,0.97,0.06,Midfielder,299
+Ian Maatsen,Aston Villa,Premier League,2025/26,30,25,1590,2,0,17,19,0.96,0.11,Defender,39
+Ollie Scarles,West Ham,Premier League,2025/26,13,11,656,2,0,7,7,0.96,0.27,Defender,608
+Josh Cullen,Burnley,Premier League,2025/26,18,18,1513,2,0,16,18,0.95,0.12,Midfielder,205
+Benjamin Sesko,Man Utd,Premier League,2025/26,30,26,1630,2,0,17,6,0.94,0.11,Forward,681
+Pascal Groß,Brighton,Premier League,2025/26,19,19,1636,2,0,17,12,0.94,0.11,Midfielder,783
+Loum Tchaouna,Burnley,Premier League,2025/26,29,24,1259,2,0,13,16,0.93,0.14,Midfielder,210
+Piero Hincapié,Arsenal,Premier League,2025/26,25,23,1787,2,0,18,14,0.91,0.1,Defender,725
+Abdukodir Khusanov,Man City,Premier League,2025/26,21,18,1427,2,0,14,6,0.88,0.13,Defender,406
+Amad Diallo,Man Utd,Premier League,2025/26,32,28,2339,2,0,23,38,0.88,0.08,Midfielder,452
+Jean-Philippe Mateta,Crystal Palace,Premier League,2025/26,32,25,2210,2,0,21,19,0.86,0.08,Forward,283
+Francisco Evanilson de Lima Barbosa,Bournemouth,Premier League,2025/26,36,35,2741,2,0,26,37,0.85,0.07,Forward,97
+Chadi Riad Dnanou,Crystal Palace,Premier League,2025/26,9,7,550,2,0,5,3,0.82,0.33,Defender,262
+Curtis Jones,Liverpool,Premier League,2025/26,34,31,1923,2,0,17,29,0.8,0.09,Midfielder,388
+Lutsharel Geertruida,Sunderland,Premier League,2025/26,28,26,1681,2,0,15,7,0.8,0.11,Defender,724
+Olivier Boscagli,Brighton,Premier League,2025/26,12,11,799,2,0,7,11,0.79,0.23,Defender,143
+Kyle Walker-Peters,West Ham,Premier League,2025/26,23,21,1378,2,0,12,25,0.78,0.13,Defender,659
+William Saliba,Arsenal,Premier League,2025/26,31,31,2614,2,0,22,16,0.76,0.07,Defender,6
+Erling Haaland,Man City,Premier League,2025/26,35,35,2953,2,0,24,25,0.73,0.06,Forward,430
+Kobbie Mainoo,Man Utd,Premier League,2025/26,28,27,1653,2,0,13,22,0.71,0.11,Midfielder,458
+Tosin Adarabioyo,Chelsea,Premier League,2025/26,16,12,788,2,0,6,0,0.69,0.23,Defender,232
+Ayden Heaven,Man Utd,Premier League,2025/26,17,13,920,2,0,7,9,0.68,0.2,Defender,447
+Alejandro Garnacho Ferreyra,Chelsea,Premier League,2025/26,24,18,1261,2,0,9,23,0.64,0.14,Midfielder,453
+Sven Botman,Newcastle,Premier League,2025/26,25,23,1834,2,0,13,19,0.64,0.1,Defender,475
+Leandro Trossard,Arsenal,Premier League,2025/26,31,27,1997,2,0,13,39,0.59,0.09,Midfielder,20
+Konstantinos Mavropanos,West Ham,Premier League,2025/26,31,29,2532,2,0,16,9,0.57,0.07,Defender,606
+Pedro Lomba Neto,Chelsea,Premier League,2025/26,34,33,2629,2,1,16,25,0.55,0.07,Midfielder,236
+Ismaïla Sarr,Crystal Palace,Premier League,2025/26,28,24,2173,2,0,12,42,0.5,0.08,Midfielder,267
+Jacob Murphy,Newcastle,Premier League,2025/26,33,26,1606,2,0,9,13,0.5,0.11,Midfielder,489
+Sepp van den Berg,Brentford,Premier League,2025/26,32,31,2761,2,0,15,11,0.49,0.07,Defender,113
+Marco Bizot,Aston Villa,Premier League,2025/26,7,7,585,2,0,1,1,0.15,0.31,Goalkeeper,33
+Lucas Estella Perri,Leeds,Premier League,2025/26,16,16,1440,2,0,1,3,0.06,0.12,Goalkeeper,665
+Nick Pope,Newcastle,Premier League,2025/26,27,27,2416,2,0,1,2,0.04,0.07,Goalkeeper,469
+Aaron Ramsdale,Newcastle,Premier League,2025/26,12,12,1003,2,0,0,1,0,0.18,Goalkeeper,674
+Emiliano Martínez Romero,Aston Villa,Premier League,2025/26,32,32,2835,2,0,0,17,0,0.06,Goalkeeper,32
+José Malheiro de Sá,Wolves,Premier League,2025/26,23,23,2070,2,0,0,6,0,0.09,Goalkeeper,628
+Matz Sels,Nott'm Forest,Premier League,2025/26,31,31,2667,2,0,0,5,0,0.07,Goalkeeper,502
+Jonah Kusi-Asare,Fulham,Premier League,2025/26,7,4,49,1,0,4,2,7.35,1.84,Forward,737
+Tom Watson,Brighton,Premier League,2025/26,6,6,57,1,0,3,0,4.74,1.58,Midfielder,172
+Borna Sosa,Crystal Palace,Premier League,2025/26,7,3,99,1,0,4,0,3.64,0.91,Defender,259
+Marc Guiu Paz,Chelsea,Premier League,2025/26,10,9,265,1,0,10,2,3.4,0.34,Forward,252
+Enes Ünal,Bournemouth,Premier League,2025/26,23,10,214,1,0,6,10,2.52,0.42,Forward,98
+Manuel Ugarte Ribeiro,Man Utd,Premier League,2025/26,22,19,876,1,0,24,15,2.47,0.1,Midfielder,459
+Nilson Angulo,Sunderland,Premier League,2025/26,8,8,401,1,0,11,3,2.47,0.22,Midfielder,813
+Fer López González,Wolves,Premier League,2025/26,9,9,228,1,0,6,4,2.37,0.39,Midfielder,645
+Arthur Masuaku,Sunderland,Premier League,2025/26,3,3,125,1,0,3,0,2.16,0.72,Defender,678
+Jhon Arias,Wolves,Premier League,2025/26,23,23,1117,1,0,25,9,2.01,0.08,Midfielder,663
+Mikel Merino Zazón,Arsenal,Premier League,2025/26,22,21,1024,1,0,22,20,1.93,0.09,Midfielder,22
+João Victor de Souza Menezes,Spurs,Premier League,2025/26,4,4,142,1,0,3,2,1.9,0.63,Defender,804
+Adama Traoré Diarra,West Ham,Premier League,2025/26,24,15,376,1,0,7,8,1.68,0.24,Midfielder,326
+Romaine Mundle,Sunderland,Premier League,2025/26,14,12,399,1,0,7,8,1.58,0.23,Midfielder,548
+Bertrand Traoré,Sunderland,Premier League,2025/26,12,10,634,1,0,11,11,1.56,0.14,Midfielder,735
+Dilane Bakwa,Nott'm Forest,Premier League,2025/26,14,10,549,1,0,9,14,1.48,0.16,Midfielder,734
+Sebastiaan Bornauw,Leeds,Premier League,2025/26,12,5,429,1,0,7,0,1.47,0.21,Defender,345
+Angel Gomes,Wolves,Premier League,2025/26,12,12,457,1,0,7,9,1.38,0.2,Midfielder,816
+Ben Davies,Spurs,Premier League,2025/26,3,3,136,1,0,2,0,1.32,0.66,Defender,571
+Mathys Tel,Spurs,Premier League,2025/26,31,24,1334,1,0,19,23,1.28,0.07,Midfielder,584
+James McAtee,Nott'm Forest,Premier League,2025/26,14,8,288,1,0,4,5,1.25,0.31,Midfielder,426
+Kai Havertz,Arsenal,Premier League,2025/26,12,8,577,1,0,8,8,1.25,0.16,Forward,30
+Fabian Schär,Newcastle,Premier League,2025/26,16,15,1089,1,0,15,7,1.24,0.08,Defender,474
+Omari Hutchinson,Nott'm Forest,Premier League,2025/26,31,28,1676,1,0,23,24,1.24,0.05,Midfielder,693
+Dan Ndoye,Nott'm Forest,Premier League,2025/26,24,17,1167,1,0,16,22,1.23,0.08,Midfielder,669
+Kevin Santos Lopes de Macedo,Fulham,Premier League,2025/26,26,23,1030,1,0,14,17,1.22,0.09,Midfielder,731
+Leon Bailey,Aston Villa,Premier League,2025/26,13,6,450,1,0,6,5,1.2,0.2,Midfielder,49
+Freddie Potts,West Ham,Premier League,2025/26,22,20,1162,1,0,15,14,1.16,0.08,Midfielder,623
+Yasin Ayari,Brighton,Premier League,2025/26,29,23,1921,1,0,24,28,1.12,0.05,Midfielder,166
+Facundo Buonanotte,Leeds,Premier League,2025/26,4,3,81,1,0,1,0,1.11,1.11,Midfielder,168
+Wilson Isidor,Sunderland,Premier League,2025/26,32,22,1148,1,0,14,7,1.1,0.08,Forward,560
+Tolu Arokodare,Wolves,Premier League,2025/26,33,24,1402,1,0,17,17,1.09,0.06,Forward,720
+Dominic Solanke-Mitchell,Spurs,Premier League,2025/26,15,14,997,1,0,12,9,1.08,0.09,Forward,596
+Lesley Ugochukwu,Burnley,Premier League,2025/26,35,32,2330,1,1,28,30,1.08,0.04,Midfielder,676
+Endo Wataru,Liverpool,Premier League,2025/26,8,7,170,1,0,2,3,1.06,0.53,Midfielder,392
+Guido Rodríguez,West Ham,Premier League,2025/26,6,6,175,1,0,2,4,1.03,0.51,Midfielder,618
+Axel Tuanzebe,Burnley,Premier League,2025/26,14,14,1201,1,0,13,2,0.97,0.07,Defender,198
+Lucas Pires Silva,Burnley,Premier League,2025/26,20,16,1405,1,1,15,4,0.96,0.06,Defender,195
+Luke O'Nien,Sunderland,Premier League,2025/26,12,9,565,1,1,6,8,0.96,0.16,Defender,539
+Ross Barkley,Aston Villa,Premier League,2025/26,21,15,844,1,0,9,9,0.96,0.11,Midfielder,55
+Chris Rigg,Sunderland,Premier League,2025/26,18,13,758,1,0,8,8,0.95,0.12,Midfielder,551
+Aaron Hickey,Brentford,Premier League,2025/26,21,18,679,1,0,7,9,0.93,0.13,Defender,116
+Idrissa Gana Gueye,Everton,Premier League,2025/26,25,25,2094,1,1,21,31,0.9,0.04,Midfielder,302
+Tanaka Ao,Leeds,Premier League,2025/26,28,25,1307,1,0,13,9,0.9,0.07,Midfielder,358
+Callum Wilson,West Ham,Premier League,2025/26,32,22,1234,1,0,12,14,0.88,0.07,Forward,671
+Leny Yoro,Man Utd,Premier League,2025/26,32,27,1730,1,0,17,5,0.88,0.05,Defender,444
+David Møller Wolfe,Wolves,Premier League,2025/26,22,17,1042,1,0,10,4,0.86,0.09,Defender,682
+Rayan Cherki,Man City,Premier League,2025/26,33,27,1772,1,0,17,34,0.86,0.05,Midfielder,417
+Dwight McNeil,Everton,Premier League,2025/26,22,21,1161,1,0,11,7,0.85,0.08,Midfielder,300
+Florian Wirtz,Liverpool,Premier League,2025/26,33,31,2374,1,0,22,19,0.83,0.04,Midfielder,382
+Lewis Cook,Bournemouth,Premier League,2025/26,18,13,872,1,1,8,5,0.83,0.1,Midfielder,88
+Emmanuel Agbadou,Wolves,Premier League,2025/26,14,14,1100,1,1,10,5,0.82,0.08,Defender,631
+Oscar Bobb,Fulham,Premier League,2025/26,23,16,1030,1,0,9,17,0.79,0.09,Midfielder,424
+Harvey Barnes,Newcastle,Premier League,2025/26,37,29,1951,1,0,17,23,0.78,0.05,Midfielder,487
+Eberechi Eze,Arsenal,Premier League,2025/26,33,30,1885,1,0,16,40,0.76,0.05,Midfielder,266
+Morgan Gibbs-White,Nott'm Forest,Premier League,2025/26,37,36,3101,1,0,26,41,0.75,0.03,Midfielder,515
+Rayan Vitor Simplício Rocha,Bournemouth,Premier League,2025/26,15,14,1110,1,0,9,6,0.73,0.08,Midfielder,807
+Jeremie Frimpong,Liverpool,Premier League,2025/26,21,17,1032,1,0,8,21,0.7,0.09,Defender,370
+Toti Gomes,Wolves,Premier League,2025/26,19,17,1423,1,1,11,11,0.7,0.06,Defender,637
+Keane Lewis-Potter,Brentford,Premier League,2025/26,36,33,1960,1,0,15,36,0.69,0.05,Defender,107
+Tyrone Mings,Aston Villa,Premier League,2025/26,17,17,1322,1,0,10,9,0.68,0.07,Defender,40
+Alex Tóth,Bournemouth,Premier League,2025/26,9,8,135,1,0,1,2,0.67,0.67,Midfielder,801
+James Ward-Prowse,Burnley,Premier League,2025/26,18,12,1092,1,0,8,13,0.66,0.08,Midfielder,614
+Quilindschy Hartman,Burnley,Premier League,2025/26,21,21,1825,1,0,13,3,0.64,0.05,Defender,192
+Nathaniel Clyne,Crystal Palace,Premier League,2025/26,10,8,592,1,0,4,1,0.61,0.15,Defender,263
+Bafodé Diakité,Bournemouth,Premier League,2025/26,18,17,1275,1,0,8,5,0.56,0.07,Defender,685
+Michael Keane,Everton,Premier League,2025/26,33,29,2588,1,1,16,6,0.56,0.03,Defender,295
+Tino Livramento,Newcastle,Premier League,2025/26,17,16,1326,1,0,7,16,0.48,0.07,Defender,477
+Emile Smith Rowe,Fulham,Premier League,2025/26,37,34,1909,1,0,10,17,0.47,0.05,Midfielder,325
+Mohamed Salah,Liverpool,Premier League,2025/26,27,25,2144,1,0,10,16,0.42,0.04,Midfielder,381
+Jarrad Branthwaite,Everton,Premier League,2025/26,10,9,678,1,0,3,1,0.4,0.13,Defender,290
+Maxime Estève,Burnley,Premier League,2025/26,34,34,2933,1,0,13,12,0.4,0.03,Defender,191
+Nathan Aké,Man City,Premier League,2025/26,18,13,686,1,0,3,8,0.39,0.13,Defender,405
+Pau Torres,Aston Villa,Premier League,2025/26,21,20,1673,1,0,7,5,0.38,0.05,Defender,41
+Axel Disasi,West Ham,Premier League,2025/26,14,14,1254,1,0,5,4,0.36,0.07,Defender,815
+Josh Acheampong,Chelsea,Premier League,2025/26,17,12,657,1,0,2,9,0.27,0.14,Defender,233
+Caoimhín Kelleher,Brentford,Premier League,2025/26,37,37,3330,1,0,3,6,0.08,0.03,Goalkeeper,101
+Alisson Becker,Liverpool,Premier League,2025/26,26,26,2340,1,0,1,7,0.04,0.04,Goalkeeper,366
+Antonín Kinský,Spurs,Premier League,2025/26,7,7,630,1,0,0,1,0,0.14,Goalkeeper,567
+David Raya Martín,Arsenal,Premier League,2025/26,37,37,3330,1,0,0,14,0,0.03,Goalkeeper,1
+Ethan Pinnock,Brentford,Premier League,2025/26,4,4,318,1,0,0,2,0,0.28,Defender,111
+Guglielmo Vicario,Spurs,Premier League,2025/26,31,31,2790,1,0,0,3,0,0.03,Goalkeeper,565
+John Victor Maciel Furtado,Nott'm Forest,Premier League,2025/26,5,5,437,1,0,0,0,0,0.21,Goalkeeper,715
+Karl Darlow,Leeds,Premier League,2025/26,22,22,1980,1,0,0,7,0,0.05,Goalkeeper,341
+Martin Dúbravka,Burnley,Premier League,2025/26,35,35,3150,1,0,0,8,0,0.03,Goalkeeper,470
+Kaye Furo,Brentford,Premier League,2025/26,1,1,1,0,0,1,0,90,0,Forward,797
+Myles Peart-Harris,Brentford,Premier League,2025/26,1,0,1,0,0,1,0,90,0,Midfielder,133
+Kaden Rodney,Crystal Palace,Premier League,2025/26,1,1,3,0,0,1,0,30,0,Midfielder,281
+Dane Scarlett,Spurs,Premier League,2025/26,2,2,7,0,0,1,0,12.86,0,Forward,599
+Joél Drakes-Thomas,Crystal Palace,Premier League,2025/26,2,2,7,0,0,1,0,12.86,0,Midfielder,762
+Sam Byram,Leeds,Premier League,2025/26,2,1,8,0,0,1,0,11.25,0,Defender,346
+Tawanda Chirewa,Wolves,Premier League,2025/26,2,2,25,0,0,3,1,10.8,0,Midfielder,650
+Jaydon Banel,Burnley,Premier League,2025/26,1,1,9,0,0,1,1,10,0,Midfielder,213
+Julio Soler Barreto,Bournemouth,Premier League,2025/26,3,2,34,0,0,2,2,5.29,0,Defender,80
+Romelle Donovan,Brentford,Premier League,2025/26,4,1,38,0,0,2,3,4.74,0,Midfielder,130
+Romain Esse,Crystal Palace,Premier League,2025/26,4,4,40,0,0,2,2,4.5,0,Midfielder,269
+Shea Lacey,Man Utd,Premier League,2025/26,3,2,40,0,0,2,2,4.5,0,Midfielder,755
+Trey Nyoni,Liverpool,Premier League,2025/26,6,0,21,0,0,1,0,4.29,0,Midfielder,396
+Divine Mukasa,Man City,Premier League,2025/26,2,2,25,0,0,1,0,3.6,0,Midfielder,739
+George Hemmings,Aston Villa,Premier League,2025/26,2,2,25,0,0,1,0,3.6,0,Midfielder,754
+Frank Onyeka,Brentford,Premier League,2025/26,6,5,88,0,0,3,3,3.07,0,Midfielder,128
+Stefanos Tzimas,Brighton,Premier League,2025/26,9,9,132,0,0,4,1,2.73,0,Forward,180
+William Osula,Newcastle,Premier League,2025/26,24,18,805,0,0,24,16,2.68,0,Forward,500
+Christian Nørgaard,Arsenal,Premier League,2025/26,7,4,101,0,0,3,0,2.67,0,Midfielder,24
+Merlin Röhl,Everton,Premier League,2025/26,16,13,675,0,0,20,7,2.67,0,Midfielder,728
+James Maddison,Spurs,Premier League,2025/26,3,0,34,0,0,1,1,2.65,0,Midfielder,581
+Ben Gannon-Doak,Bournemouth,Premier League,2025/26,8,6,105,0,0,3,1,2.57,0,Midfielder,391
+Pablo Felipe Pereira de Jesus,West Ham,Premier League,2025/26,14,12,819,0,0,23,8,2.53,0,Forward,785
+Niclas Füllkrug,West Ham,Premier League,2025/26,8,8,407,0,0,11,1,2.43,0,Forward,625
+Christantus Uche,Crystal Palace,Premier League,2025/26,14,11,159,0,0,4,7,2.26,0,Forward,732
+Oliver Sonne,Burnley,Premier League,2025/26,7,6,164,0,0,4,0,2.2,0,Defender,197
+Arnaud Kalimuendo,Nott'm Forest,Premier League,2025/26,9,8,89,0,0,2,0,2.02,0,Forward,696
+Harrison Reed,Fulham,Premier League,2025/26,7,4,89,0,0,2,1,2.02,0,Midfielder,336
+Emil Krafth,Newcastle,Premier League,2025/26,1,1,45,0,0,1,0,2,0,Defender,479
+Roméo Lavia,Chelsea,Premier League,2025/26,12,7,374,0,0,8,8,1.93,0,Midfielder,244
+Hugo Ekitiké,Liverpool,Premier League,2025/26,28,28,1797,0,0,35,12,1.75,0,Forward,661
+Pedro Cardoso de Lima,Wolves,Premier League,2025/26,9,4,257,0,0,5,1,1.75,0,Defender,640
+Jack Hinshelwood,Brighton,Premier League,2025/26,27,27,1736,0,0,33,12,1.71,0,Midfielder,163
+Jack Fletcher,Man Utd,Premier League,2025/26,3,3,107,0,0,2,1,1.68,0,Midfielder,462
+Ryan Sessegnon,Fulham,Premier League,2025/26,27,23,1816,0,0,33,3,1.64,0,Midfielder,328
+Zach Abbott,Nott'm Forest,Premier League,2025/26,3,3,165,0,0,3,1,1.64,0,Defender,513
+Radu Drăgușin,Spurs,Premier League,2025/26,10,7,515,0,0,9,1,1.57,0,Defender,572
+Lukas Nmecha,Leeds,Premier League,2025/26,31,21,1065,0,0,18,18,1.52,0,Forward,365
+Armando Broja,Burnley,Premier League,2025/26,24,19,843,0,0,14,16,1.49,0,Forward,680
+Evann Guessand,Crystal Palace,Premier League,2025/26,21,17,909,0,0,15,20,1.49,0,Midfielder,677
+Joël Piroe,Leeds,Premier League,2025/26,16,11,244,0,0,4,0,1.48,0,Forward,362
+Mateus Mané,Wolves,Premier League,2025/26,27,27,1787,0,0,26,47,1.31,0,Forward,749
+Zeki Amdouni,Burnley,Premier League,2025/26,4,0,69,0,0,1,1,1.3,0,Forward,216
+Luca Netz,Nott'm Forest,Premier League,2025/26,7,7,353,0,0,5,2,1.27,0,Defender,814
+Justin Devenny,Crystal Palace,Premier League,2025/26,21,18,785,0,0,11,10,1.26,0,Midfielder,276
+Youri Tielemans,Aston Villa,Premier League,2025/26,25,23,1857,0,0,25,40,1.21,0,Midfielder,48
+Max Dowman,Arsenal,Premier League,2025/26,6,3,152,0,0,2,7,1.18,0,Midfielder,700
+Jérémy Doku,Man City,Premier League,2025/26,30,26,1773,0,0,23,61,1.17,0,Midfielder,418
+Noni Madueke,Arsenal,Premier League,2025/26,26,23,1205,0,0,15,15,1.12,0,Midfielder,18
+Jamie Bynoe-Gittens,Chelsea,Premier League,2025/26,16,15,486,0,0,6,8,1.11,0,Midfielder,239
+Ethan Nwaneri,Arsenal,Premier League,2025/26,6,6,165,0,0,2,0,1.09,0,Midfielder,25
+Andrés García,Aston Villa,Premier League,2025/26,6,3,83,0,0,1,0,1.08,0,Defender,42
+Harrison Armstrong,Everton,Premier League,2025/26,13,7,524,0,0,6,14,1.03,0,Midfielder,305
+Nick Woltemade,Newcastle,Premier League,2025/26,33,29,1896,0,0,20,20,0.95,0,Forward,714
+Matt O'Riley,Brighton,Premier League,2025/26,6,3,202,0,0,2,1,0.89,0,Midfielder,164
+Igor Julio dos Santos de Paulo,Brighton,Premier League,2025/26,4,3,103,0,0,1,0,0.87,0,Defender,149
+Mikkel Damsgaard,Brentford,Premier League,2025/26,33,30,2046,0,0,19,23,0.84,0,Midfielder,121
+Nathan Patterson,Everton,Premier League,2025/26,7,6,238,0,0,2,2,0.76,0,Defender,296
+Joe Worrall,Burnley,Premier League,2025/26,11,9,496,0,0,4,1,0.73,0,Defender,199
+Eliezer Mayenda Dossou,Sunderland,Premier League,2025/26,20,16,751,0,0,6,11,0.72,0,Forward,561
+Lorenzo Lucca,Nott'm Forest,Premier League,2025/26,4,4,126,0,0,1,2,0.71,0,Forward,805
+Jenson Seelt,Sunderland,Premier League,2025/26,2,2,133,0,0,1,1,0.68,0,Defender,542
+Lisandro Martínez,Man Utd,Premier League,2025/26,18,18,1229,0,1,9,2,0.66,0,Defender,437
+Rio Ngumoha,Liverpool,Premier League,2025/26,19,13,547,0,0,4,12,0.66,0,Midfielder,686
+Alexander Isak,Liverpool,Premier League,2025/26,14,12,694,0,0,5,1,0.65,0,Forward,499
+Tammy Abraham,Aston Villa,Premier League,2025/26,12,3,278,0,0,2,0,0.65,0,Forward,808
+Benjamin White,Arsenal,Premier League,2025/26,12,11,699,0,0,5,6,0.64,0,Defender,11
+Ki-Jana Hoever,Wolves,Premier League,2025/26,8,8,423,0,0,3,3,0.64,0,Defender,638
+Chris Wood,Nott'm Forest,Premier League,2025/26,15,12,896,0,0,6,6,0.6,0,Forward,525
+Marcus Edwards,Burnley,Premier League,2025/26,23,18,1058,0,0,7,18,0.6,0,Midfielder,206
+Callum Hudson-Odoi,Nott'm Forest,Premier League,2025/26,30,29,1838,0,0,12,12,0.59,0,Midfielder,516
+Martin Ødegaard,Arsenal,Premier League,2025/26,24,21,1363,0,0,9,9,0.59,0,Midfielder,17
+Andy Irving,West Ham,Premier League,2025/26,7,5,156,0,0,1,0,0.58,0,Midfielder,621
+Rodrigo Martins Gomes,Wolves,Premier League,2025/26,22,15,954,0,0,6,8,0.57,0,Defender,635
+Anthony Elanga,Newcastle,Premier League,2025/26,32,27,1302,0,0,8,25,0.55,0,Midfielder,486
+Matthijs de Ligt,Man Utd,Premier League,2025/26,13,13,1170,0,0,6,5,0.46,0,Defender,436
+Samuel Chukwueze,Fulham,Premier League,2025/26,23,17,1067,0,0,5,12,0.42,0,Midfielder,727
+Levi Samuels Colwill,Chelsea,Premier League,2025/26,3,3,225,0,0,1,2,0.4,0,Defender,227
+Jack Harrison,Leeds,Premier League,2025/26,11,10,262,0,0,1,4,0.34,0,Midfielder,352
+Ezri Konsa Ngoyo,Aston Villa,Premier League,2025/26,34,34,3035,0,1,11,41,0.33,0,Defender,38
+Andrew Robertson,Liverpool,Premier League,2025/26,24,21,1165,0,0,4,1,0.31,0,Defender,372
+Jadon Sancho,Aston Villa,Premier League,2025/26,23,18,863,0,0,3,2,0.31,0,Midfielder,456
+Lewis Miley,Newcastle,Premier League,2025/26,23,21,1493,0,0,5,4,0.3,0,Midfielder,497
+Chemsdine Talbi,Sunderland,Premier League,2025/26,28,24,1553,0,0,5,1,0.29,0,Midfielder,553
+Hjalmar Ekdal,Burnley,Premier League,2025/26,19,18,1539,0,0,5,7,0.29,0,Defender,190
+Donyell Malen,Aston Villa,Premier League,2025/26,21,21,640,0,0,2,6,0.28,0,Midfielder,53
+Oleksandr Zinchenko,Nott'm Forest,Premier League,2025/26,5,5,352,0,0,1,2,0.26,0,Defender,12
+Victor Lindelöf,Aston Villa,Premier League,2025/26,17,16,942,0,0,2,1,0.19,0,Defender,719
+Wilson Odobert,Spurs,Premier League,2025/26,24,24,972,0,0,2,10,0.19,0,Midfielder,588
+Daniel James,Leeds,Premier League,2025/26,19,13,547,0,0,1,8,0.16,0,Midfielder,353
+Giorgi Mamardashvili,Liverpool,Premier League,2025/26,10,10,867,0,0,1,2,0.1,0,Goalkeeper,367
+Jacob Bruun Larsen,Burnley,Premier League,2025/26,28,21,1014,0,0,1,0,0.09,0,Midfielder,202
+Alphonse Areola,West Ham,Premier League,2025/26,20,20,1800,0,0,1,1,0.05,0,Goalkeeper,600
+Alex Murphy,Newcastle,Premier League,2025/26,2,1,7,0,0,0,0,0,0,Defender,481
+Altay Bayındır,Man Utd,Premier League,2025/26,6,6,540,0,0,0,3,0,0,Goalkeeper,431
+Alysson Edward Franco da Rocha dos Santos,Aston Villa,Premier League,2025/26,3,3,47,0,0,0,1,0,0,Midfielder,792
+Angus Gunn,Nott'm Forest,Premier League,2025/26,1,1,45,0,0,0,0,0,0,Goalkeeper,675
+Antoni Milambo,Brentford,Premier League,2025/26,1,1,45,0,0,0,0,0,0,Midfielder,122
+Ben Winterburn,Bournemouth,Premier League,2025/26,1,1,6,0,0,0,0,0,0,Midfielder,96
+Bendito Mantato,Man Utd,Premier League,2025/26,1,1,15,0,0,0,0,0,0,Midfielder,769
+Bradley Burrowes,Aston Villa,Premier League,2025/26,1,1,16,0,0,0,1,0,0,Midfielder,702
+Callum Marshall,West Ham,Premier League,2025/26,2,2,58,0,0,0,0,0,0,Forward,626
+Callum Olusesi,Spurs,Premier League,2025/26,1,0,14,0,0,0,0,0,0,Midfielder,595
+Dan Neil,Sunderland,Premier League,2025/26,3,1,13,0,0,0,1,0,0,Midfielder,549
+Daniel Bentley,Wolves,Premier League,2025/26,3,3,270,0,0,0,2,0,0,Goalkeeper,629
+Djiamgone Jocelin Ta Bi,Sunderland,Premier League,2025/26,1,1,38,0,0,0,1,0,0,Midfielder,800
+Ezra Mayers,West Ham,Premier League,2025/26,6,5,113,0,0,0,0,0,0,Defender,747
+Filip Jörgensen,Chelsea,Premier League,2025/26,5,4,378,0,0,0,0,0,0,Goalkeeper,221
+Freddie Woodman,Liverpool,Premier League,2025/26,3,2,212,0,0,0,0,0,0,Goalkeeper,369
+Fábio Freitas Gouveia Carvalho,Brentford,Premier League,2025/26,6,5,100,0,0,0,0,0,0,Midfielder,123
+George Earthy,West Ham,Premier League,2025/26,1,1,8,0,0,0,0,0,0,Midfielder,620
+Hamed Traorè,Bournemouth,Premier League,2025/26,1,1,16,0,0,0,0,0,0,Midfielder,93
+Harry Howell,Brighton,Premier League,2025/26,3,3,92,0,0,0,0,0,0,Midfielder,795
+Harvey Elliott,Aston Villa,Premier League,2025/26,5,4,110,0,0,0,2,0,0,Midfielder,389
+Hákon Rafn Valdimarsson,Brentford,Premier League,2025/26,1,1,90,0,0,0,0,0,0,Goalkeeper,105
+Jair Paula da Cunha Filho,Nott'm Forest,Premier League,2025/26,9,6,514,0,0,0,6,0,0,Defender,510
+Jamaal Lascelles,Newcastle,Premier League,2025/26,2,2,19,0,0,0,0,0,0,Defender,480
+Jamaldeen Jimoh-Aloba,Aston Villa,Premier League,2025/26,1,1,8,0,0,0,1,0,0,Midfielder,62
+James Rowswell,Spurs,Premier League,2025/26,1,1,1,0,0,0,0,0,0,Defender,750
+James Trafford,Man City,Premier League,2025/26,4,4,360,0,0,0,1,0,0,Goalkeeper,182
+Jerome Abbey,Wolves,Premier League,2025/26,1,1,16,0,0,0,0,0,0,Midfielder,809
+Jesse Derry,Chelsea,Premier League,2025/26,1,1,45,0,0,0,1,0,0,Midfielder,829
+Joe Knight,Brighton,Premier League,2025/26,1,0,1,0,0,0,0,0,0,Midfielder,175
+John Stones,Man City,Premier League,2025/26,9,7,436,0,0,0,0,0,0,Defender,409
+Josh Dasilva,Brentford,Premier League,2025/26,2,2,2,0,0,0,0,0,0,Midfielder,748
+João Pedro Ferreira da Silva,Nott'm Forest,Premier League,2025/26,1,1,11,0,0,0,1,0,0,Midfielder,518
+Jun'ai Byfield,Spurs,Premier League,2025/26,1,1,1,0,0,0,0,0,0,Defender,745
+Kepa Arrizabalaga Revuelta,Arsenal,Premier League,2025/26,1,1,90,0,0,0,0,0,0,Goalkeeper,2
+Luis Guilherme Lira dos Santos,West Ham,Premier League,2025/26,5,5,121,0,0,0,0,0,0,Midfielder,619
+Mads Hermansen,West Ham,Premier League,2025/26,18,18,1620,0,0,0,2,0,0,Goalkeeper,679
+Mamadou Sarr,Chelsea,Premier League,2025/26,3,1,100,0,0,0,0,0,0,Defender,231
+Mateo Kovačić,Man City,Premier League,2025/26,6,2,125,0,0,0,2,0,0,Midfielder,422
+Max Alleyne,Man City,Premier League,2025/26,2,2,135,0,0,0,0,0,0,Defender,794
+Max Weiß,Burnley,Premier League,2025/26,3,3,270,0,0,0,0,0,0,Goalkeeper,183
+Melker Ellborg,Sunderland,Premier League,2025/26,3,3,270,0,0,0,1,0,0,Goalkeeper,812
+Mike Trésor Ndayishimiye,Burnley,Premier League,2025/26,6,6,37,0,0,0,0,0,0,Midfielder,214
+Nayef Aguerd,West Ham,Premier League,2025/26,2,2,180,0,0,0,1,0,0,Defender,607
+Nehemiah Oriola,Brighton,Premier League,2025/26,1,0,1,0,0,0,0,0,0,Midfielder,744
+Odsonne Édouard,Crystal Palace,Premier League,2025/26,1,1,2,0,0,0,1,0,0,Forward,285
+Patrick Roberts,Sunderland,Premier League,2025/26,1,1,27,0,0,0,0,0,0,Midfielder,545
+Reiss Nelson,Brentford,Premier League,2025/26,10,5,118,0,0,0,2,0,0,Midfielder,27
+Rio Cardines,Crystal Palace,Premier League,2025/26,1,1,90,0,0,0,1,0,0,Midfielder,690
+Sam Johnstone,Wolves,Premier League,2025/26,12,12,1080,0,0,0,0,0,0,Goalkeeper,627
+Saša Kalajdžić,Wolves,Premier League,2025/26,1,1,14,0,0,0,0,0,0,Forward,656
+Sean Neave,Newcastle,Premier League,2025/26,1,0,13,0,0,0,0,0,0,Forward,501
+Senne Lammens,Man Utd,Premier League,2025/26,32,32,2880,0,0,0,4,0,0,Goalkeeper,733
+Shumaira Mheuka,Chelsea,Premier League,2025/26,1,1,1,0,0,0,0,0,0,Forward,840
+Solly March,Brighton,Premier League,2025/26,4,0,38,0,0,0,1,0,0,Midfielder,159
+Stefan Ortega Moreno,Nott'm Forest,Premier League,2025/26,3,3,270,0,0,0,0,0,0,Goalkeeper,400
+Séamus Coleman,Everton,Premier League,2025/26,5,1,19,0,0,0,1,0,0,Defender,294
+Tom Edozie,Wolves,Premier League,2025/26,3,0,12,0,0,0,0,0,0,Midfielder,651
+Tyler Fletcher,Man Utd,Premier League,2025/26,2,2,17,0,0,0,0,0,0,Midfielder,771
+Tyler Fredricson,Man Utd,Premier League,2025/26,1,1,2,0,0,0,0,0,0,Defender,446
+Tyrell Malacia,Man Utd,Premier League,2025/26,3,1,15,0,0,0,0,0,0,Defender,448
+Veljko Milosavljevic,Bournemouth,Premier League,2025/26,7,5,367,0,0,0,0,0,0,Defender,721
+Walter Benítez,Crystal Palace,Premier League,2025/26,1,1,90,0,0,0,0,0,0,Goalkeeper,254
+Tommy Setford,Arsenal,Premier League,2025/26,,,,,,,,,,,4
+Will Dennis,Bournemouth,Premier League,2025/26,,,,,,,,,,,68
+Ellery Balcombe,Brentford,Premier League,2025/26,,,,,,,,,,,102
+Jason Steele,Brighton,Premier League,2025/26,,,,,,,,,,,138
+Connor Roberts,Burnley,Premier League,2025/26,,,,,,,,,,,186
+Gabriel Słonina,Chelsea,Premier League,2025/26,,,,,,,,,,,223
+Remi Matthews,Crystal Palace,Premier League,2025/26,,,,,,,,,,,255
+Mark Travers,Everton,Premier League,2025/26,,,,,,,,,,,288
+Reece Welch,Everton,Premier League,2025/26,,,,,,,,,,,298
+Illan Meslier,Leeds,Premier League,2025/26,,,,,,,,,,,339
+Ármin Pécsi,Liverpool,Premier League,2025/26,,,,,,,,,,,368
+Calvin Ramsay,Liverpool,Premier League,2025/26,,,,,,,,,,,380
+James McConnell,Liverpool,Premier League,2025/26,,,,,,,,,,,394
+Marcus Bettinelli,Man City,Premier League,2025/26,,,,,,,,,,,401
+Jack Moorhouse,Man Utd,Premier League,2025/26,,,,,,,,,,,464
+Willy Boly,Nott'm Forest,Premier League,2025/26,,,,,,,,,,,514
+Eric da Silva Moreira,Nott'm Forest,Premier League,2025/26,,,,,,,,,,,523
+Anthony Patterson,Sunderland,Premier League,2025/26,,,,,,,,,,,528
+Simon Moore,Sunderland,Premier League,2025/26,,,,,,,,,,,529
+Milan Aleksić,Sunderland,Premier League,2025/26,,,,,,,,,,,546
+Harrison Jones,Sunderland,Premier League,2025/26,,,,,,,,,,,557
+Brandon Austin,Spurs,Premier League,2025/26,,,,,,,,,,,566
+Tom King,Everton,Premier League,2025/26,,,,,,,,,,,630
+Benjamin Lecomte,Fulham,Premier League,2025/26,,,,,,,,,,,664
+Adam Aznou,Everton,Premier League,2025/26,,,,,,,,,,,667
+Kieran Morrison,Liverpool,Premier League,2025/26,,,,,,,,,,,746
+John Ruddy,Newcastle,Premier League,2025/26,,,,,,,,,,,753
+Marli Salmon,Arsenal,Premier League,2025/26,,,,,,,,,,,759
