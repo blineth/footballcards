@@ -1,10 +1,20 @@
 import { db, isDatabaseConfigured } from "@/lib/db"
-import { playerBaselines, playerH2H, playerRefereeHistory, referees } from "@/lib/db/schema"
+import {
+  playerBaselines,
+  playerH2H,
+  playerRefereeHistory,
+  referees,
+} from "@/lib/db/schema"
+import { and, eq, gte, lte } from "drizzle-orm"
 import { NextResponse } from "next/server"
 
 export const dynamic = "force-dynamic"
 
-type Dataset = "player_baselines" | "h2h" | "referees" | "player_referee_history"
+type Dataset =
+  | "player_baselines"
+  | "h2h"
+  | "referees"
+  | "player_referee_history"
 
 // --- lightweight CSV parser (handles quoted fields and commas) ---
 function parseCSV(text: string): Record<string, string>[] {
@@ -12,15 +22,21 @@ function parseCSV(text: string): Record<string, string>[] {
   let field = ""
   let row: string[] = []
   let inQuotes = false
+
   for (let i = 0; i < text.length; i++) {
     const c = text[i]
+
     if (inQuotes) {
       if (c === '"') {
         if (text[i + 1] === '"') {
           field += '"'
           i++
-        } else inQuotes = false
-      } else field += c
+        } else {
+          inQuotes = false
+        }
+      } else {
+        field += c
+      }
     } else if (c === '"') {
       inQuotes = true
     } else if (c === ",") {
@@ -28,45 +44,75 @@ function parseCSV(text: string): Record<string, string>[] {
       field = ""
     } else if (c === "\n" || c === "\r") {
       if (c === "\r" && text[i + 1] === "\n") i++
+
       row.push(field)
       field = ""
-      if (row.some((v) => v.trim() !== "")) rows.push(row)
+
+      if (row.some((v) => v.trim() !== "")) {
+        rows.push(row)
+      }
+
       row = []
-    } else field += c
+    } else {
+      field += c
+    }
   }
+
   if (field !== "" || row.length > 0) {
     row.push(field)
-    if (row.some((v) => v.trim() !== "")) rows.push(row)
+
+    if (row.some((v) => v.trim() !== "")) {
+      rows.push(row)
+    }
   }
+
   if (rows.length === 0) return []
+
   const headers = rows[0].map((h) => h.trim())
+
   return rows.slice(1).map((r) => {
     const obj: Record<string, string> = {}
-    headers.forEach((h, idx) => (obj[h] = (r[idx] ?? "").trim()))
+
+    headers.forEach((h, idx) => {
+      obj[h] = (r[idx] ?? "").trim()
+    })
+
     return obj
   })
 }
 
 const int = (v: unknown) => {
   if (v === "" || v === null || v === undefined) return null
+
   const n = Number(v)
+
   return Number.isFinite(n) ? Math.trunc(n) : null
 }
+
 const dec = (v: unknown) => {
   if (v === "" || v === null || v === undefined) return null
+
   const n = Number(v)
+
   return Number.isFinite(n) ? String(n) : null
 }
+
 const str = (v: unknown) => {
   if (v === null || v === undefined) return null
+
   const s = String(v).trim()
+
   return s === "" ? null : s
 }
+
 const bool = (v: unknown) => {
   if (v === "" || v === null || v === undefined) return null
+
   const s = String(v).toLowerCase().trim()
+
   if (["1", "true", "yes", "y"].includes(s)) return true
   if (["0", "false", "no", "n"].includes(s)) return false
+
   return null
 }
 
@@ -90,6 +136,7 @@ function mapRows(dataset: Dataset, rows: Record<string, unknown>[]) {
         position: str(r.position),
         externalPlayerId: str(r.external_player_id),
       }))
+
     case "h2h":
       return rows.map((r) => ({
         playerName: str(r.player_name ?? r.player) ?? "",
@@ -104,6 +151,7 @@ function mapRows(dataset: Dataset, rows: Record<string, unknown>[]) {
         redCard: bool(r.red_card),
         externalPlayerId: str(r.external_player_id),
       }))
+
     case "referees":
       return rows.map((r) => ({
         refereeName: str(r.referee_name ?? r.referee) ?? "",
@@ -116,6 +164,7 @@ function mapRows(dataset: Dataset, rows: Record<string, unknown>[]) {
         season: str(r.season),
         externalRefereeId: str(r.external_referee_id),
       }))
+
     case "player_referee_history":
       return rows.map((r) => ({
         refereeName: str(r.referee_name ?? r.referee) ?? "",
@@ -133,7 +182,13 @@ function mapRows(dataset: Dataset, rows: Record<string, unknown>[]) {
 
 export async function POST(request: Request) {
   if (!isDatabaseConfigured) {
-    return NextResponse.json({ ok: false, error: "Database not connected." }, { status: 503 })
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Database not connected.",
+      },
+      { status: 503 },
+    )
   }
 
   const body = (await request.json().catch(() => null)) as {
@@ -143,39 +198,150 @@ export async function POST(request: Request) {
   } | null
 
   if (!body?.dataset || !body?.content) {
-    return NextResponse.json({ ok: false, error: "Missing dataset or content." }, { status: 400 })
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Missing dataset or content.",
+      },
+      { status: 400 },
+    )
   }
 
-  const validDatasets: Dataset[] = ["player_baselines", "h2h", "referees", "player_referee_history"]
+  const validDatasets: Dataset[] = [
+    "player_baselines",
+    "h2h",
+    "referees",
+    "player_referee_history",
+  ]
+
   if (!validDatasets.includes(body.dataset)) {
-    return NextResponse.json({ ok: false, error: "Unknown dataset." }, { status: 400 })
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Unknown dataset.",
+      },
+      { status: 400 },
+    )
   }
 
   let raw: Record<string, unknown>[]
+
   try {
     if (body.format === "json") {
       const parsed = JSON.parse(body.content)
-      raw = Array.isArray(parsed) ? parsed : parsed.rows ?? []
+
+      raw = Array.isArray(parsed)
+        ? parsed
+        : parsed.rows ?? []
     } else {
       raw = parseCSV(body.content)
     }
   } catch {
-    return NextResponse.json({ ok: false, error: "Could not parse the file." }, { status: 400 })
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Could not parse the file.",
+      },
+      { status: 400 },
+    )
   }
 
   if (raw.length === 0) {
-    return NextResponse.json({ ok: false, error: "No rows found in file." }, { status: 400 })
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "No rows found in file.",
+      },
+      { status: 400 },
+    )
   }
 
   const mapped = mapRows(body.dataset, raw)
 
   try {
+    /*
+     * IMPORTANT:
+     *
+     * The original importer always appended H2H rows.
+     * That would duplicate the existing 12,613 rows.
+     *
+     * We now remove the old 2025/26 Premier League research
+     * before importing the newly enriched version.
+     */
+
+    if (body.dataset === "h2h") {
+      /*
+       * Safety check.
+       *
+       * The complete generated 2025/26 file should contain
+       * 12,613 player-match rows.
+       *
+       * Refuse to wipe the current season if somebody
+       * accidentally uploads a tiny/partial file.
+       */
+      if (mapped.length < 12000) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "H2H replacement stopped for safety. Expected the complete 2025/26 dataset (about 12,613 rows).",
+          },
+          { status: 400 },
+        )
+      }
+
+      await db
+        .delete(playerH2H)
+        .where(
+          and(
+            eq(playerH2H.competition, "Premier League"),
+            gte(playerH2H.matchDate, "2025-08-01"),
+            lte(playerH2H.matchDate, "2026-06-30"),
+          ),
+        )
+    }
+
+    if (body.dataset === "referees") {
+      /*
+       * Replace 2025/26 referee rows.
+       *
+       * This is required because the old records had
+       * missing red-card and fouls/game values.
+       */
+      await db
+        .delete(referees)
+        .where(
+          and(
+            eq(referees.competition, "Premier League"),
+            eq(referees.season, "2025/26"),
+          ),
+        )
+    }
+
+    if (body.dataset === "player_referee_history") {
+      /*
+       * This table currently contains the 2025/26 research set.
+       *
+       * Replace it completely so the newly calculated yellow/red
+       * card counts are stored rather than ignored by
+       * onConflictDoNothing().
+       *
+       * When we add multiple seasons to this table later,
+       * we'll add season/competition columns and scope this delete.
+       */
+      await db.delete(playerRefereeHistory)
+    }
+
     let inserted = 0
+
     // Chunk inserts to keep statements reasonable.
     const chunkSize = 200
+
     for (let i = 0; i < mapped.length; i += chunkSize) {
       const chunk = mapped.slice(i, i + chunkSize)
+
       if (chunk.length === 0) continue
+
       switch (body.dataset) {
         case "player_baselines":
           await db
@@ -183,27 +349,54 @@ export async function POST(request: Request) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             .values(chunk as any)
             .onConflictDoNothing()
+
           break
+
         case "h2h":
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await db.insert(playerH2H).values(chunk as any)
+
           break
+
         case "referees":
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await db.insert(referees).values(chunk as any).onConflictDoNothing()
+          await db.insert(referees).values(chunk as any)
+
           break
+
         case "player_referee_history":
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await db.insert(playerRefereeHistory).values(chunk as any).onConflictDoNothing()
+          await db.insert(playerRefereeHistory).values(chunk as any)
+
           break
       }
+
       inserted += chunk.length
     }
-    return NextResponse.json({ ok: true, dataset: body.dataset, rows: inserted })
+
+    return NextResponse.json({
+      ok: true,
+      dataset: body.dataset,
+      rows: inserted,
+      replacedExisting:
+        body.dataset === "h2h" ||
+        body.dataset === "referees" ||
+        body.dataset === "player_referee_history",
+    })
   } catch (error) {
-    console.log("[v0] import error:", error instanceof Error ? error.message : error)
+    console.log(
+      "[v0] import error:",
+      error instanceof Error
+        ? error.message
+        : error,
+    )
+
     return NextResponse.json(
-      { ok: false, error: "Insert failed. Check your column headers match the template." },
+      {
+        ok: false,
+        error:
+          "Import failed. Existing data may not have been replaced correctly. Check the server log before retrying.",
+      },
       { status: 500 },
     )
   }
@@ -211,16 +404,26 @@ export async function POST(request: Request) {
 
 export async function GET() {
   if (!isDatabaseConfigured) {
-    return NextResponse.json({ connected: false, counts: null })
+    return NextResponse.json({
+      connected: false,
+      counts: null,
+    })
   }
+
   const [b, h, r, prh] = await Promise.all([
     db.$count(playerBaselines),
     db.$count(playerH2H),
     db.$count(referees),
     db.$count(playerRefereeHistory),
   ])
+
   return NextResponse.json({
     connected: true,
-    counts: { player_baselines: b, h2h: h, referees: r, player_referee_history: prh },
+    counts: {
+      player_baselines: b,
+      h2h: h,
+      referees: r,
+      player_referee_history: prh,
+    },
   })
 }
