@@ -1,0 +1,59 @@
+name: Build complete 2025-26 card history
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/enrich-research-data.mjs'
+      - 'data/source/player_match_log_2025_26.json'
+      - 'player_baselines.csv'
+      - '.github/workflows/build-complete-card-history.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Fetch all 38 gameweeks and build exact research CSVs
+        run: node scripts/enrich-research-data.mjs
+
+      - name: Validate required output sizes
+        shell: bash
+        run: |
+          test "$(($(wc -l < h2h.csv)-1))" -eq 12613
+          test "$(($(wc -l < referees.csv)-1))" -ge 20
+          test "$(($(wc -l < player_referee_history.csv)-1))" -gt 6000
+          echo "Validation passed."
+
+      - name: Commit generated database files
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add \
+            h2h.csv \
+            referees.csv \
+            player_referee_history.csv \
+            data/identified_card_events.csv \
+            data/unresolved_card_events.csv \
+            data/research-data-quality.json
+
+          if git diff --cached --quiet; then
+            echo "Generated files are already up to date."
+            exit 0
+          fi
+
+          git commit -m "Build complete 2025-26 card history"
+          git push
