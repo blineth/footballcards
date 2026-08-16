@@ -21,38 +21,60 @@ function parseCSV(text) {
     const c = text[i]
     if (inQuotes) {
       if (c === '"') {
-        if (text[i + 1] === '"') { field += '"'; i++ }
-        else inQuotes = false
-      } else field += c
-    } else if (c === '"') inQuotes = true
-    else if (c === ',') { row.push(field); field = '' }
-    else if (c === '\n' || c === '\r') {
+        if (text[i + 1] === '"') {
+          field += '"'
+          i++
+        } else {
+          inQuotes = false
+        }
+      } else {
+        field += c
+      }
+    } else if (c === '"') {
+      inQuotes = true
+    } else if (c === ',') {
+      row.push(field)
+      field = ''
+    } else if (c === '\n' || c === '\r') {
       if (c === '\r' && text[i + 1] === '\n') i++
-      row.push(field); field = ''
+      row.push(field)
+      field = ''
       if (row.some(v => v !== '')) rows.push(row)
       row = []
-    } else field += c
+    } else {
+      field += c
+    }
   }
+
   if (field !== '' || row.length) {
     row.push(field)
     if (row.some(v => v !== '')) rows.push(row)
   }
+
   if (!rows.length) return []
+
   const headers = rows[0].map(v => v.trim().replace(/^\uFEFF/, ''))
+
   return rows.slice(1).map(r =>
-    Object.fromEntries(headers.map((h, i) => [h, (r[i] ?? '').trim()]))
+    Object.fromEntries(
+      headers.map((h, i) => [h, (r[i] ?? '').trim()])
+    )
   )
 }
 
 function csvCell(value) {
   const s = value == null ? '' : String(value)
-  return /[",\n\r]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s
+  return /[",\n\r]/.test(s)
+    ? `"${s.replaceAll('"', '""')}"`
+    : s
 }
 
 function toCSV(headers, rows) {
   return [
     headers.join(','),
-    ...rows.map(r => headers.map(h => csvCell(r[h])).join(','))
+    ...rows.map(r =>
+      headers.map(h => csvCell(r[h])).join(',')
+    ),
   ].join('\n') + '\n'
 }
 
@@ -64,19 +86,33 @@ function n(v) {
 
 async function fetchText(url, attempts = 5) {
   let last
+
   for (let i = 0; i < attempts; i++) {
     try {
       const res = await fetch(url, {
-        headers: { 'user-agent': 'footballcards-full-card-enrichment/2.0' }
+        headers: {
+          'user-agent': 'footballcards-full-card-enrichment/2.0',
+        },
       })
-      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+
+      if (!res.ok) {
+        throw new Error(`${res.status} ${res.statusText}`)
+      }
+
       return await res.text()
     } catch (e) {
       last = e
-      await new Promise(r => setTimeout(r, 750 * (i + 1)))
+      await new Promise(r =>
+        setTimeout(r, 750 * (i + 1))
+      )
     }
   }
-  throw new Error(`Failed to fetch ${url}: ${last instanceof Error ? last.message : last}`)
+
+  throw new Error(
+    `Failed to fetch ${url}: ${
+      last instanceof Error ? last.message : last
+    }`
+  )
 }
 
 const teamSlug = new Map([
@@ -132,19 +168,34 @@ const refereeFullName = new Map([
 function footballDataMatchId(home, away) {
   const h = teamSlug.get(home)
   const a = teamSlug.get(away)
-  return h && a ? `25-26-prem-${h}-vs-${a}` : null
+
+  return h && a
+    ? `25-26-prem-${h}-vs-${a}`
+    : null
 }
 
 function dateOnly(value) {
   if (!value) return ''
+
   const iso = value.match(/^(\d{4}-\d{2}-\d{2})/)
   if (iso) return iso[1]
-  const uk = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/)
+
+  const uk = value.match(
+    /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/
+  )
+
   if (uk) {
     let y = uk[3]
-    if (y.length === 2) y = Number(y) >= 70 ? `19${y}` : `20${y}`
+
+    if (y.length === 2) {
+      y = Number(y) >= 70
+        ? `19${y}`
+        : `20${y}`
+    }
+
     return `${y}-${uk[2].padStart(2, '0')}-${uk[1].padStart(2, '0')}`
   }
+
   return ''
 }
 
@@ -156,58 +207,102 @@ const [baselineText, sourceText] = await Promise.all([
 const baselines = parseCSV(baselineText)
 const groupedSource = JSON.parse(sourceText)
 
-const sourceRows = Object.entries(groupedSource).flatMap(([match_id, entries]) =>
-  entries.map(([player_id, opponent, minutes, fouls_committed, fouls_drawn]) => ({
-    player_id: String(player_id),
-    opponent,
-    match_id,
-    minutes: String(minutes),
-    fouls_committed: String(fouls_committed),
-    fouls_drawn: String(fouls_drawn),
-  }))
+const sourceRows = Object.entries(groupedSource).flatMap(
+  ([match_id, entries]) =>
+    entries.map(
+      ([
+        player_id,
+        opponent,
+        minutes,
+        fouls_committed,
+        fouls_drawn,
+      ]) => ({
+        player_id: String(player_id),
+        opponent,
+        match_id,
+        minutes: String(minutes),
+        fouls_committed: String(fouls_committed),
+        fouls_drawn: String(fouls_drawn),
+      })
+    )
 )
 
 const profileById = new Map(
-  baselines.map(r => [String(r.external_player_id), r])
+  baselines.map(r => [
+    String(r.external_player_id),
+    r,
+  ])
 )
 
-// Exact match dates + exact player-level card incidents.
 const dates = new Map()
 const cardByMatchPlayer = new Map()
 const identifiedCardEvents = []
 const gwStats = []
 
 async function loadGw(gw) {
-  const dir = `${UPSTREAM}/By%20Tournament/Premier%20League/GW${gw}`
-  const [matchText, incidentText] = await Promise.all([
-    fetchText(`${dir}/matches.csv`),
-    fetchText(`${dir}/incidents.csv`),
-  ])
+  const dir =
+    `${UPSTREAM}/By%20Tournament/Premier%20League/GW${gw}`
+
+  const [matchText, incidentText] =
+    await Promise.all([
+      fetchText(`${dir}/matches.csv`),
+      fetchText(`${dir}/incidents.csv`),
+    ])
 
   const matches = parseCSV(matchText)
   const incidents = parseCSV(incidentText)
 
   for (const m of matches) {
     const d = dateOnly(m.kickoff_time)
-    if (m.match_id && d) dates.set(m.match_id, d)
+
+    if (m.match_id && d) {
+      dates.set(m.match_id, d)
+    }
   }
 
   let identifiedCards = 0
 
   for (const i of incidents) {
-    if (i.incident_type !== 'card' || !i.match_id || !i.player_id) continue
+    if (
+      i.incident_type !== 'card' ||
+      !i.match_id ||
+      !i.player_id
+    ) {
+      continue
+    }
 
     const type = String(i.card_type || '')
       .toLowerCase()
       .replace(/[^a-z]/g, '')
 
-    if (!['yellow', 'red', 'yellowred'].includes(type)) continue
+    if (
+      !['yellow', 'red', 'yellowred'].includes(type)
+    ) {
+      continue
+    }
 
-    const key = `${i.match_id}|${i.player_id}`
-    const rec = cardByMatchPlayer.get(key) ?? { yellow: false, red: false }
+    const key =
+      `${i.match_id}|${i.player_id}`
 
-    if (type === 'yellow' || type === 'yellowred') rec.yellow = true
-    if (type === 'red' || type === 'yellowred') rec.red = true
+    const rec =
+      cardByMatchPlayer.get(key) ?? {
+        yellow: false,
+        red: false,
+      }
+
+    if (
+      type === 'yellow' ||
+      type === 'yellowred'
+    ) {
+      rec.yellow = true
+    }
+
+    if (
+      type === 'red' ||
+      type === 'yellowred'
+    ) {
+      rec.red = true
+    }
 
     cardByMatchPlayer.set(key, rec)
 
@@ -219,51 +314,99 @@ async function loadGw(gw) {
       minute: i.minute,
       added_time: i.added_time,
       card_type: i.card_type,
-      yellow_card: (type === 'yellow' || type === 'yellowred') ? '1' : '0',
-      red_card: (type === 'red' || type === 'yellowred') ? '1' : '0',
+      yellow_card:
+        type === 'yellow' ||
+        type === 'yellowred'
+          ? '1'
+          : '0',
+      red_card:
+        type === 'red' ||
+        type === 'yellowred'
+          ? '1'
+          : '0',
     })
 
     identifiedCards++
   }
 
-  return { gw, matches: matches.length, identifiedCardIncidents: identifiedCards }
+  return {
+    gw,
+    matches: matches.length,
+    identifiedCardIncidents:
+      identifiedCards,
+  }
 }
 
 const concurrency = 6
-for (let start = 1; start <= 38; start += concurrency) {
+
+for (
+  let start = 1;
+  start <= 38;
+  start += concurrency
+) {
   const batch = []
-  for (let gw = start; gw < start + concurrency && gw <= 38; gw++) {
+
+  for (
+    let gw = start;
+    gw < start + concurrency &&
+    gw <= 38;
+    gw++
+  ) {
     batch.push(loadGw(gw))
   }
-  gwStats.push(...await Promise.all(batch))
+
+  gwStats.push(
+    ...await Promise.all(batch)
+  )
 }
 
-// Quarantined incidents: a card is known to have happened but the player cannot be identified.
-// For these matches, affected card types stay NULL/blank unless the player's card is explicitly known.
-const quarantineText = await fetchText(
-  `${UPSTREAM}/supplemental/incidents_quarantined.csv`
-)
-const quarantined = parseCSV(quarantineText)
+const quarantineText =
+  await fetchText(
+    `${UPSTREAM}/supplemental/incidents_quarantined.csv`
+  )
+
+const quarantined =
+  parseCSV(quarantineText)
 
 const uncertainByMatch = new Map()
 const unresolvedCardEvents = []
 
 for (const q of quarantined) {
-  if (q.incident_type !== 'card' || !q.match_id) continue
+  if (
+    q.incident_type !== 'card' ||
+    !q.match_id
+  ) {
+    continue
+  }
 
   const type = String(q.card_type || '')
     .toLowerCase()
     .replace(/[^a-z]/g, '')
 
-  const rec = uncertainByMatch.get(q.match_id) ?? {
-    yellow: false,
-    red: false,
+  const rec =
+    uncertainByMatch.get(q.match_id) ?? {
+      yellow: false,
+      red: false,
+    }
+
+  if (
+    type === 'yellow' ||
+    type === 'yellowred'
+  ) {
+    rec.yellow = true
   }
 
-  if (type === 'yellow' || type === 'yellowred') rec.yellow = true
-  if (type === 'red' || type === 'yellowred') rec.red = true
+  if (
+    type === 'red' ||
+    type === 'yellowred'
+  ) {
+    rec.red = true
+  }
 
-  uncertainByMatch.set(q.match_id, rec)
+  uncertainByMatch.set(
+    q.match_id,
+    rec
+  )
 
   unresolvedCardEvents.push({
     gameweek: q.gameweek,
@@ -271,7 +414,8 @@ for (const q of quarantined) {
     team_side: q.team_side,
     minute: q.minute,
     card_type: q.card_type,
-    quarantine_reason: q.quarantine_reason,
+    quarantine_reason:
+      q.quarantine_reason,
   })
 }
 
@@ -288,35 +432,70 @@ const h2hRows = sourceRows.map(r => {
 
   if (!p) missingProfiles++
 
-  const matchDate = dates.get(r.match_id) ?? ''
-  if (!matchDate) missingDates++
+  const matchDate =
+    dates.get(r.match_id) ?? ''
 
-  const known = cardByMatchPlayer.get(`${r.match_id}|${id}`) ?? {
-    yellow: false,
-    red: false,
+  if (!matchDate) {
+    missingDates++
   }
 
-  const uncertain = uncertainByMatch.get(r.match_id) ?? {
-    yellow: false,
-    red: false,
+  const known =
+    cardByMatchPlayer.get(
+      `${r.match_id}|${id}`
+    ) ?? {
+      yellow: false,
+      red: false,
+    }
+
+  const uncertain =
+    uncertainByMatch.get(
+      r.match_id
+    ) ?? {
+      yellow: false,
+      red: false,
+    }
+
+  const yellow =
+    known.yellow
+      ? '1'
+      : uncertain.yellow
+        ? ''
+        : '0'
+
+  const red =
+    known.red
+      ? '1'
+      : uncertain.red
+        ? ''
+        : '0'
+
+  if (yellow === '') {
+    nullYellowRows++
   }
 
-  const yellow = known.yellow ? '1' : uncertain.yellow ? '' : '0'
-  const red = known.red ? '1' : uncertain.red ? '' : '0'
+  if (red === '') {
+    nullRedRows++
+  }
 
-  if (yellow === '') nullYellowRows++
-  if (red === '') nullRedRows++
-  if (yellow === '1') yellowTrueRows++
-  if (red === '1') redTrueRows++
+  if (yellow === '1') {
+    yellowTrueRows++
+  }
+
+  if (red === '1') {
+    redTrueRows++
+  }
 
   return {
-    player_name: p?.player_name ?? `Player ${id}`,
+    player_name:
+      p?.player_name ??
+      `Player ${id}`,
     team: p?.team ?? '',
     opponent: r.opponent,
     match_date: matchDate,
     competition: 'Premier League',
     minutes: r.minutes,
-    fouls_committed: r.fouls_committed,
+    fouls_committed:
+      r.fouls_committed,
     fouls_drawn: r.fouls_drawn,
     yellow_card: yellow,
     red_card: red,
@@ -324,8 +503,10 @@ const h2hRows = sourceRows.map(r => {
 
     _knownYellow: known.yellow,
     _knownRed: known.red,
-    _yellowCertain: yellow !== '',
-    _redCertain: red !== '',
+    _yellowCertain:
+      yellow !== '',
+    _redCertain:
+      red !== '',
     _match_id: r.match_id,
   }
 })
@@ -362,59 +543,107 @@ await fs.writeFile(
   )
 )
 
-// Referee source: final completed 2025/26 Premier League Football-Data file.
-const fdRows = parseCSV(await fetchText(FOOTBALL_DATA))
+const fdRows =
+  parseCSV(
+    await fetchText(
+      FOOTBALL_DATA
+    )
+  )
+
 const refByMatch = new Map()
 const refAgg = new Map()
 
 let unmappedFootballDataMatches = 0
 
 for (const r of fdRows) {
-  const matchId = footballDataMatchId(r.HomeTeam, r.AwayTeam)
+  const matchId =
+    footballDataMatchId(
+      r.HomeTeam,
+      r.AwayTeam
+    )
+
   if (!matchId) {
     unmappedFootballDataMatches++
     continue
   }
 
   const rawReferee = r.Referee
-  if (!rawReferee) continue
 
-  const referee = refereeFullName.get(rawReferee) ?? rawReferee
-
-  refByMatch.set(matchId, referee)
-
-  const a = refAgg.get(referee) ?? {
-    matches: 0,
-    yellows: 0,
-    reds: 0,
-    fouls: 0,
+  if (!rawReferee) {
+    continue
   }
 
-  a.matches++
-  a.yellows += (n(r.HY) ?? 0) + (n(r.AY) ?? 0)
-  a.reds += (n(r.HR) ?? 0) + (n(r.AR) ?? 0)
-  a.fouls += (n(r.HF) ?? 0) + (n(r.AF) ?? 0)
+  const referee =
+    refereeFullName.get(
+      rawReferee
+    ) ?? rawReferee
 
-  refAgg.set(referee, a)
+  refByMatch.set(
+    matchId,
+    referee
+  )
+
+  const a =
+    refAgg.get(referee) ?? {
+      matches: 0,
+      yellows: 0,
+      reds: 0,
+      fouls: 0,
+    }
+
+  a.matches++
+
+  a.yellows +=
+    (n(r.HY) ?? 0) +
+    (n(r.AY) ?? 0)
+
+  a.reds +=
+    (n(r.HR) ?? 0) +
+    (n(r.AR) ?? 0)
+
+  a.fouls +=
+    (n(r.HF) ?? 0) +
+    (n(r.AF) ?? 0)
+
+  refAgg.set(
+    referee,
+    a
+  )
 }
 
-const refRows = [...refAgg.entries()]
-  .sort((a, b) => a[0].localeCompare(b[0]))
-  .map(([name, a]) => ({
-    referee_name: name,
-    matches_refereed: a.matches,
-    yellow_cards: a.yellows,
-    red_cards: a.reds,
-    yellows_per_game: a.matches
-      ? (a.yellows / a.matches).toFixed(3)
-      : '',
-    fouls_per_game: a.matches
-      ? (a.fouls / a.matches).toFixed(3)
-      : '',
-    competition: 'Premier League',
-    season: '2025/26',
-    external_referee_id: '',
-  }))
+const refRows =
+  [...refAgg.entries()]
+    .sort(
+      (a, b) =>
+        a[0].localeCompare(b[0])
+    )
+    .map(([name, a]) => ({
+      referee_name: name,
+      matches_refereed:
+        a.matches,
+      yellow_cards:
+        a.yellows,
+      red_cards:
+        a.reds,
+      yellows_per_game:
+        a.matches
+          ? (
+              a.yellows /
+              a.matches
+            ).toFixed(3)
+          : '',
+      fouls_per_game:
+        a.matches
+          ? (
+              a.fouls /
+              a.matches
+            ).toFixed(3)
+          : '',
+      competition:
+        'Premier League',
+      season: '2025/26',
+      external_referee_id: '',
+    }))
 
 await fs.writeFile(
   OUT_REFS,
@@ -434,65 +663,106 @@ await fs.writeFile(
   )
 )
 
-// Exact player × referee history.
 const pairAgg = new Map()
 let sourceRowsWithoutReferee = 0
 
 for (const r of h2hRows) {
-  const referee = refByMatch.get(r._match_id)
+  const referee =
+    refByMatch.get(
+      r._match_id
+    )
 
   if (!referee) {
     sourceRowsWithoutReferee++
     continue
   }
 
-  const id = String(r.external_player_id)
-  const key = `${referee}|${id}|${r.team}`
+  const id =
+    String(
+      r.external_player_id
+    )
 
-  const a = pairAgg.get(key) ?? {
-    referee,
-    player: r.player_name,
-    team: r.team,
-    playerId: id,
-    matches: 0,
-    yellows: 0,
-    reds: 0,
-    fouls: 0,
-    yellowCertain: true,
-    redCertain: true,
-  }
+  const key =
+    `${referee}|${id}|${r.team}`
+
+  const a =
+    pairAgg.get(key) ?? {
+      referee,
+      player: r.player_name,
+      team: r.team,
+      playerId: id,
+      matches: 0,
+      yellows: 0,
+      reds: 0,
+      fouls: 0,
+      yellowCertain: true,
+      redCertain: true,
+    }
 
   a.matches++
 
-  if (r._knownYellow) a.yellows++
-  if (r._knownRed) a.reds++
+  if (r._knownYellow) {
+    a.yellows++
+  }
 
-  a.fouls += n(r.fouls_committed) ?? 0
+  if (r._knownRed) {
+    a.reds++
+  }
 
-  if (!r._yellowCertain) a.yellowCertain = false
-  if (!r._redCertain) a.redCertain = false
+  a.fouls +=
+    n(r.fouls_committed) ?? 0
 
-  pairAgg.set(key, a)
+  if (!r._yellowCertain) {
+    a.yellowCertain = false
+  }
+
+  if (!r._redCertain) {
+    a.redCertain = false
+  }
+
+  pairAgg.set(
+    key,
+    a
+  )
 }
 
-const playerRefRows = [...pairAgg.values()]
-  .sort(
-    (a, b) =>
-      a.referee.localeCompare(b.referee) ||
-      a.player.localeCompare(b.player) ||
-      a.team.localeCompare(b.team)
-  )
-  .map(a => ({
-    referee_name: a.referee,
-    player_name: a.player,
-    team: a.team,
-    matches_together: a.matches,
-    yellow_cards: a.yellowCertain ? a.yellows : '',
-    red_cards: a.redCertain ? a.reds : '',
-    fouls_committed: a.fouls,
-    external_referee_id: '',
-    external_player_id: a.playerId,
-  }))
+const playerRefRows =
+  [...pairAgg.values()]
+    .sort(
+      (a, b) =>
+        a.referee.localeCompare(
+          b.referee
+        ) ||
+        a.player.localeCompare(
+          b.player
+        ) ||
+        a.team.localeCompare(
+          b.team
+        )
+    )
+    .map(a => ({
+      referee_name:
+        a.referee,
+      player_name:
+        a.player,
+      team:
+        a.team,
+      matches_together:
+        a.matches,
+      yellow_cards:
+        a.yellowCertain
+          ? a.yellows
+          : '',
+      red_cards:
+        a.redCertain
+          ? a.reds
+          : '',
+      fouls_committed:
+        a.fouls,
+      external_referee_id: '',
+      external_player_id:
+        a.playerId,
+    }))
 
 await fs.writeFile(
   OUT_PLAYER_REFS,
@@ -512,7 +782,14 @@ await fs.writeFile(
   )
 )
 
-await fs.mkdir(path.dirname(OUT_CARD_EVENTS), { recursive: true })
+await fs.mkdir(
+  path.dirname(
+    OUT_CARD_EVENTS
+  ),
+  {
+    recursive: true,
+  }
+)
 
 await fs.writeFile(
   OUT_CARD_EVENTS,
@@ -530,9 +807,17 @@ await fs.writeFile(
     ],
     identifiedCardEvents.sort(
       (a, b) =>
-        Number(a.gameweek) - Number(b.gameweek) ||
-        a.match_id.localeCompare(b.match_id) ||
-        Number(a.minute || 999) - Number(b.minute || 999)
+        Number(a.gameweek) -
+          Number(b.gameweek) ||
+        a.match_id.localeCompare(
+          b.match_id
+        ) ||
+        Number(
+          a.minute || 999
+        ) -
+          Number(
+            b.minute || 999
+          )
     )
   )
 )
@@ -552,86 +837,188 @@ await fs.writeFile(
   )
 )
 
-// Compare known H2H yellow totals against the season baseline as an audit.
-// Mismatches are reported, not silently changed.
-const knownYellowByPlayer = new Map()
-const knownRedByPlayer = new Map()
+const knownYellowByPlayer =
+  new Map()
+
+const knownRedByPlayer =
+  new Map()
 
 for (const r of h2hRows) {
-  const id = String(r.external_player_id)
-  if (r.yellow_card === '1') {
-    knownYellowByPlayer.set(id, (knownYellowByPlayer.get(id) ?? 0) + 1)
+  const id =
+    String(
+      r.external_player_id
+    )
+
+  if (
+    r.yellow_card === '1'
+  ) {
+    knownYellowByPlayer.set(
+      id,
+      (
+        knownYellowByPlayer.get(
+          id
+        ) ?? 0
+      ) + 1
+    )
   }
-  if (r.red_card === '1') {
-    knownRedByPlayer.set(id, (knownRedByPlayer.get(id) ?? 0) + 1)
+
+  if (
+    r.red_card === '1'
+  ) {
+    knownRedByPlayer.set(
+      id,
+      (
+        knownRedByPlayer.get(
+          id
+        ) ?? 0
+      ) + 1
+    )
   }
 }
 
-const baselineCardAudit = baselines
-  .filter(r => r.external_player_id)
-  .map(r => {
-    const id = String(r.external_player_id)
-    const baselineY = n(r.yellow_cards)
-    const baselineR = n(r.red_cards)
-    const knownY = knownYellowByPlayer.get(id) ?? 0
-    const knownR = knownRedByPlayer.get(id) ?? 0
+const baselineCardAudit =
+  baselines
+    .filter(
+      r =>
+        r.external_player_id
+    )
+    .map(r => {
+      const id =
+        String(
+          r.external_player_id
+        )
 
-    return {
-      player_id: id,
-      player_name: r.player_name,
-      team: r.team,
-      baseline_yellows: baselineY,
-      identified_match_yellows: knownY,
-      yellow_difference:
-        baselineY == null ? null : knownY - baselineY,
-      baseline_reds: baselineR,
-      identified_match_reds: knownR,
-      red_difference:
-        baselineR == null ? null : knownR - baselineR,
-    }
-  })
-  .filter(
-    r =>
-      (r.yellow_difference != null && r.yellow_difference !== 0) ||
-      (r.red_difference != null && r.red_difference !== 0)
-  )
+      const baselineY =
+        n(r.yellow_cards)
+
+      const baselineR =
+        n(r.red_cards)
+
+      const knownY =
+        knownYellowByPlayer.get(
+          id
+        ) ?? 0
+
+      const knownR =
+        knownRedByPlayer.get(
+          id
+        ) ?? 0
+
+      return {
+        player_id:
+          id,
+        player_name:
+          r.player_name,
+        team:
+          r.team,
+        baseline_yellows:
+          baselineY,
+        identified_match_yellows:
+          knownY,
+        yellow_difference:
+          baselineY == null
+            ? null
+            : knownY -
+              baselineY,
+        baseline_reds:
+          baselineR,
+        identified_match_reds:
+          knownR,
+        red_difference:
+          baselineR == null
+            ? null
+            : knownR -
+              baselineR,
+      }
+    })
+    .filter(
+      r =>
+        (
+          r.yellow_difference != null &&
+          r.yellow_difference !== 0
+        ) ||
+        (
+          r.red_difference != null &&
+          r.red_difference !== 0
+        )
+    )
 
 const report = {
-  generatedAt: new Date().toISOString(),
-  season: '2025/26',
-  competition: 'Premier League',
+  generatedAt:
+    new Date().toISOString(),
+
+  season:
+    '2025/26',
+
+  competition:
+    'Premier League',
 
   sources: {
     matchAndIncidentData:
       'olbauday/FPL-Core-Insights — 2025/26 Premier League GW1-GW38',
+
     refereeAndTeamTotals:
       'football-data.co.uk — 2025/26 Premier League E0.csv',
   },
 
-  sourcePlayerMatchRows: sourceRows.length,
-  exactMatchDates: dates.size,
+  sourcePlayerMatchRows:
+    sourceRows.length,
 
-  identifiedCardIncidentRows: identifiedCardEvents.length,
-  identifiedPlayerMatchCardPairs: cardByMatchPlayer.size,
-  unresolvedCardIncidentRows: unresolvedCardEvents.length,
-  quarantinedCardMatches: uncertainByMatch.size,
+  exactMatchDates:
+    dates.size,
 
-  h2hRows: h2hRows.length,
-  h2hYellowTrueRows: yellowTrueRows,
-  h2hRedTrueRows: redTrueRows,
-  h2hRowsWithUnknownYellowBecausePlayerWasUnlocated: nullYellowRows,
-  h2hRowsWithUnknownRedBecausePlayerWasUnlocated: nullRedRows,
+  identifiedCardIncidentRows:
+    identifiedCardEvents.length,
 
-  refereeMatchesMapped: refByMatch.size,
-  refereeRows: refRows.length,
-  playerRefereeRows: playerRefRows.length,
-  sourcePlayerRowsWithoutReferee,
+  identifiedPlayerMatchCardPairs:
+    cardByMatchPlayer.size,
+
+  unresolvedCardIncidentRows:
+    unresolvedCardEvents.length,
+
+  quarantinedCardMatches:
+    uncertainByMatch.size,
+
+  h2hRows:
+    h2hRows.length,
+
+  h2hYellowTrueRows:
+    yellowTrueRows,
+
+  h2hRedTrueRows:
+    redTrueRows,
+
+  h2hRowsWithUnknownYellowBecausePlayerWasUnlocated:
+    nullYellowRows,
+
+  h2hRowsWithUnknownRedBecausePlayerWasUnlocated:
+    nullRedRows,
+
+  refereeMatchesMapped:
+    refByMatch.size,
+
+  refereeRows:
+    refRows.length,
+
+  playerRefereeRows:
+    playerRefRows.length,
+
+  sourcePlayerRowsWithoutReferee:
+    sourceRowsWithoutReferee,
+
   unmappedFootballDataMatches,
 
-  baselineCardAuditMismatchCount: baselineCardAudit.length,
-  baselineCardAuditMismatches: baselineCardAudit,
+  baselineCardAuditMismatchCount:
+    baselineCardAudit.length,
 
-  gameweeks: gwStats.sort((a, b) => a.gw - b.gw),
+  baselineCardAuditMismatches:
+    baselineCardAudit,
+
+  gameweeks:
+    gwStats.sort(
+      (a, b) =>
+        a.gw - b.gw
+    ),
 
   integrityRules: [
     'Cards are joined by exact match_id + player_id.',
@@ -644,7 +1031,17 @@ const report = {
 
 await fs.writeFile(
   OUT_REPORT,
-  JSON.stringify(report, null, 2) + '\n'
+  JSON.stringify(
+    report,
+    null,
+    2
+  ) + '\n'
 )
 
-console.log(JSON.stringify(report, null, 2))
+console.log(
+  JSON.stringify(
+    report,
+    null,
+    2
+  )
+)
