@@ -406,19 +406,47 @@ export default function HomePage() {
                                     Previous meetings vs {getOpponent(fixture, candidate)}
                                   </p>
                                   <div className="space-y-1.5">
-                                    {detail.h2h.slice(0, 5).map((match, matchIndex) => (
-                                      <div
-                                        key={`${match.matchDate}-${matchIndex}`}
-                                        className="flex items-center justify-between rounded-lg bg-card px-3 py-2 text-xs"
-                                      >
-                                        <span className="font-medium text-foreground">{match.matchDate}</span>
-                                        <span className="text-muted-foreground">
-                                          {match.foulsCommitted ?? "—"} fouls
-                                          {match.yellowCard ? " · 🟨 booked" : ""}
-                                        </span>
-                                      </div>
-                                    ))}
+                                    {detail.h2h.slice(0, 5).map((match, matchIndex) => {
+                                      const cardStatus =
+                                        match.redCard === true
+                                          ? { label: "Sent off", icon: "🟥", className: "text-destructive" }
+                                          : match.yellowCard === true
+                                            ? { label: "Booked", icon: "🟨", className: "text-foreground" }
+                                            : match.yellowCard === false
+                                              ? { label: "No card", icon: "", className: "text-muted-foreground" }
+                                              : { label: "Card data missing", icon: "?", className: "text-muted-foreground" };
+
+                                      return (
+                                        <div
+                                          key={`${match.matchDate}-${matchIndex}`}
+                                          className="rounded-lg bg-card px-3 py-2 text-xs"
+                                        >
+                                          <div className="flex items-center justify-between gap-3">
+                                            <span className="font-medium text-foreground">
+                                              {match.matchDate}
+                                            </span>
+                                            <span className={`inline-flex items-center gap-1 font-semibold ${cardStatus.className}`}>
+                                              {cardStatus.icon ? <span>{cardStatus.icon}</span> : null}
+                                              {cardStatus.label}
+                                            </span>
+                                          </div>
+
+                                          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-muted-foreground">
+                                            <span>
+                                              {match.foulsCommitted ?? "—"} fouls committed
+                                            </span>
+                                            <span>
+                                              {match.foulsDrawn ?? "—"} fouls drawn
+                                            </span>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
                                   </div>
+                                  <p className="mt-2 text-[0.68rem] leading-relaxed text-muted-foreground">
+                                    A yellow is only shown when the imported H2H row explicitly records it.
+                                    Blank card fields are shown as “Card data missing”, not “No card”.
+                                  </p>
                                 </div>
                               ) : (
                                 <p className="text-xs text-muted-foreground">
