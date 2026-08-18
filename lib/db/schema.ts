@@ -10,12 +10,6 @@ import {
   unique,
 } from "drizzle-orm/pg-core"
 
-/**
- * Historical player baselines. One row per player/team/competition/season.
- * All statistical columns are nullable on purpose: a NULL means "not imported",
- * which is NOT the same as 0. The app must render "Not enough historical data"
- * for NULLs rather than treating them as zero.
- */
 export const playerBaselines = pgTable(
   "player_baselines",
   {
@@ -42,11 +36,6 @@ export const playerBaselines = pgTable(
   }),
 )
 
-/**
- * Player-vs-opponent head-to-head records. One row per individual meeting so we
- * can show a real match log ("03 Mar 2026 - 3 fouls - booked") rather than only
- * an average.
- */
 export const playerH2H = pgTable("player_h2h", {
   id: serial("id").primaryKey(),
   playerName: text("player_name").notNull(),
@@ -54,6 +43,7 @@ export const playerH2H = pgTable("player_h2h", {
   opponent: text("opponent").notNull(),
   matchDate: date("match_date").notNull(),
   competition: text("competition"),
+  venue: text("venue"),
   minutes: integer("minutes"),
   foulsCommitted: integer("fouls_committed"),
   foulsDrawn: integer("fouls_drawn"),
@@ -63,7 +53,6 @@ export const playerH2H = pgTable("player_h2h", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 })
 
-/** Referee tendencies. */
 export const referees = pgTable(
   "referees",
   {
@@ -84,7 +73,6 @@ export const referees = pgTable(
   }),
 )
 
-/** How a specific referee has treated a specific player across their meetings. */
 export const playerRefereeHistory = pgTable(
   "player_referee_history",
   {
@@ -92,6 +80,8 @@ export const playerRefereeHistory = pgTable(
     refereeName: text("referee_name").notNull(),
     playerName: text("player_name").notNull(),
     team: text("team"),
+    competition: text("competition"),
+    season: text("season"),
     matchesTogether: integer("matches_together"),
     yellowCards: integer("yellow_cards"),
     redCards: integer("red_cards"),
@@ -101,7 +91,7 @@ export const playerRefereeHistory = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
-    uniq: unique().on(t.refereeName, t.playerName),
+    uniq: unique().on(t.refereeName, t.playerName, t.competition, t.season),
   }),
 )
 
