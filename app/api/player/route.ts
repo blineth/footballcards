@@ -8,8 +8,6 @@ import { NextResponse } from "next/server"
 
 export const dynamic = "force-dynamic"
 
-// Player detail keyed by name (+ optional team/opponent/referee) since providers
-// and the historical library are correlated by player name.
 export async function GET(request: Request) {
   const url = new URL(request.url)
   const name = url.searchParams.get("name")
@@ -55,6 +53,8 @@ export async function GET(request: Request) {
     h2h: h2h.map((m) => ({
       matchDate: m.matchDate,
       opponent: m.opponent,
+      competition: m.competition,
+      venue: m.venue,
       minutes: m.minutes,
       foulsCommitted: m.foulsCommitted,
       foulsDrawn: m.foulsDrawn,
@@ -64,6 +64,8 @@ export async function GET(request: Request) {
     refereeHistory: refereeHistory
       ? {
           referee: refereeHistory.refereeName,
+          competition: refereeHistory.competition,
+          season: refereeHistory.season,
           matchesTogether: refereeHistory.matchesTogether,
           yellowCards: refereeHistory.yellowCards,
           redCards: refereeHistory.redCards,
