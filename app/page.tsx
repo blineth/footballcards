@@ -261,7 +261,10 @@ export default function HomePage() {
     try {
       const opponent = getOpponent(fixture, candidate)
       const response = await fetch(`/api/player?name=${encodeURIComponent(candidate.dbName)}&team=${encodeURIComponent(candidate.dbTeam)}&opponent=${encodeURIComponent(opponent)}`, { cache: "no-store" })
-      if (response.ok) setDetails((current) => ({ ...current, [key]: await response.json() }))
+      if (response.ok) {
+        const data = await response.json()
+        setDetails((current) => ({ ...current, [key]: data }))
+      }
     } catch {} finally { setLoading(null) }
   }
 
