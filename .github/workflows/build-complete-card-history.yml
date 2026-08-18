@@ -5,6 +5,7 @@ on:
   push:
     paths:
       - 'scripts/enrich-research-data.mjs'
+      - 'scripts/enrich-h2h-venue.mjs'
       - 'data/source/player_match_log_2025_26.json'
       - 'player_baselines.csv'
       - '.github/workflows/build-complete-card-history.yml'
@@ -28,12 +29,17 @@ jobs:
       - name: Fetch all 38 gameweeks and build exact research CSVs
         run: node scripts/enrich-research-data.mjs
 
+      - name: Add home and away context to H2H
+        run: node scripts/enrich-h2h-venue.mjs
+
       - name: Validate required output sizes
         shell: bash
         run: |
           test "$(($(wc -l < h2h.csv)-1))" -eq 12613
           test "$(($(wc -l < referees.csv)-1))" -ge 20
           test "$(($(wc -l < player_referee_history.csv)-1))" -gt 6000
+          grep -q ',home,' h2h.csv
+          grep -q ',away,' h2h.csv
           echo "Validation passed."
 
       - name: Commit generated database files
