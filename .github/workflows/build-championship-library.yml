@@ -1,0 +1,65 @@
+name: Build Championship research library
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/build-championship-library.py'
+      - '.github/workflows/build-championship-library.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install scraper dependencies
+        run: pip install requests beautifulsoup4 lxml
+
+      - name: Build 2025/26 Championship library
+        run: python scripts/build-championship-library.py
+
+      - name: Validate generated datasets
+        shell: bash
+        run: |
+          test "$(($(wc -l < data/championship/player_baselines.csv)-1))" -ge 500
+          test "$(($(wc -l < data/championship/h2h.csv)-1))" -ge 9000
+          test "$(($(wc -l < data/championship/referees.csv)-1))" -ge 20
+          test "$(($(wc -l < data/championship/player_referee_history.csv)-1))" -ge 4000
+          grep -q ',home,' data/championship/h2h.csv
+          grep -q ',away,' data/championship/h2h.csv
+          grep -q ',Championship,' data/championship/h2h.csv
+          echo 'Championship validation passed.'
+
+      - name: Commit Championship database files
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add \
+            data/championship/player_baselines.csv \
+            data/championship/h2h.csv \
+            data/championship/referees.csv \
+            data/championship/player_referee_history.csv \
+            data/championship/quality-report.json
+
+          if git diff --cached --quiet; then
+            echo 'Championship database is already up to date.'
+            exit 0
+          fi
+
+          git commit -m "Build complete 2025-26 Championship research library"
+          git pull --rebase origin main
+          git push origin main
