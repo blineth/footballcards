@@ -36,22 +36,28 @@ export const playerBaselines = pgTable(
   }),
 )
 
-export const playerH2H = pgTable("player_h2h", {
-  id: serial("id").primaryKey(),
-  playerName: text("player_name").notNull(),
-  team: text("team"),
-  opponent: text("opponent").notNull(),
-  matchDate: date("match_date").notNull(),
-  competition: text("competition"),
-  venue: text("venue"),
-  minutes: integer("minutes"),
-  foulsCommitted: integer("fouls_committed"),
-  foulsDrawn: integer("fouls_drawn"),
-  yellowCard: boolean("yellow_card"),
-  redCard: boolean("red_card"),
-  externalPlayerId: text("external_player_id"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-})
+export const playerH2H = pgTable(
+  "player_h2h",
+  {
+    id: serial("id").primaryKey(),
+    playerName: text("player_name").notNull(),
+    team: text("team"),
+    opponent: text("opponent").notNull(),
+    matchDate: date("match_date").notNull(),
+    competition: text("competition"),
+    venue: text("venue"),
+    minutes: integer("minutes"),
+    foulsCommitted: integer("fouls_committed"),
+    foulsDrawn: integer("fouls_drawn"),
+    yellowCard: boolean("yellow_card"),
+    redCard: boolean("red_card"),
+    externalPlayerId: text("external_player_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    uniq: unique().on(t.playerName, t.team, t.opponent, t.matchDate, t.competition),
+  }),
+)
 
 export const referees = pgTable(
   "referees",
