@@ -130,7 +130,7 @@ export async function POST(request: Request) {
     for (let i = 0; i < mapped.length; i += 200) {
       const chunk = mapped.slice(i, i + 200)
       if (body.dataset === "player_baselines") await db.insert(playerBaselines).values(chunk as never).onConflictDoNothing()
-      if (body.dataset === "h2h") await db.insert(playerH2H).values(chunk as never)
+      if (body.dataset === "h2h") await db.insert(playerH2H).values(chunk as never).onConflictDoNothing()
       if (body.dataset === "referees") await db.insert(referees).values(chunk as never).onConflictDoNothing()
       if (body.dataset === "player_referee_history") await db.insert(playerRefereeHistory).values(chunk as never).onConflictDoNothing()
       processed += chunk.length
