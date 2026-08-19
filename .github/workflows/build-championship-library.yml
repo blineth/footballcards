@@ -5,6 +5,7 @@ on:
   push:
     paths:
       - 'scripts/build-championship-library.py'
+      - 'scripts/build-championship-library-v2.py'
       - '.github/workflows/build-championship-library.yml'
 
 permissions:
@@ -27,8 +28,8 @@ jobs:
       - name: Install scraper dependencies
         run: pip install requests beautifulsoup4 lxml
 
-      - name: Build 2025/26 Championship library
-        run: python scripts/build-championship-library.py
+      - name: Build 2025/26 Championship regular-season library
+        run: python scripts/build-championship-library-v2.py
 
       - name: Validate generated datasets
         shell: bash
@@ -40,7 +41,16 @@ jobs:
           grep -q ',home,' data/championship/h2h.csv
           grep -q ',away,' data/championship/h2h.csv
           grep -q ',Championship,' data/championship/h2h.csv
-          echo 'Championship validation passed.'
+          python - <<'PY'
+          import csv, json
+          from collections import Counter
+          rows = list(csv.DictReader(open('data/championship/h2h.csv', encoding='utf-8')))
+          venues = Counter(r['venue'] for r in rows)
+          assert set(venues) <= {'home', 'away'}, venues
+          report = json.load(open('data/championship/quality-report.json', encoding='utf-8'))
+          assert report['counts']['schedule_matches_with_referee'] == 552, report['counts']
+          print('Championship validation passed:', report['counts'])
+          PY
 
       - name: Commit Championship database files
         shell: bash
