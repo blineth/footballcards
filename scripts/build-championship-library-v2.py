@@ -9,6 +9,7 @@ season aggregate tables.
 from __future__ import annotations
 
 import importlib.util
+import re
 from pathlib import Path
 
 BASE_SCRIPT = Path(__file__).with_name("build-championship-library.py")
@@ -31,9 +32,12 @@ def parse_regular_schedule():
     matches = []
     lookup = {}
     for row in table.select("tbody tr"):
-        # FBref labels the 46-match league phase as Championship and the extra
-        # knockout games as Promotion play-offs — ... .
-        if builder.cell_text(row, "round") != "Championship":
+        # FBref labels Championship league fixtures as Matchweek 1 through
+        # Matchweek 46. Promotion play-off rows use different round labels, so
+        # restricting to those 46 matchweeks gives the 552-game league season.
+        round_label = builder.cell_text(row, "round")
+        match = re.fullmatch(r"Matchweek\s+(\d+)", round_label)
+        if not match or not 1 <= int(match.group(1)) <= 46:
             continue
 
         date = builder.cell_text(row, "date")
