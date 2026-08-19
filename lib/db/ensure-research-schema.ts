@@ -45,7 +45,7 @@ export function ensureResearchSchema() {
       ON player_referee_history (referee_name, player_name, competition, season)
     `)
 
-    -- Remove only exact duplicate H2H imports before adding the idempotency key.
+    // Remove only exact duplicate H2H imports before adding the idempotency key.
     await pool.query(`
       DELETE FROM player_h2h a
       USING player_h2h b
