@@ -12,6 +12,7 @@ type Candidate = {
   yellows: number
   cards90: number
   fouls90: number
+  confirmedStarter?: boolean
 }
 
 type Fixture = {
@@ -24,6 +25,7 @@ type Fixture = {
   homeDb: string
   awayDb: string
   candidates: Candidate[]
+  lineupsConfirmed?: boolean
   noLeagueH2HReason?: string
 }
 
@@ -234,6 +236,20 @@ function TeamLogo({ team }: { team: string }) {
   )
 }
 
+function LineupStatusPill({ confirmed }: { confirmed?: boolean }) {
+  return confirmed ? (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-[0.62rem] font-extrabold uppercase tracking-wide text-emerald-800">
+      <span className="size-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
+      Lineups confirmed
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-red-300 bg-red-50 px-2.5 py-1 text-[0.62rem] font-extrabold uppercase tracking-wide text-red-800">
+      <span className="size-1.5 rounded-full bg-red-500" aria-hidden="true" />
+      Lineups not confirmed
+    </span>
+  )
+}
+
 function VenueBadge({ venue }: { venue?: string | null }) {
   if (!venue) return null
   const isHome = venue.toLowerCase() === "home"
@@ -331,6 +347,7 @@ export default function HomePage() {
                     <p className="text-[0.65rem] font-bold uppercase tracking-wide text-muted-foreground">{fixture.day} · {fixture.date} · {fixture.time}</p>
                     <div className="mt-1 flex items-center gap-2"><p className="truncate text-sm font-bold sm:text-base">{fixture.home}</p><span className="text-xs font-medium text-muted-foreground">v</span><p className="truncate text-sm font-bold sm:text-base">{fixture.away}</p></div>
                     <p className="mt-1 text-xs font-semibold text-yellow-500">{fixtureOpen ? "Hide yellow card potentials" : "View yellow card potentials"}</p>
+                    <div className="mt-2"><LineupStatusPill confirmed={fixture.lineupsConfirmed} /></div>
                   </div>
                   <TeamLogo team={fixture.away} />
                   {fixtureOpen ? <ChevronUp className="size-5 shrink-0 text-muted-foreground" /> : <ChevronDown className="size-5 shrink-0 text-muted-foreground" />}
@@ -339,9 +356,9 @@ export default function HomePage() {
 
               {fixtureOpen ? (
                 <div className="border-t border-border bg-secondary/20 p-3">
-                  <div className="mb-2 flex items-center justify-between gap-2 px-1"><p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Top 5 yellow card candidates</p><span className="rounded-full bg-muted px-2 py-1 text-[0.62rem] font-semibold text-muted-foreground">Lineups TBC</span></div>
+                  <div className="mb-2 flex items-center justify-between gap-2 px-1"><div><p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Top 5 yellow card candidates</p><p className="mt-0.5 text-[0.65rem] font-semibold text-muted-foreground">{fixture.lineupsConfirmed ? "Confirmed XI · starters only" : "Pre-lineup · start-risk adjusted"}</p></div><LineupStatusPill confirmed={fixture.lineupsConfirmed} /></div>
                   <div className="space-y-2">
-                    {fixture.candidates.slice(0, 5).map((candidate, index) => {
+                    {(fixture.lineupsConfirmed ? fixture.candidates.filter((candidate) => candidate.confirmedStarter === true) : fixture.candidates).slice(0, 5).map((candidate, index) => {
                       const key = `${fixture.id}-${index}`
                       const open = selected === key
                       const detail = evidence[candidateKey(fixture, candidate)] ?? details[key]
