@@ -1,0 +1,535 @@
+{
+  "provider": "SofaScore with proxy fallbacks",
+  "providerOk": false,
+  "range": {
+    "from": "2026-08-20",
+    "to": "2026-08-29"
+  },
+  "competitions": [
+    "Premier League",
+    "Championship"
+  ],
+  "events": [],
+  "health": {
+    "eventsDiscovered": 0,
+    "eventsWithDetailOrLineupProvider": 0,
+    "rosters": {},
+    "discoveryAttempts": [
+      {
+        "date": "2026-08-20",
+        "ok": true,
+        "url": "https://r.jina.ai/https://www.sofascore.com/api/v1/sport/football/scheduled-events/2026-08-20",
+        "status": 200,
+        "attempts": [
+          {
+            "url": "https://www.sofascore.com/api/v1/sport/football/scheduled-events/2026-08-20",
+            "status": 403,
+            "parsed": false
+          },
+          {
+            "url": "https://api.sofascore.com/api/v1/sport/football/scheduled-events/2026-08-20",
+            "status": 403,
+            "parsed": false
+          },
+          {
+            "url": "https://api.allorigins.win/raw?url=https%3A%2F%2Fwww.sofascore.com%2Fapi%2Fv1%2Fsport%2Ffootball%2Fscheduled-events%2F2026-08-20",
+            "status": 520,
+            "parsed": false
+          },
+          {
+            "url": "https://r.jina.ai/https://www.sofascore.com/api/v1/sport/football/scheduled-events/2026-08-20",
+            "status": 200,
+            "parsed": true
+          }
+        ]
+      },
+      {
+        "date": "2026-08-21",
+        "ok": true,
+        "url": "https://r.jina.ai/https://www.sofascore.com/api/v1/sport/football/scheduled-events/2026-08-21",
+        "status": 200,
+        "attempts": [
+          {
+            "url": "https://www.sofascore.com/api/v1/sport/football/scheduled-events/2026-08-21",
+            "status": 403,
+            "parsed": false
+          },
+          {
+            "url": "https://api.sofascore.com/api/v1/sport/football/scheduled-events/2026-08-21",
+            "status": 403,
+            "parsed": false
+          },
+          {
+            "url": "https://api.allorigins.win/raw?url=https%3A%2F%2Fwww.sofascore.com%2Fapi%2Fv1%2Fsport%2Ffootball%2Fscheduled-events%2F2026-08-21",
+            "status": 500,
+            "parsed": false
+          },
+          {
+            "url": "https://r.jina.ai/https://www.sofascore.com/api/v1/sport/football/scheduled-events/2026-08-21",
+            "status": 200,
+            "parsed": true
+          }
+        ]
+      },
+      {
+        "date": "2026-08-22",
+        "ok": false,
+        "attempts": [
+          {
+            "url": "https://www.sofascore.com/api/v1/sport/football/scheduled-events/2026-08-22",
+            "status": 403,
+            "parsed": false
+          },
+          {
+            "url": "https://api.sofascore.com/api/v1/sport/football/scheduled-events/2026-08-22",
+            "status": 403,
+            "parsed": false
+          },
+          {
+            "url": "https://api.allorigins.win/raw?url=https%3A%2F%2Fwww.sofascore.com%2Fapi%2Fv1%2Fsport%2Ffootball%2Fscheduled-events%2F2026-08-22",
+            "status": null,
+            "parsed": false,
+            "error": "HTTPSConnectionPool(host='api.allorigins.win', port=443): Read timed out. (read timeout=18)"
+          },
+          {
+            "url": "https://r.jina.ai/https://www.sofascore.com/api/v1/sport/football/scheduled-events/2026-08-22",
+            "status": null,
+            "parsed": false,
+            "error": "HTTPSConnectionPool(host='r.jina.ai', port=443): Read timed out. (read timeout=18)"
+          }
+        ]
+      },
+      {
+        "date": "2026-08-23",
+        "ok": true,
+        "url": "https://r.jina.ai/https://www.sofascore.com/api/v1/sport/football/scheduled-events/2026-08-23",
+        "status": 200,
+        "attempts": [
+          {
+            "url": "https://www.sofascore.com/api/v1/sport/football/scheduled-events/2026-08-23",
+            "status": 403,
+            "parsed": false
+          },
+          {
+            "url": "https://api.sofascore.com/api/v1/sport/football/scheduled-events/2026-08-23",
+            "status": 403,
+            "parsed": false
+          },
+          {
+            "url": "https://api.allorigins.win/raw?url=https%3A%2F%2Fwww.sofascore.com%2Fapi%2Fv1%2Fsport%2Ffootball%2Fscheduled-events%2F2026-08-23",
+            "status": null,
+            "parsed": false,
+            "error": "HTTPSConnectionPool(host='api.allorigins.win', port=443): Read timed out. (read timeout=18)"
+          },
+          {
+            "url": "https://r.jina.ai/https://www.sofascore.com/api/v1/sport/football/scheduled-events/2026-08-23",
+            "status": 200,
+            "parsed": true
+          }
+        ]
+      },
+      {
+        "date": "2026-08-24",
+        "ok": true,
+        "url": "https://r.jina.ai/https://www.sofascore.com/api/v1/sport/football/scheduled-events/2026-08-24",
+        "status": 200,
+        "attempts": [
+          {
+            "url": "https://www.sofascore.com/api/v1/sport/football/scheduled-events/2026-08-24",
+            "status": 403,
+            "parsed": false
+          },
+          {
+            "url": "https://api.sofascore.com/api/v1/sport/football/scheduled-events/2026-08-24",
+            "status": 403,
+            "parsed": false
+          },
+          {
+            "url": "https://api.allorigins.win/raw?url=https%3A%2F%2Fwww.sofascore.com%2Fapi%2Fv1%2Fsport%2Ffootball%2Fscheduled-events%2F2026-08-24",
+            "status": null,
+            "parsed": false,
+            "error": "HTTPSConnectionPool(host='api.allorigins.win', port=443): Read timed out. (read timeout=18)"
+          },
+          {
+            "url": "https://r.jina.ai/https://www.sofascore.com/api/v1/sport/football/scheduled-events/2026-08-24",
+            "status": 200,
+            "parsed": true
+          }
+        ]
+      },
+      {
+        "date": "2026-08-25",
+        "ok": true,
+        "url": "https://r.jina.ai/https://www.sofascore.com/api/v1/sport/football/scheduled-events/2026-08-25",
+        "status": 200,
+        "attempts": [
+          {
+            "url": "https://www.sofascore.com/api/v1/sport/football/scheduled-events/2026-08-25",
+            "status": 403,
+            "parsed": false
+          },
+          {
+            "url": "https://api.sofascore.com/api/v1/sport/football/scheduled-events/2026-08-25",
+            "status": 403,
+            "parsed": false
+          },
+          {
+            "url": "https://api.allorigins.win/raw?url=https%3A%2F%2Fwww.sofascore.com%2Fapi%2Fv1%2Fsport%2Ffootball%2Fscheduled-events%2F2026-08-25",
+            "status": null,
+            "parsed": false,
+            "error": "HTTPSConnectionPool(host='api.allorigins.win', port=443): Read timed out. (read timeout=18)"
+          },
+          {
+            "url": "https://r.jina.ai/https://www.sofascore.com/api/v1/sport/football/scheduled-events/2026-08-25",
+            "status": 200,
+            "parsed": true
+          }
+        ]
+      },
+      {
+        "date": "2026-08-26",
+        "ok": true,
+        "url": "https://api.allorigins.win/raw?url=https%3A%2F%2Fwww.sofascore.com%2Fapi%2Fv1%2Fsport%2Ffootball%2Fscheduled-events%2F2026-08-26",
+        "status": 200,
+        "attempts": [
+          {
+            "url": "https://www.sofascore.com/api/v1/sport/football/scheduled-events/2026-08-26",
+            "status": 403,
+            "parsed": false
+          },
+          {
+            "url": "https://api.sofascore.com/api/v1/sport/football/scheduled-events/2026-08-26",
+            "status": 403,
+            "parsed": false
+          },
+          {
+            "url": "https://api.allorigins.win/raw?url=https%3A%2F%2Fwww.sofascore.com%2Fapi%2Fv1%2Fsport%2Ffootball%2Fscheduled-events%2F2026-08-26",
+            "status": 200,
+            "parsed": true
+          }
+        ]
+      },
+      {
+        "date": "2026-08-27",
+        "ok": true,
+        "url": "https://r.jina.ai/https://www.sofascore.com/api/v1/sport/football/scheduled-events/2026-08-27",
+        "status": 200,
+        "attempts": [
+          {
+            "url": "https://www.sofascore.com/api/v1/sport/football/scheduled-events/2026-08-27",
+            "status": 403,
+            "parsed": false
+          },
+          {
+            "url": "https://api.sofascore.com/api/v1/sport/football/scheduled-events/2026-08-27",
+            "status": 403,
+            "parsed": false
+          },
+          {
+            "url": "https://api.allorigins.win/raw?url=https%3A%2F%2Fwww.sofascore.com%2Fapi%2Fv1%2Fsport%2Ffootball%2Fscheduled-events%2F2026-08-27",
+            "status": 408,
+            "parsed": false
+          },
+          {
+            "url": "https://r.jina.ai/https://www.sofascore.com/api/v1/sport/football/scheduled-events/2026-08-27",
+            "status": 200,
+            "parsed": true
+          }
+        ]
+      },
+      {
+        "date": "2026-08-28",
+        "ok": true,
+        "url": "https://r.jina.ai/https://www.sofascore.com/api/v1/sport/football/scheduled-events/2026-08-28",
+        "status": 200,
+        "attempts": [
+          {
+            "url": "https://www.sofascore.com/api/v1/sport/football/scheduled-events/2026-08-28",
+            "status": 403,
+            "parsed": false
+          },
+          {
+            "url": "https://api.sofascore.com/api/v1/sport/football/scheduled-events/2026-08-28",
+            "status": 403,
+            "parsed": false
+          },
+          {
+            "url": "https://api.allorigins.win/raw?url=https%3A%2F%2Fwww.sofascore.com%2Fapi%2Fv1%2Fsport%2Ffootball%2Fscheduled-events%2F2026-08-28",
+            "status": null,
+            "parsed": false,
+            "error": "HTTPSConnectionPool(host='api.allorigins.win', port=443): Read timed out. (read timeout=18)"
+          },
+          {
+            "url": "https://r.jina.ai/https://www.sofascore.com/api/v1/sport/football/scheduled-events/2026-08-28",
+            "status": 200,
+            "parsed": true
+          }
+        ]
+      },
+      {
+        "date": "2026-08-29",
+        "ok": true,
+        "url": "https://r.jina.ai/https://www.sofascore.com/api/v1/sport/football/scheduled-events/2026-08-29",
+        "status": 200,
+        "attempts": [
+          {
+            "url": "https://www.sofascore.com/api/v1/sport/football/scheduled-events/2026-08-29",
+            "status": 403,
+            "parsed": false
+          },
+          {
+            "url": "https://api.sofascore.com/api/v1/sport/football/scheduled-events/2026-08-29",
+            "status": 403,
+            "parsed": false
+          },
+          {
+            "url": "https://api.allorigins.win/raw?url=https%3A%2F%2Fwww.sofascore.com%2Fapi%2Fv1%2Fsport%2Ffootball%2Fscheduled-events%2F2026-08-29",
+            "status": null,
+            "parsed": false,
+            "error": "HTTPSConnectionPool(host='api.allorigins.win', port=443): Read timed out. (read timeout=18)"
+          },
+          {
+            "url": "https://r.jina.ai/https://www.sofascore.com/api/v1/sport/football/scheduled-events/2026-08-29",
+            "status": 200,
+            "parsed": true
+          }
+        ]
+      },
+      {
+        "tournament": 17,
+        "round": 1,
+        "ok": true,
+        "url": "https://r.jina.ai/https://www.sofascore.com/api/v1/unique-tournament/17/season/96668/events/round/1",
+        "status": 200,
+        "attempts": [
+          {
+            "url": "https://www.sofascore.com/api/v1/unique-tournament/17/season/96668/events/round/1",
+            "status": 403,
+            "parsed": false
+          },
+          {
+            "url": "https://api.sofascore.com/api/v1/unique-tournament/17/season/96668/events/round/1",
+            "status": 403,
+            "parsed": false
+          },
+          {
+            "url": "https://api.allorigins.win/raw?url=https%3A%2F%2Fwww.sofascore.com%2Fapi%2Fv1%2Funique-tournament%2F17%2Fseason%2F96668%2Fevents%2Fround%2F1",
+            "status": 520,
+            "parsed": false
+          },
+          {
+            "url": "https://r.jina.ai/https://www.sofascore.com/api/v1/unique-tournament/17/season/96668/events/round/1",
+            "status": 200,
+            "parsed": true
+          }
+        ]
+      },
+      {
+        "tournament": 17,
+        "round": 2,
+        "ok": true,
+        "url": "https://r.jina.ai/https://www.sofascore.com/api/v1/unique-tournament/17/season/96668/events/round/2",
+        "status": 200,
+        "attempts": [
+          {
+            "url": "https://www.sofascore.com/api/v1/unique-tournament/17/season/96668/events/round/2",
+            "status": 403,
+            "parsed": false
+          },
+          {
+            "url": "https://api.sofascore.com/api/v1/unique-tournament/17/season/96668/events/round/2",
+            "status": 403,
+            "parsed": false
+          },
+          {
+            "url": "https://api.allorigins.win/raw?url=https%3A%2F%2Fwww.sofascore.com%2Fapi%2Fv1%2Funique-tournament%2F17%2Fseason%2F96668%2Fevents%2Fround%2F2",
+            "status": null,
+            "parsed": false,
+            "error": "HTTPSConnectionPool(host='api.allorigins.win', port=443): Read timed out. (read timeout=18)"
+          },
+          {
+            "url": "https://r.jina.ai/https://www.sofascore.com/api/v1/unique-tournament/17/season/96668/events/round/2",
+            "status": 200,
+            "parsed": true
+          }
+        ]
+      },
+      {
+        "tournament": 17,
+        "round": 3,
+        "ok": true,
+        "url": "https://r.jina.ai/https://www.sofascore.com/api/v1/unique-tournament/17/season/96668/events/round/3",
+        "status": 200,
+        "attempts": [
+          {
+            "url": "https://www.sofascore.com/api/v1/unique-tournament/17/season/96668/events/round/3",
+            "status": 403,
+            "parsed": false
+          },
+          {
+            "url": "https://api.sofascore.com/api/v1/unique-tournament/17/season/96668/events/round/3",
+            "status": 403,
+            "parsed": false
+          },
+          {
+            "url": "https://api.allorigins.win/raw?url=https%3A%2F%2Fwww.sofascore.com%2Fapi%2Fv1%2Funique-tournament%2F17%2Fseason%2F96668%2Fevents%2Fround%2F3",
+            "status": 500,
+            "parsed": false
+          },
+          {
+            "url": "https://r.jina.ai/https://www.sofascore.com/api/v1/unique-tournament/17/season/96668/events/round/3",
+            "status": 200,
+            "parsed": true
+          }
+        ]
+      },
+      {
+        "tournament": 17,
+        "round": 4,
+        "ok": true,
+        "url": "https://r.jina.ai/https://www.sofascore.com/api/v1/unique-tournament/17/season/96668/events/round/4",
+        "status": 200,
+        "attempts": [
+          {
+            "url": "https://www.sofascore.com/api/v1/unique-tournament/17/season/96668/events/round/4",
+            "status": 403,
+            "parsed": false
+          },
+          {
+            "url": "https://api.sofascore.com/api/v1/unique-tournament/17/season/96668/events/round/4",
+            "status": 403,
+            "parsed": false
+          },
+          {
+            "url": "https://api.allorigins.win/raw?url=https%3A%2F%2Fwww.sofascore.com%2Fapi%2Fv1%2Funique-tournament%2F17%2Fseason%2F96668%2Fevents%2Fround%2F4",
+            "status": 520,
+            "parsed": false
+          },
+          {
+            "url": "https://r.jina.ai/https://www.sofascore.com/api/v1/unique-tournament/17/season/96668/events/round/4",
+            "status": 200,
+            "parsed": true
+          }
+        ]
+      },
+      {
+        "tournament": 18,
+        "round": 1,
+        "ok": true,
+        "url": "https://r.jina.ai/https://www.sofascore.com/api/v1/unique-tournament/18/season/97037/events/round/1",
+        "status": 200,
+        "attempts": [
+          {
+            "url": "https://www.sofascore.com/api/v1/unique-tournament/18/season/97037/events/round/1",
+            "status": 403,
+            "parsed": false
+          },
+          {
+            "url": "https://api.sofascore.com/api/v1/unique-tournament/18/season/97037/events/round/1",
+            "status": 403,
+            "parsed": false
+          },
+          {
+            "url": "https://api.allorigins.win/raw?url=https%3A%2F%2Fwww.sofascore.com%2Fapi%2Fv1%2Funique-tournament%2F18%2Fseason%2F97037%2Fevents%2Fround%2F1",
+            "status": null,
+            "parsed": false,
+            "error": "HTTPSConnectionPool(host='api.allorigins.win', port=443): Read timed out. (read timeout=18)"
+          },
+          {
+            "url": "https://r.jina.ai/https://www.sofascore.com/api/v1/unique-tournament/18/season/97037/events/round/1",
+            "status": 200,
+            "parsed": true
+          }
+        ]
+      },
+      {
+        "tournament": 18,
+        "round": 2,
+        "ok": true,
+        "url": "https://r.jina.ai/https://www.sofascore.com/api/v1/unique-tournament/18/season/97037/events/round/2",
+        "status": 200,
+        "attempts": [
+          {
+            "url": "https://www.sofascore.com/api/v1/unique-tournament/18/season/97037/events/round/2",
+            "status": 403,
+            "parsed": false
+          },
+          {
+            "url": "https://api.sofascore.com/api/v1/unique-tournament/18/season/97037/events/round/2",
+            "status": 403,
+            "parsed": false
+          },
+          {
+            "url": "https://api.allorigins.win/raw?url=https%3A%2F%2Fwww.sofascore.com%2Fapi%2Fv1%2Funique-tournament%2F18%2Fseason%2F97037%2Fevents%2Fround%2F2",
+            "status": null,
+            "parsed": false,
+            "error": "HTTPSConnectionPool(host='api.allorigins.win', port=443): Read timed out. (read timeout=18)"
+          },
+          {
+            "url": "https://r.jina.ai/https://www.sofascore.com/api/v1/unique-tournament/18/season/97037/events/round/2",
+            "status": 200,
+            "parsed": true
+          }
+        ]
+      },
+      {
+        "tournament": 18,
+        "round": 3,
+        "ok": true,
+        "url": "https://r.jina.ai/https://www.sofascore.com/api/v1/unique-tournament/18/season/97037/events/round/3",
+        "status": 200,
+        "attempts": [
+          {
+            "url": "https://www.sofascore.com/api/v1/unique-tournament/18/season/97037/events/round/3",
+            "status": 403,
+            "parsed": false
+          },
+          {
+            "url": "https://api.sofascore.com/api/v1/unique-tournament/18/season/97037/events/round/3",
+            "status": 403,
+            "parsed": false
+          },
+          {
+            "url": "https://api.allorigins.win/raw?url=https%3A%2F%2Fwww.sofascore.com%2Fapi%2Fv1%2Funique-tournament%2F18%2Fseason%2F97037%2Fevents%2Fround%2F3",
+            "status": 502,
+            "parsed": false
+          },
+          {
+            "url": "https://r.jina.ai/https://www.sofascore.com/api/v1/unique-tournament/18/season/97037/events/round/3",
+            "status": 200,
+            "parsed": true
+          }
+        ]
+      },
+      {
+        "tournament": 18,
+        "round": 4,
+        "ok": true,
+        "url": "https://r.jina.ai/https://www.sofascore.com/api/v1/unique-tournament/18/season/97037/events/round/4",
+        "status": 200,
+        "attempts": [
+          {
+            "url": "https://www.sofascore.com/api/v1/unique-tournament/18/season/97037/events/round/4",
+            "status": 403,
+            "parsed": false
+          },
+          {
+            "url": "https://api.sofascore.com/api/v1/unique-tournament/18/season/97037/events/round/4",
+            "status": 403,
+            "parsed": false
+          },
+          {
+            "url": "https://api.allorigins.win/raw?url=https%3A%2F%2Fwww.sofascore.com%2Fapi%2Fv1%2Funique-tournament%2F18%2Fseason%2F97037%2Fevents%2Fround%2F4",
+            "status": 500,
+            "parsed": false
+          },
+          {
+            "url": "https://r.jina.ai/https://www.sofascore.com/api/v1/unique-tournament/18/season/97037/events/round/4",
+            "status": 200,
+            "parsed": true
+          }
+        ]
+      }
+    ]
+  }
+}
