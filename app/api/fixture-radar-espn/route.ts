@@ -29,7 +29,6 @@ function playerNameScore(current: string, historic: string) {
   if ((a.includes(b) || b.includes(a)) && Math.min(a.length, b.length) >= 6) return 92
   const aa = a.split(" "), bb = b.split(" ")
   if (aa[0] === bb[0] && aa.at(-1) === bb.at(-1)) return 90
-  if (aa.at(-1) === bb.at(-1) && aa[0]?.[0] === bb[0]?.[0]) return 80
   return 0
 }
 async function espn(path: string) {
