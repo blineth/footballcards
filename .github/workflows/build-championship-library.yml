@@ -1,4 +1,3 @@
-# Triggered 2026-08-20 to complete validated Championship historical build
 name: Build Championship research library
 
 on:
@@ -6,19 +5,84 @@ on:
   push:
     paths:
       - 'scripts/build-championship-espn.py'
+      - 'scripts/build-championship-espn-sharded.py'
       - '.github/workflows/build-championship-library.yml'
 
 permissions:
   contents: write
 
+env:
+  SHARD_COUNT: 12
+
 concurrency:
-  group: championship-research-library
+  group: championship-research-library-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build:
+  discover:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Discover 2025/26 Championship regular-season fixtures
+        run: python scripts/build-championship-espn-sharded.py discover
+
+      - name: Upload fixture manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: championship-events
+          path: .build/championship/events.json
+          if-no-files-found: error
+          retention-days: 2
+
+  summaries:
+    needs: discover
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Download fixture manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: championship-events
+          path: .build/championship
+
+      - name: Fetch ESPN match summaries for shard ${{ matrix.shard }}
+        run: python scripts/build-championship-espn-sharded.py shard --index ${{ matrix.shard }} --count $SHARD_COUNT
+
+      - name: Upload shard result
+        uses: actions/upload-artifact@v4
+        with:
+          name: championship-shard-${{ matrix.shard }}
+          path: .build/championship/shards/shard-*.json
+          if-no-files-found: error
+          retention-days: 2
+
+  aggregate:
+    needs: summaries
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v4
@@ -29,19 +93,24 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Restore ESPN response cache
-        uses: actions/cache@v4
-        with:
-          path: .cache/championship-espn
-          key: championship-espn-2025-26-v1-${{ github.run_id }}
-          restore-keys: |
-            championship-espn-2025-26-v1-
-
       - name: Install dependencies
         run: pip install requests
 
-      - name: Build 2025/26 Championship regular-season library
-        run: python scripts/build-championship-espn.py
+      - name: Download fixture manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: championship-events
+          path: .build/championship
+
+      - name: Download all summary shards
+        uses: actions/download-artifact@v4
+        with:
+          pattern: championship-shard-*
+          path: .build/championship/shards
+          merge-multiple: true
+
+      - name: Aggregate Championship datasets
+        run: python scripts/build-championship-espn-sharded.py aggregate --count $SHARD_COUNT
 
       - name: Validate generated datasets
         shell: bash
@@ -70,6 +139,7 @@ jobs:
           PY
 
       - name: Commit Championship database files
+        if: github.ref == 'refs/heads/main'
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
