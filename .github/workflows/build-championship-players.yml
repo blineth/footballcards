@@ -1,0 +1,56 @@
+name: Build Championship player baselines
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/build-championship-player-baselines-v2.py'
+      - '.github/workflows/build-championship-players.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install requests pandas beautifulsoup4 lxml
+
+      - name: Build current Championship player baselines
+        run: python scripts/build-championship-player-baselines-v2.py
+
+      - name: Validate player output
+        shell: bash
+        run: |
+          test -f data/championship/current_player_baselines.csv
+          test -f data/championship/current-player-quality-report.json
+          python - <<'PY'
+          import csv, json
+          rows = list(csv.DictReader(open('data/championship/current_player_baselines.csv', encoding='utf-8')))
+          report = json.load(open('data/championship/current-player-quality-report.json', encoding='utf-8'))
+          assert len(rows) == report['players']
+          assert report['clubs'] == 24
+          assert report['players'] >= 300
+          required = {'player_name','current_team','yellow_cards','red_cards','fouls_committed','fouls_drawn','shots','shots_on_target','previous_yellow_cards','previous_fouls_committed'}
+          assert required.issubset(rows[0])
+          print('Player-only Championship validation passed:', report)
+          PY
+
+      - name: Upload player baseline artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: championship-current-player-baselines
+          path: |
+            data/championship/current_player_baselines.csv
+            data/championship/current-player-quality-report.json
+          if-no-files-found: error
+          retention-days: 7
