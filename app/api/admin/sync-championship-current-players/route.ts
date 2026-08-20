@@ -1,5 +1,6 @@
 import fs from "node:fs/promises"
 import path from "node:path"
+import { and, eq } from "drizzle-orm"
 import { NextResponse } from "next/server"
 import { db, isDatabaseConfigured } from "@/lib/db"
 import { ensureResearchSchema } from "@/lib/db/ensure-research-schema"
@@ -9,15 +10,12 @@ export const dynamic = "force-dynamic"
 
 function parseCSV(text: string): Record<string, string>[] {
   const rows: string[][] = []
-  let field = ""
-  let row: string[] = []
-  let inQuotes = false
+  let field = "", row: string[] = [], inQuotes = false
   for (let i = 0; i < text.length; i++) {
     const c = text[i]
     if (inQuotes) {
-      if (c === '"') {
-        if (text[i + 1] === '"') { field += '"'; i++ } else inQuotes = false
-      } else field += c
+      if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++ } else inQuotes = false }
+      else field += c
     } else if (c === '"') inQuotes = true
     else if (c === ",") { row.push(field); field = "" }
     else if (c === "\n" || c === "\r") {
@@ -27,10 +25,7 @@ function parseCSV(text: string): Record<string, string>[] {
       row = []
     } else field += c
   }
-  if (field !== "" || row.length) {
-    row.push(field)
-    if (row.some((v) => v.trim() !== "")) rows.push(row)
-  }
+  if (field !== "" || row.length) { row.push(field); if (row.some((v) => v.trim() !== "")) rows.push(row) }
   if (!rows.length) return []
   const headers = rows[0].map((h) => h.trim().replace(/^\uFEFF/, ""))
   return rows.slice(1).map((r) => Object.fromEntries(headers.map((h, i) => [h, (r[i] ?? "").trim()])))
@@ -72,23 +67,12 @@ export async function GET() {
     externalPlayerId: null,
   }))
 
-  // This endpoint is deliberately scoped to Championship 2026/27 player baselines.
-  // It does not delete or update Premier League, H2H, referee or player-referee data.
-  await db.insert(playerBaselines).values(values as never).onConflictDoUpdate({
-    target: [playerBaselines.playerName, playerBaselines.team, playerBaselines.competition, playerBaselines.season],
-    set: {
-      appearances: playerBaselines.appearances,
-      starts: playerBaselines.starts,
-      minutes: playerBaselines.minutes,
-      yellowCards: playerBaselines.yellowCards,
-      redCards: playerBaselines.redCards,
-      foulsCommitted: playerBaselines.foulsCommitted,
-      foulsDrawn: playerBaselines.foulsDrawn,
-      foulsPer90: playerBaselines.foulsPer90,
-      cardsPer90: playerBaselines.cardsPer90,
-      position: playerBaselines.position,
-    },
-  })
+  // Replace ONLY Championship 2026/27 player baseline rows.
+  await db.delete(playerBaselines).where(and(
+    eq(playerBaselines.competition, "Championship"),
+    eq(playerBaselines.season, "2026/27"),
+  ))
+  await db.insert(playerBaselines).values(values as never)
 
   return NextResponse.json({
     ok: true,
