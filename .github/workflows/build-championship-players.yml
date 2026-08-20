@@ -4,21 +4,19 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - 'scripts/build-championship-player-baselines-v2.py'
+      - 'scripts/build-championship-player-baselines-v3.py'
       - '.github/workflows/build-championship-players.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 90
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -27,10 +25,10 @@ jobs:
       - name: Install dependencies
         run: pip install requests pandas beautifulsoup4 lxml
 
-      - name: Build current Championship player baselines
-        run: python scripts/build-championship-player-baselines-v2.py
+      - name: Collect all current Championship player data
+        run: python scripts/build-championship-player-baselines-v3.py
 
-      - name: Validate player output
+      - name: Validate complete player output
         shell: bash
         run: |
           test -f data/championship/current_player_baselines.csv
@@ -41,29 +39,24 @@ jobs:
           report = json.load(open('data/championship/current-player-quality-report.json', encoding='utf-8'))
           assert len(rows) == report['players']
           assert report['clubs'] == 24
-          assert report['players'] >= 300
-          required = {'player_name','current_team','yellow_cards','red_cards','fouls_committed','fouls_drawn','shots','shots_on_target','previous_yellow_cards','previous_fouls_committed'}
-          assert required.issubset(rows[0])
-          assert sum(int(r['yellow_cards'] or 0) for r in rows) >= 1
-          assert sum(int(r['fouls_committed'] or 0) for r in rows) >= 1
-          print('Player-only Championship validation passed:', report)
+          assert report['players'] >= 400
+          assert report['players_with_current_fbref_row'] >= 250
+          required = {
+              'player_name','current_team','position','external_player_id','current_stats_status',
+              'appearances','starts','minutes','yellow_cards','red_cards','fouls_committed','fouls_drawn',
+              'shots','shots_on_target','yellow_cards_per_90','fouls_per_90','shots_per_90','shots_on_target_per_90',
+              'previous_stats_status','previous_season_team','previous_season_competition','previous_yellow_cards',
+              'previous_fouls_committed','previous_shots','previous_shots_on_target'
+          }
+          assert rows and required.issubset(rows[0])
+          matched = [r for r in rows if r['current_stats_status'] == 'matched_fbref']
+          assert sum(int(r['yellow_cards'] or 0) for r in matched) >= 1
+          assert sum(int(r['fouls_committed'] or 0) for r in matched) >= 1
+          assert len({r['current_team'] for r in rows}) == 24
+          print('Validated complete Championship player dataset:', report)
           PY
 
-      - name: Commit validated player database to branch
-        shell: bash
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/championship/current_player_baselines.csv data/championship/current-player-quality-report.json
-          if git diff --cached --quiet; then
-            echo 'Validated Championship player database is already current.'
-            exit 0
-          fi
-          git commit -m "Build validated Championship player baselines"
-          git pull --rebase origin "${GITHUB_REF_NAME}"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
-
-      - name: Upload player baseline artifact
+      - name: Upload validated final dataset only
         uses: actions/upload-artifact@v4
         with:
           name: championship-current-player-baselines
