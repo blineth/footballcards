@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - 'scripts/build-championship-sofascore.py'
+      - 'scripts/build-championship-espn.py'
       - '.github/workflows/build-championship-library.yml'
 
 permissions:
@@ -12,7 +12,7 @@ permissions:
 
 concurrency:
   group: championship-research-library
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -28,19 +28,19 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Restore SofaScore response cache
+      - name: Restore ESPN response cache
         uses: actions/cache@v4
         with:
-          path: .cache/championship-sofascore
-          key: championship-sofascore-2025-26-v1-${{ github.run_id }}
+          path: .cache/championship-espn
+          key: championship-espn-2025-26-v1-${{ github.run_id }}
           restore-keys: |
-            championship-sofascore-2025-26-v1-
+            championship-espn-2025-26-v1-
 
-      - name: Install scraper dependencies
+      - name: Install dependencies
         run: pip install requests
 
       - name: Build 2025/26 Championship regular-season library
-        run: python scripts/build-championship-sofascore.py
+        run: python scripts/build-championship-espn.py
 
       - name: Validate generated datasets
         shell: bash
@@ -56,12 +56,11 @@ jobs:
           import csv, json
           from collections import Counter
           rows = list(csv.DictReader(open('data/championship/h2h.csv', encoding='utf-8')))
-          venues = Counter(r['venue'] for r in rows)
-          assert set(venues) <= {'home', 'away'}, venues
+          assert set(Counter(r['venue'] for r in rows)) <= {'home', 'away'}
           report = json.load(open('data/championship/quality-report.json', encoding='utf-8'))
           c = report['counts']
           assert c['regular_season_events'] == 552, c
-          assert c['events_failed'] <= 10, c
+          assert c['events_failed'] <= 5, c
           assert c['player_baselines'] >= 450, c
           assert c['h2h_player_match_rows'] >= 9000, c
           assert c['referees'] >= 15, c
@@ -74,19 +73,11 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git add \
-            data/championship/player_baselines.csv \
-            data/championship/h2h.csv \
-            data/championship/referees.csv \
-            data/championship/player_referee_history.csv \
-            data/championship/quality-report.json
-
+          git add data/championship/player_baselines.csv data/championship/h2h.csv data/championship/referees.csv data/championship/player_referee_history.csv data/championship/quality-report.json
           if git diff --cached --quiet; then
             echo 'Championship database is already up to date.'
             exit 0
           fi
-
           git commit -m "Build complete 2025-26 Championship research library"
           git pull --rebase origin main
           git push origin main
