@@ -11,7 +11,6 @@ LEGACY_PATH = ROOT / "scripts" / "build-championship-espn.py"
 BUILD = ROOT / ".build" / "championship"
 EVENTS_PATH = BUILD / "events.json"
 SHARDS_DIR = BUILD / "shards"
-SEASON = 2025
 SHARD_COUNT = 12
 
 
@@ -24,52 +23,48 @@ def load_builder():
     return module
 
 
-def team_ids_from(data: dict[str, Any]) -> list[str]:
-    ids: set[str] = set()
-
-    def add(entry: Any) -> None:
-        if not isinstance(entry, dict):
-            return
-        team = entry.get("team") if isinstance(entry.get("team"), dict) else entry
-        team_id = str(team.get("id") or "")
-        if team_id:
-            ids.add(team_id)
-
-    for entry in data.get("teams") or []:
-        add(entry)
-    for sport in data.get("sports") or []:
-        for league in sport.get("leagues") or []:
-            for entry in league.get("teams") or []:
-                add(entry)
-    return sorted(ids)
+def regular_season_events(builder, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    events: dict[str, dict[str, Any]] = {}
+    start = builder.START_DATE.isoformat()
+    end = builder.END_DATE.isoformat()
+    for event in rows:
+        event_id = str(event.get("id") or "")
+        event_day = builder.event_date(event)
+        if event_id and start <= event_day <= end:
+            events[event_id] = event
+    return sorted(events.values(), key=lambda e: (builder.event_date(e), str(e.get("id") or "")))
 
 
 def discover() -> None:
     builder = load_builder()
     BUILD.mkdir(parents=True, exist_ok=True)
 
-    teams = builder.cached_get(f"{builder.BASE}/teams", "teams-2025-26")
-    team_ids = team_ids_from(teams)
-    if len(team_ids) != 24:
-        raise RuntimeError(f"Expected 24 Championship teams, found {len(team_ids)}: {team_ids}")
+    # ESPN scoreboards accept date windows. This replaces 276 one-day calls and is
+    # explicitly tied to the 2025/26 regular-season window rather than current teams.
+    start = builder.START_DATE.strftime("%Y%m%d")
+    end = builder.END_DATE.strftime("%Y%m%d")
+    window = builder.cached_get(
+        f"{builder.BASE}/scoreboard?dates={start}-{end}&limit=1000",
+        f"scoreboard-window-{start}-{end}",
+    )
+    ordered = regular_season_events(builder, window.get("events") or [])
 
-    events: dict[str, dict[str, Any]] = {}
-    for index, team_id in enumerate(team_ids, 1):
-        schedule = builder.cached_get(
-            f"{builder.BASE}/teams/{team_id}/schedule?season={SEASON}",
-            f"schedule-{SEASON}-{team_id}",
-        )
-        for event in schedule.get("events") or []:
-            event_id = str(event.get("id") or "")
-            event_day = builder.event_date(event)
-            if event_id and builder.START_DATE.isoformat() <= event_day <= builder.END_DATE.isoformat():
-                events[event_id] = event
-        print(f"Schedules {index}/24; unique regular-season events={len(events)}", flush=True)
+    # Some ESPN scoreboard implementations cap wide date windows. If that happens,
+    # make only two yearly calls, merge them, and still fail closed unless all 552
+    # regular-season fixtures are present.
+    if len(ordered) != 552:
+        merged: list[dict[str, Any]] = []
+        for year in (2025, 2026):
+            data = builder.cached_get(
+                f"{builder.BASE}/scoreboard?dates={year}&limit=1000",
+                f"scoreboard-year-{year}",
+            )
+            merged.extend(data.get("events") or [])
+        ordered = regular_season_events(builder, merged)
 
-    ordered = sorted(events.values(), key=lambda e: (builder.event_date(e), str(e.get("id") or "")))
     if len(ordered) != 552:
         raise RuntimeError(
-            f"Expected 552 Championship regular-season fixtures from team schedules, found {len(ordered)}. "
+            f"Expected 552 Championship regular-season fixtures, found {len(ordered)}. "
             "Failing before summary requests so incomplete data cannot be built."
         )
 
@@ -90,8 +85,8 @@ def shard(index: int, count: int) -> None:
     meta: list[dict[str, Any]] = []
     failures: list[dict[str, Any]] = []
 
-    # Intentionally sequential: each shard only handles ~46 summaries, which avoids
-    # hammering ESPN from one runner and removes requests.Session thread-safety risk.
+    # Each runner handles only ~46 summaries sequentially. This avoids hammering
+    # ESPN and avoids sharing requests.Session across threads.
     for completed, event in enumerate(selected, 1):
         try:
             event_rows, event_meta = builder.parse_event(event)
@@ -126,6 +121,7 @@ def aggregate(count: int) -> None:
     by_event: dict[str, tuple[list[dict[str, Any]], dict[str, Any]]] = {}
     failures: list[dict[str, Any]] = []
     missing_shards: list[int] = []
+
     for index in range(count):
         path = SHARDS_DIR / f"shard-{index:02d}.json"
         if not path.exists():
@@ -133,18 +129,10 @@ def aggregate(count: int) -> None:
             continue
         payload = json.loads(path.read_text(encoding="utf-8"))
         failures.extend(payload.get("failures") or [])
-        rows_by_event: dict[str, list[dict[str, Any]]] = {}
-        for row in payload.get("rows") or []:
-            # Rows do not carry the ESPN event ID, so pair them back to metadata by
-            # date/home/away through the deterministic shard event ordering below.
-            # We instead rebuild a queue using each selected event and its meta entry.
-            pass
 
         selected = events[index::count]
         meta_rows = payload.get("meta") or []
         meta_by_id = {str(m.get("event_id") or ""): m for m in meta_rows}
-        # parse_event output rows are contiguous per event in the shard payload. Use
-        # each metadata player count to slice them back into exact per-event groups.
         cursor = 0
         raw_rows = payload.get("rows") or []
         for event in selected:
@@ -174,6 +162,8 @@ def aggregate(count: int) -> None:
             raise RuntimeError((failure or {}).get("error") or f"No shard result for event {event_id}")
         return by_event[event_id]
 
+    # Reuse the existing, already-tested aggregation and quality-gate logic without
+    # performing any additional network requests.
     builder.collect_events = collect_events_override
     builder.parse_event = parse_event_override
     builder.main()
