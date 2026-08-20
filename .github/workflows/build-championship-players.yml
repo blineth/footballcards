@@ -8,7 +8,7 @@ on:
       - '.github/workflows/build-championship-players.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -17,6 +17,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -42,8 +44,24 @@ jobs:
           assert report['players'] >= 300
           required = {'player_name','current_team','yellow_cards','red_cards','fouls_committed','fouls_drawn','shots','shots_on_target','previous_yellow_cards','previous_fouls_committed'}
           assert required.issubset(rows[0])
+          assert sum(int(r['yellow_cards'] or 0) for r in rows) >= 1
+          assert sum(int(r['fouls_committed'] or 0) for r in rows) >= 1
           print('Player-only Championship validation passed:', report)
           PY
+
+      - name: Commit validated player database to branch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/championship/current_player_baselines.csv data/championship/current-player-quality-report.json
+          if git diff --cached --quiet; then
+            echo 'Validated Championship player database is already current.'
+            exit 0
+          fi
+          git commit -m "Build validated Championship player baselines"
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
 
       - name: Upload player baseline artifact
         uses: actions/upload-artifact@v4
