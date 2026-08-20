@@ -1,0 +1,58 @@
+name: Refresh live fixture data
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/5 * * * *'
+  push:
+    paths:
+      - 'scripts/update-live-fixtures.py'
+      - '.github/workflows/refresh-live-fixtures.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: live-fixture-refresh
+  cancel-in-progress: true
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Fetch Premier League and Championship live data
+        env:
+          LIVE_FIXTURE_OUTPUT: /tmp/live-fixtures.json
+        run: python scripts/update-live-fixtures.py
+
+      - name: Publish live snapshot without touching main
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin live-data
+          git checkout -B live-data origin/live-data
+          mkdir -p data/live
+          cp /tmp/live-fixtures.json data/live/fixtures.json
+          git add data/live/fixtures.json
+
+          if git diff --cached --quiet; then
+            echo "Live fixture data has not changed."
+            exit 0
+          fi
+
+          git commit -m "Refresh live fixture and lineup data"
+          git push origin live-data
