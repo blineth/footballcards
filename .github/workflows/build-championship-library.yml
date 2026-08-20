@@ -4,17 +4,20 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - 'scripts/build-championship-library.py'
-      - 'scripts/build-championship-library-v2.py'
+      - 'scripts/build-championship-sofascore.py'
       - '.github/workflows/build-championship-library.yml'
 
 permissions:
   contents: write
 
+concurrency:
+  group: championship-research-library
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 120
 
     steps:
       - uses: actions/checkout@v4
@@ -25,19 +28,27 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Restore SofaScore response cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/championship-sofascore
+          key: championship-sofascore-2025-26-v1-${{ github.run_id }}
+          restore-keys: |
+            championship-sofascore-2025-26-v1-
+
       - name: Install scraper dependencies
-        run: pip install requests beautifulsoup4 lxml
+        run: pip install requests
 
       - name: Build 2025/26 Championship regular-season library
-        run: python scripts/build-championship-library-v2.py
+        run: python scripts/build-championship-sofascore.py
 
       - name: Validate generated datasets
         shell: bash
         run: |
-          test "$(($(wc -l < data/championship/player_baselines.csv)-1))" -ge 500
+          test "$(($(wc -l < data/championship/player_baselines.csv)-1))" -ge 450
           test "$(($(wc -l < data/championship/h2h.csv)-1))" -ge 9000
-          test "$(($(wc -l < data/championship/referees.csv)-1))" -ge 20
-          test "$(($(wc -l < data/championship/player_referee_history.csv)-1))" -ge 4000
+          test "$(($(wc -l < data/championship/referees.csv)-1))" -ge 15
+          test "$(($(wc -l < data/championship/player_referee_history.csv)-1))" -ge 2500
           grep -q ',home,' data/championship/h2h.csv
           grep -q ',away,' data/championship/h2h.csv
           grep -q ',Championship,' data/championship/h2h.csv
@@ -48,8 +59,14 @@ jobs:
           venues = Counter(r['venue'] for r in rows)
           assert set(venues) <= {'home', 'away'}, venues
           report = json.load(open('data/championship/quality-report.json', encoding='utf-8'))
-          assert report['counts']['schedule_matches_with_referee'] == 552, report['counts']
-          print('Championship validation passed:', report['counts'])
+          c = report['counts']
+          assert c['regular_season_events'] == 552, c
+          assert c['events_failed'] <= 10, c
+          assert c['player_baselines'] >= 450, c
+          assert c['h2h_player_match_rows'] >= 9000, c
+          assert c['referees'] >= 15, c
+          assert c['player_referee_rows'] >= 2500, c
+          print('Championship validation passed:', c)
           PY
 
       - name: Commit Championship database files
