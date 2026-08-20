@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
-import sys
 import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -21,7 +19,7 @@ OUT = Path(os.environ.get("LIVE_FIXTURE_OUTPUT", "/tmp/live-fixtures.json"))
 
 SESSION = requests.Session()
 SESSION.headers.update({
-    "User-Agent": "Mozilla/5.0 (compatible; footballcards-live/1.0)",
+    "User-Agent": "Mozilla/5.0 (compatible; footballcards-live/1.1)",
     "Accept": "application/json,text/plain,*/*",
     "Accept-Language": "en-GB,en;q=0.9",
     "Referer": "https://www.sofascore.com/",
@@ -35,8 +33,6 @@ def parse_json_text(text: str) -> dict[str, Any] | None:
         return value if isinstance(value, dict) else None
     except Exception:
         pass
-    # Reader/proxy services can wrap JSON in a small text envelope. Keep only
-    # the first complete-looking JSON object when possible.
     start = text.find("{")
     end = text.rfind("}")
     if start >= 0 and end > start:
@@ -94,6 +90,17 @@ def tournament_info(event: dict[str, Any]) -> tuple[int | None, str]:
     return tournament_id, str(unique.get("name") or tournament.get("name") or "")
 
 
+def compact_player(player: dict[str, Any], position: Any = None) -> dict[str, Any] | None:
+    if not player.get("name"):
+        return None
+    return {
+        "id": player.get("id"),
+        "name": player.get("name"),
+        "shortName": player.get("shortName"),
+        "position": player.get("position") or position,
+    }
+
+
 def lineup_side(data: dict[str, Any] | None, side: str) -> list[dict[str, Any]]:
     if not data:
         return []
@@ -102,16 +109,30 @@ def lineup_side(data: dict[str, Any] | None, side: str) -> list[dict[str, Any]]:
     for row in entries:
         if row.get("substitute") is not False:
             continue
-        player = row.get("player") or {}
-        if not player.get("name"):
-            continue
-        starters.append({
-            "id": player.get("id"),
-            "name": player.get("name"),
-            "shortName": player.get("shortName"),
-            "position": player.get("position") or row.get("position"),
-        })
+        compact = compact_player(row.get("player") or {}, row.get("position"))
+        if compact:
+            starters.append(compact)
     return starters
+
+
+def roster_players(data: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not data:
+        return []
+    rows = []
+    seen = set()
+    for entry in data.get("players") or []:
+        player = entry.get("player") if isinstance(entry, dict) else None
+        if not isinstance(player, dict):
+            continue
+        compact = compact_player(player, entry.get("position"))
+        if not compact:
+            continue
+        key = compact.get("id") or compact.get("name")
+        if key in seen:
+            continue
+        seen.add(key)
+        rows.append(compact)
+    return rows
 
 
 def referee_from(event: dict[str, Any], detail: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -128,8 +149,6 @@ def referee_from(event: dict[str, Any], detail: dict[str, Any] | None) -> dict[s
 
 def main() -> int:
     today = date.today()
-    # Give the dashboard enough runway to cover the current match round and the
-    # following one without hard-coding dates into the live updater.
     dates = [today + timedelta(days=i) for i in range(0, 10)]
     events_by_id: dict[int, dict[str, Any]] = {}
     provider_attempts = []
@@ -141,16 +160,13 @@ def main() -> int:
         if not data:
             continue
         for event in data.get("events") or []:
-            tournament_id, tournament_name = tournament_info(event)
+            tournament_id, _ = tournament_info(event)
             if tournament_id not in TARGET_TOURNAMENTS:
                 continue
             event_id = event.get("id")
-            if not event_id:
-                continue
-            events_by_id[int(event_id)] = event
+            if event_id:
+                events_by_id[int(event_id)] = event
 
-    # If date schedules were blocked but a provider works for tournament pages,
-    # use the first few current-season rounds as a second discovery route.
     if not events_by_id:
         current_seasons = {17: 96668, 18: 97037}
         for tournament_id, season_id in current_seasons.items():
@@ -167,6 +183,20 @@ def main() -> int:
                     if d and today.isoformat() <= d <= (today + timedelta(days=9)).isoformat() and event.get("id"):
                         events_by_id[int(event["id"])] = event
 
+    team_ids = set()
+    for event in events_by_id.values():
+        for side in ("homeTeam", "awayTeam"):
+            team_id = (event.get(side) or {}).get("id")
+            if team_id:
+                team_ids.add(int(team_id))
+
+    rosters: dict[int, list[dict[str, Any]]] = {}
+    roster_health: dict[int, dict[str, Any]] = {}
+    for team_id in sorted(team_ids):
+        data, meta = fetch_json(f"/team/{team_id}/players", optional=True)
+        rosters[team_id] = roster_players(data)
+        roster_health[team_id] = {"ok": meta.get("ok", False), "players": len(rosters[team_id])}
+
     output_events = []
     event_provider_ok = 0
     for event in sorted(events_by_id.values(), key=lambda e: (e.get("startTimestamp") or 0, e.get("id") or 0)):
@@ -180,17 +210,21 @@ def main() -> int:
         away_starters = lineup_side(lineups, "away")
         home_team = event.get("homeTeam") or {}
         away_team = event.get("awayTeam") or {}
+        home_id = int(home_team["id"]) if home_team.get("id") else None
+        away_id = int(away_team["id"]) if away_team.get("id") else None
         output_events.append({
             "eventId": event_id,
             "competition": TARGET_TOURNAMENTS.get(tournament_id, tournament_name),
             "date": event_date(event),
             "startTimestamp": event.get("startTimestamp"),
-            "home": {"id": home_team.get("id"), "name": home_team.get("name")},
-            "away": {"id": away_team.get("id"), "name": away_team.get("name")},
+            "home": {"id": home_id, "name": home_team.get("name")},
+            "away": {"id": away_id, "name": away_team.get("name")},
             "referee": referee_from(event, detail),
             "lineupsConfirmed": len(home_starters) >= 11 and len(away_starters) >= 11,
             "homeStarters": home_starters,
             "awayStarters": away_starters,
+            "homeRoster": rosters.get(home_id or -1, []),
+            "awayRoster": rosters.get(away_id or -1, []),
         })
 
     provider_ok = bool(events_by_id)
@@ -203,15 +237,14 @@ def main() -> int:
         "health": {
             "eventsDiscovered": len(events_by_id),
             "eventsWithDetailOrLineupProvider": event_provider_ok,
+            "rosters": roster_health,
             "discoveryAttempts": provider_attempts,
         },
     }
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps({"providerOk": provider_ok, "events": len(output_events), "output": str(OUT)}))
-    # Do not make the workflow fail on a provider block: the committed health
-    # file is more useful because the app can visibly fall back to pre-lineup.
+    print(json.dumps({"providerOk": provider_ok, "events": len(output_events), "teams": len(team_ids), "output": str(OUT)}))
     return 0
 
 
