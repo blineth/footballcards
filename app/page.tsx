@@ -333,7 +333,7 @@ export default function HomePage() {
             <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-secondary"><Database className="size-5" /></div>
             <div>
               <p className="font-bold">{competition} fixtures</p>
-              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">Pre-lineup rankings use historical card/foul evidence, H2H, sample size and previous starting frequency. The app checks SofaScore every minute; once both official XIs appear, the fixture turns green and the ranking switches to confirmed starters only.</p>
+              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">Pre-lineup rankings use historical card/foul evidence, H2H, sample size and previous starting frequency. The app checks ESPN every minute; once both official XIs appear, the fixture turns green and the ranking switches to confirmed starters only.</p>
             </div>
           </div>
         </section>
