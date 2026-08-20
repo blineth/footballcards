@@ -7,6 +7,11 @@ on:
       - 'scripts/build-championship-espn.py'
       - 'scripts/build-championship-espn-sharded.py'
       - '.github/workflows/build-championship-library.yml'
+  pull_request:
+    paths:
+      - 'scripts/build-championship-espn.py'
+      - 'scripts/build-championship-espn-sharded.py'
+      - '.github/workflows/build-championship-library.yml'
 
 permissions:
   contents: write
