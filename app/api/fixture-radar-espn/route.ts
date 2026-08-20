@@ -1,5 +1,5 @@
 import { db, isDatabaseConfigured } from "@/lib/db"
-import { playerBaselines, playerH2H, referees } from "@/lib/db/schema"
+import { playerBaselines, playerH2H, playerRefereeHistory, referees } from "@/lib/db/schema"
 import { ensureResearchSchema } from "@/lib/db/ensure-research-schema"
 import { and, desc, eq, inArray } from "drizzle-orm"
 import { NextResponse } from "next/server"
@@ -9,6 +9,7 @@ export const dynamic = "force-dynamic"
 type Competition = "Premier League" | "Championship"
 type EspnPlayer = { id?: string; displayName?: string; fullName?: string; position?: { abbreviation?: string; displayName?: string } }
 type CurrentPlayer = { id?: string; name: string; position?: string; currentTeam: string }
+type FootballDataMatch = { date: string; home: string; away: string; referee: string }
 
 const leagueSlug: Record<Competition, string> = { "Premier League": "eng.1", Championship: "eng.2" }
 const teamAliases: Record<string, string[]> = {
@@ -21,6 +22,15 @@ function norm(value: string | null | undefined) {
 function teamMatch(a?: string | null, b?: string | null) {
   const na = norm(a), nb = norm(b)
   return Boolean(na && nb && (na === nb || na.includes(nb) || nb.includes(na)))
+}
+function refereeMatch(a?: string | null, b?: string | null) {
+  const aa = norm(a).split(" ").filter(Boolean), bb = norm(b).split(" ").filter(Boolean)
+  if (!aa.length || !bb.length) return false
+  if (aa.join(" ") === bb.join(" ")) return true
+  const aLast = aa.at(-1), bLast = bb.at(-1)
+  if (aLast !== bLast) return false
+  const aFirst = aa[0], bFirst = bb[0]
+  return Boolean(aFirst && bFirst && (aFirst === bFirst || aFirst[0] === bFirst[0]))
 }
 function playerNameScore(current: string, historic: string) {
   const a = norm(current), b = norm(historic)
@@ -39,7 +49,7 @@ async function espn(path: string) {
 function positionOf(player: EspnPlayer) { return player.position?.displayName ?? player.position?.abbreviation }
 function reliability(minutes: number) { return Math.max(0, Math.min(1, minutes / 1800)) }
 function startProbability(starts: number, apps: number) { return apps ? 0.25 + Math.max(0, Math.min(1, starts / apps)) * 0.7 : 0.35 }
-function scoreCandidate(input: { cards90: number; yellows: number; fouls90: number; minutes: number; starts: number; apps: number; h2hYellows: number; h2hFouls: number; confirmed: boolean }) {
+function scoreCandidate(input: { cards90: number; yellows: number; fouls90: number; minutes: number; starts: number; apps: number; h2hYellows: number; h2hFouls: number; refMatches: number; refYellows: number; refOpponentYellows: number; confirmed: boolean }) {
   const rel = reliability(input.minutes)
   const shrunkCards90 = 0.22 + rel * (input.cards90 - 0.22)
   const cardRate = Math.min(1, Math.max(0, shrunkCards90 / 0.6))
@@ -47,7 +57,11 @@ function scoreCandidate(input: { cards90: number; yellows: number; fouls90: numb
   const foulRate = Math.min(1, input.fouls90 / 2.5)
   const start = input.confirmed ? 1 : startProbability(input.starts, input.apps)
   const h2h = Math.min(1, input.h2hYellows / 2) * 0.7 + Math.min(1, input.h2hFouls / 8) * 0.3
-  return Math.round((cardRate * 30 + yellowVolume * 18 + foulRate * 15 + start * 20 + rel * 7 + h2h * 10) * 10) / 10
+  const refBookingRate = input.refMatches ? input.refYellows / input.refMatches : 0
+  const refSignal = Math.min(1, refBookingRate / 0.5)
+  const doubleSignal = input.refOpponentYellows > 0 ? 1 : 0
+  const raw = cardRate * 27 + yellowVolume * 16 + foulRate * 14 + start * 18 + rel * 7 + h2h * 8 + refSignal * 5 + doubleSignal * 5
+  return Math.min(99, Math.round(raw * 10) / 10)
 }
 function band(score: number) { return score >= 70 ? "STRONG" : score >= 55 ? "GOOD" : "WATCH" }
 function sampleLabel(minutes: number, starts: number, apps: number, confirmed: boolean) {
@@ -57,6 +71,30 @@ function sampleLabel(minutes: number, starts: number, apps: number, confirmed: b
   if (ratio >= 0.7) return "Likely starter"
   if (ratio >= 0.45) return "Possible starter"
   return "Rotation risk"
+}
+
+function csvDate(value: string) {
+  const m = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/)
+  if (!m) return ""
+  const year = m[3].length === 2 ? `20${m[3]}` : m[3]
+  return `${year}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`
+}
+async function premierLeagueMatchOfficials(): Promise<FootballDataMatch[]> {
+  try {
+    const response = await fetch("https://www.football-data.co.uk/mmz4281/2526/E0.csv", { next: { revalidate: 86400 }, signal: AbortSignal.timeout(8000) })
+    if (!response.ok) return []
+    const text = await response.text()
+    const lines = text.split(/\r?\n/).filter(Boolean)
+    if (!lines.length) return []
+    const headers = lines[0].split(",").map((v) => v.replace(/^\uFEFF/, "").trim())
+    const ix = (name: string) => headers.indexOf(name)
+    const dateIx = ix("Date"), homeIx = ix("HomeTeam"), awayIx = ix("AwayTeam"), refIx = ix("Referee")
+    if ([dateIx, homeIx, awayIx, refIx].some((v) => v < 0)) return []
+    return lines.slice(1).map((line) => {
+      const cells = line.split(",")
+      return { date: csvDate(cells[dateIx] ?? ""), home: cells[homeIx] ?? "", away: cells[awayIx] ?? "", referee: cells[refIx] ?? "" }
+    }).filter((m) => m.date && m.home && m.away && m.referee)
+  } catch { return [] }
 }
 
 async function findEvent(league: string, date: string, home: string, away: string) {
@@ -110,6 +148,7 @@ export async function GET(request: Request) {
   if (eventInfo?.event?.id) { try { summary = await espn(`${league}/summary?event=${eventInfo.event.id}`) } catch {} }
   const official = startersFromSummary(summary, home, away)
   const confirmed = official.confirmed
+  const officialName = summary?.gameInfo?.officials?.[0]?.displayName ?? summary?.gameInfo?.officials?.[0]?.fullName ?? null
 
   let currentPlayers: CurrentPlayer[] = official.players
   if (!confirmed && eventInfo) {
@@ -145,18 +184,53 @@ export async function GET(request: Request) {
   const pool = [...unique.values()]
   const names = pool.map((row) => row.baseline.playerName)
   const opponentNames = Array.from(new Set([...(teamAliases[home] ?? [home]), ...(teamAliases[away] ?? [away])]))
-  const h2hRows = names.length ? await db.select().from(playerH2H).where(and(inArray(playerH2H.playerName, names), inArray(playerH2H.opponent, opponentNames))) : []
+  const [h2hRows, refRows, officialMatches] = await Promise.all([
+    names.length ? db.select().from(playerH2H).where(and(inArray(playerH2H.playerName, names), inArray(playerH2H.opponent, opponentNames))) : Promise.resolve([]),
+    officialName && names.length ? db.select().from(playerRefereeHistory).where(and(eq(playerRefereeHistory.refereeName, officialName), inArray(playerRefereeHistory.playerName, names))) : Promise.resolve([]),
+    competition === "Premier League" && officialName ? premierLeagueMatchOfficials() : Promise.resolve([]),
+  ])
 
   const ranked = pool.map(({ player, baseline }) => {
     const opponent = player.currentTeam === home ? away : home, aliases = teamAliases[opponent] ?? [opponent]
-    const h2h = h2hRows.filter((row) => row.playerName === baseline.playerName && aliases.includes(row.opponent))
-    const h2hYellows = h2h.filter((row) => row.yellowCard === true).length, h2hFouls = h2h.reduce((sum, row) => sum + Number(row.foulsCommitted ?? 0), 0)
+    const h2h = h2hRows.filter((row) => row.playerName === baseline.playerName && aliases.some((alias) => teamMatch(row.opponent, alias)))
+    const h2hYellows = h2h.filter((row) => row.yellowCard === true).length
+    const h2hFouls = h2h.reduce((sum, row) => sum + Number(row.foulsCommitted ?? 0), 0)
+    const refHistory = refRows.find((row) => row.playerName === baseline.playerName)
+    const refMatches = Number(refHistory?.matchesTogether ?? 0)
+    const refYellows = Number(refHistory?.yellowCards ?? 0)
+    const refOpponentYellows = officialName ? h2h.filter((row) => {
+      if (row.yellowCard !== true) return false
+      return officialMatches.some((match) => match.date === row.matchDate && refereeMatch(match.referee, officialName) && ((teamMatch(match.home, row.team) && teamMatch(match.away, row.opponent)) || (teamMatch(match.away, row.team) && teamMatch(match.home, row.opponent))))
+    }).length : 0
     const cards90 = Number(baseline.cardsPer90 ?? 0), fouls90 = Number(baseline.foulsPer90 ?? 0), yellows = Number(baseline.yellowCards ?? 0), minutes = Number(baseline.minutes ?? 0), starts = Number(baseline.starts ?? 0), apps = Number(baseline.appearances ?? 0)
-    const score = scoreCandidate({ cards90, yellows, fouls90, minutes, starts, apps, h2hYellows, h2hFouls, confirmed })
-    return { name: player.name, dbName: baseline.playerName, team: player.currentTeam, dbTeam: baseline.team, historicalCompetition: baseline.competition, position: player.position ?? baseline.position, yellows, cards90, fouls90, appearances: apps, starts, minutes, startLikelihood: confirmed ? 1 : startProbability(starts, apps), sampleLabel: sampleLabel(minutes, starts, apps, confirmed), h2hYellows, h2hFouls, score, band: band(score) }
+    const score = scoreCandidate({ cards90, yellows, fouls90, minutes, starts, apps, h2hYellows, h2hFouls, refMatches, refYellows, refOpponentYellows, confirmed })
+    return {
+      name: player.name,
+      dbName: baseline.playerName,
+      team: player.currentTeam,
+      dbTeam: baseline.team,
+      historicalCompetition: baseline.competition,
+      position: player.position ?? baseline.position,
+      yellows,
+      cards90,
+      fouls90,
+      appearances: apps,
+      starts,
+      minutes,
+      startLikelihood: confirmed ? 1 : startProbability(starts, apps),
+      sampleLabel: sampleLabel(minutes, starts, apps, confirmed),
+      h2hYellows,
+      h2hFouls,
+      refMatches,
+      refYellows,
+      refBookingRate: refMatches ? Math.round((refYellows / refMatches) * 100) : 0,
+      refOpponentYellows,
+      doubleSignal: refOpponentYellows > 0,
+      score,
+      band: band(score),
+    }
   }).sort((a, b) => b.score - a.score || b.minutes - a.minutes)
 
-  const officialName = summary?.gameInfo?.officials?.[0]?.displayName ?? summary?.gameInfo?.officials?.[0]?.fullName ?? null
   let referee = null as any
   if (officialName) {
     const rows = await db.select().from(referees).where(eq(referees.refereeName, officialName)).orderBy(desc(referees.season))
