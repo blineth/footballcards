@@ -65,3 +65,5 @@ jobs:
             data/championship/current-player-quality-report.json
           if-no-files-found: error
           retention-days: 7
+
+# Player-only run trigger: 2026-08-21
