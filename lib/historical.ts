@@ -3,6 +3,27 @@ import { playerBaselines, playerH2H, playerRefereeHistory, referees } from "@/li
 import { ensureResearchSchema } from "@/lib/db/ensure-research-schema"
 import { and, desc, eq, sql } from "drizzle-orm"
 
+function normName(value: string | null | undefined) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ")
+}
+
+function refereeNameMatch(a: string | null | undefined, b: string | null | undefined) {
+  const aa = normName(a).split(" ").filter(Boolean)
+  const bb = normName(b).split(" ").filter(Boolean)
+  if (!aa.length || !bb.length) return false
+  if (aa.join(" ") === bb.join(" ")) return true
+  if (aa.at(-1) !== bb.at(-1)) return false
+  const af = aa[0]
+  const bf = bb[0]
+  return Boolean(af && bf && (af === bf || af[0] === bf[0]))
+}
+
 export async function hasAnyHistoricalData(): Promise<boolean> {
   if (!isDatabaseConfigured) return false
   await ensureResearchSchema()
@@ -33,17 +54,26 @@ export async function getPlayerH2H(playerName: string, opponent: string) {
 export async function getRefereeByName(name: string) {
   if (!isDatabaseConfigured) return null
   await ensureResearchSchema()
-  const rows = await db.select().from(referees).where(eq(referees.refereeName, name)).orderBy(desc(referees.season))
-  return rows[0] ?? null
+  const exact = await db.select().from(referees).where(eq(referees.refereeName, name)).orderBy(desc(referees.season))
+  if (exact[0]) return exact[0]
+  const rows = await db.select().from(referees).orderBy(desc(referees.season))
+  return rows.find((row) => refereeNameMatch(row.refereeName, name)) ?? null
 }
 
 export async function getPlayerRefereeHistory(refereeName: string, playerName: string) {
   if (!isDatabaseConfigured) return null
   await ensureResearchSchema()
-  const rows = await db
+  const exact = await db
     .select()
     .from(playerRefereeHistory)
     .where(and(eq(playerRefereeHistory.refereeName, refereeName), eq(playerRefereeHistory.playerName, playerName)))
     .orderBy(desc(playerRefereeHistory.season))
-  return rows[0] ?? null
+  if (exact[0]) return exact[0]
+
+  const rows = await db
+    .select()
+    .from(playerRefereeHistory)
+    .where(eq(playerRefereeHistory.playerName, playerName))
+    .orderBy(desc(playerRefereeHistory.season))
+  return rows.find((row) => refereeNameMatch(row.refereeName, refereeName)) ?? null
 }
