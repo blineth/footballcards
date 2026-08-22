@@ -1,0 +1,69 @@
+name: Build Championship player baselines
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/build-championship-player-baselines-v3.py'
+      - '.github/workflows/build-championship-players.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install requests pandas beautifulsoup4 lxml
+
+      - name: Collect all current Championship player data
+        run: python scripts/build-championship-player-baselines-v3.py
+
+      - name: Validate complete player output
+        shell: bash
+        run: |
+          test -f data/championship/current_player_baselines.csv
+          test -f data/championship/current-player-quality-report.json
+          python - <<'PY'
+          import csv, json
+          rows = list(csv.DictReader(open('data/championship/current_player_baselines.csv', encoding='utf-8')))
+          report = json.load(open('data/championship/current-player-quality-report.json', encoding='utf-8'))
+          assert len(rows) == report['players']
+          assert report['clubs'] == 24
+          assert report['players'] >= 400
+          assert report['players_with_current_fbref_row'] >= 250
+          required = {
+              'player_name','current_team','position','external_player_id','current_stats_status',
+              'appearances','starts','minutes','yellow_cards','red_cards','fouls_committed','fouls_drawn',
+              'shots','shots_on_target','yellow_cards_per_90','fouls_per_90','shots_per_90','shots_on_target_per_90',
+              'previous_stats_status','previous_season_team','previous_season_competition','previous_yellow_cards',
+              'previous_fouls_committed','previous_shots','previous_shots_on_target'
+          }
+          assert rows and required.issubset(rows[0])
+          matched = [r for r in rows if r['current_stats_status'] == 'matched_fbref']
+          assert sum(int(r['yellow_cards'] or 0) for r in matched) >= 1
+          assert sum(int(r['fouls_committed'] or 0) for r in matched) >= 1
+          assert len({r['current_team'] for r in rows}) == 24
+          print('Validated complete Championship player dataset:', report)
+          PY
+
+      - name: Upload validated final dataset only
+        uses: actions/upload-artifact@v4
+        with:
+          name: championship-current-player-baselines
+          path: |
+            data/championship/current_player_baselines.csv
+            data/championship/current-player-quality-report.json
+          if-no-files-found: error
+          retention-days: 7
+
+# Player-only run trigger: 2026-08-21
