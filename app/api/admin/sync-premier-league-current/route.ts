@@ -22,7 +22,7 @@ const REFEREES: Record<string,string> = {
   "26-27-prem-nottingham-forest-vs-leeds-united":"Rob Jones",
   "26-27-prem-brentford-vs-tottenham-hotspur":"Michael Oliver",
   "26-27-prem-brighton-hove-albion-vs-aston-villa":"Peter Bankes",
-  "26-27-prem-manchester-city-vs-bournemouth":"Jarred Gillett",
+  "26-27-prem-manchester-city-vs-afc-bournemouth":"Jarred Gillett",
   "26-27-prem-newcastle-united-vs-liverpool":"Stuart Attwell",
   "26-27-prem-fulham-vs-chelsea":"John Brooks",
 }
