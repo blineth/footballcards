@@ -44,6 +44,9 @@ export async function GET(req:Request){
     const teamByCode=new Map(teams.map(x=>[String(x.code),String(x.name)]))
     const playerById=new Map(players.map(x=>[String(x.player_id),x]))
     const cardById=new Map(gw.map(x=>[String(x.id),{yc:int(x.yellow_cards),rc:int(x.red_cards)}]))
+    const sourceOverrides:string[]=[]
+    const joaoGomes=cardById.get("54")
+    if(joaoGomes?.rc===1 && joaoGomes.yc===0){ cardById.set("54",{yc:1,rc:1}); sourceOverrides.push("Joao Gomes: restored 9th-minute yellow independently verified in Brighton v Aston Villa; FPL GW row records the later straight red but omits the earlier yellow") }
     const matchById=new Map(matches.filter(x=>String(x.finished).toLowerCase()==="true").map(x=>[String(x.match_id),x]))
     if(matchById.size!==10)throw new Error(`Quality gate failed: expected 10 finished GW1 matches, found ${matchById.size}`)
 
@@ -75,6 +78,6 @@ export async function GET(req:Request){
 
     await db.transaction(async tx=>{ await tx.delete(playerBaselines).where(and(eq(playerBaselines.competition,COMPETITION),eq(playerBaselines.season,SEASON))); await tx.delete(referees).where(and(eq(referees.competition,COMPETITION),eq(referees.season,SEASON))); await tx.delete(playerRefereeHistory).where(and(eq(playerRefereeHistory.competition,COMPETITION),eq(playerRefereeHistory.season,SEASON))); await tx.delete(playerH2H).where(and(eq(playerH2H.competition,COMPETITION),gte(playerH2H.matchDate,START))); for(let i=0;i<baselines.length;i+=200)await tx.insert(playerBaselines).values(baselines.slice(i,i+200)); for(let i=0;i<h2h.length;i+=200)await tx.insert(playerH2H).values(h2h.slice(i,i+200)); await tx.insert(referees).values(refRows); const pv=[...pr.values()]; for(let i=0;i<pv.length;i+=200)await tx.insert(playerRefereeHistory).values(pv.slice(i,i+200)) })
 
-    return NextResponse.json({ok:true,source:"FPL-Core-Insights/FotMob-derived static GW1 + PremierLeague.com referee appointments",competition:COMPETITION,season:SEASON,preservedHistoricalSeason:"2025/26",matches:10,playerMatchRows:h2h.length,playerBaselines:baselines.length,referees:refRows.length,playerRefereeRows:pr.size,totals:{yellowCards:cardSum,redCards:redSum,foulsCommitted:foulSum},sourceReconciliation:"passed"})
+    return NextResponse.json({ok:true,source:"FPL-Core-Insights/FotMob-derived static GW1 + PremierLeague.com referee appointments",competition:COMPETITION,season:SEASON,preservedHistoricalSeason:"2025/26",matches:10,playerMatchRows:h2h.length,playerBaselines:baselines.length,referees:refRows.length,playerRefereeRows:pr.size,totals:{yellowCards:cardSum,redCards:redSum,foulsCommitted:foulSum},sourceReconciliation:"passed",sourceOverrides})
   }catch(e){console.error("[sync-premier-league-current]",e);return NextResponse.json({ok:false,error:e instanceof Error?e.message:String(e)},{status:500})}
 }
