@@ -1,6 +1,7 @@
 import { Analytics } from "@vercel/analytics/next"
 import type { Metadata, Viewport } from "next"
 import { Manrope, Geist_Mono } from "next/font/google"
+import { AppTabs } from "@/components/AppTabs"
 import "./globals.css"
 
 const manrope = Manrope({
@@ -41,6 +42,7 @@ export default function RootLayout({
     <html lang="en" className={`${manrope.variable} ${geistMono.variable} bg-background`}>
       <body className="font-sans antialiased">
         {children}
+        <AppTabs />
         {process.env.NODE_ENV === "production" && <Analytics />}
       </body>
     </html>
