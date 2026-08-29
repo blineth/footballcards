@@ -16,6 +16,18 @@ type Fixture = {
   away: string
 }
 
+type H2HMatch = {
+  matchDate: string
+  opponent?: string | null
+  competition?: string | null
+  venue?: string | null
+  minutes?: number | null
+  foulsCommitted?: number | null
+  foulsDrawn?: number | null
+  yellowCard?: boolean | null
+  redCard?: boolean | null
+}
+
 type RadarCandidate = {
   name: string
   dbName: string
@@ -33,6 +45,7 @@ type RadarCandidate = {
   sampleLabel: string
   h2hYellows: number
   h2hFouls: number
+  h2hMatches?: H2HMatch[]
   score: number
   band: "STRONG" | "GOOD" | "WATCH"
 }
@@ -43,6 +56,8 @@ type RadarResponse = {
   eventId?: number | null
   competition?: string
   lineupsConfirmed?: boolean
+  rankingMethod?: string
+  teamCoverage?: { home?: number; away?: number }
   referee?: {
     name: string
     yellowsPerGame: number | null
@@ -68,15 +83,7 @@ type PlayerDetail = {
     foulsPer90?: number | null
     cardsPer90?: number | null
   } | null
-  h2h?: Array<{
-    matchDate: string
-    competition?: string | null
-    venue?: string | null
-    foulsCommitted?: number | null
-    foulsDrawn?: number | null
-    yellowCard?: boolean | null
-    redCard?: boolean | null
-  }>
+  h2h?: H2HMatch[]
   refereeHistory?: {
     referee?: string
     competition?: string | null
@@ -229,6 +236,22 @@ function formatDate(value: string) {
   return new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric" }).format(date)
 }
 
+function H2HMatchRow({ match }: { match: H2HMatch }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-lg border border-border bg-card px-2.5 py-2 text-[0.68rem]">
+      <div className="flex items-center gap-2">
+        <span className="font-semibold">{formatDate(match.matchDate)}</span>
+        <VenueBadge venue={match.venue} />
+      </div>
+      <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
+        <span>{match.foulsCommitted ?? 0} fouls</span>
+        {match.yellowCard === true ? <span className="inline-flex items-center gap-1 font-semibold text-amber-700"><span className="h-3.5 w-2.5 rounded-[1px] bg-yellow-400" />Booked</span> : null}
+        {match.redCard === true ? <span className="font-semibold text-red-600">Sent off</span> : null}
+      </div>
+    </div>
+  )
+}
+
 export default function HomePage() {
   const [competition, setCompetition] = useState<Competition>("Premier League")
   const [openFixture, setOpenFixture] = useState<string | null>(null)
@@ -333,7 +356,7 @@ export default function HomePage() {
             <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-secondary"><Database className="size-5" /></div>
             <div>
               <p className="font-bold">{competition} fixtures</p>
-              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">Pre-lineup rankings use historical card/foul evidence, H2H, sample size and previous starting frequency. The app checks ESPN every minute; once both official XIs appear, the fixture turns green and the ranking switches to confirmed starters only.</p>
+              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">Pre-lineup rankings use historical card/foul evidence, H2H, sample size and previous starting frequency. H2H card and foul history is prioritised, with five candidates from each team where the data supports it. The app checks ESPN every minute; once both official XIs appear, the fixture turns green and the ranking switches to confirmed starters only.</p>
             </div>
           </div>
         </section>
@@ -363,8 +386,8 @@ export default function HomePage() {
                 <div className="border-t border-border bg-secondary/20 p-3">
                   <div className="mb-3 flex items-start justify-between gap-2 px-1">
                     <div>
-                      <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Top 5 yellow card candidates</p>
-                      <p className="mt-0.5 text-[0.67rem] font-semibold text-muted-foreground">{fixtureRadar?.lineupsConfirmed ? "Confirmed XI · starters only" : "Pre-lineup · start-risk and sample adjusted"}</p>
+                      <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Top 10 yellow card candidates · 5 per team</p>
+                      <p className="mt-0.5 text-[0.67rem] font-semibold text-muted-foreground">H2H bookings first, then H2H fouls, then the overall evidence score. {fixtureRadar?.lineupsConfirmed ? "Confirmed XI · starters only" : "Pre-lineup · start-risk and sample adjusted"}</p>
                     </div>
                     <button type="button" onClick={() => void refreshCompetition(competition)} className="rounded-lg border border-border bg-card p-2 text-muted-foreground hover:text-foreground" aria-label="Refresh fixture data"><RefreshCw className={`size-4 ${radarLoading[fixture.id] ? "animate-spin" : ""}`} /></button>
                   </div>
@@ -379,7 +402,7 @@ export default function HomePage() {
                     <div className="flex items-center gap-2 rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground"><RefreshCw className="size-4 animate-spin" />Building the fixture radar…</div>
                   ) : candidates.length ? (
                     <div className="space-y-2">
-                      {candidates.slice(0, 5).map((candidate, index) => {
+                      {candidates.slice(0, 10).map((candidate, index) => {
                         const key = `${fixture.id}-${candidate.dbName}-${index}`
                         const playerOpen = selectedPlayer === key
                         const detail = details[key]
@@ -402,6 +425,15 @@ export default function HomePage() {
                                     {candidate.h2hFouls > 0 ? <span className="rounded-lg bg-secondary px-2 py-1 text-xs font-medium">{candidate.h2hFouls} H2H fouls</span> : null}
                                     {candidate.h2hYellows > 0 ? <span className="inline-flex items-center gap-1.5 rounded-lg border border-yellow-300 bg-yellow-50 px-2 py-1 text-xs font-semibold text-slate-950"><span className="h-3.5 w-2.5 rounded-[1px] bg-yellow-400" />{candidate.h2hYellows} H2H {candidate.h2hYellows === 1 ? "booking" : "bookings"}</span> : null}
                                   </div>
+
+                                  {candidate.h2hMatches?.length ? (
+                                    <div className="mt-2 rounded-xl border border-border bg-secondary/40 p-2">
+                                      <p className="mb-1.5 text-[0.62rem] font-bold uppercase tracking-wide text-muted-foreground">H2H match evidence vs {opponentFor(fixture, candidate)}</p>
+                                      <div className="space-y-1">
+                                        {candidate.h2hMatches.map((match, matchIndex) => <H2HMatchRow key={`${match.matchDate}-${matchIndex}`} match={match} />)}
+                                      </div>
+                                    </div>
+                                  ) : null}
                                 </div>
                                 {playerOpen ? <ChevronUp className="mt-1 size-4 shrink-0 text-muted-foreground" /> : <ChevronDown className="mt-1 size-4 shrink-0 text-muted-foreground" />}
                               </div>
