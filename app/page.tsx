@@ -89,16 +89,16 @@ type PlayerDetail = {
 }
 
 const premierLeagueFixtures: Fixture[] = [
-  { id: "pl-arsenal-coventry", competition: "Premier League", dateIso: "2026-08-21", day: "Friday", date: "21 Aug", time: "20:00", home: "Arsenal", away: "Coventry City" },
-  { id: "pl-hull-man-utd", competition: "Premier League", dateIso: "2026-08-22", day: "Saturday", date: "22 Aug", time: "12:30", home: "Hull City", away: "Manchester United" },
-  { id: "pl-everton-palace", competition: "Premier League", dateIso: "2026-08-22", day: "Saturday", date: "22 Aug", time: "15:00", home: "Everton", away: "Crystal Palace" },
-  { id: "pl-ipswich-sunderland", competition: "Premier League", dateIso: "2026-08-22", day: "Saturday", date: "22 Aug", time: "15:00", home: "Ipswich Town", away: "Sunderland" },
-  { id: "pl-forest-leeds", competition: "Premier League", dateIso: "2026-08-22", day: "Saturday", date: "22 Aug", time: "15:00", home: "Nottingham Forest", away: "Leeds United" },
-  { id: "pl-brentford-spurs", competition: "Premier League", dateIso: "2026-08-22", day: "Saturday", date: "22 Aug", time: "17:30", home: "Brentford", away: "Tottenham Hotspur" },
-  { id: "pl-brighton-villa", competition: "Premier League", dateIso: "2026-08-23", day: "Sunday", date: "23 Aug", time: "14:00", home: "Brighton & Hove Albion", away: "Aston Villa" },
-  { id: "pl-city-bournemouth", competition: "Premier League", dateIso: "2026-08-23", day: "Sunday", date: "23 Aug", time: "14:00", home: "Manchester City", away: "AFC Bournemouth" },
-  { id: "pl-newcastle-liverpool", competition: "Premier League", dateIso: "2026-08-23", day: "Sunday", date: "23 Aug", time: "16:30", home: "Newcastle United", away: "Liverpool" },
-  { id: "pl-fulham-chelsea", competition: "Premier League", dateIso: "2026-08-24", day: "Monday", date: "24 Aug", time: "20:00", home: "Fulham", away: "Chelsea" },
+  { id: "pl-palace-city", competition: "Premier League", dateIso: "2026-08-28", day: "Friday", date: "28 Aug", time: "20:00", home: "Crystal Palace", away: "Manchester City" },
+  { id: "pl-liverpool-forest", competition: "Premier League", dateIso: "2026-08-29", day: "Saturday", date: "29 Aug", time: "12:30", home: "Liverpool", away: "Nottingham Forest" },
+  { id: "pl-bournemouth-everton", competition: "Premier League", dateIso: "2026-08-29", day: "Saturday", date: "29 Aug", time: "15:00", home: "AFC Bournemouth", away: "Everton" },
+  { id: "pl-coventry-hull", competition: "Premier League", dateIso: "2026-08-29", day: "Saturday", date: "29 Aug", time: "15:00", home: "Coventry City", away: "Hull City" },
+  { id: "pl-spurs-newcastle", competition: "Premier League", dateIso: "2026-08-29", day: "Saturday", date: "29 Aug", time: "17:30", home: "Tottenham Hotspur", away: "Newcastle United" },
+  { id: "pl-chelsea-brighton", competition: "Premier League", dateIso: "2026-08-30", day: "Sunday", date: "30 Aug", time: "14:00", home: "Chelsea", away: "Brighton & Hove Albion" },
+  { id: "pl-leeds-brentford", competition: "Premier League", dateIso: "2026-08-30", day: "Sunday", date: "30 Aug", time: "14:00", home: "Leeds United", away: "Brentford" },
+  { id: "pl-sunderland-fulham", competition: "Premier League", dateIso: "2026-08-30", day: "Sunday", date: "30 Aug", time: "14:00", home: "Sunderland", away: "Fulham" },
+  { id: "pl-man-utd-ipswich", competition: "Premier League", dateIso: "2026-08-30", day: "Sunday", date: "30 Aug", time: "16:30", home: "Manchester United", away: "Ipswich Town" },
+  { id: "pl-villa-arsenal", competition: "Premier League", dateIso: "2026-08-31", day: "Monday", date: "31 Aug", time: "20:00", home: "Aston Villa", away: "Arsenal" },
 ]
 
 const championshipFixtures: Fixture[] = [
@@ -130,7 +130,7 @@ const clubDomains: Record<string, string> = {
   "Birmingham City": "bcfc.com", "Bristol City": "bcfc.co.uk", "Lincoln City": "weareimps.com", Portsmouth: "portsmouthfc.co.uk",
   Millwall: "millwallfc.co.uk", "Norwich City": "canaries.co.uk", "Blackburn Rovers": "rovers.co.uk", Middlesbrough: "mfc.co.uk",
   "Derby County": "dcfc.co.uk", "Cardiff City": "cardiffcityfc.co.uk", "Preston North End": "pnefc.net", "Wolverhampton Wanderers": "wolves.co.uk",
-  "Queens Park Rangers": "qpr.co.uk", "Bolton Wanderers": "bwfc.co.uk", Southampton: "southamptonfc.com", "Stoke City": "stokecityfc.com",
+  "Queens Park Rangers": "qpr.co.uk", "Bolton Wanderers": "bwfc.co.uk", Southampton: "southamptonfc.com", "Stoke City": "stokecityfc.co.uk",
   "Swansea City": "swanseacity.com", "Sheffield United": "sufc.co.uk", "West Ham United": "whufc.com", "Charlton Athletic": "cafc.co.uk",
   Wrexham: "wrexhamafc.co.uk", Watford: "watfordfc.com", "West Bromwich Albion": "wba.co.uk", Burnley: "burnleyfootballclub.com",
 }
