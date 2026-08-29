@@ -103,9 +103,6 @@ async function addCurrentSeasonLayer(data: any, competition: string) {
     const cardSignal = Math.min(1, Math.max(0, cards90 / 0.6))
     const recentScore = (foulSignal * 55) + (cardSignal * 45)
 
-    // GW1 should matter, but it should not outweigh a full 2025/26 sample.
-    // One full match contributes about 10% of the live evidence score; the
-    // current-season layer grows gradually and is capped at 35%.
     const recentWeight = Math.min(0.35, minutes / 900)
     const baselineScore = Number(candidate.score ?? 0)
     const score = Math.round(((baselineScore * (1 - recentWeight)) + (recentScore * recentWeight)) * 10) / 10
@@ -139,6 +136,68 @@ async function addCurrentSeasonLayer(data: any, competition: string) {
   return data
 }
 
+function h2hRank(candidate: any) {
+  if (Number(candidate.h2hYellows ?? 0) > 0) return 2
+  if (Number(candidate.h2hFouls ?? 0) > 0) return 1
+  return 0
+}
+
+function candidateOrder(a: any, b: any) {
+  return h2hRank(b) - h2hRank(a)
+    || Number(b.h2hYellows ?? 0) - Number(a.h2hYellows ?? 0)
+    || Number(b.h2hFouls ?? 0) - Number(a.h2hFouls ?? 0)
+    || Number(b.score ?? 0) - Number(a.score ?? 0)
+    || Number(b.yellows ?? 0) - Number(a.yellows ?? 0)
+}
+
+async function addH2HMatchesAndBalance(data: any, home: string, away: string, competition: string, fixtureDate: string) {
+  if (!isDatabaseConfigured || !Array.isArray(data?.candidates) || !data.candidates.length) return data
+  const names = Array.from(new Set(data.candidates.map((candidate: any) => String(candidate.dbName ?? "")).filter(Boolean))) as string[]
+  if (!names.length) return data
+
+  const rows = await db
+    .select()
+    .from(playerH2H)
+    .where(and(inArray(playerH2H.playerName, names), eq(playerH2H.competition, competition)))
+
+  data.candidates = data.candidates.map((candidate: any) => {
+    const opponent = teamMatch(candidate.team, home) ? away : home
+    const matches = rows
+      .filter((row) => row.playerName === candidate.dbName && teamMatch(row.opponent, opponent) && (!fixtureDate || String(row.matchDate) < fixtureDate))
+      .sort((a, b) => String(b.matchDate).localeCompare(String(a.matchDate)))
+      .slice(0, 8)
+
+    const h2hYellows = matches.filter((row) => row.yellowCard === true).length
+    const h2hFouls = matches.reduce((sum, row) => sum + Number(row.foulsCommitted ?? 0), 0)
+
+    return {
+      ...candidate,
+      h2hYellows,
+      h2hFouls,
+      h2hMatches: matches.map((row) => ({
+        matchDate: String(row.matchDate),
+        opponent: row.opponent,
+        venue: row.venue,
+        competition: row.competition,
+        minutes: row.minutes,
+        foulsCommitted: row.foulsCommitted,
+        foulsDrawn: row.foulsDrawn,
+        yellowCard: row.yellowCard,
+        redCard: row.redCard,
+      })),
+    }
+  })
+
+  const homeCandidates = data.candidates.filter((candidate: any) => teamMatch(candidate.team, home)).sort(candidateOrder).slice(0, 5)
+  const awayCandidates = data.candidates.filter((candidate: any) => teamMatch(candidate.team, away)).sort(candidateOrder).slice(0, 5)
+  const balanced = [...homeCandidates, ...awayCandidates].sort(candidateOrder)
+
+  data.candidates = balanced
+  data.rankingMethod = "Top 10: five per team where data is available; H2H bookings first, then H2H fouls, then overall evidence score"
+  data.teamCoverage = { home: homeCandidates.length, away: awayCandidates.length }
+  return data
+}
+
 export async function GET(request: Request) {
   const response = await espnGET(request)
   if (!response.ok) return response
@@ -152,6 +211,7 @@ export async function GET(request: Request) {
     const competition = url.searchParams.get("competition") ?? "Premier League"
 
     data = await addCurrentSeasonLayer(data, competition)
+    data = await addH2HMatchesAndBalance(data, home, away, competition, date)
 
     let refereeName = data?.referee?.name ?? null
     let refereeSource = refereeName ? "ESPN" : null
