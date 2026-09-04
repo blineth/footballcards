@@ -50,7 +50,7 @@ export default function HomePage(){
   const fixtures=useMemo(()=>byCompetition[competition],[competition])
   const refresh=useCallback(async(target:Competition)=>{
     const fs=byCompetition[target]; setLoading(x=>({...x,...Object.fromEntries(fs.map(f=>[f.id,true]))}))
-    await Promise.all(fs.map(async f=>{ try{ const r=await fetch(query(f),{cache:"no-store"}); if(r.ok)setRadar(x=>({...x,[f.id]:await r.json()})) }finally{ setLoading(x=>({...x,[f.id]:false})) }}))
+    await Promise.all(fs.map(async f=>{ try{ const r=await fetch(query(f),{cache:"no-store"}); if(r.ok){ const data=await r.json() as Radar; setRadar(x=>({...x,[f.id]:data})) } }finally{ setLoading(x=>({...x,[f.id]:false})) }}))
   },[])
   useEffect(()=>{ void refresh(competition); const t=window.setInterval(()=>void refresh(competition),60000); return()=>window.clearInterval(t) },[competition,refresh])
 
