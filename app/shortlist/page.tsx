@@ -26,7 +26,7 @@ function roleLabel(value:string|null|undefined){if(!value)return null;const raw=
 
 export default function ShortlistPage(){
  const[radar,setRadar]=useState<Record<string,Radar>>({});const[loading,setLoading]=useState(false)
- async function refresh(){setLoading(true);try{await Promise.all(fixtures.map(async f=>{try{const r=await fetch(query(f),{cache:"no-store"});if(r.ok)setRadar(x=>({...x,[f.id]:await r.json()}))}catch{}}))}finally{setLoading(false)}}
+ async function refresh(){setLoading(true);try{await Promise.all(fixtures.map(async f=>{try{const r=await fetch(query(f),{cache:"no-store"});if(r.ok){const data=await r.json() as Radar;setRadar(x=>({...x,[f.id]:data}))}}catch{}}))}finally{setLoading(false)}}
  useEffect(()=>{void refresh();const t=window.setInterval(()=>void refresh(),60000);return()=>window.clearInterval(t)},[])
  const rows=useMemo(()=>fixtures.map(f=>({f,d:radar[f.id],p:picks(radar[f.id]?.candidates??[])})),[radar])
  return <main className="min-h-screen bg-background pb-24"><header className="sticky top-0 z-30 bg-navy text-white"><div className="mx-auto flex max-w-2xl items-center justify-between px-4 pb-4 pt-[max(1rem,env(safe-area-inset-top))]"><div><h1 className="text-xl font-bold">Card Shortlist</h1><p className="text-sm text-white/70">GW3 · strongest yellow-card evidence</p></div><button onClick={()=>void refresh()} className="rounded-xl bg-white/10 p-2.5"><RefreshCw className={`size-4 ${loading?"animate-spin":""}`}/></button></div></header>
