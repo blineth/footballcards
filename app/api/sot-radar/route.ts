@@ -3,187 +3,125 @@ import { NextResponse } from "next/server"
 export const dynamic = "force-dynamic"
 export const revalidate = 0
 
-const SOFA = "https://www.sofascore.com/api/v1"
+const API_BASE = "https://v3.football.api-sports.io"
+const LEAGUE_IDS: Record<string,string> = {
+  "Premier League":"39",
+  Championship:"40",
+}
 
-function norm(value: string | null | undefined) {
-  return String(value ?? "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/\b(afc|fc)\b/g, "")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim()
-    .replace(/\s+/g, " ")
+function norm(value:string|null|undefined){
+  return String(value??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/\b(afc|fc)\b/g,"").replace(/[^a-z0-9]+/g," ").trim().replace(/\s+/g," ")
 }
-function teamMatch(a?: string | null, b?: string | null) {
-  const na = norm(a), nb = norm(b)
-  return Boolean(na && nb && (na === nb || na.includes(nb) || nb.includes(na)))
+function teamMatch(a?:string|null,b?:string|null){
+  const na=norm(a),nb=norm(b)
+  return Boolean(na&&nb&&(na===nb||na.includes(nb)||nb.includes(na)))
 }
-function parseJsonText(text:string){
-  try{return JSON.parse(text)}catch{}
-  const start=text.indexOf("{"),end=text.lastIndexOf("}")
-  if(start>=0&&end>start){try{return JSON.parse(text.slice(start,end+1))}catch{}}
-  return null
+function seasonFor(date:string){
+  const d=new Date(date+"T12:00:00Z")
+  const y=d.getUTCFullYear(),m=d.getUTCMonth()
+  return String(m>=7?y:y-1)
 }
-async function sofa(path: string) {
-  const primary=`https://www.sofascore.com/api/v1${path}`
-  const urls=[
-    primary,
-    `https://api.sofascore.com/api/v1${path}`,
-    `https://api.allorigins.win/raw?url=${encodeURIComponent(primary)}`,
-    `https://r.jina.ai/${primary}`,
-  ]
-  const errors:string[]=[]
-  for(const url of urls){
-    try{
-      const r=await fetch(url,{
-        cache:"no-store",
-        signal:AbortSignal.timeout(10000),
-        headers:{accept:"application/json,text/plain,*/*","user-agent":"Mozilla/5.0 footballcards/1.0"},
-      })
-      const text=await r.text()
-      const parsed=r.ok?parseJsonText(text):null
-      if(parsed)return parsed
-      errors.push(`${r.status} ${url.slice(0,60)}`)
-    }catch(e){errors.push(e instanceof Error?e.message:"fetch error")}
-  }
-  throw new Error(`SofaScore providers failed: ${errors.join(" | ")}`)
+async function api(path:string,params:Record<string,string>,key:string){
+  const url=new URL(API_BASE+path)
+  for(const[k,v]of Object.entries(params))url.searchParams.set(k,v)
+  const r=await fetch(url,{headers:{"x-apisports-key":key},cache:"no-store",signal:AbortSignal.timeout(10000)})
+  if(!r.ok)throw new Error(`API-Football ${path} ${r.status}`)
+  const j=await r.json()
+  return j?.response??[]
 }
-function dateOnly(ts: number | null | undefined) {
-  return ts ? new Date(ts * 1000).toISOString().slice(0,10) : ""
+async function resolveTeam(name:string,key:string){
+  const rows=await api("/teams",{search:name},key)
+  const exact=rows.find((r:any)=>teamMatch(r?.team?.name,name))
+  return exact?.team??null
 }
-function sotFromStats(stats: any) {
-  const candidates = [
-    stats?.onTargetScoringAttempt,
-    stats?.shotsOnTarget,
-    stats?.shotOnTarget,
-    stats?.onTargetAttempts,
-  ]
-  for (const v of candidates) {
-    const n = Number(v)
-    if (Number.isFinite(n)) return n
-  }
-  return 0
+function matchDate(row:any){
+  return String(row?.fixture?.date??"").slice(0,10)
 }
-function minutesFromStats(stats: any) {
-  const vals = [stats?.minutesPlayed, stats?.minutes, stats?.timePlayed]
-  for (const v of vals) {
-    const n = Number(v)
-    if (Number.isFinite(n)) return n
-  }
-  return 0
+function playerTeamBlock(rows:any[],teamId:number){
+  return rows.find((r:any)=>Number(r?.team?.id)===Number(teamId))
 }
-async function findFixture(date: string, home: string, away: string) {
-  const data = await sofa(`/sport/football/scheduled-events/${date}`)
-  return (data?.events ?? []).find((e:any) => teamMatch(e?.homeTeam?.name, home) && teamMatch(e?.awayTeam?.name, away)) ?? null
+async function recentFixtures(teamId:number,league:string,season:string,key:string){
+  const rows=await api("/fixtures",{team:String(teamId),league,season,last:"5",timezone:"Europe/London"},key)
+  return rows.filter((r:any)=>String(r?.fixture?.status?.short??"").toUpperCase()==="FT").slice(0,5)
 }
-async function findTeamByName(name:string){
-  const data=await sofa(`/search/all?q=${encodeURIComponent(name)}`)
-  const rows=Array.isArray(data?.results)?data.results:Array.isArray(data?.data)?data.data:[]
-  for(const row of rows){
-    const entity=row?.entity??row?.team??row
-    const type=String(row?.type??entity?.type??"").toLowerCase()
-    if(entity?.id&&entity?.name&&(!type||type.includes("team"))&&teamMatch(entity.name,name)) return {id:Number(entity.id),name:String(entity.name)}
-  }
-  return null
-}
-async function recentFinished(teamId: number, beforeDate: string) {
-  const collected:any[] = []
-  for (let page=0; page<3 && collected.length<5; page++) {
-    let data:any
-    try { data = await sofa(`/team/${teamId}/events/last/${page}`) } catch { break }
-    for (const e of data?.events ?? []) {
-      const d = dateOnly(e?.startTimestamp)
-      const type = String(e?.status?.type ?? "").toLowerCase()
-      if (!d || d >= beforeDate) continue
-      if (!(type.includes("finished") || type.includes("after"))) continue
-      if (!collected.some(x=>x.id===e.id)) collected.push(e)
-      if (collected.length>=5) break
-    }
-  }
-  return collected.slice(0,5)
-}
-async function teamSot(team:any, beforeDate:string) {
-  const events = await recentFinished(Number(team.id), beforeDate)
-  const players = new Map<string, {
-    name:string; team:string; games:number; minutes:number; sot:number; onePlus:number; twoPlus:number;
+async function teamSot(team:any,league:string,season:string,key:string){
+  const fixtures=await recentFixtures(Number(team.id),league,season,key)
+  const players=new Map<string,{
+    name:string;team:string;games:number;minutes:number;sot:number;onePlus:number;twoPlus:number;
     matches:Array<{date:string;opponent:string;sot:number;minutes:number}>
   }>()
 
-  await Promise.all(events.map(async (e:any) => {
-    let lineups:any
-    try { lineups = await sofa(`/event/${e.id}/lineups`) } catch { return }
-    const isHome = Number(e?.homeTeam?.id) === Number(team.id)
-    const rows = ((lineups?.[isHome ? "home" : "away"]?.players) ?? [])
-    const opponent = isHome ? e?.awayTeam?.name : e?.homeTeam?.name
-    const d = dateOnly(e?.startTimestamp)
+  await Promise.all(fixtures.map(async(f:any)=>{
+    let rows:any[]=[]
+    try{rows=await api("/fixtures/players",{fixture:String(f.fixture.id)},key)}catch{return}
+    const block=playerTeamBlock(rows,Number(team.id))
+    if(!block)return
+    const isHome=Number(f?.teams?.home?.id)===Number(team.id)
+    const opponent=isHome?f?.teams?.away?.name:f?.teams?.home?.name
+    const date=matchDate(f)
 
-    for (const row of rows) {
-      const p = row?.player
-      if (!p?.name) continue
-      const stats = row?.statistics ?? {}
-      const minutes = minutesFromStats(stats)
-      if (minutes <= 0) continue
-      const sot = sotFromStats(stats)
-      const key = norm(p.name)
-      const current = players.get(key) ?? {
-        name:String(p.name), team:String(team.name), games:0, minutes:0, sot:0, onePlus:0, twoPlus:0, matches:[]
-      }
-      current.games += 1
-      current.minutes += minutes
-      current.sot += sot
-      if (sot >= 1) current.onePlus += 1
-      if (sot >= 2) current.twoPlus += 1
-      current.matches.push({date:d, opponent:String(opponent??""), sot, minutes})
-      players.set(key,current)
+    for(const row of block?.players??[]){
+      const p=row?.player
+      const stats=row?.statistics?.[0]??{}
+      const minutes=Number(stats?.games?.minutes??0)
+      if(!p?.name||!minutes)continue
+      const sot=Number(stats?.shots?.on??0)
+      const keyName=norm(p.name)
+      const current=players.get(keyName)??{name:String(p.name),team:String(team.name),games:0,minutes:0,sot:0,onePlus:0,twoPlus:0,matches:[]}
+      current.games+=1
+      current.minutes+=minutes
+      current.sot+=Number.isFinite(sot)?sot:0
+      if(sot>=1)current.onePlus+=1
+      if(sot>=2)current.twoPlus+=1
+      current.matches.push({date,opponent:String(opponent??""),sot:Number.isFinite(sot)?sot:0,minutes})
+      players.set(keyName,current)
     }
   }))
 
-  return [...players.values()].map(p => ({
-    ...p,
-    sot90: p.minutes ? p.sot / p.minutes * 90 : 0,
-    onePlusRate: p.games ? p.onePlus / p.games : 0,
-    twoPlusRate: p.games ? p.twoPlus / p.games : 0,
-    score: Math.round((
-      Math.min(1, (p.minutes ? p.sot / p.minutes * 90 : 0) / 1.2) * 45 +
-      (p.games ? p.onePlus / p.games : 0) * 30 +
-      (p.games ? p.twoPlus / p.games : 0) * 25
-    ) * 10) / 10,
-  }))
+  return [...players.values()].map(p=>{
+    const sot90=p.minutes?p.sot/p.minutes*90:0
+    const onePlusRate=p.games?p.onePlus/p.games:0
+    const twoPlusRate=p.games?p.twoPlus/p.games:0
+    const score=Math.round((Math.min(1,sot90/1.2)*45+onePlusRate*35+twoPlusRate*20)*10)/10
+    return {...p,sot90,onePlusRate,twoPlusRate,score}
+  })
 }
 
-export async function GET(request: Request) {
-  const url = new URL(request.url)
-  const date = url.searchParams.get("date") ?? ""
-  const home = url.searchParams.get("home") ?? ""
-  const away = url.searchParams.get("away") ?? ""
-  if (!date || !home || !away) return NextResponse.json({ players: [], error:"Invalid fixture parameters" }, { status:400 })
+export async function GET(request:Request){
+  const url=new URL(request.url)
+  const date=url.searchParams.get("date")??""
+  const home=url.searchParams.get("home")??""
+  const away=url.searchParams.get("away")??""
+  const competition=url.searchParams.get("competition")??"Premier League"
+  const league=LEAGUE_IDS[competition]
+  const key=process.env.API_FOOTBALL_KEY
 
-  try {
-    const event = await findFixture(date, home, away).catch(()=>null)
-    const [homeTeam,awayTeam]=event?.homeTeam?.id&&event?.awayTeam?.id
-      ? [event.homeTeam,event.awayTeam]
-      : await Promise.all([findTeamByName(home),findTeamByName(away)])
-    if (!homeTeam?.id || !awayTeam?.id) {
-      return NextResponse.json({ connected:true, source:"SofaScore", players:[], note:"Teams could not be resolved for SOT research." })
+  if(!date||!home||!away||!league)return NextResponse.json({connected:false,players:[],error:"Invalid fixture parameters"},{status:400})
+  if(!key)return NextResponse.json({connected:false,players:[],error:"API_FOOTBALL_KEY is not configured"},{status:503})
+
+  try{
+    const [homeTeam,awayTeam]=await Promise.all([resolveTeam(home,key),resolveTeam(away,key)])
+    if(!homeTeam?.id||!awayTeam?.id){
+      return NextResponse.json({connected:true,source:"API-Football",players:[],note:"Teams could not be resolved for SOT research."})
     }
-    const [homeRows, awayRows] = await Promise.all([
-      teamSot(homeTeam, date),
-      teamSot(awayTeam, date),
+    const season=seasonFor(date)
+    const [homeRows,awayRows]=await Promise.all([
+      teamSot(homeTeam,league,season,key),
+      teamSot(awayTeam,league,season,key),
     ])
-    const players = [...homeRows, ...awayRows]
-      .filter(p => p.games >= 2)
-      .sort((a,b) => b.score-a.score || b.sot90-a.sot90 || b.sot-a.sot)
+    const players=[...homeRows,...awayRows]
+      .filter(p=>p.games>=2)
+      .sort((a,b)=>b.score-a.score||b.sot90-a.sot90||b.sot-a.sot)
       .slice(0,20)
+
     return NextResponse.json({
       connected:true,
-      source:"SofaScore recent player match stats",
-      fixtureId:event?.id?String(event.id):null,
+      source:"API-Football recent fixture player stats",
       updatedAt:new Date().toISOString(),
       players,
     })
-  } catch (error) {
-    console.log("[sot-radar]", error instanceof Error ? error.message : error)
-    return NextResponse.json({ connected:false, source:"SofaScore", players:[], error:"SOT research feed unavailable." }, { status:502 })
+  }catch(error){
+    console.log("[sot-radar]",error instanceof Error?error.message:error)
+    return NextResponse.json({connected:false,source:"API-Football",players:[],error:"SOT research feed unavailable."},{status:502})
   }
 }
