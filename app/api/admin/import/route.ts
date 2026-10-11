@@ -6,6 +6,7 @@ import {
   referees,
 } from "@/lib/db/schema"
 import { ensureResearchSchema } from "@/lib/db/ensure-research-schema"
+import { and, eq, gte, inArray } from "drizzle-orm"
 import { NextResponse } from "next/server"
 
 export const dynamic = "force-dynamic"
@@ -71,7 +72,9 @@ function mapRows(dataset: Dataset, rows: Record<string, unknown>[]) {
         appearances: int(r.appearances), starts: int(r.starts), minutes: int(r.minutes),
         yellowCards: int(r.yellow_cards), redCards: int(r.red_cards),
         foulsCommitted: int(r.fouls_committed), foulsDrawn: int(r.fouls_drawn),
+        shots: int(r.shots), shotsOnTarget: int(r.shots_on_target),
         foulsPer90: dec(r.fouls_per_90), cardsPer90: dec(r.cards_per_90),
+        shotsPer90: dec(r.shots_per_90), shotsOnTargetPer90: dec(r.shots_on_target_per_90),
         position: str(r.position), externalPlayerId: str(r.external_player_id),
       }))
     case "h2h":
@@ -80,6 +83,7 @@ function mapRows(dataset: Dataset, rows: Record<string, unknown>[]) {
         team: str(r.team), opponent: str(r.opponent) ?? "", matchDate: str(r.match_date) ?? "",
         competition: str(r.competition), venue: str(r.venue), minutes: int(r.minutes),
         foulsCommitted: int(r.fouls_committed), foulsDrawn: int(r.fouls_drawn),
+        shots: int(r.shots), shotsOnTarget: int(r.shots_on_target),
         yellowCard: bool(r.yellow_card), redCard: bool(r.red_card), externalPlayerId: str(r.external_player_id),
       }))
     case "referees":
@@ -104,7 +108,7 @@ export async function POST(request: Request) {
   if (!isDatabaseConfigured) return NextResponse.json({ ok: false, error: "Database not connected." }, { status: 503 })
   await ensureResearchSchema()
 
-  const body = (await request.json().catch(() => null)) as { dataset?: Dataset; format?: "csv" | "json"; content?: string } | null
+  const body = (await request.json().catch(() => null)) as { dataset?: Dataset; format?: "csv" | "json"; content?: string; replaceCurrentSeason?: boolean } | null
   if (!body?.dataset || !body.content) return NextResponse.json({ ok: false, error: "Missing dataset or content." }, { status: 400 })
   if (!["player_baselines", "h2h", "referees", "player_referee_history"].includes(body.dataset)) {
     return NextResponse.json({ ok: false, error: "Unknown dataset." }, { status: 400 })
@@ -126,6 +130,15 @@ export async function POST(request: Request) {
   const seasons = Array.from(new Set(raw.map((r) => str(r.season)).filter((v): v is string => Boolean(v))))
 
   try {
+    if (body.replaceCurrentSeason && competitions.length) {
+      if (body.dataset === "player_baselines") {
+        await db.delete(playerBaselines).where(and(eq(playerBaselines.season, "2026/27"), inArray(playerBaselines.competition, competitions)))
+      }
+      if (body.dataset === "h2h") {
+        await db.delete(playerH2H).where(and(gte(playerH2H.matchDate, "2026-08-01"), inArray(playerH2H.competition, competitions)))
+      }
+    }
+
     let processed = 0
     for (let i = 0; i < mapped.length; i += 200) {
       const chunk = mapped.slice(i, i + 200)
@@ -136,7 +149,7 @@ export async function POST(request: Request) {
       processed += chunk.length
     }
 
-    return NextResponse.json({ ok: true, dataset: body.dataset, rows: processed, competitions, seasons, importMode: "additive", replacedExisting: false })
+    return NextResponse.json({ ok: true, dataset: body.dataset, rows: processed, competitions, seasons, importMode: body.replaceCurrentSeason ? "replace-current-season" : "additive", replacedExisting: Boolean(body.replaceCurrentSeason) })
   } catch (error) {
     console.log("[import] error", error)
     return NextResponse.json({ ok: false, error: "Import failed. Existing Premier League data was not intentionally deleted or replaced." }, { status: 500 })
