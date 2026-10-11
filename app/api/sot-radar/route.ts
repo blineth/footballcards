@@ -19,14 +19,35 @@ function teamMatch(a?: string | null, b?: string | null) {
   const na = norm(a), nb = norm(b)
   return Boolean(na && nb && (na === nb || na.includes(nb) || nb.includes(na)))
 }
+function parseJsonText(text:string){
+  try{return JSON.parse(text)}catch{}
+  const start=text.indexOf("{"),end=text.lastIndexOf("}")
+  if(start>=0&&end>start){try{return JSON.parse(text.slice(start,end+1))}catch{}}
+  return null
+}
 async function sofa(path: string) {
-  const r = await fetch(SOFA + path, {
-    cache: "no-store",
-    signal: AbortSignal.timeout(9000),
-    headers: { accept: "application/json", "user-agent": "Mozilla/5.0 footballcards/1.0" },
-  })
-  if (!r.ok) throw new Error(`SofaScore ${path} ${r.status}`)
-  return r.json()
+  const primary=`https://www.sofascore.com/api/v1${path}`
+  const urls=[
+    primary,
+    `https://api.sofascore.com/api/v1${path}`,
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(primary)}`,
+    `https://r.jina.ai/${primary}`,
+  ]
+  const errors:string[]=[]
+  for(const url of urls){
+    try{
+      const r=await fetch(url,{
+        cache:"no-store",
+        signal:AbortSignal.timeout(10000),
+        headers:{accept:"application/json,text/plain,*/*","user-agent":"Mozilla/5.0 footballcards/1.0"},
+      })
+      const text=await r.text()
+      const parsed=r.ok?parseJsonText(text):null
+      if(parsed)return parsed
+      errors.push(`${r.status} ${url.slice(0,60)}`)
+    }catch(e){errors.push(e instanceof Error?e.message:"fetch error")}
+  }
+  throw new Error(`SofaScore providers failed: ${errors.join(" | ")}`)
 }
 function dateOnly(ts: number | null | undefined) {
   return ts ? new Date(ts * 1000).toISOString().slice(0,10) : ""
