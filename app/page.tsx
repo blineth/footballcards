@@ -75,10 +75,14 @@ function foulScore(c:Candidate){
 }
 function fouledScore(c:Candidate){ return Number(c.fouled90??0) }
 
+function sameTeam(a:string,b:string){
+  const na=norm(a),nb=norm(b)
+  return Boolean(na&&nb&&(na===nb||na.includes(nb)||nb.includes(na)))
+}
 function balancedTopFive<T extends {team:string}>(rows:T[],home:string,away:string,score:(row:T)=>number){
   const sorted=[...rows].sort((a,b)=>score(b)-score(a))
-  const homeRows=sorted.filter(r=>norm(r.team)===norm(home)).slice(0,2)
-  const awayRows=sorted.filter(r=>norm(r.team)===norm(away)).slice(0,2)
+  const homeRows=sorted.filter(r=>sameTeam(r.team,home)).slice(0,2)
+  const awayRows=sorted.filter(r=>sameTeam(r.team,away)).slice(0,2)
   const chosen=[...homeRows,...awayRows]
   const seen=new Set(chosen)
   for(const row of sorted){
