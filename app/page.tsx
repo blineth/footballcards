@@ -74,6 +74,19 @@ function foulScore(c:Candidate){
   return Number(c.recentFive?.fouls90??0)*0.5 + Number(c.fouls90??0)*0.3 + Number(c.likelyMatchup?.fouled90??0)*0.2
 }
 function fouledScore(c:Candidate){ return Number(c.fouled90??0) }
+
+function balancedTopFive<T extends {team:string}>(rows:T[],home:string,away:string,score:(row:T)=>number){
+  const sorted=[...rows].sort((a,b)=>score(b)-score(a))
+  const homeRows=sorted.filter(r=>norm(r.team)===norm(home)).slice(0,2)
+  const awayRows=sorted.filter(r=>norm(r.team)===norm(away)).slice(0,2)
+  const chosen=[...homeRows,...awayRows]
+  const seen=new Set(chosen)
+  for(const row of sorted){
+    if(chosen.length>=5)break
+    if(!seen.has(row)){chosen.push(row);seen.add(row)}
+  }
+  return chosen.sort((a,b)=>score(b)-score(a)).slice(0,5)
+}
 function h2hMeetings(c:Candidate){ return c.h2hMatches?.length??0 }
 
 export default function HomePage(){
@@ -172,10 +185,10 @@ export default function HomePage(){
       {fixtures.map(f=>{
         const d=radar[f.id],o=odds[f.id],cs=d?.candidates??[],isOpen=open===f.id
         const confirmed=d?.lineupsConfirmed||f.lineupStatus==="confirmed"
-        const cards=[...cs].sort((a,b)=>cardScore(b)-cardScore(a)).slice(0,5)
-        const fouls=[...cs].sort((a,b)=>foulScore(b)-foulScore(a)).slice(0,5)
-        const fouled=[...cs].sort((a,b)=>fouledScore(b)-fouledScore(a)).slice(0,5)
-        const sots=(sot[f.id]?.players??[]).slice(0,5)
+        const cards=balancedTopFive(cs,f.home,f.away,cardScore)
+        const fouls=balancedTopFive(cs,f.home,f.away,foulScore)
+        const fouled=balancedTopFive(cs,f.home,f.away,fouledScore)
+        const sots=balancedTopFive(sot[f.id]?.players??[],f.home,f.away,(p)=>Number(p.score??0))
 
         return <section key={f.id} className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
           <button onClick={()=>setOpen(x=>x===f.id?null:f.id)} className="w-full p-4 text-left">
