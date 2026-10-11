@@ -130,7 +130,14 @@ def matchup(team: str, home: str, away: str) -> tuple[str, str]:
 
 def build_league(source_key: str, competition: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
     print(f"\n=== Scraping {competition} {SEASON_LABEL} from FBref ===", flush=True)
-    fb = sd.FBref(leagues=source_key, seasons=SEASON_SELECTOR, no_cache=True)
+    chrome_path = os.environ.get("CHROME_PATH")
+    fb = sd.FBref(
+        leagues=source_key,
+        seasons=SEASON_SELECTOR,
+        no_cache=True,
+        path_to_browser=Path(chrome_path) if chrome_path else None,
+        headless=True,
+    )
 
     schedule = flatten_columns(fb.read_schedule(force_cache=False).reset_index())
     completed = schedule[schedule.get("game_id").notna()].copy()
