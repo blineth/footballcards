@@ -40,12 +40,12 @@ function matchDate(row:any){
 function playerTeamBlock(rows:any[],teamId:number){
   return rows.find((r:any)=>Number(r?.team?.id)===Number(teamId))
 }
-async function recentFixtures(teamId:number,league:string,season:string,key:string){
-  const rows=await api("/fixtures",{team:String(teamId),league,season,last:"5",timezone:"Europe/London"},key)
-  return rows.filter((r:any)=>String(r?.fixture?.status?.short??"").toUpperCase()==="FT").slice(0,5)
+async function recentFixtures(teamId:number,key:string){
+  const rows=await api("/fixtures",{team:String(teamId),last:"8",timezone:"Europe/London"},key)
+  return rows.filter((r:any)=>["FT","AET","PEN"].includes(String(r?.fixture?.status?.short??"").toUpperCase())).slice(0,5)
 }
-async function teamSot(team:any,league:string,season:string,key:string){
-  const fixtures=await recentFixtures(Number(team.id),league,season,key)
+async function teamSot(team:any,key:string){
+  const fixtures=await recentFixtures(Number(team.id),key)
   const players=new Map<string,{
     name:string;team:string;games:number;minutes:number;sot:number;onePlus:number;twoPlus:number;
     matches:Array<{date:string;opponent:string;sot:number;minutes:number}>
@@ -104,10 +104,9 @@ export async function GET(request:Request){
     if(!homeTeam?.id||!awayTeam?.id){
       return NextResponse.json({connected:true,source:"API-Football",players:[],note:"Teams could not be resolved for SOT research."})
     }
-    const season=seasonFor(date)
     const [homeRows,awayRows]=await Promise.all([
-      teamSot(homeTeam,league,season,key),
-      teamSot(awayTeam,league,season,key),
+      teamSot(homeTeam,key),
+      teamSot(awayTeam,key),
     ])
     const players=[...homeRows,...awayRows]
       .filter(p=>p.games>=2)
