@@ -1,0 +1,103 @@
+name: Refresh 2026-27 current-season research
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "35 5 * * *"
+  push:
+    paths:
+      - "scripts/backfill-current-season-fbref.py"
+      - "lib/db/schema.ts"
+      - "lib/db/ensure-research-schema.ts"
+      - "app/api/admin/import/route.ts"
+      - "app/api/version/route.ts"
+      - ".github/workflows/refresh-current-season.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-current-season
+  cancel-in-progress: true
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install scraper dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install "soccerdata==1.9.1" pandas requests lxml selenium
+
+      - name: Confirm browser
+        shell: bash
+        run: |
+          which google-chrome || which google-chrome-stable || which chromium || true
+          google-chrome --version || google-chrome-stable --version || chromium --version || true
+
+      - name: Wait for this commit to be live on Vercel
+        shell: bash
+        run: |
+          for i in {1..40}; do
+            BODY="$(curl -fsS https://footballcards-wheat.vercel.app/api/version || true)"
+            echo "$BODY"
+            if echo "$BODY" | grep -q "$GITHUB_SHA"; then
+              echo "Production is on $GITHUB_SHA"
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "Production did not reach $GITHUB_SHA in time"
+          exit 1
+
+      - name: Scrape FBref and sync Neon
+        env:
+          SOCCERDATA_DIR: ${{ github.workspace }}/.cache/soccerdata
+          SYNC_URL: https://footballcards-wheat.vercel.app
+          SOCCERDATA_LOGLEVEL: INFO
+        run: python scripts/backfill-current-season-fbref.py
+
+      - name: Validate current-season dataset
+        shell: bash
+        run: |
+          python - <<'PY'
+          import csv, json
+          from pathlib import Path
+          root = Path("data/current-season")
+          h2h = list(csv.DictReader((root / "h2h.csv").open(encoding="utf-8")))
+          baselines = list(csv.DictReader((root / "player_baselines.csv").open(encoding="utf-8")))
+          report = json.load((root / "quality-report.json").open(encoding="utf-8"))
+
+          assert len(h2h) >= 500, len(h2h)
+          assert len(baselines) >= 150, len(baselines)
+          assert sum(int(r.get("shots_on_target") or 0) for r in h2h) > 0
+          assert sum(int(r.get("fouls_committed") or 0) for r in h2h) > 0
+          assert sum(1 for r in h2h if str(r.get("yellow_card")).lower() == "true") > 0
+          assert report["totals"]["shots_on_target"] > 0
+          assert "neon_sync" in report
+          print("Validation passed:", report["totals"])
+          PY
+
+      - name: Commit refreshed research snapshot
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/current-season/h2h.csv data/current-season/player_baselines.csv data/current-season/quality-report.json
+          if git diff --cached --quiet; then
+            echo "Current-season research snapshot already up to date."
+            exit 0
+          fi
+          git commit -m "Refresh 2026-27 current-season research data"
+          git pull --rebase origin main
+          git push origin main
