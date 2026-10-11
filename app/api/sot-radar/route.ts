@@ -44,6 +44,43 @@ async function recentFixtures(teamId:number,key:string){
   const rows=await api("/fixtures",{team:String(teamId),last:"8",timezone:"Europe/London"},key)
   return rows.filter((r:any)=>["FT","AET","PEN"].includes(String(r?.fixture?.status?.short??"").toUpperCase())).slice(0,5)
 }
+async function seasonPlayers(team:any,league:string,season:string,key:string){
+  const rows:any[]=[]
+  for(let page=1;page<=4;page++){
+    let batch:any[]=[]
+    try{batch=await api("/players",{team:String(team.id),league,season,page:String(page)},key)}catch{break}
+    if(!batch.length)break
+    rows.push(...batch)
+    if(batch.length<20)break
+  }
+  return rows.map((row:any)=>{
+    const stat=(row?.statistics??[]).find((s:any)=>String(s?.league?.id)===String(league))??row?.statistics?.[0]??{}
+    const minutes=Number(stat?.games?.minutes??0)
+    const appearances=Number(stat?.games?.appearences??stat?.games?.appearances??0)
+    const sot=Number(stat?.shots?.on??0)
+    const totalShots=Number(stat?.shots?.total??0)
+    const sot90=minutes?sot/minutes*90:0
+    const score=Math.round((Math.min(1,sot90/1.2)*70+Math.min(1,sot/15)*20+Math.min(1,minutes/1500)*10)*10)/10
+    return {
+      name:String(row?.player?.name??""),
+      team:String(team.name),
+      games:appearances,
+      minutes,
+      sot,
+      totalShots,
+      onePlus:0,
+      twoPlus:0,
+      onePlusRate:0,
+      twoPlusRate:0,
+      sot90,
+      score,
+      matches:[],
+      sample:"season",
+      season,
+    }
+  }).filter((p:any)=>p.name&&p.minutes>0)
+}
+
 async function teamSot(team:any,key:string){
   const fixtures=await recentFixtures(Number(team.id),key)
   const players=new Map<string,{
@@ -104,18 +141,39 @@ export async function GET(request:Request){
     if(!homeTeam?.id||!awayTeam?.id){
       return NextResponse.json({connected:true,source:"API-Football",players:[],note:"Teams could not be resolved for SOT research."})
     }
-    const [homeRows,awayRows]=await Promise.all([
+    let [homeRows,awayRows]=await Promise.all([
       teamSot(homeTeam,key),
       teamSot(awayTeam,key),
     ])
+    let source="API-Football recent fixture player stats"
+    let sample="recent5"
+
+    if(homeRows.length+awayRows.length===0){
+      let season=seasonFor(date)
+      ;[homeRows,awayRows]=await Promise.all([
+        seasonPlayers(homeTeam,league,season,key),
+        seasonPlayers(awayTeam,league,season,key),
+      ])
+      if(homeRows.length+awayRows.length===0){
+        season=String(Number(season)-1)
+        ;[homeRows,awayRows]=await Promise.all([
+          seasonPlayers(homeTeam,league,season,key),
+          seasonPlayers(awayTeam,league,season,key),
+        ])
+      }
+      source=`API-Football player season stats (${season})`
+      sample="season"
+    }
+
     const players=[...homeRows,...awayRows]
-      .filter(p=>p.games>=2)
-      .sort((a,b)=>b.score-a.score||b.sot90-a.sot90||b.sot-a.sot)
+      .filter((p:any)=>p.games>=2||p.minutes>=180)
+      .sort((a:any,b:any)=>b.score-a.score||b.sot90-a.sot90||b.sot-a.sot)
       .slice(0,20)
 
     return NextResponse.json({
       connected:true,
-      source:"API-Football recent fixture player stats",
+      source,
+      sample,
       updatedAt:new Date().toISOString(),
       players,
     })
