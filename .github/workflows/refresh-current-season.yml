@@ -6,6 +6,7 @@ on:
     - cron: "35 5 * * *"
   push:
     paths:
+      - "scripts/backfill-current-season-espn.py"
       - "scripts/backfill-current-season-fbref.py"
       - "lib/db/schema.ts"
       - "lib/db/ensure-research-schema.ts"
@@ -37,13 +38,7 @@ jobs:
       - name: Install scraper dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install "soccerdata==1.9.1" pandas requests lxml selenium
-
-      - name: Confirm browser
-        shell: bash
-        run: |
-          which google-chrome || which google-chrome-stable || which chromium || true
-          google-chrome --version || google-chrome-stable --version || chromium --version || true
+          pip install requests
 
       - name: Wait for this commit to be live on Vercel
         shell: bash
@@ -60,12 +55,10 @@ jobs:
           echo "Production did not reach $GITHUB_SHA in time"
           exit 1
 
-      - name: Scrape FBref and sync Neon
+      - name: Scrape current-season match stats and sync Neon
         env:
-          SOCCERDATA_DIR: ${{ github.workspace }}/.cache/soccerdata
           SYNC_URL: https://footballcards-wheat.vercel.app
-          SOCCERDATA_LOGLEVEL: INFO
-        run: python scripts/backfill-current-season-fbref.py
+        run: python scripts/backfill-current-season-espn.py
 
       - name: Validate current-season dataset
         shell: bash
