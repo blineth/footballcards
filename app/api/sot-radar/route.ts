@@ -77,6 +77,16 @@ async function findFixture(date: string, home: string, away: string) {
   const data = await sofa(`/sport/football/scheduled-events/${date}`)
   return (data?.events ?? []).find((e:any) => teamMatch(e?.homeTeam?.name, home) && teamMatch(e?.awayTeam?.name, away)) ?? null
 }
+async function findTeamByName(name:string){
+  const data=await sofa(`/search/all?q=${encodeURIComponent(name)}`)
+  const rows=Array.isArray(data?.results)?data.results:Array.isArray(data?.data)?data.data:[]
+  for(const row of rows){
+    const entity=row?.entity??row?.team??row
+    const type=String(row?.type??entity?.type??"").toLowerCase()
+    if(entity?.id&&entity?.name&&(!type||type.includes("team"))&&teamMatch(entity.name,name)) return {id:Number(entity.id),name:String(entity.name)}
+  }
+  return null
+}
 async function recentFinished(teamId: number, beforeDate: string) {
   const collected:any[] = []
   for (let page=0; page<3 && collected.length<5; page++) {
@@ -150,13 +160,16 @@ export async function GET(request: Request) {
   if (!date || !home || !away) return NextResponse.json({ players: [], error:"Invalid fixture parameters" }, { status:400 })
 
   try {
-    const event = await findFixture(date, home, away)
-    if (!event?.homeTeam?.id || !event?.awayTeam?.id) {
-      return NextResponse.json({ connected:true, source:"SofaScore", players:[], note:"Fixture not found in SofaScore schedule." })
+    const event = await findFixture(date, home, away).catch(()=>null)
+    const [homeTeam,awayTeam]=event?.homeTeam?.id&&event?.awayTeam?.id
+      ? [event.homeTeam,event.awayTeam]
+      : await Promise.all([findTeamByName(home),findTeamByName(away)])
+    if (!homeTeam?.id || !awayTeam?.id) {
+      return NextResponse.json({ connected:true, source:"SofaScore", players:[], note:"Teams could not be resolved for SOT research." })
     }
     const [homeRows, awayRows] = await Promise.all([
-      teamSot(event.homeTeam, date),
-      teamSot(event.awayTeam, date),
+      teamSot(homeTeam, date),
+      teamSot(awayTeam, date),
     ])
     const players = [...homeRows, ...awayRows]
       .filter(p => p.games >= 2)
@@ -165,7 +178,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       connected:true,
       source:"SofaScore recent player match stats",
-      fixtureId:String(event.id),
+      fixtureId:event?.id?String(event.id):null,
       updatedAt:new Date().toISOString(),
       players,
     })
