@@ -1,0 +1,16 @@
+name: ChatGPT Artifact Transfer
+on:
+  push:
+    branches:
+      - chatgpt-download-iwill-20261014
+  workflow_dispatch:
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: itrustlaw-build
+          path: chatgpt-artifacts/iTrustLaw_Assessment_iWill_PEOPLE_REUSE_2026-10-14.zip
+          compression-level: 0
