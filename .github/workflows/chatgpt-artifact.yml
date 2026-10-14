@@ -4,13 +4,71 @@ on:
     branches:
       - chatgpt-download-iwill-20261014
   workflow_dispatch:
+
 jobs:
   package:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/upload-artifact@v4
+
+      - name: Assemble Hostinger deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf build
+          mkdir -p build/dist/assets build/dist/fonts build/dist/images
+
+          curl -fsSL https://assessment.itrust121.com/iwill -o build/dist/index.html
+
+          for file in             index-8q-tm3Fq.js             vendor-M0yO4Hhd.js             rolldown-runtime-Bh1tDfsg.js             index-KTBlZxXE.css             IWillFormPage-DKCYsbJW.js             WillThankYouPage-BTlf8cvG.js             SeoHead-BV_io4B3.js             LandingPage-BRDLC4Gj.js             constants-BcJbgnME.js             features-D0uyPu5y.js
+          do
+            curl -fsSL "https://assessment.itrust121.com/assets/$file" -o "build/dist/assets/$file"
+          done
+
+          for file in             PPMonumentExtended-Light.woff2             PPMonumentExtended-Regular.woff2             PPMonumentExtended-Black.woff2
+          do
+            curl -fsSL "https://assessment.itrust121.com/fonts/$file" -o "build/dist/fonts/$file"
+          done
+
+          for file in hero-couple.png hero-family.png
+          do
+            curl -fsSL "https://assessment.itrust121.com/images/$file" -o "build/dist/images/$file"
+          done
+
+          for file in cookie.svg logo-black.png logo-white.png logo.png
+          do
+            curl -fsSL "https://assessment.itrust121.com/$file" -o "build/dist/$file"
+          done
+
+          cp chatgpt-build/iwill-enhancements.js build/dist/iwill-enhancements.js
+          cp chatgpt-build/server.js build/server.js
+          cp chatgpt-build/build-check.js build/build-check.js
+          cp chatgpt-build/package.json build/package.json
+          cp chatgpt-build/IWILL-DEPLOYMENT-README.txt build/IWILL-DEPLOYMENT-README.txt
+
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("build/dist/index.html")
+          html = p.read_text()
+          tag = '  <script src="/iwill-enhancements.js" defer></script>\n'
+          if "iwill-enhancements.js" not in html:
+              html = html.replace("</body>", tag + "</body>")
+          p.write_text(html)
+          PY
+
+          cd build
+          npm install --package-lock-only --ignore-scripts
+          npm ci --ignore-scripts
+          npm run build
+          node --check server.js
+          node --check dist/iwill-enhancements.js
+          test -f dist/logo-black.png
+          test -f dist/assets/IWillFormPage-DKCYsbJW.js
+
+      - name: Upload Hostinger-ready ZIP
+        uses: actions/upload-artifact@v4
         with:
-          name: itrustlaw-build
-          path: chatgpt-artifacts/iTrustLaw_Assessment_iWill_PEOPLE_REUSE_2026-10-14.zip
-          compression-level: 0
+          name: iTrustLaw_Assessment_iWill_PEOPLE_REUSE_2026-10-14
+          path: build/
+          if-no-files-found: error
+          compression-level: 6
