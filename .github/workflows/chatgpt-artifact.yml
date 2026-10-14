@@ -18,27 +18,68 @@ jobs:
           rm -rf build
           mkdir -p build/dist/assets build/dist/fonts build/dist/images
 
-          curl -fsSL https://assessment.itrust121.com/iwill -o build/dist/index.html
+          python3 - <<'PY'
+          from pathlib import Path
+          from urllib.request import Request, urlopen
+          from urllib.error import HTTPError
+          import re
 
-          for file in             index-8q-tm3Fq.js             vendor-M0yO4Hhd.js             rolldown-runtime-Bh1tDfsg.js             index-KTBlZxXE.css             IWillFormPage-DKCYsbJW.js             WillThankYouPage-BTlf8cvG.js             SeoHead-BV_io4B3.js             LandingPage-BRDLC4Gj.js             constants-BcJbgnME.js             features-D0uyPu5y.js
-          do
-            curl -fsSL "https://assessment.itrust121.com/assets/$file" -o "build/dist/assets/$file"
-          done
+          base = "https://assessment.itrust121.com"
+          root = Path("build/dist")
 
-          for file in             PPMonumentExtended-Light.woff2             PPMonumentExtended-Regular.woff2             PPMonumentExtended-Black.woff2
-          do
-            curl -fsSL "https://assessment.itrust121.com/fonts/$file" -o "build/dist/fonts/$file"
-          done
+          def get(url):
+              req = Request(url, headers={"User-Agent":"Mozilla/5.0"})
+              with urlopen(req, timeout=30) as r:
+                  return r.read()
 
-          for file in hero-couple.png hero-family.png
-          do
-            curl -fsSL "https://assessment.itrust121.com/images/$file" -o "build/dist/images/$file"
-          done
+          def save(rel, required=True):
+              rel = rel if rel.startswith("/") else "/" + rel
+              target = root / rel.lstrip("/")
+              target.parent.mkdir(parents=True, exist_ok=True)
+              try:
+                  data = get(base + rel)
+                  target.write_bytes(data)
+                  print("downloaded", rel, len(data))
+                  return data
+              except HTTPError as e:
+                  if required:
+                      raise
+                  print("optional resource unavailable", rel, e.code)
+                  return b""
 
-          for file in cookie.svg logo-black.png logo-white.png logo.png
-          do
-            curl -fsSL "https://assessment.itrust121.com/$file" -o "build/dist/$file"
-          done
+          html = save("/iwill").decode("utf-8")
+          (root / "index.html").write_text(html)
+
+          queue = set(re.findall(r'(?:src|href)=["\'](/assets/[^"\']+)["\']', html))
+          seen = set()
+          while queue:
+              rel = queue.pop()
+              if rel in seen:
+                  continue
+              seen.add(rel)
+              data = save(rel)
+              if rel.endswith(".js"):
+                  text = data.decode("utf-8", "ignore")
+                  for match in re.findall(r'(?<![A-Za-z0-9_])(?:/)?assets/[A-Za-z0-9_.-]+\.js', text):
+                      child = "/" + match.lstrip("/")
+                      if child not in seen:
+                          queue.add(child)
+
+          for rel in [
+              "/fonts/PPMonumentExtended-Light.woff2",
+              "/fonts/PPMonumentExtended-Regular.woff2",
+              "/fonts/PPMonumentExtended-Black.woff2",
+              "/images/hero-couple.png",
+              "/images/hero-family.png",
+              "/cookie.svg",
+              "/logo-black.png",
+              "/logo.png"
+          ]:
+              save(rel, required=False)
+
+          # White logo is optional; the Will form/PDF uses the supplied black logo.
+          save("/logo-white.png", required=False)
+          PY
 
           cp chatgpt-build/iwill-enhancements.js build/dist/iwill-enhancements.js
           cp chatgpt-build/server.js build/server.js
@@ -63,7 +104,7 @@ jobs:
           node --check server.js
           node --check dist/iwill-enhancements.js
           test -f dist/logo-black.png
-          test -f dist/assets/IWillFormPage-DKCYsbJW.js
+          test -f dist/index.html
 
       - name: Upload Hostinger-ready ZIP
         uses: actions/upload-artifact@v4
