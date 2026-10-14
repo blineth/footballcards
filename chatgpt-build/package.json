@@ -1,0 +1,11 @@
+{
+  "name": "itrustlaw-assessment",
+  "version": "1.0.0",
+  "private": true,
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build": "node build-check.js",
+    "start": "node server.js"
+  },
+  "dependencies": {}
+}
