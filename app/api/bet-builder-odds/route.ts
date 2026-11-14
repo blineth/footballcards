@@ -9,6 +9,7 @@ export const revalidate = 0
 
 const API_BASE = "https://v3.football.api-sports.io"
 const UK_ODDS_BASE = "https://api.ukoddsapi.com"
+const FREE_ODDS_CACHE_MS = 3 * 60 * 60 * 1000
 const LEAGUE_IDS: Record<string, string> = {
   "Premier League": "39",
   Championship: "40",
@@ -91,6 +92,78 @@ async function attachMovement(input:{date:string;home:string;away:string;competi
     })
   } catch {
     return input.selections
+  }
+}
+
+
+type MarketAvailabilityState = "available" | "unavailable" | "unknown"
+type MarketAvailability = Record<"card"|"foul"|"fouled"|"shot"|"sot", MarketAvailabilityState>
+
+function marketAvailability(selections:Array<{kind:string}>, verified:boolean):MarketAvailability {
+  const state = (kind:string):MarketAvailabilityState => selections.some(s=>s.kind===kind) ? "available" : verified ? "unavailable" : "unknown"
+  return {
+    card:state("card"),
+    foul:state("foul"),
+    fouled:state("fouled"),
+    shot:state("shot"),
+    sot:state("sot"),
+  }
+}
+
+async function cachedSnapshot(input:{date:string;home:string;away:string;competition:string}) {
+  if (!isDatabaseConfigured) return null
+  try {
+    await ensureResearchSchema()
+    const rows = await db.select().from(oddsSnapshots)
+      .where(and(
+        eq(oddsSnapshots.competition,input.competition),
+        eq(oddsSnapshots.fixtureDate,input.date),
+        eq(oddsSnapshots.homeTeam,input.home),
+        eq(oddsSnapshots.awayTeam,input.away),
+      ))
+      .orderBy(desc(oddsSnapshots.capturedAt))
+      .limit(1000)
+    if (!rows.length) return null
+
+    const latest = rows[0]
+    const capturedAt = latest.capturedAt instanceof Date ? latest.capturedAt : new Date(latest.capturedAt)
+    if (Number.isNaN(capturedAt.getTime())) return null
+    const ageMs = Date.now() - capturedAt.getTime()
+    if (ageMs > FREE_ODDS_CACHE_MS) return null
+
+    const latestBucket = new Date(latest.snapshotBucket).getTime()
+    const sameBucket = rows.filter(row =>
+      row.bookmaker === latest.bookmaker &&
+      new Date(row.snapshotBucket).getTime() === latestBucket
+    )
+    const rawSelections = sameBucket.map(row => ({
+      market:row.market,
+      kind:row.kind,
+      label:row.label,
+      odd:Number(row.odds),
+    }))
+    const selections = await attachMovement({
+      date:input.date,
+      home:input.home,
+      away:input.away,
+      competition:input.competition,
+      bookmaker:latest.bookmaker,
+      selections:rawSelections,
+    })
+    return {
+      connected:true,
+      bookmaker:latest.bookmaker,
+      source:(latest.source ?? "free odds feed")+" · cache",
+      capturedAt:capturedAt.toISOString(),
+      selections,
+      priceAvailable:selections.length>0,
+      freeTier:true,
+      cached:true,
+      maxUsableAgeSeconds:10800,
+      marketAvailability:marketAvailability(selections,true),
+    }
+  } catch {
+    return null
   }
 }
 
@@ -239,40 +312,65 @@ export async function GET(request: Request) {
   }
 
   try {
-    const ukKey = process.env.UK_ODDS_API_KEY
-    if (ukKey) {
-      try {
-        const fresh = await fromUkOdds({ date, home, away, key: ukKey })
-        if (fresh) {
-          await saveSnapshots({ date, home, away, competition, bookmaker:fresh.bookmaker, source:fresh.source, capturedAt:fresh.capturedAt, selections:fresh.selections })
-          const selections = await attachMovement({ date, home, away, competition, bookmaker:fresh.bookmaker, selections:fresh.selections })
-          return NextResponse.json({ ...fresh, selections, priceAvailable: selections.length > 0 })
-        }
-      } catch (error) {
-        console.log("[bet-builder-odds] UK Odds fallback:", error instanceof Error ? error.message : error)
-      }
-    }
+    // Free-tier policy: reuse a recent stored bookmaker snapshot before spending API quota.
+    const cached = await cachedSnapshot({ date, home, away, competition })
+    if (cached) return NextResponse.json(cached)
 
+    // API-Football remains the free bookmaker-data fallback where the free plan supports the league.
     const apiKey = process.env.API_FOOTBALL_KEY
     if (apiKey && LEAGUE_IDS[competition]) {
-      const fallback = await fromApiFootball({ date, home, away, competition, key: apiKey })
-      if (fallback) {
-        await saveSnapshots({ date, home, away, competition, bookmaker:fallback.bookmaker, source:fallback.source, capturedAt:fallback.capturedAt, selections:fallback.selections })
-        const selections = await attachMovement({ date, home, away, competition, bookmaker:fallback.bookmaker, selections:fallback.selections })
-        return NextResponse.json({ ...fallback, selections, priceAvailable: selections.length > 0 })
+      try {
+        const fallback = await fromApiFootball({ date, home, away, competition, key: apiKey })
+        if (fallback) {
+          await saveSnapshots({
+            date, home, away, competition,
+            bookmaker:fallback.bookmaker,
+            source:fallback.source,
+            capturedAt:fallback.capturedAt,
+            selections:fallback.selections,
+          })
+          const selections = await attachMovement({
+            date, home, away, competition,
+            bookmaker:fallback.bookmaker,
+            selections:fallback.selections,
+          })
+          return NextResponse.json({
+            ...fallback,
+            selections,
+            priceAvailable:selections.length > 0,
+            freeTier:true,
+            cached:false,
+            maxUsableAgeSeconds:10800,
+            marketAvailability:marketAvailability(selections,true),
+          })
+        }
+      } catch (error) {
+        console.log("[bet-builder-odds] free API-Football fallback:", error instanceof Error ? error.message : error)
       }
     }
 
+    // No paid odds dependency is required. The prediction engine still works from calibrated fair odds.
     return NextResponse.json({
-      connected: Boolean(ukKey || (apiKey && LEAGUE_IDS[competition])),
-      bookmaker: "Bet365",
-      source: ukKey ? "UK Odds API" : apiKey && LEAGUE_IDS[competition] ? "API-Football" : null,
-      selections: [],
-      priceAvailable: false,
-      note: "No Bet365 player-prop prices are available from the configured feed for this fixture.",
+      connected:Boolean(apiKey && LEAGUE_IDS[competition]),
+      bookmaker:"Bet365",
+      source:apiKey && LEAGUE_IDS[competition] ? "API-Football free tier" : null,
+      selections:[],
+      priceAvailable:false,
+      freeTier:true,
+      cached:false,
+      maxUsableAgeSeconds:10800,
+      marketAvailability:marketAvailability([],false),
+      note:"No free bookmaker player-prop snapshot is available for this fixture. Model probabilities and fair odds remain available.",
     })
   } catch (error) {
     console.log("[bet-builder-odds]", error instanceof Error ? error.message : error)
-    return NextResponse.json({ connected: false, bookmaker: "Bet365", selections: [], priceAvailable: false })
+    return NextResponse.json({
+      connected:false,
+      bookmaker:"Bet365",
+      selections:[],
+      priceAvailable:false,
+      freeTier:true,
+      marketAvailability:marketAvailability([],false),
+    })
   }
 }
