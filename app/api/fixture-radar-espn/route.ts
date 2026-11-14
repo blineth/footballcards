@@ -120,7 +120,7 @@ export async function GET(request: Request) {
     currentPlayers = [...homeRoster, ...awayRoster]
   }
 
-  const baselineSeason = competition === "Championship" ? "2026/27" : "2025/26"
+  const baselineSeason = "2026/27"
   const allBaselines = await db.select().from(playerBaselines).where(and(eq(playerBaselines.season, baselineSeason), eq(playerBaselines.competition, competition))).orderBy(desc(playerBaselines.minutes))
   const matched: Array<{ player: CurrentPlayer; baseline: (typeof allBaselines)[number] }> = []
   if (currentPlayers.length) {
