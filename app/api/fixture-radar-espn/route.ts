@@ -147,7 +147,10 @@ export async function GET(request: Request) {
       let best: (typeof allBaselines)[number] | undefined, bestScore = 0
       for (const baseline of allBaselines) {
         const score = playerNameScore(current.name, baseline.playerName)
-        if (score > bestScore) { bestScore = score; best = baseline }
+        if (score > bestScore || (score === bestScore && score > 0 && Number(baseline.minutes ?? 0) > Number(best?.minutes ?? 0))) {
+          bestScore = score
+          best = baseline
+        }
       }
       if (best && bestScore >= 80) matched.push({ player: current, baseline: best })
     }
@@ -170,7 +173,10 @@ export async function GET(request: Request) {
       let best: (typeof allBaselines)[number] | undefined, bestScore = 0
       for (const baseline of allBaselines) {
         const score = playerNameScore(name, baseline.playerName)
-        if (score > bestScore) { bestScore = score; best = baseline }
+        if (score > bestScore || (score === bestScore && score > 0 && Number(baseline.minutes ?? 0) > Number(best?.minutes ?? 0))) {
+          bestScore = score
+          best = baseline
+        }
       }
       if (best && bestScore >= 80) {
         const latest = relevant.filter((r) => r.playerName === name).sort((a,b)=>String(b.matchDate).localeCompare(String(a.matchDate)))[0]
