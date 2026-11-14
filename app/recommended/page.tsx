@@ -26,9 +26,24 @@ type Tracking={
   exactPriceLegs?:number;exactPriceProfitUnits?:number|null;exactPriceROI?:number|null;
   byMarket?:Array<{market:string;sample:number;hits:number;hitRate:number|null;avgProbability:number|null;avgExactOdds:number|null}>
 }
+type TargetOddsLeg={
+  fixtureId:string;competition:string;kickoff:string;home:string;away:string;player:string;team:string;
+  market:string;label:string;probability:number;price:number;priceSource:"exact"|"model";
+  bookmaker:string|null;confidence:"A"|"B"|"C"|"D"
+}
+type TargetOddsSlip={
+  id:string;targetFractional:string;targetDecimal:number;available:boolean;referenceOdds:number|null;
+  modelAllHitProbability:number|null;bookmaker:string|null;
+  priceSource:"bookmaker-singles"|"model"|null;marketsVerified:boolean;
+  legs:TargetOddsLeg[];note:string
+}
+type TargetOddsGame={
+  fixture:Fixture
+  targets:TargetOddsSlip[]
+}
 type Response={
   ok:boolean;updatedAt?:string;fixturesScanned?:number;recommendations?:Recommendation[];
-  tracking?:Tracking;error?:string
+  targetOddsGames?:TargetOddsGame[];tracking?:Tracking;error?:string;staleFallback?:boolean;warning?:string
 }
 
 function percent(v:number|null|undefined){return v==null?"—":Math.round(v*100)+"%"}
@@ -43,6 +58,7 @@ function avgProbability(slip:Slip){
 export default function RecommendedPage(){
   const[loading,setLoading]=useState(false)
   const[data,setData]=useState<Response|null>(null)
+  const[selectedTargetFixtureId,setSelectedTargetFixtureId]=useState<string|null>(null)
 
   const refresh=useCallback(async(force=false)=>{
     setLoading(true)
@@ -57,11 +73,20 @@ export default function RecommendedPage(){
 
   useEffect(()=>{void refresh(false)},[refresh])
   useEffect(()=>{const t=window.setInterval(()=>void refresh(false),300000);return()=>window.clearInterval(t)},[refresh])
+  useEffect(()=>{
+    const games=data?.targetOddsGames??[]
+    if(!games.length){setSelectedTargetFixtureId(null);return}
+    if(!selectedTargetFixtureId||!games.some(g=>g.fixture.id===selectedTargetFixtureId)){
+      setSelectedTargetFixtureId(games[0].fixture.id)
+    }
+  },[data,selectedTargetFixtureId])
 
   const recommendations=data?.recommendations??[]
   const best=recommendations[0]??null
   const alternatives=useMemo(()=>recommendations.slice(1),[recommendations])
   const tracking=data?.tracking
+  const targetGames=data?.targetOddsGames??[]
+  const selectedTargetGame=targetGames.find(g=>g.fixture.id===selectedTargetFixtureId)??targetGames[0]??null
 
   return <main className="min-h-screen bg-[#07120e] pb-24 text-white">
     <header className="sticky top-0 z-30 border-b border-white/10 bg-[#07120e]/95 backdrop-blur-xl">
@@ -82,7 +107,9 @@ export default function RecommendedPage(){
     </header>
 
     <div className="mx-auto max-w-3xl space-y-4 px-4 py-4">
+      {data?.staleFallback?<div className="rounded-2xl border border-amber-300/15 bg-amber-300/[0.06] px-4 py-3 text-xs text-amber-100">{data.warning??"Showing the last successful cached recommendations."}</div>:null}
       {tracking?.available?<TrackingCard tracking={tracking}/>:null}
+      {targetGames.length?<TargetOddsSection games={targetGames} selectedId={selectedTargetGame?.fixture.id??null} onSelect={setSelectedTargetFixtureId}/>:null}
 
       {loading&&!best?<div className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center"><RefreshCw className="mx-auto mb-3 size-5 animate-spin text-violet-300"/><p className="font-black">Scanning upcoming matches…</p></div>:null}
       {!loading&&!data?.ok?<div className="rounded-3xl border border-rose-300/15 bg-rose-400/5 p-6 text-center"><p className="font-black">Recommended scan unavailable</p><p className="mt-1 text-sm text-white/40">{data?.error??"Try a manual refresh."}</p></div>:null}
@@ -96,6 +123,46 @@ export default function RecommendedPage(){
       </section>:null}
     </div>
   </main>
+}
+
+function TargetOddsSection({games,selectedId,onSelect}:{games:TargetOddsGame[];selectedId:string|null;onSelect:(id:string)=>void}){
+  const selected=games.find(g=>g.fixture.id===selectedId)??games[0]??null
+  if(!selected)return null
+  return <section className="space-y-3">
+    <div className="px-1"><p className="font-black">Target odds builder</p><p className="text-[0.6rem] text-white/35">Pick the match first, then choose the return you want. Every target below is built from that game only.</p></div>
+    <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
+      {games.map(game=><button key={game.fixture.id} onClick={()=>onSelect(game.fixture.id)} className={"min-w-[12rem] shrink-0 rounded-2xl border px-3 py-3 text-left transition "+(game.fixture.id===selected.fixture.id?"border-violet-300/35 bg-violet-400/10":"border-white/8 bg-white/[0.035]")}>
+        <p className="text-[0.48rem] font-black uppercase text-white/30">{game.fixture.competition} · {time(game.fixture)}</p>
+        <p className="mt-1 text-sm font-black">{game.fixture.home.name} <span className="text-white/25">v</span> {game.fixture.away.name}</p>
+      </button>)}
+    </div>
+    <div className="rounded-2xl border border-violet-300/10 bg-violet-400/[0.035] px-4 py-3"><p className="text-[0.5rem] font-black uppercase text-violet-300">Selected match</p><p className="mt-1 font-black">{selected.fixture.home.name} v {selected.fixture.away.name}</p><p className="mt-1 text-[0.56rem] text-white/35">{selected.fixture.competition} · {time(selected.fixture)}</p></div>
+    <div className="grid gap-3 sm:grid-cols-2">{selected.targets.map(s=><TargetOddsCard key={s.id} slip={s}/>)}</div>
+  </section>
+}
+
+function TargetOddsCard({slip}:{slip:TargetOddsSlip}){
+  const[open,setOpen]=useState(slip.targetFractional==="5/1")
+  if(!slip.available)return <article className="rounded-3xl border border-white/10 bg-white/[0.035] p-4">
+    <div className="flex items-center justify-between gap-3"><div><p className="text-[0.5rem] font-black uppercase tracking-[0.14em] text-white/30">Target</p><h3 className="mt-1 text-xl font-black">{slip.targetFractional}</h3></div><span className="rounded-full bg-white/7 px-2.5 py-1 text-[0.48rem] font-black text-white/35">NO STRONG BUILD</span></div>
+    <p className="mt-3 text-[0.62rem] leading-relaxed text-white/40">{slip.note}</p>
+  </article>
+  return <article className="overflow-hidden rounded-3xl border border-violet-300/15 bg-violet-400/[0.045]">
+    <button onClick={()=>setOpen(v=>!v)} className="w-full p-4 text-left">
+      <div className="flex items-start justify-between gap-3">
+        <div><p className="text-[0.5rem] font-black uppercase tracking-[0.14em] text-violet-300">Target {slip.targetFractional}</p><h3 className="mt-1 text-lg font-black">{slip.legs.length}-leg builder</h3><p className="mt-1 text-[0.56rem] text-white/35">{slip.bookmaker??"Model fair prices"} · same game</p></div>
+        <div className="text-right"><p className="font-mono text-xl font-black">{slip.referenceOdds?.toFixed(2)??"—"}</p><p className="text-[0.42rem] uppercase text-white/25">{slip.priceSource==="bookmaker-singles"?"singles reference":"model reference"}</p></div>
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2"><Stat label="Model all hit" value={percent(slip.modelAllHitProbability)}/><Stat label="Legs" value={String(slip.legs.length)}/></div>
+      <div className="mt-3 flex items-center justify-between"><span className={"rounded-full px-2.5 py-1 text-[0.5rem] font-black "+(slip.marketsVerified?"bg-emerald-400/15 text-emerald-300":"bg-amber-300/10 text-amber-200")}>{slip.marketsVerified?"MARKETS VERIFIED":"CHECK MARKETS"}</span><span className="text-[0.52rem] font-black text-white/35">{open?"Hide":"Show what to add"}</span></div>
+    </button>
+    {open?<div className="border-t border-white/8 bg-black/20 p-4">
+      <div className="space-y-2">{slip.legs.map((leg,i)=><div key={leg.player+"|"+leg.market+"|"+i} className="rounded-2xl bg-white/[0.055] p-3">
+        <div className="flex items-start justify-between gap-3"><div><p className="text-sm font-black">{leg.player} · {leg.label}</p><p className="mt-0.5 text-[0.56rem] text-white/35">{leg.team} · Grade {leg.confidence}{leg.bookmaker?" · "+leg.bookmaker:""}</p></div><div className="text-right"><p className="font-mono text-base font-black">{percent(leg.probability)}</p><p className="text-[0.44rem] text-white/25">{leg.price.toFixed(2)} {leg.priceSource==="exact"?"single":"fair"}</p></div></div>
+      </div>)}</div>
+      <p className="mt-3 rounded-xl bg-amber-300/[0.06] px-3 py-2 text-[0.56rem] leading-relaxed text-amber-100/75">{slip.note}</p>
+    </div>:null}
+  </article>
 }
 
 function TrackingCard({tracking}:{tracking:Tracking}){
