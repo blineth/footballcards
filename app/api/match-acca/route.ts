@@ -4,6 +4,7 @@ import { ensureResearchSchema } from "@/lib/db/ensure-research-schema"
 import { londonToday } from "@/lib/date"
 import { GET as fixturesGET } from "../fixtures/route"
 import matchAccaBacktest from "@/data/model/match-acca-backtest.json"
+import { snapshotRowsForCompetition } from "@/lib/current-season-snapshot"
 
 export const dynamic="force-dynamic"
 export const revalidate=900
@@ -37,9 +38,25 @@ function points(r:"W"|"D"|"L"){return r==="W"?3:r==="D"?1:0}
 function ordinal(n:number){const x=n%100;if(x>=11&&x<=13)return n+"th";return n+(n%10===1?"st":n%10===2?"nd":n%10===3?"rd":"th")}
 
 async function matches(competition:Competition,from:string,to:string){
-  const sql="SELECT match_date::text AS date, team, opponent, COALESCE(venue,'') AS venue, SUM(COALESCE(goals,0))::int AS goals FROM player_h2h WHERE competition=$1 AND match_date >= $2 AND match_date < $3 AND team IS NOT NULL AND opponent IS NOT NULL GROUP BY match_date,team,opponent,venue ORDER BY match_date"
-  const r=await pool.query(sql,[competition,from,to])
-  const rows=r.rows.map((x:any)=>({date:String(x.date).slice(0,10),team:String(x.team),opponent:String(x.opponent),venue:String(x.venue??"").toLowerCase(),goals:Number(x.goals??0)}))
+  let rows:Array<{date:string;team:string;opponent:string;venue:string;goals:number}>=[]
+  if(isDatabaseConfigured){
+    try{
+      const sql="SELECT match_date::text AS date, team, opponent, COALESCE(venue,'') AS venue, SUM(COALESCE(goals,0))::int AS goals FROM player_h2h WHERE competition=$1 AND match_date >= $2 AND match_date < $3 AND team IS NOT NULL AND opponent IS NOT NULL GROUP BY match_date,team,opponent,venue ORDER BY match_date"
+      const r=await pool.query(sql,[competition,from,to])
+      rows=r.rows.map((x:any)=>({date:String(x.date).slice(0,10),team:String(x.team),opponent:String(x.opponent),venue:String(x.venue??"").toLowerCase(),goals:Number(x.goals??0)}))
+    }catch{}
+  }
+  if(!rows.length){
+    const snapshot=await snapshotRowsForCompetition(competition,from,to)
+    const grouped=new Map<string,{date:string;team:string;opponent:string;venue:string;goals:number}>()
+    for(const row of snapshot){
+      const key=[row.match_date,row.team,row.opponent,row.venue].join("|")
+      const current=grouped.get(key)??{date:row.match_date,team:row.team,opponent:row.opponent,venue:String(row.venue??"").toLowerCase(),goals:0}
+      current.goals+=Number(row.goals??0)
+      grouped.set(key,current)
+    }
+    rows=[...grouped.values()].sort((a,b)=>a.date.localeCompare(b.date))
+  }
   const map=new Map(rows.map((x:any)=>[[x.date,norm(x.team),norm(x.opponent)].join("|"),x]))
   const out:MatchRow[]=[]
   for(const x of rows){
@@ -194,10 +211,17 @@ function buildSlip(id:string,title:string,subtitle:string,legs:any[],structureKe
   return {id,title,subtitle,structureKey,requiredLegs,available:enough,containsLive,legs:selected.map(l=>({fixtureId:l.prediction.id,competition:l.prediction.competition,kickoff:l.prediction.kickoff,home:l.prediction.home,away:l.prediction.away,inPlay:Boolean(l.prediction.inPlay),elapsed:l.prediction.elapsed??null,score:l.prediction.score??null,market:l.market,label:l.label,probability:pct(l.probability),fairOdds:Math.round((1/Math.max(.05,l.probability))*100)/100,bookmakerOdds:book?exactPrice(l.prediction,l.market,book):null,bookmaker:book,grade:l.grade,reasons:l.reasons})),modelAllHitProbability:rawAllHit==null?null:pct(rawAllHit),adjustedAllHitProbability:adjustedAllHit==null?null:pct(adjustedAllHit),historicalStructureSample:containsLive?0:sample,historicalStructureHitRate:containsLive?null:(sample?observed:null),fairCombinedOdds:fair==null?null:Math.round(fair*100)/100,bookmaker:book,exactCombinedOdds:exact==null?null:Math.round(exact*100)/100,exactPriced:Boolean(book&&exact),combinedProbabilityNote:containsLive?"Contains live legs: combined probability uses the current live model product and is not pre-match structure-calibrated.":"Pre-match combined probability is adjusted against the historical hit-rate of the same fold size."}
 }
 
+const responseCache=new Map<string,{at:number,payload:any}>()
+const FRESH_CACHE_MS=5*60*1000
+const STALE_CACHE_MS=6*60*60*1000
+
 export async function GET(request:Request){
-  if(!isDatabaseConfigured)return NextResponse.json({ok:false,error:"Database not connected"},{status:503})
-  await ensureResearchSchema()
   const url=new URL(request.url),date=url.searchParams.get("date")??londonToday()
+  const refresh=url.searchParams.has("refresh")
+  const cached=responseCache.get(date)
+  if(!refresh&&cached&&Date.now()-cached.at<FRESH_CACHE_MS){
+    return NextResponse.json({...cached.payload,cached:true},{headers:{"Cache-Control":"public, s-maxage=60, stale-while-revalidate=900"}})
+  }
   try{
     const fixtureRes=await fixturesGET(new Request("http://local/api/fixtures?"+new URLSearchParams({date,nextIfEmpty:"0"}).toString()))
     if(!fixtureRes.ok)return fixtureRes
@@ -255,10 +279,20 @@ export async function GET(request:Request){
     const wins=predictions.filter(p=>!p.finished&&p.winnerPick&&p.winnerPick.grade!=="D").map(p=>({prediction:p,market:p.winnerPick.side==="home"?"homeWin":"awayWin",label:p.winnerPick.team+" to win",probability:p.winnerPick.probability,grade:p.winnerPick.grade,reasons:p.reasons})).sort((a,b)=>b.probability-a.probability)
     const btts=predictions.filter(p=>!p.finished&&p.bttsPick&&p.bttsPick.grade!=="D").map(p=>({prediction:p,market:p.bttsPick.selection==="yes"?"bttsYes":"bttsNo",label:"BTTS "+(p.bttsPick.selection==="yes"?"Yes":"No"),probability:p.bttsPick.probability,grade:p.bttsPick.grade,reasons:p.reasons})).sort((a,b)=>b.probability-a.probability)
     const mixed=predictions.filter(p=>!p.finished).map(p=>{const w=p.winnerPick?{prediction:p,market:p.winnerPick.side==="home"?"homeWin":"awayWin",label:p.winnerPick.team+" to win",probability:p.winnerPick.probability,grade:p.winnerPick.grade,reasons:p.reasons,score:(p.winnerPick.probability-.34)/.45}:null,b=p.bttsPick?{prediction:p,market:p.bttsPick.selection==="yes"?"bttsYes":"bttsNo",label:"BTTS "+(p.bttsPick.selection==="yes"?"Yes":"No"),probability:p.bttsPick.probability,grade:p.bttsPick.grade,reasons:p.reasons,score:(p.bttsPick.probability-.5)/.34}:null;return [w,b].filter(Boolean).sort((a:any,b:any)=>b.score-a.score)[0]??null}).filter(Boolean).sort((a:any,b:any)=>b.score-a.score)
-    return NextResponse.json({ok:true,date,generatedAt:new Date().toISOString(),fixtureCount:predictions.length,predictions,slips:[
+    const activePredictions=predictions.filter(p=>!p.finished)
+    const finishedPredictions=predictions.filter(p=>p.finished)
+    const payload={ok:true,date,generatedAt:new Date().toISOString(),fixtureCount:predictions.length,activeFixtureCount:activePredictions.length,finishedFixtureCount:finishedPredictions.length,predictions:activePredictions,finishedPredictions,slips:[
       buildSlip("fold-5","5-Fold Acca","Five strongest selections from five different matches.",mixed,"fold5",5),
       buildSlip("fold-7","7-Fold Acca","Seven strongest selections from seven different matches.",mixed,"fold7",7),
       buildSlip("fold-10","10-Fold Acca","Ten strongest selections from ten different matches.",mixed,"fold10",10)
-    ],methodology:{resultModel:"League position, PPG, recent five-match form, streaks, home/away PPG and win rate, goal difference and recent H2H with sample shrinkage, followed by walk-forward calibration.",bttsModel:"Home/away BTTS, scoring and conceding rates, overall BTTS and H2H BTTS. Once both teams have already scored in-play, BTTS is treated as settled and removed from betting recommendations.",pricing:"Each fold uses one selection per fixture. Exact combined odds are shown only when one preferred bookmaker prices every leg. Model fair combined odds are adjusted using the historical hit-rate of the same fold size rather than naive probability multiplication alone.",inPlay:"Live matches are recalculated from the current score, match minute, remaining-time goal rates and the calibrated pre-match strength. Pre-match bookmaker prices are never reused as if they were live prices.",caution:"Model estimates, not guarantees. Team news, red cards, injuries and other in-play events can materially change outcomes."}},{headers:{"Cache-Control":predictions.some(p=>p.inPlay)?"public, s-maxage=20, stale-while-revalidate=20":"public, s-maxage=900, stale-while-revalidate=900"}})
-  }catch(error){return NextResponse.json({ok:false,error:error instanceof Error?error.message:"Accumulator analysis failed"},{status:500})}
+    ],cached:false,staleFallback:false,methodology:{resultModel:"League position, PPG, recent five-match form, streaks, home/away PPG and win rate, goal difference and recent H2H with sample shrinkage, followed by walk-forward calibration.",bttsModel:"Home/away BTTS, scoring and conceding rates, overall BTTS and H2H BTTS. Once both teams have already scored in-play, BTTS is treated as settled and removed from betting recommendations.",pricing:"Each fold uses one selection per fixture. Exact combined odds are shown only when one preferred bookmaker prices every leg. Model fair combined odds are adjusted using the historical hit-rate of the same fold size rather than naive probability multiplication alone.",inPlay:"Live matches are recalculated from the current score, match minute, remaining-time goal rates and the calibrated pre-match strength. Pre-match bookmaker prices are never reused as if they were live prices.",fallback:"Team history uses the live database when available and automatically falls back to the checked-in daily current-season snapshot if database quota or connectivity fails.",caution:"Model estimates, not guarantees. Team news, red cards, injuries and other in-play events can materially change outcomes."}}
+    responseCache.set(date,{at:Date.now(),payload})
+    return NextResponse.json(payload,{headers:{"Cache-Control":activePredictions.some(p=>p.inPlay)?"public, s-maxage=20, stale-while-revalidate=120":"public, s-maxage=300, stale-while-revalidate=1800"}})
+  }catch(error){
+    const stale=responseCache.get(date)
+    if(stale&&Date.now()-stale.at<STALE_CACHE_MS){
+      return NextResponse.json({...stale.payload,cached:true,staleFallback:true,warning:"Fresh data pull failed; showing the last successful Accumulator snapshot."},{headers:{"Cache-Control":"public, s-maxage=30, stale-while-revalidate=900"}})
+    }
+    return NextResponse.json({ok:false,error:error instanceof Error?error.message:"Accumulator analysis failed"},{status:500})
+  }
 }
