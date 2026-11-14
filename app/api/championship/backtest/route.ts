@@ -129,6 +129,10 @@ export async function GET() {
     }]
   }))
 
+  const playedRows = rows.filter(played)
+  const positionRows = playedRows.filter(r => Boolean(r.position)).length
+  const starterRows = playedRows.filter(r => r.starter === true).length
+
   return NextResponse.json({
     ok:true,
     competition:"Championship",
@@ -137,6 +141,12 @@ export async function GET() {
     warning:"This validates ranking signal, not bookmaker profitability. Odds and closing-line data are required before ROI can be measured.",
     fixturesInDatabase:fixtureList.length,
     playerMatchRows:rows.length,
+    dataQuality:{
+      playedRows:playedRows.length,
+      positionRows,
+      positionCoverage:playedRows.length?Math.round((positionRows/playedRows.length)*1000)/1000:0,
+      starterRows,
+    },
     metrics,
     generatedAt:new Date().toISOString(),
   })
