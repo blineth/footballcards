@@ -43,6 +43,8 @@ type ChampionshipPlayersResponse = { connected:boolean; season:string; source?:s
 type H2HPlayer = { name:string;team:string;opponent:string;position?:string|null;starter?:boolean;minutes?:number|null;goals:number;assists:number;shots:number;shotsOnTarget:number;foulsCommitted:number;foulsDrawn:number;yellowCard:boolean;redCard:boolean }
 type H2HMatch = { id:string;date:string;competition:string;home:string;away:string;homeGoals:number;awayGoals:number;referee?:string|null;players:H2HPlayer[] }
 type H2HResponse = { ok:boolean;source?:string;period?:string;matches?:H2HMatch[];error?:string }
+type BacktestMetric = {testedFixtures:number;eligiblePlayerRows:number;baseRate:number;top1:{selections:number;hits:number;hitRate:number;lift:number|null};top3:{selections:number;hits:number;hitRate:number;lift:number|null}}
+type BacktestResponse = {ok:boolean;competition?:string;season?:string;methodology?:string;warning?:string;fixturesInDatabase?:number;playerMatchRows?:number;metrics?:Record<"card"|"foul1"|"foul2"|"sot1",BacktestMetric>;error?:string}
 
 function londonDate(){
   const parts=new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/London",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date())
@@ -114,6 +116,8 @@ export default function HomePage(){
   const[sot,setSot]=useState<Record<string,SotResponse>>({})
   const[championshipDb,setChampionshipDb]=useState<ChampionshipPlayersResponse|null>(null)
   const[h2h,setH2h]=useState<Record<string,H2HResponse>>({})
+  const[backtest,setBacktest]=useState<BacktestResponse|null>(null)
+  const[loadingBacktest,setLoadingBacktest]=useState(false)
   const[loadingH2h,setLoadingH2h]=useState<Record<string,boolean>>({})
   const[loadingChampionshipDb,setLoadingChampionshipDb]=useState(false)
   const[loading,setLoading]=useState<Record<string,boolean>>({})
@@ -145,6 +149,17 @@ export default function HomePage(){
     }catch{
       setChampionshipDb({connected:false,season:"2026/27",players:[],error:"Championship player database unavailable"})
     }finally{setLoadingChampionshipDb(false)}
+  },[])
+
+  const loadBacktest=useCallback(async()=>{
+    setLoadingBacktest(true)
+    try{
+      const r=await fetch(`/api/championship/backtest?refresh=${Date.now()}`,{cache:"no-store"})
+      const d=await r.json() as BacktestResponse
+      setBacktest(d)
+    }catch{
+      setBacktest({ok:false,error:"Championship backtest unavailable"})
+    }finally{setLoadingBacktest(false)}
   },[])
 
   const loadH2h=useCallback(async(f:Fixture)=>{
@@ -192,7 +207,7 @@ export default function HomePage(){
   },[competition,selectedDate,loadResearch,loadSot,open,openGroups])
 
   useEffect(()=>{void refresh(false)},[competition,selectedDate])
-  useEffect(()=>{if(competition==="Championship")void loadChampionshipDb()},[competition,loadChampionshipDb])
+  useEffect(()=>{if(competition==="Championship"){void loadChampionshipDb();void loadBacktest()}},[competition,loadChampionshipDb,loadBacktest])
   useEffect(()=>{const t=window.setInterval(()=>void refresh(false),60000);return()=>window.clearInterval(t)},[refresh])
 
   const today=londonDate()
@@ -222,7 +237,10 @@ export default function HomePage(){
         <div className="flex flex-wrap items-center gap-2"><CalendarDays className="size-4 text-muted-foreground"/><input type="date" value={selectedDate} onChange={e=>{setSelectedDate(e.target.value);setOpen(null)}} className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm font-semibold"/>{selectedDate!==today?<button onClick={()=>{setSelectedDate(today);setOpen(null)}} className="rounded-lg border border-border px-2.5 py-1.5 text-xs font-bold">Today</button>:null}<span className="ml-auto text-[0.68rem] text-muted-foreground">{lastRefresh?`Updated ${lastRefresh.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}`:"Loading…"}</span></div>
       </section>
 
-      {competition==="Championship"?<ChampionshipDatabase data={championshipDb} loading={loadingChampionshipDb} onRefresh={loadChampionshipDb}/>:null}
+      {competition==="Championship"?<>
+        <ChampionshipDatabase data={championshipDb} loading={loadingChampionshipDb} onRefresh={loadChampionshipDb}/>
+        <BacktestPanel data={backtest} loading={loadingBacktest} onRefresh={loadBacktest}/>
+      </>:null}
 
       {loadingFixtures&&!live?<section className="rounded-2xl border border-border bg-card p-6 text-center text-sm text-muted-foreground"><RefreshCw className="mx-auto mb-2 size-5 animate-spin"/>Loading games…</section>:null}
       {noGames?<section className="rounded-2xl border border-border bg-card p-6 text-center"><p className="font-bold">No {competition} games found for this date.</p></section>:null}
@@ -313,3 +331,14 @@ function Th({children}:{children:React.ReactNode}){return <th className="whitesp
 function Td({children,strong=false}:{children:React.ReactNode;strong?:boolean}){return <td className={`whitespace-nowrap px-2.5 py-2 ${strong?"font-bold":""}`}>{children}</td>}
 function fmt(v:number|null|undefined){return v==null?"—":Number(v).toFixed(2)}
 
+
+function BacktestPanel({data,loading,onRefresh}:{data:BacktestResponse|null;loading:boolean;onRefresh:()=>void}){
+  const labels:Record<string,string>={card:"Yellow card",foul1:"1+ foul",foul2:"2+ fouls",sot1:"1+ SOT"}
+  return <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+    <div className="flex items-start justify-between gap-3 border-b border-border p-4"><div><p className="font-black">Championship signal backtest</p><p className="mt-1 text-xs text-muted-foreground">Walk-forward only · no future-match leakage</p></div><button onClick={onRefresh} className="rounded-lg border bg-card p-2"><RefreshCw className={`size-4 ${loading?"animate-spin":""}`}/></button></div>
+    {!data&&loading?<div className="p-5 text-center text-xs text-muted-foreground">Running backtest…</div>:data?.error?<Unavailable text={data.error}/>:data?.metrics?<div className="p-3">
+      <div className="grid grid-cols-2 gap-2">{Object.entries(data.metrics).map(([key,m])=><div key={key} className="rounded-xl border border-border bg-secondary/20 p-3"><p className="text-xs font-black">{labels[key]??key}</p><p className="mt-2 font-mono text-lg font-black">{Math.round(m.top3.hitRate*100)}%</p><p className="text-[0.62rem] text-muted-foreground">Top 3 hit rate · {m.top3.hits}/{m.top3.selections}</p><p className="mt-1 text-[0.62rem] text-muted-foreground">All eligible: {Math.round(m.baseRate*100)}%{m.top3.lift!=null?` · ${m.top3.lift.toFixed(2)}× lift`:""}</p></div>)}</div>
+      <p className="mt-3 text-[0.65rem] text-muted-foreground">{data.fixturesInDatabase??0} fixtures · {data.playerMatchRows??0} player-match rows. {data.warning}</p>
+    </div>:<Unavailable text="No backtest results yet."/>}
+  </section>
+}
