@@ -73,6 +73,7 @@ type ExactFoulOffer = {
   edge:number
   expectedValue:number
   confidence:"A"|"B"|"C"|"D"
+  priceSource?:"exact"|"estimated"
 }
 
 type Scorecard = {
@@ -87,6 +88,7 @@ type Scorecard = {
   eligibleBooks?:string[]
   slips?:BetSlip[]
   exactFoulOffers?:ExactFoulOffer[]
+  estimatedFoulOffers?:ExactFoulOffer[]
   foulTargetSlips?:FoulTargetSlip[]
   error?:string
 }
@@ -184,6 +186,7 @@ export default function BetBuilderPage(){
 
       {data?.ok&&eligible&&data.lineupsConfirmed?<>
         <ExactFoulOffers offers={data.exactFoulOffers??[]}/>
+        <EstimatedFoulOffers offers={data.estimatedFoulOffers??[]}/>
         <FoulLadder slips={data.foulTargetSlips??[]}/>
         <section className="space-y-3">
           <div className="px-1"><p className="font-black">Recommended slips</p><p className="text-[0.6rem] text-white/35">Built only from a fixture where both player-card and foul markets are available.</p></div>
@@ -215,8 +218,20 @@ function ExactFoulOffers({offers}:{offers:ExactFoulOffer[]}){
   </section>
 }
 
+function EstimatedFoulOffers({offers}:{offers:ExactFoulOffer[]}){
+  const top=[...offers].sort((a,b)=>(b.probability-a.probability)||(b.edge-a.edge)).slice(0,20)
+  if(!top.length)return null
+  return <section className="space-y-3">
+    <div className="px-1"><p className="font-black">Likely bookmaker prices</p><p className="text-[0.6rem] text-white/35">Estimated only when the bookmaker's foul market is verified but that exact threshold price is missing. Anchored to that bookmaker's observed margin on the player's other foul lines.</p></div>
+    <div className="space-y-2">{top.map((o,i)=><div key={o.player+"|"+o.threshold+"|"+o.bookmaker+"|est|"+i} className="rounded-2xl border border-amber-300/10 bg-amber-300/[0.035] p-3">
+      <div className="flex items-start justify-between gap-3"><div><div className="flex items-center gap-2"><p className="text-sm font-black">{o.player} · {o.label}</p><span className="rounded-full bg-amber-300/10 px-2 py-0.5 text-[0.45rem] font-black text-amber-200">ESTIMATED</span></div><p className="mt-0.5 text-[0.56rem] text-white/35">{o.team} · {o.bookmaker}</p></div><div className="text-right"><p className="font-mono text-lg font-black">{o.bookmakerOdds.toFixed(2)}</p><p className="text-[0.45rem] uppercase text-white/25">likely price</p></div></div>
+      <div className="mt-2 grid grid-cols-3 gap-1.5 text-center"><Metric label="Model" value={percent(o.probability)}/><Metric label="Fair" value={o.fairOdds?.toFixed(2)??"—"}/><Metric label="Est. edge" value={edgeText(o.edge)} good={o.edge>0}/></div>
+    </div>)}</div>
+  </section>
+}
+
 function FoulLadder({slips}:{slips:FoulTargetSlip[]}){
-  return <section className="space-y-3"><div className="px-1"><p className="font-black">Foul odds ladder</p><p className="text-[0.6rem] text-white/35">Built only from exact UK bookmaker foul lines, using whichever threshold and bookmaker price the model rates best.</p></div>{slips.map(s=><FoulCard key={s.id} slip={s}/>)}</section>
+  return <section className="space-y-3"><div className="px-1"><p className="font-black">Foul odds ladder</p><p className="text-[0.6rem] text-white/35">Uses exact preferred-bookmaker foul lines first, with clearly marked estimated thresholds only when the same bookmaker's foul market is verified.</p></div>{slips.map(s=><FoulCard key={s.id} slip={s}/>)}</section>
 }
 
 function FoulCard({slip}:{slip:FoulTargetSlip}){
