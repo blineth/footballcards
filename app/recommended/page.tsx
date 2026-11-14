@@ -75,7 +75,7 @@ export default function RecommendedPage(){
           <button onClick={()=>void refresh(true)} className="rounded-xl bg-violet-300 p-2.5 text-violet-950"><RefreshCw className={"size-4 "+(loading?"animate-spin":"")}/></button>
         </div>
         <p className="mt-3 text-[0.58rem] text-white/30">
-          Premier League · Championship · League One · International · {data?.fixturesScanned??0} fixtures scanned
+          Premier League · Championship · League One · League Two · International · {data?.fixturesScanned??0} fixtures scanned
           {data?.updatedAt?" · updated "+new Date(data.updatedAt).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}):""}
         </p>
       </div>
