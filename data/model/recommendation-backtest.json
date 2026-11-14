@@ -1,0 +1,1272 @@
+{
+  "version": "recommendation-walk-forward-v1",
+  "source": "data/current-season/h2h.csv",
+  "methodology": "One top model-ranked card/foul selection per historical fixture using only prior player matches. This validates ranking and hit-rate behaviour, not historical bookmaker profitability because historical exact prices are not available in the dataset.",
+  "minimumPriorMatches": 4,
+  "minimumPriorMinutes": 240,
+  "overall": {
+    "sample": 2678,
+    "hits": 1754,
+    "hitRate": 0.655,
+    "avgProbability": 0.8531,
+    "brier": 0.26067
+  },
+  "byMarket": {
+    "card": {
+      "sample": 1,
+      "hits": 0,
+      "hitRate": 0.0,
+      "avgProbability": 0.5879,
+      "brier": 0.34563
+    },
+    "foul1": {
+      "sample": 2677,
+      "hits": 1754,
+      "hitRate": 0.6552,
+      "avgProbability": 0.8532,
+      "brier": 0.26064
+    },
+    "foul2": {
+      "sample": 0,
+      "hits": 0,
+      "hitRate": null,
+      "avgProbability": null,
+      "brier": null
+    },
+    "foul3": {
+      "sample": 0,
+      "hits": 0,
+      "hitRate": null,
+      "avgProbability": null,
+      "brier": null
+    },
+    "foul4": {
+      "sample": 0,
+      "hits": 0,
+      "hitRate": null,
+      "avgProbability": null,
+      "brier": null
+    },
+    "foul5": {
+      "sample": 0,
+      "hits": 0,
+      "hitRate": null,
+      "avgProbability": null,
+      "brier": null
+    }
+  },
+  "byCompetition": {
+    "2. Bundesliga": {
+      "sample": 68,
+      "hits": 43,
+      "hitRate": 0.6324,
+      "avgProbability": 0.838,
+      "brier": 0.28838
+    },
+    "A-League Men": {
+      "sample": 5,
+      "hits": 2,
+      "hitRate": 0.4,
+      "avgProbability": 0.4733,
+      "brier": 0.36142
+    },
+    "Argentine Liga Profesional": {
+      "sample": 183,
+      "hits": 126,
+      "hitRate": 0.6885,
+      "avgProbability": 0.8657,
+      "brier": 0.24691
+    },
+    "Austrian Bundesliga": {
+      "sample": 51,
+      "hits": 6,
+      "hitRate": 0.1176,
+      "avgProbability": 0.6666,
+      "brier": 0.39308
+    },
+    "Belgian Pro League": {
+      "sample": 77,
+      "hits": 46,
+      "hitRate": 0.5974,
+      "avgProbability": 0.8389,
+      "brier": 0.30245
+    },
+    "Brazil Serie A": {
+      "sample": 137,
+      "hits": 95,
+      "hitRate": 0.6934,
+      "avgProbability": 0.8698,
+      "brier": 0.24452
+    },
+    "Bundesliga": {
+      "sample": 51,
+      "hits": 34,
+      "hitRate": 0.6667,
+      "avgProbability": 0.8492,
+      "brier": 0.26017
+    },
+    "Championship": {
+      "sample": 139,
+      "hits": 75,
+      "hitRate": 0.5396,
+      "avgProbability": 0.8444,
+      "brier": 0.3388
+    },
+    "Danish Superliga": {
+      "sample": 64,
+      "hits": 50,
+      "hitRate": 0.7812,
+      "avgProbability": 0.8662,
+      "brier": 0.18738
+    },
+    "Eerste Divisie": {
+      "sample": 100,
+      "hits": 66,
+      "hitRate": 0.66,
+      "avgProbability": 0.8633,
+      "brier": 0.26871
+    },
+    "Eredivisie": {
+      "sample": 74,
+      "hits": 41,
+      "hitRate": 0.5541,
+      "avgProbability": 0.8349,
+      "brier": 0.33297
+    },
+    "Greek Super League": {
+      "sample": 45,
+      "hits": 29,
+      "hitRate": 0.6444,
+      "avgProbability": 0.8107,
+      "brier": 0.26166
+    },
+    "J League": {
+      "sample": 100,
+      "hits": 71,
+      "hitRate": 0.71,
+      "avgProbability": 0.8614,
+      "brier": 0.22793
+    },
+    "La Liga": {
+      "sample": 87,
+      "hits": 56,
+      "hitRate": 0.6437,
+      "avgProbability": 0.8381,
+      "brier": 0.27702
+    },
+    "La Liga 2": {
+      "sample": 98,
+      "hits": 65,
+      "hitRate": 0.6633,
+      "avgProbability": 0.8836,
+      "brier": 0.26687
+    },
+    "League One": {
+      "sample": 112,
+      "hits": 77,
+      "hitRate": 0.6875,
+      "avgProbability": 0.8831,
+      "brier": 0.2497
+    },
+    "League Two": {
+      "sample": 118,
+      "hits": 84,
+      "hitRate": 0.7119,
+      "avgProbability": 0.8811,
+      "brier": 0.2303
+    },
+    "Liga MX": {
+      "sample": 114,
+      "hits": 81,
+      "hitRate": 0.7105,
+      "avgProbability": 0.8594,
+      "brier": 0.22109
+    },
+    "Ligue 1": {
+      "sample": 63,
+      "hits": 42,
+      "hitRate": 0.6667,
+      "avgProbability": 0.821,
+      "brier": 0.21902
+    },
+    "Ligue 2": {
+      "sample": 79,
+      "hits": 62,
+      "hitRate": 0.7848,
+      "avgProbability": 0.8637,
+      "brier": 0.18498
+    },
+    "MLS": {
+      "sample": 244,
+      "hits": 161,
+      "hitRate": 0.6598,
+      "avgProbability": 0.8434,
+      "brier": 0.25412
+    },
+    "Norwegian Eliteserien": {
+      "sample": 89,
+      "hits": 61,
+      "hitRate": 0.6854,
+      "avgProbability": 0.874,
+      "brier": 0.25503
+    },
+    "Premier League": {
+      "sample": 67,
+      "hits": 45,
+      "hitRate": 0.6716,
+      "avgProbability": 0.8432,
+      "brier": 0.24491
+    },
+    "Primeira Liga": {
+      "sample": 66,
+      "hits": 45,
+      "hitRate": 0.6818,
+      "avgProbability": 0.8656,
+      "brier": 0.23717
+    },
+    "Saudi Pro League": {
+      "sample": 68,
+      "hits": 38,
+      "hitRate": 0.5588,
+      "avgProbability": 0.8565,
+      "brier": 0.33464
+    },
+    "Scottish Premiership": {
+      "sample": 54,
+      "hits": 42,
+      "hitRate": 0.7778,
+      "avgProbability": 0.859,
+      "brier": 0.17576
+    },
+    "Serie A": {
+      "sample": 75,
+      "hits": 42,
+      "hitRate": 0.56,
+      "avgProbability": 0.8458,
+      "brier": 0.33114
+    },
+    "Serie B": {
+      "sample": 72,
+      "hits": 54,
+      "hitRate": 0.75,
+      "avgProbability": 0.8811,
+      "brier": 0.20968
+    },
+    "Swedish Allsvenskan": {
+      "sample": 111,
+      "hits": 73,
+      "hitRate": 0.6577,
+      "avgProbability": 0.8672,
+      "brier": 0.26709
+    },
+    "Turkish Super Lig": {
+      "sample": 67,
+      "hits": 42,
+      "hitRate": 0.6269,
+      "avgProbability": 0.8496,
+      "brier": 0.27769
+    }
+  },
+  "recentPicks": [
+    {
+      "date": "2026-11-07",
+      "competition": "Turkish Super Lig",
+      "player": "Logi Tomasson",
+      "team": "Samsunspor",
+      "opponent": "Konyaspor",
+      "market": "foul1",
+      "probability": 0.8684,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "2. Bundesliga",
+      "player": "Jan Schöppner",
+      "team": "1. FC Heidenheim 1846",
+      "opponent": "Hannover 96",
+      "market": "foul1",
+      "probability": 0.8406,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "2. Bundesliga",
+      "player": "Abdoulie Ceesay",
+      "team": "St. Pauli",
+      "opponent": "1. FC Magdeburg",
+      "market": "foul1",
+      "probability": 0.9194,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "2. Bundesliga",
+      "player": "Philipp Hofmann",
+      "team": "VfL Bochum",
+      "opponent": "Karlsruher SC",
+      "market": "foul1",
+      "probability": 0.8684,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "A-League Men",
+      "player": "Tatsuki Nara",
+      "team": "Macarthur FC",
+      "opponent": "Brisbane Roar FC",
+      "market": "foul1",
+      "probability": 0.5097,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Argentine Liga Profesional",
+      "player": "Marco Iacobellis",
+      "team": "Central Córdoba (Santiago del Estero)",
+      "opponent": "Lanús",
+      "market": "foul1",
+      "probability": 0.8786,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Argentine Liga Profesional",
+      "player": "Walter Mazzantti",
+      "team": "Newell's Old Boys",
+      "opponent": "Instituto (Córdoba)",
+      "market": "foul1",
+      "probability": 0.8069,
+      "outcome": 0
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Austrian Bundesliga",
+      "player": "Florian Wustinger",
+      "team": "Austria Vienna",
+      "opponent": "WSG Swarovski Tirol",
+      "market": "foul1",
+      "probability": 0.4052,
+      "outcome": 0
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Austrian Bundesliga",
+      "player": "Seedy Jatta",
+      "team": "SK Sturm Graz",
+      "opponent": "RB Salzburg",
+      "market": "foul1",
+      "probability": 0.5514,
+      "outcome": 0
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Austrian Bundesliga",
+      "player": "Ousmane Diawara",
+      "team": "SC Rheindorf Altach",
+      "opponent": "TSV Hartberg",
+      "market": "foul1",
+      "probability": 0.4301,
+      "outcome": 0
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Belgian Pro League",
+      "player": "Enric Llansana",
+      "team": "Anderlecht",
+      "opponent": "Club Brugge",
+      "market": "foul1",
+      "probability": 0.8903,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Belgian Pro League",
+      "player": "Thierry Ambrose",
+      "team": "KV Kortrijk",
+      "opponent": "KAA Gent",
+      "market": "foul1",
+      "probability": 0.8684,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Belgian Pro League",
+      "player": "Bryan Heynen",
+      "team": "Racing Genk",
+      "opponent": "Union St.-Gilloise",
+      "market": "foul1",
+      "probability": 0.9317,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Belgian Pro League",
+      "player": "Anosike Ementa",
+      "team": "Zulte-Waregem",
+      "opponent": "Sint-Truidense",
+      "market": "foul1",
+      "probability": 0.8684,
+      "outcome": 0
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Bundesliga",
+      "player": "Rani Khedira",
+      "team": "1. FC Union Berlin",
+      "opponent": "SC Freiburg",
+      "market": "foul1",
+      "probability": 0.8176,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Bundesliga",
+      "player": "Facundo Medina",
+      "team": "Bayer Leverkusen",
+      "opponent": "FC Cologne",
+      "market": "foul1",
+      "probability": 0.8454,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Bundesliga",
+      "player": "Soufian El-Faouzi",
+      "team": "Schalke 04",
+      "opponent": "TSG Hoffenheim",
+      "market": "foul1",
+      "probability": 0.9116,
+      "outcome": 0
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Danish Superliga",
+      "player": "Alagie Saine",
+      "team": "AC Horsens",
+      "opponent": "AGF",
+      "market": "foul1",
+      "probability": 0.9393,
+      "outcome": 0
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Danish Superliga",
+      "player": "Mads Frökjaer",
+      "team": "Brøndby IF",
+      "opponent": "F.C. København",
+      "market": "foul1",
+      "probability": 0.7361,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Danish Superliga",
+      "player": "Andreas Maxsø",
+      "team": "FC Midtjylland",
+      "opponent": "Sønderjyske Fodbold",
+      "market": "foul1",
+      "probability": 0.8741,
+      "outcome": 0
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Danish Superliga",
+      "player": "Victor Nelsson",
+      "team": "FC Nordsjælland",
+      "opponent": "Randers FC",
+      "market": "foul1",
+      "probability": 0.8903,
+      "outcome": 0
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Eerste Divisie",
+      "player": "Michael Breij",
+      "team": "FC Emmen",
+      "opponent": "MVV Maastricht",
+      "market": "foul1",
+      "probability": 0.8574,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Eredivisie",
+      "player": "Wout Weghorst",
+      "team": "FC Twente",
+      "opponent": "Ajax Amsterdam",
+      "market": "foul1",
+      "probability": 0.8746,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Eredivisie",
+      "player": "Jorg Schreuders",
+      "team": "FC Groningen",
+      "opponent": "AZ Alkmaar",
+      "market": "foul1",
+      "probability": 0.7857,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Eredivisie",
+      "player": "Matisse Didden",
+      "team": "FC Utrecht",
+      "opponent": "NEC Nijmegen",
+      "market": "foul1",
+      "probability": 0.8578,
+      "outcome": 0
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Eredivisie",
+      "player": "Vasilios Zagaritis",
+      "team": "Heerenveen",
+      "opponent": "Feyenoord Rotterdam",
+      "market": "foul1",
+      "probability": 0.8111,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Eredivisie",
+      "player": "Mathieu Maertens",
+      "team": "SC Cambuur",
+      "opponent": "PSV Eindhoven",
+      "market": "foul1",
+      "probability": 0.9116,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Greek Super League",
+      "player": "Lovro Majer",
+      "team": "AEK Athens",
+      "opponent": "Levadiakos",
+      "market": "foul1",
+      "probability": 0.8307,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Greek Super League",
+      "player": "Rodrigues",
+      "team": "Kalamata",
+      "opponent": "Asteras Tripoli",
+      "market": "foul1",
+      "probability": 0.83,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Greek Super League",
+      "player": "Mattheos Mountes",
+      "team": "Atromitos",
+      "opponent": "OFI Crete",
+      "market": "foul1",
+      "probability": 0.7852,
+      "outcome": 0
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Greek Super League",
+      "player": "Santino Andino",
+      "team": "Panathinaikos",
+      "opponent": "Iraklis",
+      "market": "foul1",
+      "probability": 0.7895,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Greek Super League",
+      "player": "Christos Zafeiris",
+      "team": "PAOK",
+      "opponent": "Olympiacos",
+      "market": "foul1",
+      "probability": 0.9194,
+      "outcome": 0
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "J League",
+      "player": "Issam Jebali",
+      "team": "Gamba Osaka",
+      "opponent": "Cerezo Osaka",
+      "market": "foul1",
+      "probability": 0.8746,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "J League",
+      "player": "Erison",
+      "team": "JEF United Ichihara-Chiba",
+      "opponent": "Mito Hollyhock",
+      "market": "foul1",
+      "probability": 0.9357,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "J League",
+      "player": "Koki Ogawa",
+      "team": "Machida Zelvia",
+      "opponent": "Sanfrecce Hiroshima",
+      "market": "foul1",
+      "probability": 0.8406,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "J League",
+      "player": "Tatsuki Seko",
+      "team": "Urawa Red Diamonds",
+      "opponent": "Vissel Kobe",
+      "market": "foul1",
+      "probability": 0.75,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "La Liga",
+      "player": "Marc Pubill",
+      "team": "Atlético Madrid",
+      "opponent": "Barcelona",
+      "market": "foul1",
+      "probability": 0.7617,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "La Liga",
+      "player": "Marcos Alonso",
+      "team": "Celta Vigo",
+      "opponent": "Levante",
+      "market": "foul1",
+      "probability": 0.8176,
+      "outcome": 0
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "La Liga",
+      "player": "Pablo Fornals",
+      "team": "Real Betis",
+      "opponent": "Elche",
+      "market": "foul1",
+      "probability": 0.805,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "La Liga",
+      "player": "Nemanja Gudelj",
+      "team": "Getafe",
+      "opponent": "Villarreal",
+      "market": "foul1",
+      "probability": 0.8578,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "La Liga",
+      "player": "Florian Lejeune",
+      "team": "Rayo Vallecano",
+      "opponent": "Real Sociedad",
+      "market": "foul1",
+      "probability": 0.8406,
+      "outcome": 0
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "La Liga 2",
+      "player": "Carles Pérez",
+      "team": "Girona",
+      "opponent": "Almería",
+      "market": "foul1",
+      "probability": 0.8578,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "La Liga 2",
+      "player": "Iván Alejo",
+      "team": "Real Valladolid",
+      "opponent": "Sporting Gijón",
+      "market": "foul1",
+      "probability": 0.9357,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Liga MX",
+      "player": "Kevin Álvarez",
+      "team": "América",
+      "opponent": "Pumas UNAM",
+      "market": "foul1",
+      "probability": 0.8468,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Liga MX",
+      "player": "Fernando Gorriarán",
+      "team": "Tigres UANL",
+      "opponent": "Cruz Azul",
+      "market": "foul1",
+      "probability": 0.8081,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Liga MX",
+      "player": "Ricardo Chávez",
+      "team": "Monterrey",
+      "opponent": "Toluca",
+      "market": "foul1",
+      "probability": 0.8574,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Ligue 1",
+      "player": "Branco van den Boomen",
+      "team": "Angers",
+      "opponent": "Nice",
+      "market": "foul1",
+      "probability": 0.7617,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Ligue 1",
+      "player": "Lucas Bretelle",
+      "team": "Le Mans",
+      "opponent": "AS Monaco",
+      "market": "foul1",
+      "probability": 0.8454,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Ligue 1",
+      "player": "Ludovic Ajorque",
+      "team": "Brest",
+      "opponent": "Lyon",
+      "market": "foul1",
+      "probability": 0.9261,
+      "outcome": 0
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Ligue 1",
+      "player": "Isaak Touré",
+      "team": "Lorient",
+      "opponent": "Le Havre AC",
+      "market": "foul1",
+      "probability": 0.8741,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Ligue 1",
+      "player": "Pierre-Emile Højbjerg",
+      "team": "Marseille",
+      "opponent": "Lens",
+      "market": "foul1",
+      "probability": 0.8307,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Ligue 1",
+      "player": "Benjamin André",
+      "team": "Lille",
+      "opponent": "Stade Rennais",
+      "market": "foul1",
+      "probability": 0.8029,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "MLS",
+      "player": "Besard Sabovic",
+      "team": "Austin FC",
+      "opponent": "Portland Timbers",
+      "market": "foul1",
+      "probability": 0.8025,
+      "outcome": 0
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "MLS",
+      "player": "Osaze Urhoghide",
+      "team": "FC Dallas",
+      "opponent": "Colorado Rapids",
+      "market": "foul1",
+      "probability": 0.8937,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "MLS",
+      "player": "Rafael Navarro",
+      "team": "St. Louis CITY SC",
+      "opponent": "Houston Dynamo FC",
+      "market": "foul1",
+      "probability": 0.8785,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "MLS",
+      "player": "Hirving Lozano",
+      "team": "LA Galaxy",
+      "opponent": "Real Salt Lake",
+      "market": "foul1",
+      "probability": 0.9261,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "MLS",
+      "player": "Paul Rothrock",
+      "team": "Seattle Sounders FC",
+      "opponent": "LAFC",
+      "market": "foul1",
+      "probability": 0.9317,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "MLS",
+      "player": "Ousseni Bouda",
+      "team": "San Jose Earthquakes",
+      "opponent": "Minnesota United FC",
+      "market": "foul1",
+      "probability": 0.8743,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "MLS",
+      "player": "Stephen Afrifa",
+      "team": "Sporting Kansas City",
+      "opponent": "San Diego FC",
+      "market": "foul1",
+      "probability": 0.8421,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Norwegian Eliteserien",
+      "player": "Gustav Nyheim",
+      "team": "Lillestrom",
+      "opponent": "Aalesund",
+      "market": "foul1",
+      "probability": 0.9105,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Norwegian Eliteserien",
+      "player": "Andreas Helmersen",
+      "team": "Bodo/Glimt",
+      "opponent": "Tromso",
+      "market": "foul1",
+      "probability": 0.8061,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Norwegian Eliteserien",
+      "player": "Niklas Castro",
+      "team": "SK Brann",
+      "opponent": "Fredrikstad",
+      "market": "foul1",
+      "probability": 0.8524,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Norwegian Eliteserien",
+      "player": "Sondre Sörli",
+      "team": "Sarpsborg FK",
+      "opponent": "Hamarkameratene",
+      "market": "foul1",
+      "probability": 0.8315,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Norwegian Eliteserien",
+      "player": "Magnus Retsius Grødem",
+      "team": "KFUM Oslo",
+      "opponent": "Viking FK",
+      "market": "foul1",
+      "probability": 0.9194,
+      "outcome": 0
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Norwegian Eliteserien",
+      "player": "Jalal Abdulai",
+      "team": "Molde",
+      "opponent": "Sandefjord",
+      "market": "foul1",
+      "probability": 0.8524,
+      "outcome": 0
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Premier League",
+      "player": "Evanilson",
+      "team": "AFC Bournemouth",
+      "opponent": "Ipswich Town",
+      "market": "foul1",
+      "probability": 0.8578,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Premier League",
+      "player": "Boubacar Kamara",
+      "team": "Aston Villa",
+      "opponent": "Manchester United",
+      "market": "foul1",
+      "probability": 0.83,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Premier League",
+      "player": "Chema Andrés",
+      "team": "Brighton & Hove Albion",
+      "opponent": "Brentford",
+      "market": "foul1",
+      "probability": 0.8307,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Premier League",
+      "player": "Brian Brobbey",
+      "team": "Sunderland",
+      "opponent": "Chelsea",
+      "market": "foul1",
+      "probability": 0.9116,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Premier League",
+      "player": "Jérémy Jacquet",
+      "team": "Liverpool",
+      "opponent": "Crystal Palace",
+      "market": "foul1",
+      "probability": 0.8578,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Primeira Liga",
+      "player": "Soufiane Messeguem",
+      "team": "Académico de Viseu",
+      "opponent": "C.D. Nacional",
+      "market": "foul1",
+      "probability": 0.8406,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Primeira Liga",
+      "player": "Lovro Zvonarek",
+      "team": "Estrela",
+      "opponent": "Benfica",
+      "market": "foul1",
+      "probability": 0.9317,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Primeira Liga",
+      "player": "Víctor Gómez",
+      "team": "Braga",
+      "opponent": "Rio Ave",
+      "market": "foul1",
+      "probability": 0.7772,
+      "outcome": 0
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Primeira Liga",
+      "player": "Samu",
+      "team": "Vitória de Guimaraes",
+      "opponent": "FC Porto",
+      "market": "foul1",
+      "probability": 0.8684,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Primeira Liga",
+      "player": "Ricardo Esgaio",
+      "team": "Gil Vicente",
+      "opponent": "Santa Clara",
+      "market": "foul1",
+      "probability": 0.8684,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Scottish Premiership",
+      "player": "Yang Hyun-Jun",
+      "team": "Celtic",
+      "opponent": "Kilmarnock",
+      "market": "foul1",
+      "probability": 0.8903,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Scottish Premiership",
+      "player": "Finley Barbrook",
+      "team": "Falkirk",
+      "opponent": "Heart of Midlothian",
+      "market": "foul1",
+      "probability": 0.8746,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Serie A",
+      "player": "Samuel Wiafe",
+      "team": "Genoa",
+      "opponent": "AC Milan",
+      "market": "foul1",
+      "probability": 0.8903,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Serie A",
+      "player": "Franck Kessié",
+      "team": "Atalanta",
+      "opponent": "Monza",
+      "market": "foul1",
+      "probability": 0.8741,
+      "outcome": 0
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Serie A",
+      "player": "Marcus Thuram",
+      "team": "Internazionale",
+      "opponent": "Como",
+      "market": "foul1",
+      "probability": 0.7895,
+      "outcome": 0
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Serie A",
+      "player": "Randal Kolo Muani",
+      "team": "Juventus",
+      "opponent": "Fiorentina",
+      "market": "foul1",
+      "probability": 0.7772,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Serie A",
+      "player": "Romano Floriani",
+      "team": "Lazio",
+      "opponent": "Napoli",
+      "market": "foul1",
+      "probability": 0.8406,
+      "outcome": 0
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Serie B",
+      "player": "Gabriele Parlanti",
+      "team": "Carrarese",
+      "opponent": "Sampdoria",
+      "market": "foul1",
+      "probability": 0.8684,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Serie B",
+      "player": "Tommaso Barbieri",
+      "team": "Cremonese",
+      "opponent": "Vicenza",
+      "market": "foul1",
+      "probability": 0.8741,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Serie B",
+      "player": "Andrea Franzoni",
+      "team": "Virtus Entella",
+      "opponent": "Modena",
+      "market": "foul1",
+      "probability": 0.8406,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Swedish Allsvenskan",
+      "player": "Axel Kouame",
+      "team": "AIK",
+      "opponent": "BK Häcken",
+      "market": "foul1",
+      "probability": 0.8593,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Swedish Allsvenskan",
+      "player": "Hussein Carneil",
+      "team": "Halmstads BK",
+      "opponent": "Djurgården",
+      "market": "foul1",
+      "probability": 0.8997,
+      "outcome": 0
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Swedish Allsvenskan",
+      "player": "Viktor Gustafson",
+      "team": "Mjällby AIF",
+      "opponent": "IF Brommapojkarna",
+      "market": "foul1",
+      "probability": 0.8338,
+      "outcome": 0
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Swedish Allsvenskan",
+      "player": "Otto Rosengren",
+      "team": "Malmö FF",
+      "opponent": "IFK Göteborg",
+      "market": "foul1",
+      "probability": 0.8166,
+      "outcome": 0
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Swedish Allsvenskan",
+      "player": "Victor Larsson",
+      "team": "Kalmar FF",
+      "opponent": "IK Sirius",
+      "market": "foul1",
+      "probability": 0.9191,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Turkish Super Lig",
+      "player": "Sidny Lopes Cabral",
+      "team": "Trabzonspor",
+      "opponent": "Alanyaspor",
+      "market": "foul1",
+      "probability": 0.8684,
+      "outcome": 0
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Turkish Super Lig",
+      "player": "Thalisson Kelven",
+      "team": "Genclerbirligi",
+      "opponent": "Besiktas",
+      "market": "foul1",
+      "probability": 0.8307,
+      "outcome": 0
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Turkish Super Lig",
+      "player": "Zakaria Ariss",
+      "team": "Caykur Rizespor",
+      "opponent": "Erzurum BB",
+      "market": "foul1",
+      "probability": 0.8578,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-08",
+      "competition": "Turkish Super Lig",
+      "player": "Jesús Ramírez",
+      "team": "Çorum FK",
+      "opponent": "Fenerbahce",
+      "market": "foul1",
+      "probability": 0.805,
+      "outcome": 0
+    },
+    {
+      "date": "2026-11-09",
+      "competition": "La Liga 2",
+      "player": "Lander Astiazarán",
+      "team": "Real Sociedad II",
+      "opponent": "CD Sabadell",
+      "market": "foul1",
+      "probability": 0.8468,
+      "outcome": 0
+    },
+    {
+      "date": "2026-11-09",
+      "competition": "La Liga 2",
+      "player": "Justin Smith",
+      "team": "Eldense",
+      "opponent": "Las Palmas",
+      "market": "foul1",
+      "probability": 0.8684,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-09",
+      "competition": "Liga MX",
+      "player": "Daniel Aguirre",
+      "team": "Guadalajara",
+      "opponent": "León",
+      "market": "foul1",
+      "probability": 0.7933,
+      "outcome": 0
+    },
+    {
+      "date": "2026-11-09",
+      "competition": "Liga MX",
+      "player": "Ali Avila",
+      "team": "Querétaro",
+      "opponent": "Puebla",
+      "market": "foul1",
+      "probability": 0.9454,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-09",
+      "competition": "Norwegian Eliteserien",
+      "player": "Leander Alvheim",
+      "team": "Kristiansund BK",
+      "opponent": "Vålerenga",
+      "market": "foul1",
+      "probability": 0.8532,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-13",
+      "competition": "La Liga 2",
+      "player": "Unai Vencedor",
+      "team": "Burgos",
+      "opponent": "Leganés",
+      "market": "foul1",
+      "probability": 0.9317,
+      "outcome": 1
+    }
+  ]
+}
