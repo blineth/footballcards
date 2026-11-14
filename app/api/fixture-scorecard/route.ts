@@ -17,6 +17,8 @@ type OddSelection = {
   kind: string
   label: string
   odd: number | null
+  previousOdd?: number | null
+  movement?: number | null
 }
 
 type ScoreMarket = {
@@ -26,6 +28,8 @@ type ScoreMarket = {
   fairOdds: number | null
   confidence: "A" | "B" | "C" | "D"
   bookmakerOdds: number | null
+  previousBookmakerOdds: number | null
+  bookmakerMovement: number | null
   bookmakerLabel: string | null
   impliedProbability: number | null
   edge: number | null
@@ -63,6 +67,8 @@ type SlipLeg = {
   probability: number
   fairOdds: number | null
   bookmakerOdds: number | null
+  previousBookmakerOdds: number | null
+  bookmakerMovement: number | null
   edge: number | null
   expectedValue: number | null
   confidence: "A" | "B" | "C" | "D"
@@ -249,6 +255,8 @@ function marketLeg(player: ScorePlayer, market: MarketKey): SlipLeg {
     probability: m.probability,
     fairOdds: m.fairOdds,
     bookmakerOdds: m.bookmakerOdds,
+    previousBookmakerOdds: m.previousBookmakerOdds,
+    bookmakerMovement: m.bookmakerMovement,
     edge: m.edge,
     expectedValue: m.expectedValue,
     confidence: m.confidence,
@@ -426,6 +434,8 @@ export async function GET(request: Request) {
 
       const odd = findOdds(usableSelections, candidate.name, market)
       const bookmakerOdds = odd?.odd == null ? null : Number(odd.odd)
+      const previousBookmakerOdds = odd?.previousOdd == null ? null : Number(odd.previousOdd)
+      const bookmakerMovement = odd?.movement == null ? null : Number(odd.movement)
       const impliedProbability = bookmakerOdds ? 1 / bookmakerOdds : null
       const edge = impliedProbability == null ? null : probability - impliedProbability
       const expectedValue = bookmakerOdds == null ? null : probability * bookmakerOdds - 1
@@ -437,6 +447,8 @@ export async function GET(request: Request) {
         fairOdds: fairOdds(probability),
         confidence,
         bookmakerOdds,
+        previousBookmakerOdds,
+        bookmakerMovement,
         bookmakerLabel: odd?.label ?? null,
         impliedProbability: impliedProbability == null ? null : Math.round(impliedProbability * 1000) / 1000,
         edge: edge == null ? null : Math.round(edge * 1000) / 1000,
