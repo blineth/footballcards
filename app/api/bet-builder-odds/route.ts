@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { db, isDatabaseConfigured } from "@/lib/db"
 import { ensureResearchSchema } from "@/lib/db/ensure-research-schema"
 import { oddsSnapshots } from "@/lib/db/schema"
+import { and, desc, eq } from "drizzle-orm"
 
 export const dynamic = "force-dynamic"
 export const revalidate = 0
@@ -57,6 +58,40 @@ async function saveSnapshots(input:{date:string;home:string;away:string;competit
       capturedAt,
     }))
   if (rows.length) await db.insert(oddsSnapshots).values(rows).onConflictDoNothing()
+}
+
+async function attachMovement(input:{date:string;home:string;away:string;competition:string;bookmaker?:string;selections:Array<{market:string;kind:string;label:string;odd:number|null}>}) {
+  if (!isDatabaseConfigured || !input.selections.length || !input.bookmaker) return input.selections
+  try {
+    const rows = await db.select().from(oddsSnapshots)
+      .where(and(
+        eq(oddsSnapshots.competition, input.competition),
+        eq(oddsSnapshots.fixtureDate, input.date),
+        eq(oddsSnapshots.homeTeam, input.home),
+        eq(oddsSnapshots.awayTeam, input.away),
+        eq(oddsSnapshots.bookmaker, input.bookmaker),
+      ))
+      .orderBy(desc(oddsSnapshots.capturedAt))
+      .limit(1000)
+
+    return input.selections.map(selection => {
+      if (selection.odd == null) return { ...selection, previousOdd:null, movement:null }
+      const current = Number(selection.odd)
+      const previous = rows.find(row =>
+        norm(row.market) === norm(selection.market) &&
+        norm(row.label) === norm(selection.label) &&
+        Math.abs(Number(row.odds) - current) > 0.0001
+      )
+      const previousOdd = previous ? Number(previous.odds) : null
+      return {
+        ...selection,
+        previousOdd,
+        movement: previousOdd == null ? null : Math.round((current - previousOdd) * 1000) / 1000,
+      }
+    })
+  } catch {
+    return input.selections
+  }
 }
 
 function marketKind(name: string) {
@@ -210,7 +245,8 @@ export async function GET(request: Request) {
         const fresh = await fromUkOdds({ date, home, away, key: ukKey })
         if (fresh) {
           await saveSnapshots({ date, home, away, competition, bookmaker:fresh.bookmaker, source:fresh.source, capturedAt:fresh.capturedAt, selections:fresh.selections })
-          return NextResponse.json({ ...fresh, priceAvailable: fresh.selections.length > 0 })
+          const selections = await attachMovement({ date, home, away, competition, bookmaker:fresh.bookmaker, selections:fresh.selections })
+          return NextResponse.json({ ...fresh, selections, priceAvailable: selections.length > 0 })
         }
       } catch (error) {
         console.log("[bet-builder-odds] UK Odds fallback:", error instanceof Error ? error.message : error)
@@ -222,14 +258,15 @@ export async function GET(request: Request) {
       const fallback = await fromApiFootball({ date, home, away, competition, key: apiKey })
       if (fallback) {
         await saveSnapshots({ date, home, away, competition, bookmaker:fallback.bookmaker, source:fallback.source, capturedAt:fallback.capturedAt, selections:fallback.selections })
-        return NextResponse.json({ ...fallback, priceAvailable: fallback.selections.length > 0 })
+        const selections = await attachMovement({ date, home, away, competition, bookmaker:fallback.bookmaker, selections:fallback.selections })
+        return NextResponse.json({ ...fallback, selections, priceAvailable: selections.length > 0 })
       }
     }
 
     return NextResponse.json({
-      connected: Boolean(ukKey || apiKey),
+      connected: Boolean(ukKey || (apiKey && LEAGUE_IDS[competition])),
       bookmaker: "Bet365",
-      source: ukKey ? "UK Odds API" : apiKey ? "API-Football" : null,
+      source: ukKey ? "UK Odds API" : apiKey && LEAGUE_IDS[competition] ? "API-Football" : null,
       selections: [],
       priceAvailable: false,
       note: "No Bet365 player-prop prices are available from the configured feed for this fixture.",
