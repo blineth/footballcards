@@ -72,7 +72,7 @@ export default function RecommendedPage(){
   },[])
 
   useEffect(()=>{void refresh(false)},[refresh])
-  useEffect(()=>{const t=window.setInterval(()=>void refresh(false),300000);return()=>window.clearInterval(t)},[refresh])
+  useEffect(()=>{const t=window.setInterval(()=>void refresh(false),120000);return()=>window.clearInterval(t)},[refresh])
   useEffect(()=>{
     const games=data?.targetOddsGames??[]
     if(!games.length){setSelectedTargetFixtureId(null);return}
@@ -113,7 +113,7 @@ export default function RecommendedPage(){
 
       {loading&&!best?<div className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center"><RefreshCw className="mx-auto mb-3 size-5 animate-spin text-violet-300"/><p className="font-black">Scanning upcoming matches…</p></div>:null}
       {!loading&&!data?.ok?<div className="rounded-3xl border border-rose-300/15 bg-rose-400/5 p-6 text-center"><p className="font-black">Recommended scan unavailable</p><p className="mt-1 text-sm text-white/40">{data?.error??"Try a manual refresh."}</p></div>:null}
-      {!loading&&data?.ok&&!best?<div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.03] p-8 text-center"><p className="font-black">No recommendation ready yet</p><p className="mt-1 text-sm text-white/35">No remaining fixture today currently passes the model/market rules strongly enough.</p></div>:null}
+      {!loading&&data?.ok&&!best?<div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.03] p-8 text-center"><p className="font-black">No recommendation ready yet</p><p className="mt-1 text-sm text-white/35">Recommended only publishes player slips after both starting XIs are confirmed. Matches still waiting for official lineups are withheld.</p></div>:null}
 
       {best?<RecommendationCard rec={best} hero/>:null}
 
@@ -211,7 +211,7 @@ function RecommendationCard({rec,hero=false}:{rec:Recommendation;hero?:boolean})
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="flex flex-wrap gap-1.5">
-            <span className={"rounded-full px-2 py-1 text-[0.5rem] font-black "+(rec.confirmed?"bg-emerald-400 text-emerald-950":"bg-amber-300 text-amber-950")}>{rec.confirmed?"CONFIRMED XI":"PROVISIONAL"}</span>
+            <span className="rounded-full bg-emerald-400 px-2 py-1 text-[0.5rem] font-black text-emerald-950">CONFIRMED XI</span>
             {hero?<span className="rounded-full bg-violet-300 px-2 py-1 text-[0.5rem] font-black text-violet-950">TOP PICK</span>:null}
           </div>
           <p className="mt-2 text-[0.58rem] font-black uppercase text-white/30">{rec.fixture.competition} · {time(rec.fixture)}</p>
