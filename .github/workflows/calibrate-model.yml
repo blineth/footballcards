@@ -7,6 +7,7 @@ on:
       - ".github/workflows/calibrate-model.yml"
       - "scripts/build-model-calibration.py"
       - "scripts/backtest-recommendations.py"
+      - "scripts/backtest-builders.py"
 
 permissions:
   contents: write
@@ -34,6 +35,9 @@ jobs:
 
       - name: Build recommendation backtest
         run: python scripts/backtest-recommendations.py
+
+      - name: Build builder strategy backtests
+        run: python scripts/backtest-builders.py
 
       - name: Validate calibration output
         shell: bash
@@ -78,12 +82,27 @@ jobs:
           print(data["overall"])
           PY
 
+      - name: Validate builder backtests
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path("data/model/builder-backtest.json").read_text(encoding="utf-8"))
+          assert data["version"]=="builder-walk-forward-v1"
+          assert data["markets"]["foul1"]["sample"]>100
+          assert "3/1" in data["foulTargetBuilders"]
+          assert "twoCard" in data["cardBuilders"]
+          print("Builder backtest validation passed")
+          print(data["foulTargetBuilders"])
+          PY
+
       - name: Commit calibration snapshot
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/model/calibration.json data/model/recommendation-backtest.json
+          git add data/model/calibration.json data/model/recommendation-backtest.json data/model/builder-backtest.json
           if git diff --cached --quiet; then
             echo "Calibration snapshot already up to date."
             exit 0
