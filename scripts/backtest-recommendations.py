@@ -19,6 +19,7 @@ from typing import Any
 ROOT=Path(__file__).resolve().parents[1]
 INPUT=ROOT/"data"/"current-season"/"h2h.csv"
 OUTPUT=ROOT/"data"/"model"/"recommendation-backtest.json"
+CALIBRATION=ROOT/"data"/"model"/"calibration.json"
 MIN_MATCHES=4
 MIN_MINUTES=240
 
@@ -64,11 +65,22 @@ def outcome(row:dict[str,str],market:str)->bool:
     if market=="card":return bv(row,"yellow_card")
     return iv(row,"fouls_committed")>=int(market.replace("foul",""))
 
+
+def calibrated_probability(raw:float,competition:str,market:str,calibration:dict[str,Any])->float:
+    source=(calibration.get("competitions",{}).get(competition,{}).get(market)
+            or calibration.get("global",{}).get(market))
+    bands=(source or {}).get("bands") or []
+    if len(bands)!=20:return raw
+    idx=max(0,min(19,int(clamp(raw,0,.999999)/.05)))
+    try:return float(bands[idx]["calibratedProbability"])
+    except:return raw
+
 def main()->int:
     with INPUT.open(encoding="utf-8",newline="") as h:
         rows=[r for r in csv.DictReader(h) if iv(r,"minutes")>0]
     rows.sort(key=lambda r:(r.get("match_date") or "",r.get("competition") or "",fixture_key(r),player_key(r)))
 
+    calibration=json.loads(CALIBRATION.read_text(encoding="utf-8")) if CALIBRATION.exists() else {}
     history:dict[str,list[dict[str,str]]]=defaultdict(list)
     by_date:dict[str,list[dict[str,str]]]=defaultdict(list)
     for row in rows:by_date[row.get("match_date") or ""].append(row)
@@ -88,7 +100,8 @@ def main()->int:
                 minutes=sum(iv(r,"minutes") for r in hist)
                 if len(hist)<MIN_MATCHES or minutes<MIN_MINUTES:continue
                 for market in markets:
-                    p=prob(hist,market)
+                    raw=prob(hist,market)
+                    p=calibrated_probability(raw,key[1],market,calibration)
                     # Prefer robust, repeatable lines. High thresholds need materially
                     # stronger evidence to outrank simple 1+ foul/card selections.
                     penalty={"card":0,"foul1":0,"foul2":.015,"foul3":.035,"foul4":.06,"foul5":.08}[market]
@@ -122,7 +135,7 @@ def main()->int:
     output={
         "version":"recommendation-walk-forward-v1",
         "source":"data/current-season/h2h.csv",
-        "methodology":"One top model-ranked card/foul selection per historical fixture using only prior player matches. This validates ranking and hit-rate behaviour, not historical bookmaker profitability because historical exact prices are not available in the dataset.",
+        "methodology":"One top model-ranked card/foul selection per historical fixture using only prior player matches, then the same walk-forward calibration bands used by the live model. This validates ranking and calibrated hit-rate behaviour, not historical bookmaker profitability because historical exact prices are not available in the dataset.",
         "minimumPriorMatches":MIN_MATCHES,
         "minimumPriorMinutes":MIN_MINUTES,
         "overall":summary(picks),
