@@ -245,7 +245,8 @@ export async function GET(request:Request){
         const bttsScale=calibratedBttsYes+calibratedBttsNo
         const bttsYes=bttsScale>0?calibratedBttsYes/bttsScale:rawBtts
         const bttsNo=1-bttsYes
-        const status=String(f.status??"scheduled").toLowerCase()\n        if(["postponed","cancelled","canceled","abandoned","suspended"].includes(status))continue
+        const status=String(f.status??"scheduled").toLowerCase()
+        if(["postponed","cancelled","canceled","abandoned","suspended"].includes(status))continue
         const live=status==="live"||status==="halftime"
         const finished=status==="finished"
         const scoreHome=Number(f?.score?.home)
