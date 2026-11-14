@@ -87,6 +87,8 @@ type ScorePlayer = {
   name: string
   dbName: string
   team: string
+  lineupStatus: "confirmed" | "predicted" | "squad"
+  lineupConfidence: string | null
   position: string | null
   sampleMatches: number
   sampleMinutes: number
@@ -918,14 +920,17 @@ export async function GET(request: Request) {
   } : null
 
   const confirmed = radar?.lineupsConfirmed === true
+  const lineupMode: "confirmed" | "predicted" | "squad" = confirmed ? "confirmed" : radar?.lineupMode === "predicted" ? "predicted" : "squad"
+  const predicted = lineupMode === "predicted"
+  const recommendationsAllowed = confirmed || predicted
   const players: ScorePlayer[] = candidates.map(candidate => {
     const allRows = history.filter(row => row.playerName === candidate.dbName && played(row))
-    const rows = confirmed ? starterRows(allRows) : allRows
+    const rows = recommendationsAllowed ? starterRows(allRows) : allRows
     const opponent = teamMatch(candidate.team, home) ? away : home
     const h2hRows = rows.filter(row => teamMatch(row.opponent, opponent))
     const recent5Rows = [...rows].sort((a, b) => String(a.matchDate).localeCompare(String(b.matchDate))).slice(-5)
     const sampleMinutes = rows.reduce((sum, row) => sum + Number(row.minutes ?? 0), 0)
-    const expectedMinutes = estimateExpectedMinutes(allRows,confirmed)
+    const expectedMinutes = estimateExpectedMinutes(allRows,recommendationsAllowed)
 
     const matchupCandidate = candidates.find(other => norm(other.name) === norm(candidate?.likelyMatchup?.name) || norm(other.dbName) === norm(candidate?.likelyMatchup?.name))
     const matchupFouls90 = Number(matchupCandidate?.fouls90 ?? 0)
@@ -1168,6 +1173,8 @@ export async function GET(request: Request) {
       name: candidate.name,
       dbName: candidate.dbName,
       team: candidate.team,
+      lineupStatus: lineupMode,
+      lineupConfidence: confirmed ? "official" : String(candidate?.predictedLineupConfidence ?? candidate?.sampleLabel ?? "predicted"),
       position: candidate.position ?? null,
       sampleMatches: rows.length,
       sampleMinutes,
@@ -1197,7 +1204,7 @@ export async function GET(request: Request) {
     return {
       ...slip,
       bookmaker,
-      placeable: confirmed && Boolean(bookmaker) && eligibleBooks.includes(bookmaker!) && slip.legs.every(leg=>leg.bookmakerOdds!=null),
+      placeable: recommendationsAllowed && Boolean(bookmaker) && eligibleBooks.includes(bookmaker!) && slip.legs.every(leg=>leg.bookmakerOdds!=null),
       marketAvailability: slip.legs.map(leg => ({
         player: leg.player,
         market: leg.market,
@@ -1205,17 +1212,17 @@ export async function GET(request: Request) {
       })),
     }
   })
-  // Bet slips are confirmation-gated. Pre-lineup player research may still be
-  // calculated above, but it must never be exposed as a bet slip.
-  const slips = confirmed ? enrichedRecommendationSlips : []
+  // Before official teams, use the probable XI. Once official lineups arrive,
+  // the radar swaps the candidate pool to confirmed starters and this scorecard rebuilds.
+  const slips = recommendationsAllowed ? enrichedRecommendationSlips : []
   const previewSlips: typeof enrichedRecommendationSlips = []
-  const riskBuilders = confirmed ? buildRiskBuilders(players) : []
+  const riskBuilders = recommendationsAllowed ? buildRiskBuilders(players) : []
   const foulRecommendations = buildFoulTargetSlips(players).map(slip => ({
     ...slip,
-    placeable: confirmed && slip.legs.length > 0 && Boolean(slip.bookmaker) && eligibleBooks.includes(slip.bookmaker!) && slip.usesLivePrices && slip.withinTargetRange,
+    placeable: recommendationsAllowed && slip.legs.length > 0 && Boolean(slip.bookmaker) && eligibleBooks.includes(slip.bookmaker!) && slip.usesLivePrices && slip.withinTargetRange,
     marketStatus: slip.bookmaker ? (bookmakerAvailability[slip.bookmaker]?.foul ?? "unknown") : "unknown",
   }))
-  const foulTargetSlips = confirmed ? foulRecommendations : []
+  const foulTargetSlips = recommendationsAllowed ? foulRecommendations : []
   const previewFoulTargetSlips: typeof foulRecommendations = []
 
   return NextResponse.json({
@@ -1225,7 +1232,10 @@ export async function GET(request: Request) {
     home,
     away,
     lineupsConfirmed: confirmed,
-    status: confirmed ? "confirmed-lineup-scorecard" : "pre-lineup-research",
+    lineupMode,
+    lineupSource: radar?.lineupSource ?? (confirmed ? "Official starting XI" : predicted ? "Probable XI" : "Current squad"),
+    predictedLineups: radar?.predictedLineups ?? null,
+    status: confirmed ? "confirmed-lineup-scorecard" : predicted ? "predicted-lineup-scorecard" : "pre-lineup-research",
     bookmaker: odds?.bookmaker ?? null,
     oddsSource: odds?.source ?? null,
     oddsCapturedAt,
@@ -1270,7 +1280,7 @@ export async function GET(request: Request) {
     previewFoulTargetSlips,
     methodology: {
       version: "scorecard-v2-calibrated",
-      description: "Player-level pre-match probabilities use only match rows dated before the target fixture. They combine domestic and international player history, recency, personal opponent-country H2H, expected minutes, direct positional matchup pressure, count-rate cross-checks, referee/card context and walk-forward calibration. International cards also receive a capped country-v-country H2H intensity adjustment when the prior sample is large enough.",
+      description: "Player-level pre-match probabilities use only match rows dated before the target fixture. Before official teams are released, the model uses a probable XI built from current squad availability, start rate, minutes and any stronger published predicted-XI source available. Once official lineups arrive, predicted starters are discarded and the scorecard is rebuilt from the confirmed XI. Probabilities combine domestic and international player history, recency, opponent H2H, expected minutes, matchup pressure, count-rate checks, referee/card context and walk-forward calibration.",
       cardConditional: "Yellow-card estimates measure each player's booking rate at 0 fouls, exactly 1, exactly 2, 3+, 1+ and 2+ foul states, with sample-size reliability. Match-level data still cannot identify the exact foul that triggered the booking.",
       calibrationWarning: "Displayed probabilities are adjusted through walk-forward calibration built from earlier-match-only predictions across 30 competitions. They remain estimates, not guarantees.",
       slipWarning: "Same-player and same-match legs can be correlated. Exact individual bookmaker foul lines are mirrored only when their threshold is explicitly present in the feed. Bet365's same-game Builder price is proprietary and is not labelled exact unless a bookmaker builder quote is supplied.",
