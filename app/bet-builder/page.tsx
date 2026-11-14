@@ -33,6 +33,14 @@ type LiveData={
   ok:boolean;source:string|null;status:"scheduled"|"live"|"halftime"|"finished"|"unknown";elapsed:number;
   score:{home:number|null;away:number|null};players:LivePlayerStat[];updatedAt:string
 }
+type H2HMeeting={
+  date:string;home:string;away:string;homeGoals:number;awayGoals:number;
+  scorers:Array<{player:string;team:string;goals:number;assists:number}>;
+  bookings:Array<{player:string;team:string;yellow:boolean;red:boolean}>;
+  players:Array<{player:string;team:string;minutes:number;goals:number;assists:number;foulsCommitted:number;foulsDrawn:number;shots:number;shotsOnTarget:number;yellow:boolean;red:boolean}>;
+  totals:{home:{yellow:number;red:number;fouls:number;shots:number;sot:number};away:{yellow:number;red:number;fouls:number;shots:number;sot:number}}
+}
+type H2HData={ok:boolean;source?:string;meetings:H2HMeeting[];count:number;error?:string}
 type RiskBuilder={
   id:string;title:string;risk:"Safe"|"Balanced"|"High Risk";targetFractional:string;targetDecimal:number;
   legs:Selection[];referenceProductOdds:number|null;averageLegProbability:number|null;minimumLegProbability:number|null;
@@ -71,6 +79,7 @@ function time(kickoff:string){return kickoff?new Intl.DateTimeFormat("en-GB",{ti
 function keyOf(s:Pick<Selection,"player"|"market"|"label">){return [s.player,s.market,s.label].join("|").toLowerCase()}
 function referenceOdd(s:Selection){return Number(s.bookmakerOdds??s.fairOdds??(s.probability>0?1/s.probability:0))}
 function liveUrl(f:Fixture){return "/api/live-player-stats?"+new URLSearchParams({date:f.date,home:f.home,away:f.away,competition:f.competition})}
+function h2hUrl(f:Fixture){return "/api/team-h2h?"+new URLSearchParams({date:f.date,home:f.home,away:f.away,competition:f.competition})}
 function normPlayer(v:string){return v.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim()}
 function thresholdForMarket(m:string){
   if(m==="card"||m.startsWith("goal"))return 1
@@ -217,6 +226,9 @@ export default function BetBuilderPage(){
   const[category,setCategory]=useState<Category>("popular")
   const[selected,setSelected]=useState<Record<string,Selection>>({})
   const[trayOpen,setTrayOpen]=useState(false)
+  const[h2hOpen,setH2hOpen]=useState(false)
+  const[h2hLoading,setH2hLoading]=useState(false)
+  const[h2hData,setH2hData]=useState<H2HData|null>(null)
 
   useEffect(()=>{setFixture(parseFixture())},[])
   const load=useCallback(async(f:Fixture)=>{setLoading(true);try{const r=await fetch(scorecardUrl(f),{cache:"no-store"});setData(await r.json().catch(()=>({ok:false,error:"Unable to load match model."})))}finally{setLoading(false)}},[])
@@ -229,6 +241,19 @@ export default function BetBuilderPage(){
     try{const r=await fetch(liveUrl(f),{cache:"no-store"});if(r.ok)setLive(await r.json())}catch{}
   },[])
   useEffect(()=>{if(!fixture)return;void loadLive(fixture);const t=window.setInterval(()=>void loadLive(fixture),30000);return()=>window.clearInterval(t)},[fixture,loadLive])
+  const toggleH2H=useCallback(async()=>{
+    if(!fixture)return
+    if(h2hOpen){setH2hOpen(false);return}
+    setH2hOpen(true)
+    if(h2hData)return
+    setH2hLoading(true)
+    try{
+      const r=await fetch(h2hUrl(fixture),{cache:"no-store"})
+      setH2hData(r.ok?await r.json():{ok:false,meetings:[],count:0,error:"Unable to load H2H history."})
+    }catch{
+      setH2hData({ok:false,meetings:[],count:0,error:"Unable to load H2H history."})
+    }finally{setH2hLoading(false)}
+  },[fixture,h2hOpen,h2hData])
 
   const preMatchRows=useMemo(()=>selectionsFrom(data),[data])
   const allRows=useMemo(()=>applyLive(preMatchRows,live),[preMatchRows,live])
@@ -287,12 +312,14 @@ export default function BetBuilderPage(){
         <div className="flex items-center gap-3">
           <button onClick={()=>router.push("/")} className="rounded-xl bg-white/7 p-2.5 text-white/70"><ArrowLeft className="size-4"/></button>
           <div className="min-w-0 flex-1"><div className="flex items-center gap-2 text-emerald-300"><Target className="size-4"/><span className="text-[0.6rem] font-black uppercase tracking-[0.15em]">Match Builder</span></div><h1 className="mt-1 truncate text-xl font-black">{fixture.home} <span className="text-white/25">v</span> {fixture.away}</h1><p className="mt-0.5 text-[0.58rem] text-white/35">{inPlay&&live?<span className="font-black text-rose-300">LIVE {live.elapsed}' · {live.score.home??"-"}-{live.score.away??"-"} · </span>:null}{fixture.competition} · {time(fixture.kickoff)}</p></div>
+          <button onClick={()=>void toggleH2H()} className={"rounded-xl border px-3 py-2.5 text-[0.55rem] font-black "+(h2hOpen?"border-emerald-300/30 bg-emerald-300 text-emerald-950":"border-white/10 bg-white/6 text-white/55")}>H2H</button>
           <button onClick={()=>void load(fixture)} className="rounded-xl bg-emerald-400 p-2.5 text-emerald-950"><RefreshCw className={"size-4 "+(loading?"animate-spin":"")}/></button>
         </div>
       </div>
     </header>
 
     <div className="mx-auto max-w-3xl space-y-5 px-4 py-4">
+      {h2hOpen?<H2HPanel data={h2hData} loading={h2hLoading} home={fixture.home} away={fixture.away}/>:null}
       {loading&&!data?<section className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center"><RefreshCw className="mx-auto mb-3 size-5 animate-spin text-emerald-300"/><p className="font-black">Ranking player markets…</p></section>:null}
       {data&&!data.ok?<section className="rounded-3xl border border-rose-300/15 bg-rose-400/5 p-5"><p className="font-black">Match model unavailable</p><p className="mt-1 text-sm text-white/40">{data.error}</p></section>:null}
 
@@ -322,6 +349,29 @@ export default function BetBuilderPage(){
 
     {selectedRows.length?<BuilderTray rows={selectedRows} referenceProduct={referenceProduct} modelProduct={modelProduct} risk={customRisk} open={trayOpen} setOpen={setTrayOpen} onRemove={row=>toggle(row)} onClear={()=>setSelected({})}/>:null}
   </main>
+}
+
+function H2HPanel({data,loading,home,away}:{data:H2HData|null;loading:boolean;home:string;away:string}){
+  return <section className="rounded-3xl border border-white/10 bg-white/[0.035] p-4">
+    <div className="flex items-start justify-between gap-3"><div><p className="text-[0.5rem] font-black uppercase tracking-[0.12em] text-emerald-300">Head to head</p><h2 className="mt-1 text-base font-black">{home} v {away}</h2><p className="mt-1 text-[0.55rem] text-white/35">Scores, scorers, bookings and player match stats from previous meetings.</p></div>{data?.source?<span className="rounded-full bg-white/6 px-2 py-1 text-[0.4rem] font-black text-white/25">{data.source}</span>:null}</div>
+    {loading?<div className="py-8 text-center"><RefreshCw className="mx-auto size-5 animate-spin text-emerald-300"/><p className="mt-2 text-xs text-white/35">Loading H2H history…</p></div>:data?.meetings?.length?<div className="mt-4 space-y-3">{data.meetings.map(m=><H2HMeetingCard key={m.date} meeting={m}/>)}</div>:<p className="mt-4 rounded-2xl bg-black/20 px-3 py-5 text-center text-xs text-white/35">{data?.error??"No tracked previous meetings found in the current history source."}</p>}
+  </section>
+}
+function H2HMeetingCard({meeting:m}:{meeting:H2HMeeting}){
+  const[open,setOpen]=useState(false)
+  const fmt=new Intl.DateTimeFormat("en-GB",{day:"2-digit",month:"short",year:"numeric"}).format(new Date(m.date+"T12:00:00Z"))
+  return <article className="overflow-hidden rounded-2xl border border-white/8 bg-black/20">
+    <button onClick={()=>setOpen(v=>!v)} className="w-full p-3 text-left">
+      <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3"><p className="font-mono text-[0.5rem] text-white/30">{fmt}</p><p className="truncate text-xs font-black">{m.home} <span className="text-white/25">v</span> {m.away}</p><p className="font-mono text-lg font-black">{m.homeGoals}-{m.awayGoals}</p></div>
+      <div className="mt-2 grid grid-cols-2 gap-2"><div className="rounded-xl bg-white/[0.04] px-2 py-1.5"><p className="text-[0.44rem] font-black uppercase text-white/25">Scorers</p><p className="mt-1 text-[0.52rem] text-white/55">{m.scorers.length?m.scorers.map(s=>s.player+(s.goals>1?" x"+s.goals:"")).join(", "):"None tracked"}</p></div><div className="rounded-xl bg-white/[0.04] px-2 py-1.5"><p className="text-[0.44rem] font-black uppercase text-white/25">Booked</p><p className="mt-1 text-[0.52rem] text-white/55">{m.bookings.length?m.bookings.map(b=>b.player+(b.red?" 🟥":" 🟨")).join(", "):"None tracked"}</p></div></div>
+      <div className="mt-2 grid grid-cols-2 gap-2"><H2HTeamTotals label={m.home} x={m.totals.home}/><H2HTeamTotals label={m.away} x={m.totals.away}/></div>
+      <p className="mt-2 text-center text-[0.44rem] font-black uppercase text-white/20">{open?"Hide player stats":"Show player fouls / shots / SOT"}</p>
+    </button>
+    {open?<div className="border-t border-white/8 p-2"><div className="grid grid-cols-[1fr_repeat(5,auto)] gap-x-2 px-2 pb-1 text-[0.38rem] font-black uppercase text-white/20"><span>Player</span><span>F</span><span>FD</span><span>SH</span><span>SOT</span><span>YC</span></div>{m.players.map(p=><div key={p.team+"|"+p.player} className="grid grid-cols-[1fr_repeat(5,auto)] items-center gap-x-2 border-t border-white/[0.045] px-2 py-1.5 text-[0.48rem]"><span className="min-w-0 truncate text-white/55">{p.player}<span className="ml-1 text-white/20">{p.team}</span></span><span className="font-mono">{p.foulsCommitted}</span><span className="font-mono">{p.foulsDrawn}</span><span className="font-mono">{p.shots}</span><span className="font-mono">{p.shotsOnTarget}</span><span className="font-mono">{p.yellow?"1":"0"}</span></div>)}</div>:null}
+  </article>
+}
+function H2HTeamTotals({label,x}:{label:string;x:{yellow:number;red:number;fouls:number;shots:number;sot:number}}){
+  return <div className="rounded-xl bg-white/[0.04] px-2 py-1.5"><p className="truncate text-[0.45rem] font-black text-white/35">{label}</p><p className="mt-1 font-mono text-[0.48rem] text-white/55">{x.fouls} fouls · {x.shots} shots · {x.sot} SOT · {x.yellow} YC{x.red?" · "+x.red+" RC":""}</p></div>
 }
 
 function RiskCard({build,onUse}:{build:RiskBuilder;onUse:()=>void}){
