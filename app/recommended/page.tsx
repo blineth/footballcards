@@ -23,12 +23,14 @@ type SlipLeg = {
   probability:number
   fairOdds:number|null
   bookmakerOdds:number|null
+  bookmakerName?:string|null
   edge:number|null
   confidence:"A"|"B"|"C"|"D"
   reason:string
 }
 type BetSlip = {
   id:string
+  bookmaker?:string|null
   title:string
   risk:string
   legs:SlipLeg[]
@@ -38,6 +40,7 @@ type BetSlip = {
 }
 type FoulTargetSlip = {
   id:string
+  bookmaker?:string|null
   targetFractional:string
   legs:SlipLeg[]
   averageLegProbability:number|null
@@ -49,6 +52,7 @@ type Scorecard = {
   lineupsConfirmed?:boolean
   bookmaker?:string|null
   marketAvailability?:{card:MarketStatus;foul:MarketStatus;fouled:MarketStatus;shot:MarketStatus;sot:MarketStatus}
+  eligibleBooks?:string[]
   slips?:BetSlip[]
   previewSlips?:BetSlip[]
   foulTargetSlips?:FoulTargetSlip[]
@@ -100,8 +104,8 @@ function rankSlip(slip:BetSlip|FoulTargetSlip,confirmed:boolean,placeable:boolea
 function blockedReason(scorecard:Scorecard,slip:BetSlip|FoulTargetSlip,kind:"standard"|"foul"){
   if(kind==="foul"){
     const status=(slip as FoulTargetSlip).marketStatus??scorecard.marketAvailability?.foul??"unknown"
-    if(status==="unavailable")return "Bet365 foul market unavailable for this fixture"
-    if(status==="unknown")return "Foul market not verified on the free bookmaker feed"
+    if(status==="unavailable")return "Foul market unavailable at the selected bookmaker"
+    if(status==="unknown")return "Foul market not verified at the selected bookmaker"
     return null
   }
   const statuses=(slip as BetSlip).marketAvailability??[]
@@ -148,14 +152,14 @@ export default function RecommendedPage(){
           const scorecard=await r.json() as Scorecard
           if(!scorecard.ok)return [] as Recommendation[]
           const confirmed=Boolean(scorecard.lineupsConfirmed)
-          const fixtureEligible=scorecard.marketAvailability?.card==="available"&&scorecard.marketAvailability?.foul==="available"
+          const fixtureEligible=(scorecard.eligibleBooks?.length??0)>0
           if(!fixtureEligible)return [] as Recommendation[]
           const standards=confirmed?(scorecard.slips??[]):(scorecard.previewSlips??[])
           const fouls=confirmed?(scorecard.foulTargetSlips??[]):(scorecard.previewFoulTargetSlips??[])
           const candidates:Recommendation[]=[]
 
           for(const slip of standards){
-            if(!slip.legs?.length)continue
+            if(!slip.legs?.length||!slip.bookmaker)continue
             const blocked=blockedReason(scorecard,slip,"standard")
             const placeable=Boolean((slip as BetSlip).placeable)&&!blocked
             candidates.push({
@@ -167,7 +171,7 @@ export default function RecommendedPage(){
             })
           }
 
-          const preferredFoul=fouls.find(s=>s.id==="foul-3-1")??fouls[0]
+          const preferredFoul=fouls.filter(s=>s.bookmaker&&s.legs?.length).sort((a,b)=>rankSlip(b,confirmed,Boolean(b.placeable))-rankSlip(a,confirmed,Boolean(a.placeable)))[0]
           if(preferredFoul?.legs?.length){
             const blocked=blockedReason(scorecard,preferredFoul,"foul")
             const placeable=Boolean(preferredFoul.placeable)&&!blocked
@@ -222,16 +226,17 @@ function RecommendationCard({rec,hero=false}:{rec:Recommendation;hero?:boolean})
   const[open,setOpen]=useState(hero)
   const legs=slipLegs(rec.slip)
   const avg=avgProbability(rec.slip)
+  const bookmaker=(rec.slip as BetSlip|FoulTargetSlip).bookmaker??null
   const title=rec.kind==="foul"?"Foul builder "+(rec.slip as FoulTargetSlip).targetFractional:(rec.slip as BetSlip).title
   return <article className={"overflow-hidden rounded-3xl border "+(hero?"border-violet-300/25 bg-gradient-to-br from-violet-500/20 to-black/30":"border-white/10 bg-white/[0.04]")}>
     <button onClick={()=>setOpen(x=>!x)} className="w-full p-4 text-left">
       <div className="flex items-start justify-between gap-3">
-        <div><div className="flex flex-wrap gap-1.5"><span className={"rounded-full px-2 py-1 text-[0.5rem] font-black "+(rec.confirmed?"bg-emerald-400 text-emerald-950":"bg-amber-300 text-amber-950")}>{rec.confirmed?"CONFIRMED XI":"PROVISIONAL"}</span>{hero?<span className="rounded-full bg-violet-300 px-2 py-1 text-[0.5rem] font-black text-violet-950">TOP PICK</span>:null}</div><p className="mt-2 text-[0.58rem] font-black uppercase text-white/30">{rec.fixture.competition} · {time(rec.fixture)}</p><h2 className="mt-1 text-lg font-black">{rec.fixture.home.name} <span className="text-white/25">v</span> {rec.fixture.away.name}</h2><p className="mt-2 text-sm font-black">{title}</p></div>
+        <div><div className="flex flex-wrap gap-1.5"><span className={"rounded-full px-2 py-1 text-[0.5rem] font-black "+(rec.confirmed?"bg-emerald-400 text-emerald-950":"bg-amber-300 text-amber-950")}>{rec.confirmed?"CONFIRMED XI":"PROVISIONAL"}</span>{hero?<span className="rounded-full bg-violet-300 px-2 py-1 text-[0.5rem] font-black text-violet-950">TOP PICK</span>:null}</div><p className="mt-2 text-[0.58rem] font-black uppercase text-white/30">{rec.fixture.competition} · {time(rec.fixture)}</p><h2 className="mt-1 text-lg font-black">{rec.fixture.home.name} <span className="text-white/25">v</span> {rec.fixture.away.name}</h2><p className="mt-2 text-sm font-black">{title}</p>{bookmaker?<p className="mt-1 text-[0.58rem] font-black text-violet-300">{bookmaker}</p>:null}</div>
         <div className="text-right"><p className="font-mono text-2xl font-black">{percent(avg)}</p><p className="text-[0.44rem] uppercase text-white/30">avg leg strength</p></div>
       </div>
 
       <div className="mt-3 rounded-2xl bg-black/20 p-3">
-        <div className="flex items-start gap-2"><Sparkles className="mt-0.5 size-4 shrink-0 text-violet-300"/><p className="text-[0.67rem] leading-relaxed text-white/55">{rec.kind==="foul"?"The model has found a cluster of high-probability 1+ foul players in this fixture. It ranks highly because the weakest leg still clears the foul-builder threshold and the confirmed/provisional lineup profile is strong.":"This is currently the strongest slip profile across the scanned fixtures after calibrated probability, weakest-leg strength, confidence grade, number of legs and lineup certainty are considered together."}</p></div>
+        <div className="flex items-start gap-2"><Sparkles className="mt-0.5 size-4 shrink-0 text-violet-300"/><p className="text-[0.67rem] leading-relaxed text-white/55">{rec.kind==="foul"?"The model has found the strongest exact foul thresholds offered by one preferred bookmaker in this fixture. It ranks highly because the weakest leg still clears the foul-builder threshold and the lineup profile is strong.":"This is currently the strongest slip profile across the scanned fixtures after calibrated probability, weakest-leg strength, confidence grade, number of legs and lineup certainty are considered together."}</p></div>
       </div>
 
       <div className="mt-3 flex items-center justify-between gap-3">
@@ -241,6 +246,6 @@ function RecommendationCard({rec,hero=false}:{rec:Recommendation;hero?:boolean})
       {rec.blockedReason?<p className="mt-2 rounded-xl bg-amber-300/10 px-3 py-2 text-[0.6rem] text-amber-100">{rec.blockedReason}</p>:null}
     </button>
 
-    {open?<div className="border-t border-white/8 bg-black/20 p-4"><div className="space-y-2">{legs.map((leg,i)=><div key={leg.player+"|"+leg.market+"|"+i} className="rounded-2xl bg-white/[0.055] p-3"><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-black">{leg.player} · {leg.label}</p><p className="mt-0.5 text-[0.56rem] text-white/35">{leg.team} · Grade {leg.confidence}</p></div><p className="font-mono text-base font-black">{percent(leg.probability)}</p></div><p className="mt-2 text-[0.62rem] leading-relaxed text-white/45">{leg.reason}</p></div>)}</div></div>:null}
+    {open?<div className="border-t border-white/8 bg-black/20 p-4"><div className="space-y-2">{legs.map((leg,i)=><div key={leg.player+"|"+leg.market+"|"+i} className="rounded-2xl bg-white/[0.055] p-3"><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-black">{leg.player} · {leg.label}</p><p className="mt-0.5 text-[0.56rem] text-white/35">{leg.team} · Grade {leg.confidence}{leg.bookmakerName?" · "+leg.bookmakerName:""}</p></div><p className="font-mono text-base font-black">{percent(leg.probability)}</p></div><p className="mt-2 text-[0.62rem] leading-relaxed text-white/45">{leg.reason}</p></div>)}</div></div>:null}
   </article>
 }
