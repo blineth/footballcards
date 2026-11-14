@@ -122,6 +122,7 @@ type SlipLeg = {
   expectedValue: number | null
   confidence: "A" | "B" | "C" | "D"
   reason: string
+  priceSource?: "exact" | "estimated" | null
 }
 
 type FoulTargetSlip = {
@@ -514,6 +515,7 @@ function marketLeg(player: ScorePlayer, market: MarketKey): SlipLeg {
     expectedValue: m.expectedValue,
     confidence: m.confidence,
     reason: m.reasons[0] ?? "",
+    priceSource: m.bookmakerOdds!=null ? "exact" : null,
   }
 }
 function legRank(leg: SlipLeg) {
@@ -568,6 +570,7 @@ function buildFoulTargetSlips(players: ScorePlayer[]): FoulTargetSlip[] {
       expectedValue:line.expectedValue,
       confidence:line.confidence,
       reason:(line.priceSource==="exact"?"Exact":"Estimated")+" "+line.threshold+"+ foul price at "+line.bookmaker+" "+line.bookmakerOdds.toFixed(2),
+      priceSource:line.priceSource,
     }))
   )
     .filter(leg=>leg.confidence!=="D")
@@ -648,9 +651,12 @@ function buildFoulTargetSlips(players: ScorePlayer[]): FoulTargetSlip[] {
       averageLegProbability:Math.round(avg*1000)/1000,
       minimumLegProbability:Math.round(min*1000)/1000,
       pricedLegs:best.legs.length,
-      usesLivePrices:true,
+      usesLivePrices:best.legs.every(leg=>leg.priceSource==="exact"),
       withinTargetRange:best.product>=target.decimal*0.72&&best.product<=target.decimal*1.45,
-      note:"Every leg in this builder is offered by "+best.bookmaker+". The displayed reference product multiplies individual prices only; the bookmaker's same-game correlation adjustment may change the final Bet Builder price.",
+      note:(best.legs.every(leg=>leg.priceSource==="exact")
+        ?"Every leg in this builder is an exact offered line from "+best.bookmaker+". "
+        :"This builder contains one or more estimated prices for "+best.bookmaker+" and must be checked in the bookmaker before placing. ")
+        +"The displayed reference product multiplies individual prices only; the bookmaker's same-game correlation adjustment may change the final Bet Builder price.",
     }
   })
 }
@@ -1005,7 +1011,7 @@ export async function GET(request: Request) {
   const previewSlips = confirmed ? [] : enrichedRecommendationSlips
   const foulRecommendations = buildFoulTargetSlips(players).map(slip => ({
     ...slip,
-    placeable: confirmed && slip.legs.length > 0 && Boolean(slip.bookmaker) && eligibleBooks.includes(slip.bookmaker!),
+    placeable: confirmed && slip.legs.length > 0 && Boolean(slip.bookmaker) && eligibleBooks.includes(slip.bookmaker!) && slip.usesLivePrices,
     marketStatus: slip.bookmaker ? (bookmakerAvailability[slip.bookmaker]?.foul ?? "unknown") : "unknown",
   }))
   const foulTargetSlips = confirmed ? foulRecommendations : []
