@@ -252,11 +252,20 @@ function playerInLabel(selection: OddSelection, player: string) {
   return Boolean(p && (hay.includes(p) || (surname.length >= 4 && hay.includes(surname))))
 }
 function selectionThreshold(selection: OddSelection) {
-  const raw = (selection.market + " " + selection.label).toLowerCase()
-  const plus = raw.match(/(?:^|\s)([123])\s*\+/)
+  const raw = norm(selection.market + " " + selection.label)
+  const plus = raw.match(/(?:^|\s)([123])\s*(?:plus|\+)/)
   if (plus) return Number(plus[1])
-  const over = raw.match(/over\s*([012])(?:\.5)?/)
-  if (over) return Number(over[1]) + 1
+
+  const overHalf = raw.match(/\bover\s*([012])\s*5\b/)
+  if (overHalf) return Number(overHalf[1]) + 1
+
+  const orMore = raw.match(/\b([123])\s*(?:or more|or over|and over|and above)\b/)
+  if (orMore) return Number(orMore[1])
+
+  const atLeast = raw.match(/\b(?:at least|minimum)\s*([123])\b/)
+  if (atLeast) return Number(atLeast[1])
+
+  if (/\bto commit (?:a|one) foul\b|\b1 foul committed\b|\bone foul committed\b/.test(raw)) return 1
   return null
 }
 function findOdds(selections: OddSelection[], player: string, market: MarketKey) {
@@ -265,7 +274,13 @@ function findOdds(selections: OddSelection[], player: string, market: MarketKey)
   const candidates = selections
     .filter(s => s.odd != null && Number(s.odd) > 1 && s.kind === desiredKind && playerInLabel(s, player))
     .map(s => ({ ...s, detectedThreshold: selectionThreshold(s) }))
-    .filter(s => market === "card" || s.detectedThreshold == null || s.detectedThreshold === threshold)
+    .filter(s => {
+      if (market === "card") return true
+      // Never attach a bookmaker price to a count market unless the exact line
+      // can be read from the bookmaker feed. This prevents a generic foul price
+      // being displayed as 1+, 2+ or 3+ by mistake.
+      return s.detectedThreshold === threshold
+    })
     .sort((a, b) => Number(b.odd ?? 0) - Number(a.odd ?? 0))
   return candidates[0] ?? null
 }
