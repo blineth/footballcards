@@ -1,6 +1,7 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 import { NextResponse } from "next/server"
+import { and, eq } from "drizzle-orm"
 import { db, isDatabaseConfigured } from "@/lib/db"
 import { ensureResearchSchema } from "@/lib/db/ensure-research-schema"
 import {
@@ -82,10 +83,16 @@ function mapped(dataset: Dataset, r: Record<string, string>) {
         minutes: int(r.minutes),
         yellowCards: int(r.yellow_cards),
         redCards: int(r.red_cards),
+        goals: int(r.goals),
+        assists: int(r.assists),
         foulsCommitted: int(r.fouls_committed),
         foulsDrawn: int(r.fouls_drawn),
+        shots: int(r.shots),
+        shotsOnTarget: int(r.shots_on_target),
         foulsPer90: dec(r.fouls_per_90),
         cardsPer90: dec(r.cards_per_90),
+        shotsPer90: dec(r.shots_per_90),
+        shotsOnTargetPer90: dec(r.shots_on_target_per_90),
         position: str(r.position),
         externalPlayerId: str(r.external_player_id),
       }
@@ -102,6 +109,10 @@ function mapped(dataset: Dataset, r: Record<string, string>) {
         foulsDrawn: int(r.fouls_drawn),
         yellowCard: bool(r.yellow_card),
         redCard: bool(r.red_card),
+        goals: int(r.goals),
+        assists: int(r.assists),
+        shots: int(r.shots),
+        shotsOnTarget: int(r.shots_on_target),
         externalPlayerId: str(r.external_player_id),
       }
     case "referees":
@@ -166,6 +177,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false, error: "Safety check failed: file is not Championship-only." }, { status: 409 })
   }
 
+  if (dataset === "player_baselines" && offset === 0) {
+    const seasons = Array.from(new Set(all.map((r) => r.season).filter(Boolean)))
+    for (const season of seasons) {
+      await db.delete(playerBaselines).where(and(eq(playerBaselines.competition, "Championship"), eq(playerBaselines.season, season)))
+    }
+  }
+
   const slice = all.slice(offset, offset + limit)
   if (!slice.length) {
     return NextResponse.json({ ok: true, ready: true, dataset, total: all.length, offset, processed: 0, done: true })
@@ -188,7 +206,7 @@ export async function GET(request: Request) {
     nextOffset,
     done: nextOffset >= all.length,
     competition: "Championship",
-    season: "2025/26",
+    season: Array.from(new Set(all.map((r) => r.season).filter(Boolean))).join(", "),
     replacedPremierLeague: false,
   })
 }
