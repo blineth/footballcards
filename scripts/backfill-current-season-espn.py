@@ -183,26 +183,39 @@ def participation_minutes(summary: dict[str, Any]) -> dict[str, int]:
 
 def collect_events(slug: str) -> list[dict[str, Any]]:
     base = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{slug}"
-    days: list[date] = []
-    d = START_DATE
-    while d <= END_DATE:
-        days.append(d)
-        d += timedelta(days=1)
+    months: list[str] = []
+    year, month = START_DATE.year, START_DATE.month
+    while year < END_DATE.year or (year == END_DATE.year and month <= END_DATE.month):
+        months.append(f"{year}{month:02d}")
+        month += 1
+        if month > 12:
+            month = 1
+            year += 1
 
     events: dict[str, dict[str, Any]] = {}
 
-    def load(day: date):
-        key = day.strftime("%Y%m%d")
-        data = cached_get(f"{base}/scoreboard?dates={key}", f"{slug}-scoreboard-{key}")
+    def load(key: str):
+        data = cached_get(f"{base}/scoreboard?dates={key}&limit=500", f"{slug}-scoreboard-month-{key}")
         return data.get("events") or []
 
-    with ThreadPoolExecutor(max_workers=12) as ex:
-        futures = [ex.submit(load, d) for d in days]
+    failures: list[dict[str, str]] = []
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        futures = {ex.submit(load, key): key for key in months}
         for future in as_completed(futures):
-            for event in future.result():
+            key = futures[future]
+            try:
+                rows = future.result()
+            except Exception as exc:
+                failures.append({"month": key, "error": str(exc)})
+                continue
+            for event in rows:
                 eid = str(event.get("id") or "")
-                if eid and event_finished(event):
+                played = event_date(event)
+                if eid and event_finished(event) and START_DATE.isoformat() <= played <= END_DATE.isoformat():
                     events[eid] = event
+
+    if failures:
+        raise RuntimeError(f"{slug} scoreboard months failed: {failures}")
 
     return sorted(events.values(), key=lambda e: (event_date(e), str(e.get("id") or "")))
 
