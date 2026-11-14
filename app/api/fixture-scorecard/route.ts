@@ -44,6 +44,7 @@ type OfferedFoulLine = {
   calibrated: boolean
   sampleMatches: number
   confidence: "A" | "B" | "C" | "D"
+  priceSource: "exact" | "estimated"
 }
 
 type OfferedCardLine = {
@@ -102,6 +103,7 @@ type ScorePlayer = {
   }
   markets: Record<MarketKey, ScoreMarket>
   offeredFoulLines: OfferedFoulLine[]
+  likelyFoulLines: OfferedFoulLine[]
   offeredCardLines: OfferedCardLine[]
 }
 
@@ -458,6 +460,17 @@ function dynamicFoulProbability(input:{
 function fairOdds(probability: number) {
   return probability > 0 ? Math.round((1 / probability) * 100) / 100 : null
 }
+function roundLikelyBookOdds(value:number){
+  if(!Number.isFinite(value)||value<=1)return 1.01
+  const step=value<2?0.01:value<4?0.02:value<8?0.05:0.1
+  return Math.max(1.01,Math.round(value/step)*step)
+}
+function median(values:number[]){
+  if(!values.length)return null
+  const sorted=[...values].sort((a,b)=>a-b)
+  const mid=Math.floor(sorted.length/2)
+  return sorted.length%2?sorted[mid]:(sorted[mid-1]+sorted[mid])/2
+}
 function marketReasons(input: {
   market: MarketKey
   probability: number
@@ -540,7 +553,7 @@ function buildFoulTargetSlips(players: ScorePlayer[]): FoulTargetSlip[] {
   ] as const
 
   const pool:SlipLeg[] = players.flatMap(player =>
-    player.offeredFoulLines.map(line => ({
+    player.likelyFoulLines.map(line => ({
       player:player.name,
       team:player.team,
       market:(("foul"+line.threshold) as SlipMarketKey),
@@ -554,7 +567,7 @@ function buildFoulTargetSlips(players: ScorePlayer[]): FoulTargetSlip[] {
       edge:line.edge,
       expectedValue:line.expectedValue,
       confidence:line.confidence,
-      reason:"Exact "+line.threshold+"+ foul line offered by "+line.bookmaker+" at "+line.bookmakerOdds.toFixed(2),
+      reason:(line.priceSource==="exact"?"Exact":"Estimated")+" "+line.threshold+"+ foul price at "+line.bookmaker+" "+line.bookmakerOdds.toFixed(2),
     }))
   )
     .filter(leg=>leg.confidence!=="D")
@@ -867,6 +880,86 @@ export async function GET(request: Request) {
       }
     }
 
+    const offeredCardLines=exactCardSelections(usableSelections,candidate.name,candidates.map(x=>String(x.name??""))).map(selection=>{
+      const probability=markets.card.probability
+      const bookmakerOdds=Number(selection.odd)
+      const impliedProbability=1/bookmakerOdds
+      return {
+        bookmaker:selection.bookmaker ?? "UK bookmaker",
+        bookmakerOdds,
+        bookmakerMarket:selection.market,
+        bookmakerLabel:selection.label,
+        probability,
+        fairOdds:fairOdds(probability),
+        edge:Math.round((probability-impliedProbability)*1000)/1000,
+        expectedValue:Math.round((probability*bookmakerOdds-1)*1000)/1000,
+        confidence,
+      }
+    })
+
+    const offeredFoulLines:OfferedFoulLine[]=exactFoulSelections(usableSelections, candidate.name, candidates.map(x=>String(x.name??""))).map(({threshold,selection})=>{
+      const standardKey = threshold>=1&&threshold<=5 ? ("foul"+threshold) as MarketKey : null
+      const probability = standardKey
+        ? markets[standardKey].probability
+        : dynamicFoulProbability({rows,threshold,per90:Number(candidate.fouls90??0),expectedMinutes,matchupFouled90})
+      const bookmakerOdds=Number(selection.odd)
+      const impliedProbability=1/bookmakerOdds
+      return {
+        threshold,
+        label:threshold+"+ fouls committed",
+        bookmakerMarket:selection.market,
+        bookmakerLabel:selection.label,
+        bookmakerOdds,
+        previousBookmakerOdds:selection.previousOdd==null?null:Number(selection.previousOdd),
+        bookmakerMovement:selection.movement==null?null:Number(selection.movement),
+        bookmaker:selection.bookmaker ?? odds?.bookmaker ?? "UK bookmaker",
+        impliedProbability:Math.round(impliedProbability*1000)/1000,
+        probability:Math.round(probability*1000)/1000,
+        fairOdds:fairOdds(probability),
+        edge:Math.round((probability-impliedProbability)*1000)/1000,
+        expectedValue:Math.round((probability*bookmakerOdds-1)*1000)/1000,
+        calibrated:Boolean(standardKey && (calibrationSnapshot as any)?.global?.[standardKey]),
+        sampleMatches:rows.length,
+        confidence,
+        priceSource:"exact" as const,
+      }
+    })
+
+    const likelyFoulLines:OfferedFoulLine[]=[...offeredFoulLines]
+    for(const bookmaker of eligibleBooks){
+      const exactForBook=offeredFoulLines.filter(line=>line.bookmaker===bookmaker)
+      const marginSamples=exactForBook
+        .map(line=>line.probability>0?(1/line.bookmakerOdds)/line.probability:0)
+        .filter(v=>v>=0.95&&v<=1.35)
+      const margin=Math.max(1.02,Math.min(1.18,median(marginSamples)??1.075))
+      for(let threshold=1;threshold<=5;threshold++){
+        if(exactForBook.some(line=>line.threshold===threshold))continue
+        const key=("foul"+threshold) as MarketKey
+        const probability=markets[key].probability
+        const bookmakerOdds=roundLikelyBookOdds(1/Math.min(.985,probability*margin))
+        const impliedProbability=1/bookmakerOdds
+        likelyFoulLines.push({
+          threshold,
+          label:threshold+"+ fouls committed",
+          bookmakerMarket:"Estimated player fouls",
+          bookmakerLabel:threshold+"+ fouls committed",
+          bookmakerOdds,
+          previousBookmakerOdds:null,
+          bookmakerMovement:null,
+          bookmaker,
+          impliedProbability:Math.round(impliedProbability*1000)/1000,
+          probability,
+          fairOdds:fairOdds(probability),
+          edge:Math.round((probability-impliedProbability)*1000)/1000,
+          expectedValue:Math.round((probability*bookmakerOdds-1)*1000)/1000,
+          calibrated:Boolean((calibrationSnapshot as any)?.global?.[key]),
+          sampleMatches:rows.length,
+          confidence,
+          priceSource:"estimated",
+        })
+      }
+    }
+
     return {
       name: candidate.name,
       dbName: candidate.dbName,
@@ -887,54 +980,9 @@ export async function GET(request: Request) {
         after3PlusFouls: cond3,
       },
       markets,
-      offeredCardLines: exactCardSelections(usableSelections,candidate.name,candidates.map(x=>String(x.name??""))).map(selection=>{
-        const probability=markets.card.probability
-        const bookmakerOdds=Number(selection.odd)
-        const impliedProbability=1/bookmakerOdds
-        return {
-          bookmaker:selection.bookmaker ?? "UK bookmaker",
-          bookmakerOdds,
-          bookmakerMarket:selection.market,
-          bookmakerLabel:selection.label,
-          probability,
-          fairOdds:fairOdds(probability),
-          edge:Math.round((probability-impliedProbability)*1000)/1000,
-          expectedValue:Math.round((probability*bookmakerOdds-1)*1000)/1000,
-          confidence,
-        }
-      }),
-      offeredFoulLines: exactFoulSelections(usableSelections, candidate.name, candidates.map(x=>String(x.name??""))).map(({threshold,selection})=>{
-        const standardKey = threshold>=1&&threshold<=5 ? ("foul"+threshold) as MarketKey : null
-        const probability = standardKey
-          ? markets[standardKey].probability
-          : dynamicFoulProbability({
-              rows,
-              threshold,
-              per90:Number(candidate.fouls90??0),
-              expectedMinutes,
-              matchupFouled90,
-            })
-        const bookmakerOdds=Number(selection.odd)
-        const impliedProbability=1/bookmakerOdds
-        return {
-          threshold,
-          label:threshold+"+ fouls committed",
-          bookmakerMarket:selection.market,
-          bookmakerLabel:selection.label,
-          bookmakerOdds,
-          previousBookmakerOdds:selection.previousOdd==null?null:Number(selection.previousOdd),
-          bookmakerMovement:selection.movement==null?null:Number(selection.movement),
-          bookmaker:selection.bookmaker ?? odds?.bookmaker ?? "UK bookmaker",
-          impliedProbability:Math.round(impliedProbability*1000)/1000,
-          probability:Math.round(probability*1000)/1000,
-          fairOdds:fairOdds(probability),
-          edge:Math.round((probability-impliedProbability)*1000)/1000,
-          expectedValue:Math.round((probability*bookmakerOdds-1)*1000)/1000,
-          calibrated:Boolean(standardKey && (calibrationSnapshot as any)?.global?.[standardKey]),
-          sampleMatches:rows.length,
-          confidence,
-        }
-      }),
+      offeredCardLines,
+      offeredFoulLines,
+      likelyFoulLines,
     }
   }).sort((a, b) => b.markets.foul1.probability - a.markets.foul1.probability)
 
@@ -990,6 +1038,12 @@ export async function GET(request: Request) {
       position:player.position,
       ...line,
     }))).sort((a,b)=>(b.edge-a.edge)||(b.probability-a.probability)),
+    estimatedFoulOffers: players.flatMap(player => player.likelyFoulLines.filter(line=>line.priceSource==="estimated").map(line => ({
+      player:player.name,
+      team:player.team,
+      position:player.position,
+      ...line,
+    }))).sort((a,b)=>(b.edge-a.edge)||(b.probability-a.probability)),
     exactFoulOffers: players.flatMap(player => player.offeredFoulLines.map(line => ({
       player: player.name,
       team: player.team,
@@ -1006,7 +1060,7 @@ export async function GET(request: Request) {
       cardConditional: "Yellow-card estimates measure each player's booking rate at 0 fouls, exactly 1, exactly 2, 3+, 1+ and 2+ foul states, with sample-size reliability. Match-level data still cannot identify the exact foul that triggered the booking.",
       calibrationWarning: "Displayed probabilities are adjusted through walk-forward calibration built from earlier-match-only predictions across 30 competitions. They remain estimates, not guarantees.",
       slipWarning: "Same-player and same-match legs can be correlated. Exact individual bookmaker foul lines are mirrored only when their threshold is explicitly present in the feed. Bet365's same-game Builder price is proprietary and is not labelled exact unless a bookmaker builder quote is supplied.",
-      priceFreshness: "Free-tier bookmaker snapshots are cached to protect API quotas. Fresh snapshots under two minutes are LIVE; recent cached snapshots remain usable for market availability and reference pricing until their free-tier cache window expires.",
+      priceFreshness: "Exact prices come from the preferred bookmaker feed. When a bookmaker's foul market is verified but a specific threshold price is missing, a clearly labelled estimate is derived from the model probability and that bookmaker's observed margin on the player's other foul lines.",
     },
     generatedAt: new Date().toISOString(),
   })
