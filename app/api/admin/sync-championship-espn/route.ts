@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { and, eq, gte } from "drizzle-orm"
 import { db, isDatabaseConfigured } from "@/lib/db"
 import { ensureResearchSchema } from "@/lib/db/ensure-research-schema"
 import { playerH2H } from "@/lib/db/schema"
@@ -100,6 +101,9 @@ export async function GET(request: Request) {
 
   try {
     const all = await completedEvents()
+    if (offset === 0) {
+      await db.delete(playerH2H).where(and(eq(playerH2H.competition, "Championship"), gte(playerH2H.matchDate, SEASON_START)))
+    }
     const selected = all.slice(offset, offset + limit)
     const results = await Promise.all(selected.map(async (event: any) => {
       const id = String(event?.id ?? "")
@@ -150,14 +154,7 @@ export async function GET(request: Request) {
         const rows = match.rows.slice(i, i + 250)
         if (!rows.length) continue
         rowCount += rows.length
-        await db.insert(playerH2H).values(rows).onConflictDoUpdate({
-          target: [playerH2H.playerName, playerH2H.team, playerH2H.opponent, playerH2H.matchDate, playerH2H.competition],
-          set: {
-            minutes: rows[0]?.minutes,
-          },
-        }).catch(async () => {
-          await db.insert(playerH2H).values(rows).onConflictDoNothing()
-        })
+        await db.insert(playerH2H).values(rows).onConflictDoNothing()
       }
     }
 
