@@ -7,7 +7,7 @@ import calibrationSnapshot from "@/data/model/calibration.json"
 import { snapshotPlayersForFixture, internationalPlayersForFixture } from "@/lib/current-season-snapshot"
 
 export const dynamic="force-dynamic"
-export const revalidate=300
+export const revalidate=120
 
 type Competition="Premier League"|"Championship"|"League One"|"League Two"|"International"
 type Fixture={
@@ -536,8 +536,8 @@ export async function GET(request:Request){
     lastGoodAt=Date.now()
     return NextResponse.json(payload,{
       headers:refresh
-        ?{"Cache-Control":"public, s-maxage=30, stale-while-revalidate=300"}
-        :{"Cache-Control":"public, s-maxage=300, stale-while-revalidate=1800"},
+        ?{"Cache-Control":"public, s-maxage=15, stale-while-revalidate=120"}
+        :{"Cache-Control":"public, s-maxage=120, stale-while-revalidate=600"},
     })
   }catch(error){
     if(lastGoodRecommended&&Date.now()-lastGoodAt<STALE_CACHE_MS){
