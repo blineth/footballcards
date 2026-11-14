@@ -28,6 +28,12 @@ type Candidate = {
 type Radar = { lineupsConfirmed?:boolean; referee?:{name:string;yellowsPerGame?:number|null}|null; candidates?:Candidate[] }
 type OddSelection = { market:string; kind:string; label:string; odd:number|null }
 type OddsResponse = { bookmaker?:string; source?:string|null; capturedAt?:string|null; selections?:OddSelection[]; priceAvailable?:boolean }
+type ScoreMarketKey = "foul1"|"foul2"|"foul3"|"fouled1"|"card"|"shot1"|"shot2"|"sot1"|"sot2"
+type ScoreMarket = {key:ScoreMarketKey;label:string;probability:number;fairOdds:number|null;confidence:"A"|"B"|"C"|"D";bookmakerOdds:number|null;edge:number|null;expectedValue:number|null;sampleMatches:number;recent5HitRate:number;seasonHitRate:number;h2hHitRate:number|null;reasons:string[]}
+type ScorePlayer = {name:string;dbName:string;team:string;position?:string|null;sampleMatches:number;sampleMinutes:number;expectedMinutes:number;matchup?:{name:string;role?:string|null;fouled90?:number|null}|null;yellowConditionals:{overall:{matches:number;yellows:number;rate:number};after1PlusFouls:{matches:number;yellows:number;rate:number|null};after2PlusFouls:{matches:number;yellows:number;rate:number|null};after3PlusFouls:{matches:number;yellows:number;rate:number|null}};markets:Record<ScoreMarketKey,ScoreMarket>}
+type SlipLeg = {player:string;team:string;market:ScoreMarketKey;label:string;probability:number;fairOdds:number|null;bookmakerOdds:number|null;edge:number|null;expectedValue:number|null;confidence:"A"|"B"|"C"|"D";reason:string}
+type BetSlip = {id:string;title:string;risk:string;legs:SlipLeg[];combinedOdds:number|null;averageLegProbability:number|null;note:string}
+type ScorecardResponse = {ok:boolean;lineupsConfirmed?:boolean;status?:string;bookmaker?:string|null;priceAvailable?:boolean;playerCount?:number;players?:ScorePlayer[];slips?:BetSlip[];methodology?:{cardConditional?:string;calibrationWarning?:string;slipWarning?:string};error?:string}
 type SotPlayer = {
   name:string; team:string; games:number; minutes:number; sot:number; onePlus:number; twoPlus:number;
   sot90:number; onePlusRate:number; twoPlusRate:number; score:number;
@@ -69,6 +75,9 @@ function radarQuery(f:Fixture,bust=0){
 }
 function oddsQuery(f:Fixture,bust=0){
   return `/api/bet-builder-odds?${new URLSearchParams({date:f.dateIso,home:f.home,away:f.away,competition:f.competition,refresh:String(bust)})}`
+}
+function scorecardQuery(f:Fixture,bust=0){
+  return `/api/fixture-scorecard?${new URLSearchParams({date:f.dateIso,home:f.home,away:f.away,competition:f.competition,refresh:String(bust)})}`
 }
 function sotQuery(f:Fixture,bust=0){
   return `/api/sot-radar?${new URLSearchParams({date:f.dateIso,home:f.home,away:f.away,competition:f.competition,refresh:String(bust)})}`
@@ -115,6 +124,7 @@ export default function HomePage(){
   const[live,setLive]=useState<FixturesResponse|null>(null)
   const[radar,setRadar]=useState<Record<string,Radar>>({})
   const[odds,setOdds]=useState<Record<string,OddsResponse>>({})
+  const[scorecards,setScorecards]=useState<Record<string,ScorecardResponse>>({})
   const[sot,setSot]=useState<Record<string,SotResponse>>({})
   const[championshipDb,setChampionshipDb]=useState<ChampionshipPlayersResponse|null>(null)
   const[premierLeagueDb,setPremierLeagueDb]=useState<ChampionshipPlayersResponse|null>(null)
@@ -146,10 +156,18 @@ export default function HomePage(){
     setLoading(x=>({...x,...Object.fromEntries(fs.map(f=>[f.id,true]))}))
     await Promise.all(fs.map(async f=>{
       try{
-        await Promise.all([
-          (async()=>{const r=await fetch(radarQuery(f,bust),{cache:"no-store"});if(r.ok){const d=await r.json() as Radar;setRadar(x=>({...x,[f.id]:d}))}})(),
-          (async()=>{const r=await fetch(oddsQuery(f,bust),{cache:"no-store"});if(r.ok){const d=await r.json() as OddsResponse;setOdds(x=>({...x,[f.id]:d}))}})(),
+        const [radarResponse,oddsResponse]=await Promise.all([
+          fetch(radarQuery(f,bust),{cache:"no-store"}),
+          fetch(oddsQuery(f,bust),{cache:"no-store"}),
         ])
+        let radarData:Radar|undefined
+        if(radarResponse.ok){radarData=await radarResponse.json() as Radar;setRadar(x=>({...x,[f.id]:radarData as Radar}))}
+        if(oddsResponse.ok){const d=await oddsResponse.json() as OddsResponse;setOdds(x=>({...x,[f.id]:d}))}
+        const confirmed=radarData?.lineupsConfirmed===true||f.lineupStatus==="confirmed"
+        if(confirmed){
+          const r=await fetch(scorecardQuery(f,bust),{cache:"no-store"})
+          if(r.ok){const d=await r.json() as ScorecardResponse;setScorecards(x=>({...x,[f.id]:d}))}
+        }
       }catch{}finally{setLoading(x=>({...x,[f.id]:false}))}
     }))
   },[])
@@ -338,7 +356,7 @@ export default function HomePage(){
       {noGames?<section className="rounded-2xl border border-border bg-card p-6 text-center"><p className="font-bold">No {competition} games found for this date.</p></section>:null}
 
       {fixtures.map(f=>{
-        const d=radar[f.id],o=odds[f.id],cs=d?.candidates??[],isOpen=open===f.id
+        const d=radar[f.id],o=odds[f.id],scorecard=scorecards[f.id],cs=d?.candidates??[],isOpen=open===f.id
         const confirmed=d?.lineupsConfirmed||f.lineupStatus==="confirmed"
         const cards=balancedTopFive(cs,f.home,f.away,cardScore)
         const fouls=balancedTopFive(cs,f.home,f.away,foulScore)
@@ -352,6 +370,8 @@ export default function HomePage(){
 
           {isOpen?<div className="space-y-3 border-t border-border bg-secondary/20 p-3">
             <div className="flex items-center justify-between gap-2"><p className="text-xs text-muted-foreground">{d?.referee?.name?`Ref: ${d.referee.name}${d.referee.yellowsPerGame!=null?` · ${d.referee.yellowsPerGame.toFixed(2)} YC/game`:""}`:"Referee not confirmed"}</p><button onClick={()=>void loadResearch([f],Date.now())} className="flex items-center gap-1.5 rounded-lg border bg-card px-2.5 py-2 text-xs font-bold"><RefreshCw className={`size-4 ${loading[f.id]?"animate-spin":""}`}/> Refresh</button></div>
+
+            <BetSlipScorecard data={scorecard} confirmed={confirmed}/>
 
             {(f.competition==="Championship"||f.competition==="League One"||f.competition==="League Two")?<CollapsibleGroup open={Boolean(openGroups[`${f.id}:h2h`])} onToggle={()=>toggleGroup(f,"h2h")} title="2025/26 H2H match research" subtitle="Goals · assists · shots · SOT · fouls · fouls won · cards">
               {loadingH2h[f.id]?<div className="p-4 text-center text-xs text-muted-foreground"><RefreshCw className="mx-auto mb-2 size-4 animate-spin"/>Loading last-season H2H player stats…</div>:<H2HPanel data={h2h[f.id]}/>}
