@@ -77,11 +77,9 @@ export async function GET() {
     connected: true,
     competition: "League Two",
     season: "2026/27",
-    source: "FBref 2026/27 League Two Standard + Shooting + Misc player tables",
+    source: "ESPN 2026/27 match-summary player statistics",
     crossCheck: {
-      fbrefStandard: "https://fbref.com/en/comps/16/stats/League Two-Stats",
-      fbrefShooting: "https://fbref.com/en/comps/16/shooting/League Two-Stats",
-      fbrefMisc: "https://fbref.com/en/comps/16/misc/League Two-Stats",
+      note: "Current League Two rows are built from completed ESPN match summaries; 2025/26 history is retained separately for current players.",
     },
     players,
     playerCount: players.length,
