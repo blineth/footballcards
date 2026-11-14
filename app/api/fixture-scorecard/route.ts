@@ -347,6 +347,11 @@ export async function GET(request: Request) {
     if (oddsResponse.ok) odds = await oddsResponse.json()
   } catch {}
   const selections: OddSelection[] = Array.isArray(odds?.selections) ? odds.selections : []
+  const oddsCapturedAt = odds?.capturedAt ? String(odds.capturedAt) : null
+  const capturedMs = oddsCapturedAt ? new Date(oddsCapturedAt).getTime() : Number.NaN
+  const oddsAgeSeconds = Number.isFinite(capturedMs) ? Math.max(0, Math.round((Date.now() - capturedMs) / 1000)) : null
+  const oddsFreshness = oddsAgeSeconds == null ? "UNKNOWN" : oddsAgeSeconds < 120 ? "LIVE" : oddsAgeSeconds < 300 ? "SLIGHTLY STALE" : "STALE"
+  const usableSelections = oddsFreshness === "STALE" ? [] : selections
 
   const history = names.length
     ? await db.select().from(playerH2H).where(and(inArray(playerH2H.playerName, names), lt(playerH2H.matchDate, date)))
@@ -421,7 +426,7 @@ export async function GET(request: Request) {
         if (refYellows > 0) probability = logitAdjust(probability, (refYellows - 4.2) * 0.055)
       }
 
-      const odd = findOdds(selections, candidate.name, market)
+      const odd = findOdds(usableSelections, candidate.name, market)
       const bookmakerOdds = odd?.odd == null ? null : Number(odd.odd)
       const impliedProbability = bookmakerOdds ? 1 / bookmakerOdds : null
       const edge = impliedProbability == null ? null : probability - impliedProbability
@@ -487,7 +492,10 @@ export async function GET(request: Request) {
     status: confirmed ? "confirmed-lineup-scorecard" : "pre-lineup-research",
     bookmaker: odds?.bookmaker ?? null,
     oddsSource: odds?.source ?? null,
-    priceAvailable: Boolean(odds?.priceAvailable),
+    oddsCapturedAt,
+    oddsAgeSeconds,
+    oddsFreshness,
+    priceAvailable: Boolean(odds?.priceAvailable) && oddsFreshness !== "STALE",
     referee: radar?.referee ?? null,
     playerCount: players.length,
     players,
@@ -498,6 +506,7 @@ export async function GET(request: Request) {
       cardConditional: "Yellow-card estimates explicitly measure each player's historical booking rate in matches where they committed 1+, 2+ and 3+ fouls. Match-level data does not currently identify the exact foul number that caused the booking.",
       calibrationWarning: "These are research probabilities, not guaranteed outcomes. They should be walk-forward calibrated by competition and market before being treated as final betting probabilities.",
       slipWarning: "Same-player and same-match legs can be correlated. Combined slip probability is deliberately not calculated by multiplying leg probabilities.",
+      priceFreshness: "Bet365 prices are used only while the captured feed is under five minutes old. Under two minutes is LIVE; two to five minutes is marked slightly stale; older prices are excluded from value calculations.",
     },
     generatedAt: new Date().toISOString(),
   })
