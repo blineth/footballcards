@@ -4,109 +4,109 @@
   "methodology": "Walk-forward structural validation using only prior player rows and the live calibration snapshot. Historical exact bookmaker prices are unavailable, so foul target builders use margin-adjusted likely prices solely to test selection structure. All-hit model products are independence guides and not same-game bookmaker quotes.",
   "markets": {
     "card": {
-      "sample": 54106,
-      "hits": 7230,
+      "sample": 54157,
+      "hits": 7238,
       "hitRate": 0.1336,
       "avgModel": 0.133,
-      "brier": 0.1145
+      "brier": 0.11451
     },
     "foul1": {
-      "sample": 54106,
-      "hits": 27440,
+      "sample": 54157,
+      "hits": 27466,
       "hitRate": 0.5072,
       "avgModel": 0.5,
       "brier": 0.22072
     },
     "foul2": {
-      "sample": 54106,
-      "hits": 11568,
+      "sample": 54157,
+      "hits": 11578,
       "hitRate": 0.2138,
       "avgModel": 0.2126,
-      "brier": 0.1583
+      "brier": 0.15828
     },
     "foul3": {
-      "sample": 54106,
-      "hits": 4050,
+      "sample": 54157,
+      "hits": 4055,
       "hitRate": 0.0749,
-      "avgModel": 0.0745,
-      "brier": 0.06721
+      "avgModel": 0.0746,
+      "brier": 0.06722
     },
     "foul4": {
-      "sample": 54106,
-      "hits": 1258,
-      "hitRate": 0.0233,
+      "sample": 54157,
+      "hits": 1259,
+      "hitRate": 0.0232,
       "avgModel": 0.0237,
       "brier": 0.02243
     },
     "foul5": {
-      "sample": 54106,
+      "sample": 54157,
       "hits": 335,
       "hitRate": 0.0062,
       "avgModel": 0.0106,
-      "brier": 0.00615
+      "brier": 0.00614
     }
   },
   "cardBuilders": {
     "twoCard": {
-      "sample": 2596,
-      "hits": 78,
-      "hitRate": 0.03,
+      "sample": 2598,
+      "hits": 80,
+      "hitRate": 0.0308,
       "avgModel": 0.0333,
-      "brier": 0.02908
+      "brier": 0.02977
     },
     "threeCard": {
-      "sample": 2578,
-      "hits": 15,
-      "hitRate": 0.0058,
+      "sample": 2580,
+      "hits": 16,
+      "hitRate": 0.0062,
       "avgModel": 0.0057,
-      "brier": 0.00577
+      "brier": 0.00615
     }
   },
   "foulTargetBuilders": {
     "3/1": {
-      "sample": 1513,
-      "hits": 480,
-      "hitRate": 0.3173,
-      "avgModel": 0.3161,
-      "brier": 0.20111,
-      "avgLegs": 3.46,
-      "avgReferencePrice": 2.83
+      "sample": 622,
+      "hits": 117,
+      "hitRate": 0.1881,
+      "avgModel": 0.1896,
+      "brier": 0.15303,
+      "avgLegs": 4.55,
+      "avgReferencePrice": 3.84
     },
     "10/1": {
-      "sample": 2451,
-      "hits": 316,
-      "hitRate": 0.1289,
-      "avgModel": 0.1327,
-      "brier": 0.10456,
-      "avgLegs": 5.44,
-      "avgReferencePrice": 7.58
+      "sample": 1178,
+      "hits": 73,
+      "hitRate": 0.062,
+      "avgModel": 0.0576,
+      "brier": 0.05824,
+      "avgLegs": 6.7,
+      "avgReferencePrice": 10.77
     },
     "20/1": {
-      "sample": 2525,
-      "hits": 105,
-      "hitRate": 0.0416,
-      "avgModel": 0.0452,
-      "brier": 0.03865,
-      "avgLegs": 7.24,
-      "avgReferencePrice": 18.07
+      "sample": 1934,
+      "hits": 56,
+      "hitRate": 0.029,
+      "avgModel": 0.0276,
+      "brier": 0.02812,
+      "avgLegs": 7.74,
+      "avgReferencePrice": 20.78
     },
     "50/1": {
-      "sample": 2546,
-      "hits": 43,
-      "hitRate": 0.0169,
-      "avgModel": 0.015,
-      "brier": 0.01608,
-      "avgLegs": 9.06,
-      "avgReferencePrice": 48.71
+      "sample": 2369,
+      "hits": 29,
+      "hitRate": 0.0122,
+      "avgModel": 0.0101,
+      "brier": 0.01209,
+      "avgLegs": 9.27,
+      "avgReferencePrice": 50.97
     },
     "100/1": {
-      "sample": 2554,
-      "hits": 19,
-      "hitRate": 0.0074,
-      "avgModel": 0.0084,
-      "brier": 0.00708,
-      "avgLegs": 10.19,
-      "avgReferencePrice": 96.47
+      "sample": 2387,
+      "hits": 7,
+      "hitRate": 0.0029,
+      "avgModel": 0.0047,
+      "brier": 0.00293,
+      "avgLegs": 10.39,
+      "avgReferencePrice": 100.77
     }
   },
   "multiMatch": {
@@ -114,15 +114,15 @@
       "sample": 83,
       "hits": 39,
       "hitRate": 0.4699,
-      "avgModel": 0.4716,
-      "brier": 0.23845
+      "avgModel": 0.4715,
+      "brier": 0.23846
     },
     "fiveMatchesOneFoulEach": {
       "sample": 75,
       "hits": 18,
       "hitRate": 0.24,
-      "avgModel": 0.2716,
-      "brier": 0.167
+      "avgModel": 0.2715,
+      "brier": 0.16696
     }
   }
 }

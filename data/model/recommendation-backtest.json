@@ -5,11 +5,11 @@
   "minimumPriorMatches": 4,
   "minimumPriorMinutes": 240,
   "overall": {
-    "sample": 2678,
-    "hits": 1758,
-    "hitRate": 0.6565,
-    "avgProbability": 0.7045,
-    "brier": 0.22219
+    "sample": 2680,
+    "hits": 1759,
+    "hitRate": 0.6563,
+    "avgProbability": 0.7044,
+    "brier": 0.22224
   },
   "recommendationCalibration": {
     "binWidth": 0.05,
@@ -129,10 +129,10 @@
       {
         "from": 0.7,
         "to": 0.75,
-        "sample": 687,
-        "hits": 475,
-        "observedRate": 0.6914,
-        "calibratedProbability": 0.6926
+        "sample": 689,
+        "hits": 476,
+        "observedRate": 0.6909,
+        "calibratedProbability": 0.6921
       },
       {
         "from": 0.75,
@@ -181,22 +181,22 @@
       "sample": 5,
       "hits": 2,
       "hitRate": 0.4,
-      "avgProbability": 0.2159,
-      "brier": 0.28902
+      "avgProbability": 0.2157,
+      "brier": 0.2894
     },
     "foul1": {
-      "sample": 2666,
-      "hits": 1755,
-      "hitRate": 0.6583,
-      "avgProbability": 0.7061,
-      "brier": 0.22226
+      "sample": 2668,
+      "hits": 1756,
+      "hitRate": 0.6582,
+      "avgProbability": 0.706,
+      "brier": 0.22231
     },
     "foul2": {
       "sample": 6,
       "hits": 1,
       "hitRate": 0.1667,
       "avgProbability": 0.4152,
-      "brier": 0.09524
+      "brier": 0.09526
     },
     "foul3": {
       "sample": 1,
@@ -232,8 +232,8 @@
       "sample": 5,
       "hits": 2,
       "hitRate": 0.4,
-      "avgProbability": 0.4535,
-      "brier": 0.35232
+      "avgProbability": 0.4536,
+      "brier": 0.35224
     },
     "Argentine Liga Profesional": {
       "sample": 183,
@@ -247,14 +247,14 @@
       "hits": 8,
       "hitRate": 0.1569,
       "avgProbability": 0.3829,
-      "brier": 0.18393
+      "brier": 0.18397
     },
     "Belgian Pro League": {
       "sample": 77,
       "hits": 46,
       "hitRate": 0.5974,
       "avgProbability": 0.6839,
-      "brier": 0.24829
+      "brier": 0.2483
     },
     "Brazil Serie A": {
       "sample": 137,
@@ -267,14 +267,14 @@
       "sample": 51,
       "hits": 37,
       "hitRate": 0.7255,
-      "avgProbability": 0.7152,
-      "brier": 0.2141
+      "avgProbability": 0.7151,
+      "brier": 0.21411
     },
     "Championship": {
       "sample": 139,
       "hits": 87,
       "hitRate": 0.6259,
-      "avgProbability": 0.6625,
+      "avgProbability": 0.6624,
       "brier": 0.23778
     },
     "Danish Superliga": {
@@ -303,7 +303,7 @@
       "hits": 30,
       "hitRate": 0.6667,
       "avgProbability": 0.6742,
-      "brier": 0.22619
+      "brier": 0.2262
     },
     "J League": {
       "sample": 100,
@@ -320,25 +320,25 @@
       "brier": 0.23398
     },
     "La Liga 2": {
-      "sample": 98,
+      "sample": 99,
       "hits": 69,
-      "hitRate": 0.7041,
-      "avgProbability": 0.7616,
-      "brier": 0.21297
+      "hitRate": 0.697,
+      "avgProbability": 0.759,
+      "brier": 0.21579
     },
     "League One": {
       "sample": 112,
       "hits": 79,
       "hitRate": 0.7054,
-      "avgProbability": 0.7384,
+      "avgProbability": 0.7383,
       "brier": 0.20739
     },
     "League Two": {
-      "sample": 118,
-      "hits": 83,
-      "hitRate": 0.7034,
-      "avgProbability": 0.7305,
-      "brier": 0.20571
+      "sample": 119,
+      "hits": 84,
+      "hitRate": 0.7059,
+      "avgProbability": 0.7306,
+      "brier": 0.2047
     },
     "Liga MX": {
       "sample": 114,
@@ -352,7 +352,7 @@
       "hits": 43,
       "hitRate": 0.6825,
       "avgProbability": 0.7046,
-      "brier": 0.19889
+      "brier": 0.19888
     },
     "Ligue 2": {
       "sample": 79,
@@ -393,22 +393,22 @@
       "sample": 68,
       "hits": 39,
       "hitRate": 0.5735,
-      "avgProbability": 0.6826,
-      "brier": 0.25972
+      "avgProbability": 0.6825,
+      "brier": 0.25971
     },
     "Scottish Premiership": {
       "sample": 54,
       "hits": 36,
       "hitRate": 0.6667,
-      "avgProbability": 0.7124,
-      "brier": 0.2266
+      "avgProbability": 0.7123,
+      "brier": 0.22659
     },
     "Serie A": {
       "sample": 75,
       "hits": 45,
       "hitRate": 0.6,
       "avgProbability": 0.6719,
-      "brier": 0.25408
+      "brier": 0.25407
     },
     "Serie B": {
       "sample": 72,
@@ -433,26 +433,6 @@
     }
   },
   "recentPicks": [
-    {
-      "date": "2026-11-07",
-      "competition": "Turkish Super Lig",
-      "player": "Diogo Gonçalves",
-      "team": "Konyaspor",
-      "opponent": "Samsunspor",
-      "market": "foul1",
-      "probability": 0.6925,
-      "outcome": 0
-    },
-    {
-      "date": "2026-11-08",
-      "competition": "2. Bundesliga",
-      "player": "Jan Schöppner",
-      "team": "1. FC Heidenheim 1846",
-      "opponent": "Hannover 96",
-      "market": "foul1",
-      "probability": 0.6579,
-      "outcome": 1
-    },
     {
       "date": "2026-11-08",
       "competition": "2. Bundesliga",
@@ -510,7 +490,7 @@
       "team": "Austria Vienna",
       "opponent": "WSG Swarovski Tirol",
       "market": "foul1",
-      "probability": 0.1382,
+      "probability": 0.1381,
       "outcome": 0
     },
     {
@@ -580,7 +560,7 @@
       "team": "1. FC Union Berlin",
       "opponent": "SC Freiburg",
       "market": "foul1",
-      "probability": 0.7081,
+      "probability": 0.708,
       "outcome": 1
     },
     {
@@ -590,7 +570,7 @@
       "team": "Bayer Leverkusen",
       "opponent": "FC Cologne",
       "market": "foul1",
-      "probability": 0.7081,
+      "probability": 0.708,
       "outcome": 1
     },
     {
@@ -710,7 +690,7 @@
       "team": "AEK Athens",
       "opponent": "Levadiakos",
       "market": "foul1",
-      "probability": 0.6588,
+      "probability": 0.6587,
       "outcome": 1
     },
     {
@@ -720,7 +700,7 @@
       "team": "Kalamata",
       "opponent": "Asteras Tripoli",
       "market": "foul1",
-      "probability": 0.6588,
+      "probability": 0.6587,
       "outcome": 1
     },
     {
@@ -780,7 +760,7 @@
       "team": "Machida Zelvia",
       "opponent": "Sanfrecce Hiroshima",
       "market": "foul1",
-      "probability": 0.6684,
+      "probability": 0.6683,
       "outcome": 1
     },
     {
@@ -850,7 +830,7 @@
       "team": "Girona",
       "opponent": "Almería",
       "market": "foul1",
-      "probability": 0.7099,
+      "probability": 0.704,
       "outcome": 1
     },
     {
@@ -1190,7 +1170,7 @@
       "team": "Kilmarnock",
       "opponent": "Celtic",
       "market": "foul1",
-      "probability": 0.7252,
+      "probability": 0.7251,
       "outcome": 1
     },
     {
@@ -1200,7 +1180,7 @@
       "team": "Heart of Midlothian",
       "opponent": "Falkirk",
       "market": "foul1",
-      "probability": 0.7252,
+      "probability": 0.7251,
       "outcome": 0
     },
     {
@@ -1210,7 +1190,7 @@
       "team": "AC Milan",
       "opponent": "Genoa",
       "market": "foul1",
-      "probability": 0.6483,
+      "probability": 0.6482,
       "outcome": 1
     },
     {
@@ -1220,7 +1200,7 @@
       "team": "Atalanta",
       "opponent": "Monza",
       "market": "foul1",
-      "probability": 0.6483,
+      "probability": 0.6482,
       "outcome": 0
     },
     {
@@ -1250,7 +1230,7 @@
       "team": "Lazio",
       "opponent": "Napoli",
       "market": "foul1",
-      "probability": 0.6483,
+      "probability": 0.6482,
       "outcome": 0
     },
     {
@@ -1390,7 +1370,7 @@
       "team": "Eldense",
       "opponent": "Las Palmas",
       "market": "foul1",
-      "probability": 0.7099,
+      "probability": 0.704,
       "outcome": 1
     },
     {
@@ -1431,6 +1411,26 @@
       "opponent": "Burgos",
       "market": "foul1",
       "probability": 0.8298,
+      "outcome": 1
+    },
+    {
+      "date": "2026-11-14",
+      "competition": "La Liga 2",
+      "player": "Víctor Fernández",
+      "team": "Real Valladolid",
+      "opponent": "Castellón",
+      "market": "foul1",
+      "probability": 0.704,
+      "outcome": 0
+    },
+    {
+      "date": "2026-11-14",
+      "competition": "League Two",
+      "player": "Shaun McWilliams",
+      "team": "Cheltenham Town",
+      "opponent": "Exeter City",
+      "market": "foul1",
+      "probability": 0.7227,
       "outcome": 1
     }
   ]
