@@ -15,6 +15,7 @@ export type SnapshotBaseline={
 
 let h2hCache:SnapshotH2HRow[]|null=null
 let baselineCache:SnapshotBaseline[]|null=null
+let internationalCache:any|null=null
 let loadedAt=0
 const MAX_AGE=15*60*1000
 
@@ -83,4 +84,19 @@ export async function snapshotPlayersForFixture(competition:string,home:string,a
   const players=baselines.filter(r=>r.competition===competition&&(same(r.team,home)||same(r.team,away)))
   const rows=h2h.filter(r=>r.competition===competition&&(same(r.team,home)||same(r.team,away)))
   return {players,rows}
+}
+
+
+async function loadInternational(){
+  if(internationalCache&&Date.now()-loadedAt<MAX_AGE)return internationalCache
+  const text=await readFile(path.join(process.cwd(),"data","international","player_profiles.json"),"utf8")
+  internationalCache=JSON.parse(text)
+  return internationalCache
+}
+export async function internationalPlayersForFixture(home:string,away:string){
+  const data=await loadInternational()
+  const n=(v:string)=>v.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim()
+  const same=(a:string,b:string)=>{const x=n(a),y=n(b);return Boolean(x&&y&&(x===y||x.includes(y)||y.includes(x)))}
+  const players=Array.isArray(data?.players)?data.players:[]
+  return players.filter((p:any)=>same(String(p?.nationalTeam??""),home)||same(String(p?.nationalTeam??""),away))
 }
