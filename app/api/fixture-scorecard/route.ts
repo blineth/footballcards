@@ -5,6 +5,7 @@ import { playerH2H } from "@/lib/db/schema"
 import { ensureResearchSchema } from "@/lib/db/ensure-research-schema"
 import { GET as radarGET } from "../fixture-radar/route"
 import { GET as oddsGET } from "../bet-builder-odds/route"
+import calibrationSnapshot from "@/data/model/calibration.json"
 
 export const dynamic = "force-dynamic"
 export const revalidate = 0
@@ -25,6 +26,8 @@ type ScoreMarket = {
   key: MarketKey
   label: string
   probability: number
+  rawProbability: number
+  calibrationSample: number | null
   fairOdds: number | null
   confidence: "A" | "B" | "C" | "D"
   bookmakerOdds: number | null
@@ -52,6 +55,10 @@ type ScorePlayer = {
   matchup: { name: string; role?: string | null; fouled90?: number | null } | null
   yellowConditionals: {
     overall: { matches: number; yellows: number; rate: number }
+    zeroFouls: { matches: number; yellows: number; rate: number | null }
+    exactly1Foul: { matches: number; yellows: number; rate: number | null }
+    exactly2Fouls: { matches: number; yellows: number; rate: number | null }
+    threePlusFouls: { matches: number; yellows: number; rate: number | null }
     after1PlusFouls: { matches: number; yellows: number; rate: number | null }
     after2PlusFouls: { matches: number; yellows: number; rate: number | null }
     after3PlusFouls: { matches: number; yellows: number; rate: number | null }
@@ -168,6 +175,28 @@ function conditional(rows: MatchRow[], foulThreshold: number) {
   if (!subset.length) return { matches: 0, yellows: 0, rate: null as number | null }
   const yellows = subset.filter(row => row.yellowCard === true).length
   return { matches: subset.length, yellows, rate: yellows / subset.length }
+}
+function conditionalExact(rows: MatchRow[], predicate: (fouls: number) => boolean) {
+  const subset = rows.filter(row => predicate(Number(row.foulsCommitted ?? 0)))
+  if (!subset.length) return { matches: 0, yellows: 0, rate: null as number | null }
+  const yellows = subset.filter(row => row.yellowCard === true).length
+  return { matches: subset.length, yellows, rate: yellows / subset.length }
+}
+type CalibrationBand = { from:number; to:number; sample:number; hits:number; calibratedProbability:number }
+function calibrationFor(competition: string, market: MarketKey, rawProbability: number) {
+  const snapshot:any = calibrationSnapshot as any
+  const leagueMarket = snapshot?.competitions?.[competition]?.[market]
+  const globalMarket = snapshot?.global?.[market]
+  const source = leagueMarket?.bands?.length === 20 ? leagueMarket : globalMarket
+  const bands:CalibrationBand[] = Array.isArray(source?.bands) ? source.bands : []
+  if (!bands.length) return { probability: rawProbability, sample: null as number | null }
+  const index = Math.max(0, Math.min(19, Math.floor(clamp(rawProbability,0,0.999999)/0.05)))
+  const band = bands[index]
+  const probability = Number(band?.calibratedProbability)
+  return {
+    probability: Number.isFinite(probability) ? clamp(probability) : rawProbability,
+    sample: Number.isFinite(Number(source?.sample)) ? Number(source.sample) : null,
+  }
 }
 function confidenceGrade(input: { matches: number; minutes: number; confirmed: boolean; matchup: boolean; h2h: number }) {
   let score = Math.min(45, input.matches * 2.5)
@@ -380,6 +409,10 @@ export async function GET(request: Request) {
     const matchupFouled90 = candidate?.likelyMatchup?.fouled90 == null ? null : Number(candidate.likelyMatchup.fouled90)
 
     const yellowOverall = rows.filter(row => row.yellowCard === true).length
+    const cond0 = conditionalExact(rows, fouls => fouls === 0)
+    const condExact1 = conditionalExact(rows, fouls => fouls === 1)
+    const condExact2 = conditionalExact(rows, fouls => fouls === 2)
+    const cond3Plus = conditionalExact(rows, fouls => fouls >= 3)
     const cond1 = conditional(rows, 1)
     const cond2 = conditional(rows, 2)
     const cond3 = conditional(rows, 3)
@@ -422,15 +455,29 @@ export async function GET(request: Request) {
       }
       if (market === "card") {
         const overallRate = rows.length ? yellowOverall / rows.length : PRIOR.card
-        const conditionalReliability = Math.min(1, cond2.matches / 8)
-        if (cond2.rate != null) {
-          const foul2Probability = empiricalProbability(rows, "foul2")
-          probability = clamp(probability + (cond2.rate - overallRate) * foul2Probability * conditionalReliability * 0.55)
+        const foul1Probability = empiricalProbability(rows, "foul1")
+        const foul2Probability = empiricalProbability(rows, "foul2")
+        const foul3Probability = empiricalProbability(rows, "foul3")
+        const behaviourAdjustments = [
+          { bucket: cond1, probability: foul1Probability, weight: 0.12, reliabilityMatches: 10 },
+          { bucket: cond2, probability: foul2Probability, weight: 0.28, reliabilityMatches: 8 },
+          { bucket: condExact2, probability: Math.max(0, foul2Probability - foul3Probability), weight: 0.18, reliabilityMatches: 6 },
+          { bucket: cond3Plus, probability: foul3Probability, weight: 0.24, reliabilityMatches: 5 },
+        ]
+        for (const item of behaviourAdjustments) {
+          if (item.bucket.rate == null) continue
+          const reliability = Math.min(1, item.bucket.matches / item.reliabilityMatches)
+          probability += (item.bucket.rate - overallRate) * item.probability * reliability * item.weight
         }
+        probability = clamp(probability)
         if (matchupFouled90 != null && matchupFouled90 > 0) probability = logitAdjust(probability, (matchupFouled90 - 1.35) * 0.08)
         const refYellows = Number(radar?.referee?.yellowsPerGame ?? 0)
         if (refYellows > 0) probability = logitAdjust(probability, (refYellows - 4.2) * 0.055)
       }
+
+      const rawProbability = probability
+      const calibrated = calibrationFor(competition, market, rawProbability)
+      probability = calibrated.probability
 
       const odd = findOdds(usableSelections, candidate.name, market)
       const bookmakerOdds = odd?.odd == null ? null : Number(odd.odd)
@@ -444,6 +491,8 @@ export async function GET(request: Request) {
         key: market,
         label: MARKET_LABELS[market],
         probability: Math.round(probability * 1000) / 1000,
+        rawProbability: Math.round(rawProbability * 1000) / 1000,
+        calibrationSample: calibrated.sample,
         fairOdds: fairOdds(probability),
         confidence,
         bookmakerOdds,
@@ -482,6 +531,10 @@ export async function GET(request: Request) {
       matchup: candidate?.likelyMatchup ? { name: candidate.likelyMatchup.name, role: candidate.likelyMatchup.role ?? null, fouled90: matchupFouled90 } : null,
       yellowConditionals: {
         overall: { matches: rows.length, yellows: yellowOverall, rate: rows.length ? Math.round((yellowOverall / rows.length) * 1000) / 1000 : 0 },
+        zeroFouls: cond0,
+        exactly1Foul: condExact1,
+        exactly2Fouls: condExact2,
+        threePlusFouls: cond3Plus,
         after1PlusFouls: cond1,
         after2PlusFouls: cond2,
         after3PlusFouls: cond3,
@@ -511,10 +564,10 @@ export async function GET(request: Request) {
     players,
     slips,
     methodology: {
-      version: "scorecard-v1",
+      version: "scorecard-v2-calibrated",
       description: "Player-level pre-match probabilities use only match rows dated before the target fixture. They combine smoothed historical hit rates, recency, H2H, expected minutes, direct matchup pressure, count-rate cross-checks and referee/card context.",
-      cardConditional: "Yellow-card estimates explicitly measure each player's historical booking rate in matches where they committed 1+, 2+ and 3+ fouls. Match-level data does not currently identify the exact foul number that caused the booking.",
-      calibrationWarning: "These are research probabilities, not guaranteed outcomes. They should be walk-forward calibrated by competition and market before being treated as final betting probabilities.",
+      cardConditional: "Yellow-card estimates measure each player's booking rate at 0 fouls, exactly 1, exactly 2, 3+, 1+ and 2+ foul states, with sample-size reliability. Match-level data still cannot identify the exact foul that triggered the booking.",
+      calibrationWarning: "Displayed probabilities are adjusted through walk-forward calibration built from earlier-match-only predictions across 30 competitions. They remain estimates, not guarantees.",
       slipWarning: "Same-player and same-match legs can be correlated. Combined slip probability is deliberately not calculated by multiplying leg probabilities.",
       priceFreshness: "Bet365 prices are used only while the captured feed is under five minutes old. Under two minutes is LIVE; two to five minutes is marked slightly stale; older prices are excluded from value calculations.",
     },
