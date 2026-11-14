@@ -483,6 +483,7 @@ function marketReasons(input: {
   matchupName?: string | null
   matchupFouled90?: number | null
   conditional2?: { matches: number; yellows: number; rate: number | null }
+  countryH2H?: { matches:number; playerSamples:number; cardRate:number|null; foulsPerPlayer:number|null } | null
 }) {
   const reasons: string[] = []
   if (input.recent5 >= input.season + 0.12) reasons.push("Recent form is above longer-run rate")
@@ -490,7 +491,10 @@ function marketReasons(input: {
   if (input.market === "card" && input.conditional2 && input.conditional2.matches >= 3 && Number(input.conditional2.rate ?? 0) >= 0.45) {
     reasons.push("Booked in " + input.conditional2.yellows + "/" + input.conditional2.matches + " matches with 2+ fouls")
   }
-  if (input.h2hRate != null && input.h2hN >= 2 && input.h2hRate >= 0.5) reasons.push("Strong H2H hit pattern")
+  if (input.h2hRate != null && input.h2hN >= 2 && input.h2hRate >= 0.5) reasons.push("Strong personal H2H hit pattern")
+  if (input.market==="card" && input.countryH2H && input.countryH2H.matches>=2 && input.countryH2H.playerSamples>=12 && Number(input.countryH2H.cardRate??0)>=0.26) {
+    reasons.push("Country H2H has elevated booking intensity ("+Math.round(Number(input.countryH2H.cardRate)*100)+"% of tracked player appearances)")
+  }
   if ((input.market === "foul1" || input.market === "foul2" || input.market === "foul3" || input.market === "card") && input.matchupName) {
     const extra = input.matchupFouled90 != null ? " (" + Number(input.matchupFouled90).toFixed(2) + " fouls drawn/90)" : ""
     reasons.push("Direct pressure from " + input.matchupName + extra)
@@ -758,6 +762,29 @@ export async function GET(request: Request) {
     ? await db.select().from(playerH2H).where(and(inArray(playerH2H.playerName, names), lt(playerH2H.matchDate, date)))
     : []
 
+  const countryH2HDates=new Set<string>()
+  let countryH2HPlayerSamples=0
+  let countryH2HYellows=0
+  let countryH2HFouls=0
+  if(competition==="International"){
+    for(const candidate of candidates){
+      const matches=Array.isArray(candidate?.h2hMatches)?candidate.h2hMatches:[]
+      for(const row of matches){
+        const matchDate=String(row?.matchDate??"")
+        if(matchDate)countryH2HDates.add(matchDate)
+        countryH2HPlayerSamples+=1
+        countryH2HYellows+=row?.yellowCard===true?1:0
+        countryH2HFouls+=Number(row?.foulsCommitted??0)
+      }
+    }
+  }
+  const countryH2HContext=competition==="International"&&countryH2HPlayerSamples>0 ? {
+    matches:countryH2HDates.size,
+    playerSamples:countryH2HPlayerSamples,
+    cardRate:countryH2HYellows/countryH2HPlayerSamples,
+    foulsPerPlayer:countryH2HFouls/countryH2HPlayerSamples,
+  } : null
+
   const confirmed = radar?.lineupsConfirmed === true
   const players: ScorePlayer[] = candidates.map(candidate => {
     const allRows = history.filter(row => row.playerName === candidate.dbName && played(row))
@@ -852,6 +879,11 @@ export async function GET(request: Request) {
         }
         const refYellows = Number(radar?.referee?.yellowsPerGame ?? 0)
         if (refYellows > 0) probability = logitAdjust(probability, (refYellows - 4.2) * 0.055)
+        if(countryH2HContext&&countryH2HContext.matches>=2&&countryH2HContext.playerSamples>=12){
+          const reliability=Math.min(1,countryH2HContext.playerSamples/36)
+          probability=logitAdjust(probability,(countryH2HContext.cardRate-0.22)*0.70*reliability)
+          probability=logitAdjust(probability,(countryH2HContext.foulsPerPlayer-1.35)*0.035*reliability)
+        }
       }
 
       const rawProbability = probability
@@ -896,6 +928,7 @@ export async function GET(request: Request) {
           matchupName: candidate?.likelyMatchup?.name ?? null,
           matchupFouled90,
           conditional2: cond2,
+          countryH2H:countryH2HContext,
         }),
       }
     }
@@ -1066,6 +1099,12 @@ export async function GET(request: Request) {
     eligibleBooks,
     priceAvailable: Boolean(odds?.priceAvailable) && oddsFreshness !== "STALE",
     referee: radar?.referee ?? null,
+    countryH2HContext:countryH2HContext ? {
+      matches:countryH2HContext.matches,
+      playerSamples:countryH2HContext.playerSamples,
+      cardRate:Math.round(countryH2HContext.cardRate*1000)/1000,
+      foulsPerPlayer:Math.round(countryH2HContext.foulsPerPlayer*100)/100,
+    } : null,
     playerCount: players.length,
     players,
     exactCardOffers: players.flatMap(player => player.offeredCardLines.map(line => ({
@@ -1092,7 +1131,7 @@ export async function GET(request: Request) {
     previewFoulTargetSlips,
     methodology: {
       version: "scorecard-v2-calibrated",
-      description: "Player-level pre-match probabilities use only match rows dated before the target fixture. They combine smoothed historical hit rates, recency, H2H, expected minutes, direct positional matchup pressure blended from season and recent fouls drawn, count-rate cross-checks, referee/card context and walk-forward calibration.",
+      description: "Player-level pre-match probabilities use only match rows dated before the target fixture. They combine domestic and international player history, recency, personal opponent-country H2H, expected minutes, direct positional matchup pressure, count-rate cross-checks, referee/card context and walk-forward calibration. International cards also receive a capped country-v-country H2H intensity adjustment when the prior sample is large enough.",
       cardConditional: "Yellow-card estimates measure each player's booking rate at 0 fouls, exactly 1, exactly 2, 3+, 1+ and 2+ foul states, with sample-size reliability. Match-level data still cannot identify the exact foul that triggered the booking.",
       calibrationWarning: "Displayed probabilities are adjusted through walk-forward calibration built from earlier-match-only predictions across 30 competitions. They remain estimates, not guarantees.",
       slipWarning: "Same-player and same-match legs can be correlated. Exact individual bookmaker foul lines are mirrored only when their threshold is explicitly present in the feed. Bet365's same-game Builder price is proprietary and is not labelled exact unless a bookmaker builder quote is supplied.",
