@@ -35,7 +35,7 @@ function seasonFor(date: string) {
   const month = d.getUTCMonth()
   return String(month >= 7 ? year : year - 1)
 }
-async function saveSnapshots(input:{date:string;home:string;away:string;competition:string;bookmaker?:string;source?:string|null;capturedAt?:string|null;selections:Array<{market:string;kind:string;label:string;odd:number|null}>}) {
+async function saveSnapshots(input:{date:string;home:string;away:string;competition:string;bookmaker?:string;source?:string|null;capturedAt?:string|null;selections:Array<{market:string;kind:string;label:string;odd:number|null;bookmaker?:string|null}>}) {
   if (!isDatabaseConfigured || !input.selections.length) return
   await ensureResearchSchema()
   const now = new Date()
@@ -49,7 +49,7 @@ async function saveSnapshots(input:{date:string;home:string;away:string;competit
       fixtureDate: input.date,
       homeTeam: input.home,
       awayTeam: input.away,
-      bookmaker: input.bookmaker ?? "Unknown",
+      bookmaker: s.bookmaker ?? input.bookmaker ?? "Unknown",
       source: input.source ?? null,
       market: s.market,
       kind: s.kind,
@@ -157,7 +157,6 @@ async function cachedSnapshot(input:{date:string;home:string;away:string;competi
 
     const latestBucket = new Date(latest.snapshotBucket).getTime()
     const sameBucket = rows.filter(row =>
-      row.bookmaker === latest.bookmaker &&
       new Date(row.snapshotBucket).getTime() === latestBucket
     )
     const rawSelections = sameBucket.map(row => ({
@@ -165,13 +164,14 @@ async function cachedSnapshot(input:{date:string;home:string;away:string;competi
       kind:row.kind,
       label:row.label,
       odd:Number(row.odds),
+      bookmaker:row.bookmaker,
     }))
     const selections = await attachMovement({
       date:input.date,
       home:input.home,
       away:input.away,
       competition:input.competition,
-      bookmaker:latest.bookmaker,
+      bookmaker:"Best UK bookmaker",
       selections:rawSelections,
     })
     return {
@@ -189,6 +189,15 @@ async function cachedSnapshot(input:{date:string;home:string;away:string;competi
   } catch {
     return null
   }
+}
+
+function isUkBookmaker(name:string){
+  const n=norm(name)
+  return [
+    "bet365","sky bet","skybet","william hill","paddy power","betfair",
+    "ladbrokes","coral","betvictor","betway","boylesports","unibet",
+    "888sport","888 sport","betmgm","betuk","10bet","32red","casumo"
+  ].some(book=>n.includes(norm(book)))
 }
 
 function marketKind(name: string) {
@@ -279,9 +288,6 @@ async function fromUkOdds(input: { date: string; home: string; away: string; key
 async function fromApiFootball(input: { date: string; home: string; away: string; competition: string; key: string }) {
   const league = LEAGUE_IDS[input.competition]
   if (!league) return null
-  const bookmakers = await apiFootball("/odds/bookmakers", { search: "Bet365" }, input.key)
-  const bookmaker = bookmakers.find((b: any) => norm(b?.name).includes("bet365")) ?? bookmakers[0]
-  if (!bookmaker?.id) return null
   const fixtures = await apiFootball("/fixtures", {
     date: input.date,
     league,
@@ -290,15 +296,18 @@ async function fromApiFootball(input: { date: string; home: string; away: string
   }, input.key)
   const fixture = fixtures.find((row: any) => teamMatch(row?.teams?.home?.name, input.home) && teamMatch(row?.teams?.away?.name, input.away))
   if (!fixture?.fixture?.id) return null
+
   const oddsRows = await apiFootball("/odds", {
     fixture: String(fixture.fixture.id),
-    bookmaker: String(bookmaker.id),
   }, input.key)
 
-  const selections: Array<{ market: string; kind: string; label: string; odd: number | null }> = []
+  const selections: Array<{ market: string; kind: string; label: string; odd: number | null; bookmaker?:string|null }> = []
+  const books = new Set<string>()
   for (const row of oddsRows) {
     for (const book of row?.bookmakers ?? []) {
-      if (String(book?.id) !== String(bookmaker.id)) continue
+      const bookmakerName=String(book?.name ?? "")
+      if (!bookmakerName || !isUkBookmaker(bookmakerName)) continue
+      books.add(bookmakerName)
       for (const bet of book?.bets ?? []) {
         const kind = marketKind(String(bet?.name ?? ""))
         if (kind === "other") continue
@@ -309,15 +318,18 @@ async function fromApiFootball(input: { date: string; home: string; away: string
             kind,
             label: String(value?.value ?? ""),
             odd: Number.isFinite(raw) ? raw : null,
+            bookmaker:bookmakerName,
           })
         }
       }
     }
   }
+
   return {
     connected: true,
-    bookmaker: bookmaker.name ?? "Bet365",
-    source: "API-Football",
+    bookmaker: books.size === 1 ? [...books][0] : "Best UK bookmaker",
+    bookmakers:[...books].sort(),
+    source: "API-Football UK bookmaker feed",
     capturedAt: null,
     fixtureId: String(fixture.fixture.id),
     selections,
@@ -353,11 +365,7 @@ export async function GET(request: Request) {
             capturedAt:fallback.capturedAt,
             selections:fallback.selections,
           })
-          const selections = await attachMovement({
-            date, home, away, competition,
-            bookmaker:fallback.bookmaker,
-            selections:fallback.selections,
-          })
+          const selections = fallback.selections
           return NextResponse.json({
             ...fallback,
             selections,
