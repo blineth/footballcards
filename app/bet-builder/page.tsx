@@ -162,11 +162,8 @@ export default function BetBuilderPage(){
       const rr=await fetch(radarUrl(f,bust),{cache:"no-store"})
       const rd=rr.ok?await rr.json() as Radar:null
       setRadar(rd)
-      const confirmed=rd?.lineupsConfirmed===true||f.lineupStatus==="confirmed"
-      if(confirmed){
-        const sr=await fetch(scorecardUrl(f,bust),{cache:"no-store"})
-        setScorecard(sr.ok?await sr.json() as Scorecard:null)
-      }else setScorecard(null)
+      const sr=await fetch(scorecardUrl(f,bust),{cache:"no-store"})
+      setScorecard(sr.ok?await sr.json() as Scorecard:null)
     }finally{
       setLoadingMatch(false)
     }
@@ -224,16 +221,17 @@ export default function BetBuilderPage(){
       {!selected?<Empty/>:null}
       {selected?<MatchHeader fixture={selected} radar={radar} confirmed={confirmed}/>:null}
 
+      {selected&&scorecard?.ok?<OddsStatus data={scorecard}/>:null}
+
       {selected&&!confirmed?<section className="rounded-3xl border border-amber-300/15 bg-amber-300/5 p-6 text-center">
         <Clock3 className="mx-auto size-6 text-amber-300"/>
         <p className="mt-3 font-black">Waiting for confirmed lineups</p>
-        <p className="mx-auto mt-1 max-w-lg text-xs leading-relaxed text-white/40">The game is selected. The final recommendations unlock when the starting XIs are confirmed, then re-check automatically every 60 seconds.</p>
+        <p className="mx-auto mt-1 max-w-lg text-xs leading-relaxed text-white/40">Bookmaker market availability is already checked above. Final player recommendations unlock when the starting XIs are confirmed, then re-check automatically every 60 seconds.</p>
       </section>:null}
 
-      {selected&&confirmed&&loadingMatch&&!scorecard?<section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 text-center"><RefreshCw className="mx-auto mb-2 size-5 animate-spin text-emerald-300"/><p className="font-black">Building recommendations…</p></section>:null}
+      {selected&&loadingMatch&&!scorecard?<section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 text-center"><RefreshCw className="mx-auto mb-2 size-5 animate-spin text-emerald-300"/><p className="font-black">Checking bookmaker markets…</p></section>:null}
 
       {selected&&confirmed&&scorecard?.ok?<>
-        <OddsStatus data={scorecard}/>
         <FoulLadder slips={scorecard.foulTargetSlips??[]}/>
         <section className="space-y-3">
           <div className="px-1"><p className="font-black">Other model slips</p><p className="text-[0.62rem] text-white/35">Cards, foul/card combinations and shots from the same confirmed XI.</p></div>
