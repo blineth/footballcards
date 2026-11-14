@@ -106,10 +106,18 @@ function priceMap(rows:any[],home:string,away:string){
   }return out
 }
 function exactPrice(pred:any,market:string,book:string){const p=pred.oddsByBook?.[book];if(!p)return null;return market==="homeWin"?p.homeWin??null:market==="awayWin"?p.awayWin??null:market==="bttsYes"?p.bttsYes??null:market==="bttsNo"?p.bttsNo??null:null}
-function buildSlip(id:string,title:string,subtitle:string,legs:any[],structureKey:"safer5"|"wins5"|"btts5"|"mixed6",requiredLegs:number){
+function buildSlip(id:string,title:string,subtitle:string,legs:any[],structureKey:"fold5"|"fold7"|"fold10",requiredLegs:number){
   const xs=legs.filter(Boolean)
-  const enough=xs.length>=requiredLegs
-  const selected=enough?xs.slice(0,requiredLegs):[]
+  const uniqueByFixture:any[]=[]
+  const seenFixtures=new Set<string>()
+  for(const leg of xs){
+    const fixtureId=String(leg?.prediction?.id??"")
+    if(!fixtureId||seenFixtures.has(fixtureId))continue
+    seenFixtures.add(fixtureId)
+    uniqueByFixture.push(leg)
+  }
+  const enough=uniqueByFixture.length>=requiredLegs
+  const selected=enough?uniqueByFixture.slice(0,requiredLegs):[]
   const rawAllHit=selected.length?selected.reduce((v,l)=>v*Math.max(.01,l.probability),1):null
   const backtest=(matchAccaBacktest as any)?.structures?.[structureKey]
   const sample=Number(backtest?.sample??0)
@@ -164,6 +172,10 @@ export async function GET(request:Request){
     const wins=predictions.filter(p=>p.winnerPick&&p.winnerPick.grade!=="D").map(p=>({prediction:p,market:p.winnerPick.side==="home"?"homeWin":"awayWin",label:p.winnerPick.team+" to win",probability:p.winnerPick.probability,grade:p.winnerPick.grade,reasons:p.reasons})).sort((a,b)=>b.probability-a.probability)
     const btts=predictions.filter(p=>p.bttsPick&&p.bttsPick.grade!=="D").map(p=>({prediction:p,market:p.bttsPick.selection==="yes"?"bttsYes":"bttsNo",label:"BTTS "+(p.bttsPick.selection==="yes"?"Yes":"No"),probability:p.bttsPick.probability,grade:p.bttsPick.grade,reasons:p.reasons})).sort((a,b)=>b.probability-a.probability)
     const mixed=predictions.map(p=>{const w=p.winnerPick?{prediction:p,market:p.winnerPick.side==="home"?"homeWin":"awayWin",label:p.winnerPick.team+" to win",probability:p.winnerPick.probability,grade:p.winnerPick.grade,reasons:p.reasons,score:(p.winnerPick.probability-.34)/.45}:null,b=p.bttsPick?{prediction:p,market:p.bttsPick.selection==="yes"?"bttsYes":"bttsNo",label:"BTTS "+(p.bttsPick.selection==="yes"?"Yes":"No"),probability:p.bttsPick.probability,grade:p.bttsPick.grade,reasons:p.reasons,score:(p.bttsPick.probability-.5)/.34}:null;return [w,b].filter(Boolean).sort((a:any,b:any)=>b.score-a.score)[0]??null}).filter(Boolean).sort((a:any,b:any)=>b.score-a.score)
-    return NextResponse.json({ok:true,date,generatedAt:new Date().toISOString(),fixtureCount:predictions.length,predictions,slips:[buildSlip("safer","Safer 5-Leg Acca","Five strongest single-match selections across the matchday.",mixed.slice(0,5),"safer5",5),buildSlip("win-lose","Win / Lose Acca","Five strongest direct winner calls; the opposing team is the model's expected loser.",wins.slice(0,5),"wins5",5),buildSlip("btts","BTTS Acca","Five strongest Both Teams To Score Yes/No selections.",btts.slice(0,5),"btts5",5),buildSlip("mixed","Mixed Acca","Best winner or BTTS selection from six of the strongest fixtures.",mixed.slice(0,6),"mixed6",6)],methodology:{resultModel:"League position, PPG, recent five-match form, streaks, home/away PPG and win rate, goal difference and recent H2H with sample shrinkage, followed by walk-forward calibration.",bttsModel:"Home/away BTTS, scoring and conceding rates, overall BTTS and H2H BTTS.",pricing:"Exact combined odds are shown only when one preferred bookmaker prices every leg. Model fair combined odds are adjusted using the historical hit-rate of the same accumulator structure rather than naive probability multiplication alone.",caution:"Model estimates, not guarantees. Team news and match events can materially change outcomes."}},{headers:{"Cache-Control":"public, s-maxage=900, stale-while-revalidate=900"}})
+    return NextResponse.json({ok:true,date,generatedAt:new Date().toISOString(),fixtureCount:predictions.length,predictions,slips:[
+      buildSlip("fold-5","5-Fold Acca","Five strongest selections from five different matches.",mixed,"fold5",5),
+      buildSlip("fold-7","7-Fold Acca","Seven strongest selections from seven different matches.",mixed,"fold7",7),
+      buildSlip("fold-10","10-Fold Acca","Ten strongest selections from ten different matches.",mixed,"fold10",10)
+    ],methodology:{resultModel:"League position, PPG, recent five-match form, streaks, home/away PPG and win rate, goal difference and recent H2H with sample shrinkage, followed by walk-forward calibration.",bttsModel:"Home/away BTTS, scoring and conceding rates, overall BTTS and H2H BTTS.",pricing:"Each fold uses one selection per fixture. Exact combined odds are shown only when one preferred bookmaker prices every leg. Model fair combined odds are adjusted using the historical hit-rate of the same fold size rather than naive probability multiplication alone.",caution:"Model estimates, not guarantees. Team news and match events can materially change outcomes."}},{headers:{"Cache-Control":"public, s-maxage=900, stale-while-revalidate=900"}})
   }catch(error){return NextResponse.json({ok:false,error:error instanceof Error?error.message:"Accumulator analysis failed"},{status:500})}
 }
