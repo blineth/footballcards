@@ -1070,15 +1070,17 @@ export async function GET(request: Request) {
       })),
     }
   })
+  // Bet slips are confirmation-gated. Pre-lineup player research may still be
+  // calculated above, but it must never be exposed as a bet slip.
   const slips = confirmed ? enrichedRecommendationSlips : []
-  const previewSlips = confirmed ? [] : enrichedRecommendationSlips
+  const previewSlips: typeof enrichedRecommendationSlips = []
   const foulRecommendations = buildFoulTargetSlips(players).map(slip => ({
     ...slip,
     placeable: confirmed && slip.legs.length > 0 && Boolean(slip.bookmaker) && eligibleBooks.includes(slip.bookmaker!) && slip.usesLivePrices && slip.withinTargetRange,
     marketStatus: slip.bookmaker ? (bookmakerAvailability[slip.bookmaker]?.foul ?? "unknown") : "unknown",
   }))
   const foulTargetSlips = confirmed ? foulRecommendations : []
-  const previewFoulTargetSlips = confirmed ? [] : foulRecommendations
+  const previewFoulTargetSlips: typeof foulRecommendations = []
 
   return NextResponse.json({
     ok: true,
