@@ -53,6 +53,7 @@ type Availability = {
 type OddsCheck = {
   bookmaker?:string|null
   marketAvailability?:Availability
+  bookmakerAvailability?:Record<string,Availability>
   cached?:boolean
   source?:string|null
 }
@@ -95,13 +96,18 @@ function oddsUrl(f:Fixture){
 }
 
 function eligibility(check?:OddsCheck){
-  const a=check?.marketAvailability
-  if(!a)return {eligible:false,checking:true,reason:"Checking Bet365 player markets…"}
-  if(a.card==="available"&&a.foul==="available")return {eligible:true,checking:false,reason:"Player cards + fouls available"}
+  if(!check)return {eligible:false,checking:true,reason:"Checking preferred bookmaker player markets…",books:[] as string[]}
+  const books=Object.entries(check.bookmakerAvailability??{})
+    .filter(([,a])=>a.card==="available"&&a.foul==="available")
+    .map(([book])=>book)
+  if(books.length)return {eligible:true,checking:false,reason:"Cards + fouls available together at "+books.join(", "),books}
+  const a=check.marketAvailability
+  if(!a)return {eligible:false,checking:false,reason:"Player markets not verified at the preferred bookmakers",books:[] as string[]}
   const missing:string[]=[]
   if(a.card!=="available")missing.push(a.card==="unavailable"?"cards unavailable":"cards not verified")
   if(a.foul!=="available")missing.push(a.foul==="unavailable"?"fouls unavailable":"fouls not verified")
-  return {eligible:false,checking:false,reason:missing.join(" · ")}
+  if(a.card==="available"&&a.foul==="available")missing.push("cards and fouls are not available together at the same bookmaker")
+  return {eligible:false,checking:false,reason:missing.join(" · "),books:[] as string[]}
 }
 
 function singleSlipUrl(f:Fixture){
@@ -248,12 +254,12 @@ export default function MatchesPage(){
 
             <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl bg-black/20 p-3">
               <div className="min-w-0">
-                {checking[f.id]&&!availability[f.id]?<p className="text-[0.62rem] font-bold text-white/45">Checking Bet365 player markets…</p>:<>
+                {checking[f.id]&&!availability[f.id]?<p className="text-[0.62rem] font-bold text-white/45">Checking preferred bookmaker player markets…</p>:<>
                   <p className={"text-[0.62rem] font-black "+(e.eligible?"text-emerald-300":"text-rose-200")}>{e.eligible?"Eligible for betting slip":"Slip locked"}</p>
                   <p className="mt-0.5 truncate text-[0.56rem] text-white/35">{e.reason}</p>
                 </>}
               </div>
-              {e.eligible?<div className="flex shrink-0 gap-1.5"><span className="rounded-full bg-emerald-400/10 px-2 py-1 text-[0.48rem] font-black text-emerald-300">CARDS ✓</span><span className="rounded-full bg-emerald-400/10 px-2 py-1 text-[0.48rem] font-black text-emerald-300">FOULS ✓</span></div>:<LockKeyhole className="size-4 shrink-0 text-white/25"/>}
+              {e.eligible?<div className="flex shrink-0 gap-1.5"><span className="rounded-full bg-emerald-400/10 px-2 py-1 text-[0.48rem] font-black text-emerald-300">{e.books[0]??"BOOK"} ✓</span><span className="rounded-full bg-emerald-400/10 px-2 py-1 text-[0.48rem] font-black text-emerald-300">CARDS + FOULS</span></div>:<LockKeyhole className="size-4 shrink-0 text-white/25"/>}
             </div>
 
             <div className="mt-3">
