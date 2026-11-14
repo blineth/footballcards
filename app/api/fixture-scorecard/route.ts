@@ -24,6 +24,24 @@ type OddSelection = {
   movement?: number | null
 }
 
+type OfferedFoulLine = {
+  threshold: number
+  label: string
+  bookmakerMarket: string
+  bookmakerLabel: string
+  bookmakerOdds: number
+  previousBookmakerOdds: number | null
+  bookmakerMovement: number | null
+  impliedProbability: number
+  probability: number
+  fairOdds: number | null
+  edge: number
+  expectedValue: number
+  calibrated: boolean
+  sampleMatches: number
+  confidence: "A" | "B" | "C" | "D"
+}
+
 type ScoreMarket = {
   key: MarketKey
   label: string
@@ -66,6 +84,7 @@ type ScorePlayer = {
     after3PlusFouls: { matches: number; yellows: number; rate: number | null }
   }
   markets: Record<MarketKey, ScoreMarket>
+  offeredFoulLines: OfferedFoulLine[]
 }
 
 type SlipLeg = {
@@ -253,16 +272,16 @@ function playerInLabel(selection: OddSelection, player: string) {
 }
 function selectionThreshold(selection: OddSelection) {
   const raw = norm(selection.market + " " + selection.label)
-  const plus = raw.match(/(?:^|\s)([123])\s*(?:plus|\+)/)
+  const plus = raw.match(/(?:^|\s)([1-9])\s*(?:plus|\+)/)
   if (plus) return Number(plus[1])
 
-  const overHalf = raw.match(/\bover\s*([012])\s*5\b/)
+  const overHalf = raw.match(/\bover\s*([0-8])\s*5\b/)
   if (overHalf) return Number(overHalf[1]) + 1
 
-  const orMore = raw.match(/\b([123])\s*(?:or more|or over|and over|and above)\b/)
+  const orMore = raw.match(/\b([1-9])\s*(?:or more|or over|and over|and above)\b/)
   if (orMore) return Number(orMore[1])
 
-  const atLeast = raw.match(/\b(?:at least|minimum)\s*([123])\b/)
+  const atLeast = raw.match(/\b(?:at least|minimum)\s*([1-9])\b/)
   if (atLeast) return Number(atLeast[1])
 
   if (/\bto commit (?:a|one) foul\b|\b1 foul committed\b|\bone foul committed\b/.test(raw)) return 1
@@ -284,6 +303,44 @@ function findOdds(selections: OddSelection[], player: string, market: MarketKey)
     .sort((a, b) => Number(b.odd ?? 0) - Number(a.odd ?? 0))
   return candidates[0] ?? null
 }
+function exactFoulSelections(selections: OddSelection[], player: string) {
+  const byThreshold = new Map<number, OddSelection>()
+  for (const selection of selections) {
+    if (selection.kind !== "foul" || selection.odd == null || Number(selection.odd) <= 1 || !playerInLabel(selection, player)) continue
+    const threshold = selectionThreshold(selection)
+    if (threshold == null) continue
+    const existing = byThreshold.get(threshold)
+    if (!existing || Number(selection.odd) > Number(existing.odd ?? 0)) byThreshold.set(threshold, selection)
+  }
+  return [...byThreshold.entries()]
+    .map(([threshold, selection]) => ({ threshold, selection }))
+    .sort((a,b)=>a.threshold-b.threshold)
+}
+
+function dynamicFoulProbability(input:{
+  rows:MatchRow[]
+  threshold:number
+  per90:number
+  expectedMinutes:number
+  matchupFouled90:number|null
+}) {
+  const ordered=[...input.rows].sort((a,b)=>String(a.matchDate).localeCompare(String(b.matchDate)))
+  const hitFor=(row:MatchRow)=>Number(row.foulsCommitted??0)>=input.threshold
+  const recent10=ordered.slice(-10)
+  const recent5=ordered.slice(-5)
+  const lambda=Math.max(0.01,input.per90*input.expectedMinutes/90)
+  const poisson=poissonAtLeast(lambda,input.threshold)
+  const prior=Math.max(0.01,Math.min(0.99,poisson))
+  const all=betaSmoothed(ordered.filter(hitFor).length,ordered.length,prior,7)
+  const ten=betaSmoothed(recent10.filter(hitFor).length,recent10.length,all,5)
+  const five=betaSmoothed(recent5.filter(hitFor).length,recent5.length,ten,4)
+  let probability=clamp(all*0.50+ten*0.25+five*0.15+poisson*0.10)
+  if(input.matchupFouled90!=null&&input.matchupFouled90>0){
+    probability=logitAdjust(probability,(input.matchupFouled90-1.35)*0.12)
+  }
+  return probability
+}
+
 function fairOdds(probability: number) {
   return probability > 0 ? Math.round((1 / probability) * 100) / 100 : null
 }
@@ -698,6 +755,37 @@ export async function GET(request: Request) {
         after3PlusFouls: cond3,
       },
       markets,
+      offeredFoulLines: exactFoulSelections(usableSelections, candidate.name).map(({threshold,selection})=>{
+        const standardKey = threshold===1 ? "foul1" : threshold===2 ? "foul2" : threshold===3 ? "foul3" : null
+        const probability = standardKey
+          ? markets[standardKey].probability
+          : dynamicFoulProbability({
+              rows,
+              threshold,
+              per90:Number(candidate.fouls90??0),
+              expectedMinutes,
+              matchupFouled90,
+            })
+        const bookmakerOdds=Number(selection.odd)
+        const impliedProbability=1/bookmakerOdds
+        return {
+          threshold,
+          label:threshold+"+ fouls committed",
+          bookmakerMarket:selection.market,
+          bookmakerLabel:selection.label,
+          bookmakerOdds,
+          previousBookmakerOdds:selection.previousOdd==null?null:Number(selection.previousOdd),
+          bookmakerMovement:selection.movement==null?null:Number(selection.movement),
+          impliedProbability:Math.round(impliedProbability*1000)/1000,
+          probability:Math.round(probability*1000)/1000,
+          fairOdds:fairOdds(probability),
+          edge:Math.round((probability-impliedProbability)*1000)/1000,
+          expectedValue:Math.round((probability*bookmakerOdds-1)*1000)/1000,
+          calibrated:Boolean(standardKey),
+          sampleMatches:rows.length,
+          confidence,
+        }
+      }),
     }
   }).sort((a, b) => b.markets.foul1.probability - a.markets.foul1.probability)
 
@@ -740,6 +828,12 @@ export async function GET(request: Request) {
     referee: radar?.referee ?? null,
     playerCount: players.length,
     players,
+    exactFoulOffers: players.flatMap(player => player.offeredFoulLines.map(line => ({
+      player: player.name,
+      team: player.team,
+      position: player.position,
+      ...line,
+    }))).sort((a,b) => (b.edge-a.edge) || (b.probability-a.probability)),
     slips,
     previewSlips,
     foulTargetSlips,
@@ -749,7 +843,7 @@ export async function GET(request: Request) {
       description: "Player-level pre-match probabilities use only match rows dated before the target fixture. They combine smoothed historical hit rates, recency, H2H, expected minutes, direct matchup pressure, count-rate cross-checks, referee/card context and walk-forward calibration.",
       cardConditional: "Yellow-card estimates measure each player's booking rate at 0 fouls, exactly 1, exactly 2, 3+, 1+ and 2+ foul states, with sample-size reliability. Match-level data still cannot identify the exact foul that triggered the booking.",
       calibrationWarning: "Displayed probabilities are adjusted through walk-forward calibration built from earlier-match-only predictions across 30 competitions. They remain estimates, not guarantees.",
-      slipWarning: "Same-player and same-match legs can be correlated. Combined slip probability is deliberately not calculated by multiplying leg probabilities.",
+      slipWarning: "Same-player and same-match legs can be correlated. Exact individual bookmaker foul lines are mirrored only when their threshold is explicitly present in the feed. Bet365's same-game Builder price is proprietary and is not labelled exact unless a bookmaker builder quote is supplied.",
       priceFreshness: "Free-tier bookmaker snapshots are cached to protect API quotas. Fresh snapshots under two minutes are LIVE; recent cached snapshots remain usable for market availability and reference pricing until their free-tier cache window expires.",
     },
     generatedAt: new Date().toISOString(),
