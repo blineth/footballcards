@@ -86,48 +86,94 @@ async function enrichReferees(fixtures: Fixture[]) {
   )
 }
 
+function addDays(date: string, days: number) {
+  const d = new Date(`${date}T12:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + days)
+  return d.toISOString().slice(0, 10)
+}
+
+function fixtureKey(f: Fixture) {
+  return [f.competition, f.kickoff.slice(0,10), f.home.name, f.away.name].join("|").toLowerCase()
+}
+
+async function fixturesForDate(date: string) {
+  const provider = getProvider()
+  let providerFixtures: Fixture[] = []
+  let espn: Fixture[] = []
+
+  if (provider.isConfigured()) {
+    try {
+      providerFixtures = await provider.getFixturesForDate(date)
+    } catch (error) {
+      console.log("[v0] API-Football fixture fetch failed:", error instanceof Error ? error.message : error)
+    }
+  }
+
+  try {
+    espn = await espnFixtures(date)
+  } catch (error) {
+    console.log("[v0] ESPN fixture fetch failed:", error instanceof Error ? error.message : error)
+  }
+
+  // Merge rather than only falling back when the primary provider is totally empty.
+  // This prevents one competition disappearing when the provider has partial coverage.
+  const merged = new Map<string, Fixture>()
+  for (const f of espn) merged.set(fixtureKey(f), f)
+  for (const f of providerFixtures) merged.set(fixtureKey(f), f)
+  return [...merged.values()]
+}
+
+function groupFixtures(fixtures: Fixture[]) {
+  const leagues: FixturesResponse["leagues"] = { "Premier League": [], Championship: [] }
+  for (const f of fixtures) {
+    const league = f.competition as Competition
+    if (leagues[league]) leagues[league].push(f)
+  }
+  for (const key of Object.keys(leagues) as Competition[]) {
+    leagues[key].sort((a, b) => a.kickoff.localeCompare(b.kickoff))
+  }
+  return leagues
+}
+
 export async function GET(request: Request) {
   const url = new URL(request.url)
-  const date = url.searchParams.get("date") ?? londonToday()
-  const provider = getProvider()
+  const requestedDate = url.searchParams.get("date") ?? londonToday()
+  const targetCompetition = url.searchParams.get("competition") as Competition | null
+  const nextIfEmpty = url.searchParams.get("nextIfEmpty") === "1"
 
   const base: FixturesResponse = {
     connected: true,
     updatedAt: new Date().toISOString(),
-    date,
+    date: requestedDate,
     leagues: { "Premier League": [], Championship: [] },
   }
 
   try {
-    let fixtures: Fixture[] = []
+    let resolvedDate = requestedDate
+    let fixtures = await fixturesForDate(resolvedDate)
+    let leagues = groupFixtures(await enrichReferees(fixtures))
 
-    if (provider.isConfigured()) {
-      try {
-        fixtures = await provider.getFixturesForDate(date)
-      } catch (error) {
-        console.log("[v0] API-Football fixture fetch failed, falling back to ESPN:", error instanceof Error ? error.message : error)
+    if (nextIfEmpty && targetCompetition && leagues[targetCompetition]?.length === 0) {
+      for (let offset = 1; offset <= 21; offset++) {
+        const candidateDate = addDays(requestedDate, offset)
+        const candidateFixtures = await fixturesForDate(candidateDate)
+        const candidateLeagues = groupFixtures(await enrichReferees(candidateFixtures))
+        if (candidateLeagues[targetCompetition]?.length) {
+          resolvedDate = candidateDate
+          fixtures = candidateFixtures
+          leagues = candidateLeagues
+          break
+        }
       }
     }
 
-    // API-Football can return an empty array for newer seasons on some plans.
-    // ESPN is used as a live public fallback so real matchdays never appear empty.
-    if (fixtures.length === 0) {
-      fixtures = await espnFixtures(date)
-    }
-
-    const enriched = await enrichReferees(fixtures)
-    const leagues: FixturesResponse["leagues"] = { "Premier League": [], Championship: [] }
-
-    for (const f of enriched) {
-      const league = f.competition as Competition
-      if (leagues[league]) leagues[league].push(f)
-    }
-
-    for (const key of Object.keys(leagues) as Competition[]) {
-      leagues[key].sort((a, b) => a.kickoff.localeCompare(b.kickoff))
-    }
-
-    return NextResponse.json({ ...base, leagues })
+    return NextResponse.json({
+      ...base,
+      date: resolvedDate,
+      requestedDate,
+      showingNextMatchday: resolvedDate !== requestedDate,
+      leagues,
+    })
   } catch (error) {
     console.log("[v0] /api/fixtures error:", error instanceof Error ? error.message : error)
     return NextResponse.json(
