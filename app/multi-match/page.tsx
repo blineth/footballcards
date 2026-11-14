@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { CalendarDays, Check, Layers3, RefreshCw, Sparkles } from "lucide-react"
 
 type Competition = "Premier League" | "Championship" | "League One" | "League Two" | "International"
+type MarketStatus = "available"|"unavailable"|"unknown"
 type Fixture = {
   id:string
   competition:Competition
@@ -33,6 +34,7 @@ type FoulTargetSlip = {id:string;legs:SlipLeg[]}
 type Scorecard = {
   ok:boolean
   lineupsConfirmed?:boolean
+  marketAvailability?:{card:MarketStatus;foul:MarketStatus;fouled:MarketStatus;shot:MarketStatus;sot:MarketStatus}
   slips?:BetSlip[]
   foulTargetSlips?:FoulTargetSlip[]
   error?:string
@@ -70,6 +72,14 @@ function scorecardUrl(f:Fixture){
   return "/api/fixture-scorecard?"+new URLSearchParams({date:fixtureDate(f),home:f.home.name,away:f.away.name,competition:f.competition,refresh:String(Date.now())})
 }
 function key(leg:SlipLeg){return leg.player+"|"+leg.market}
+function marketStatusForLeg(scorecard:Scorecard|null,leg:SlipLeg):MarketStatus{
+  if(!scorecard?.marketAvailability)return "unknown"
+  if(leg.market==="card")return scorecard.marketAvailability.card
+  if(leg.market.startsWith("fouled"))return scorecard.marketAvailability.fouled
+  if(leg.market.startsWith("foul"))return scorecard.marketAvailability.foul
+  if(leg.market.startsWith("sot"))return scorecard.marketAvailability.sot
+  return scorecard.marketAvailability.shot
+}
 function uniqueLegs(scorecard:Scorecard|null){
   const map=new Map<string,SlipLeg>()
   for(const slip of scorecard?.slips??[]){
@@ -82,9 +92,11 @@ function uniqueLegs(scorecard:Scorecard|null){
   return [...map.values()]
 }
 function bestCard(scorecard:Scorecard|null){
+  if(scorecard?.marketAvailability?.card==="unavailable")return null
   return uniqueLegs(scorecard).filter(l=>l.market==="card").sort((a,b)=>b.probability-a.probability)[0]??null
 }
 function bestFoul(scorecard:Scorecard|null){
+  if(scorecard?.marketAvailability?.foul==="unavailable")return null
   const target=(scorecard?.foulTargetSlips??[]).find(s=>s.id==="foul-3-1")
   const fromTarget=[...(target?.legs??[])].sort((a,b)=>b.probability-a.probability)[0]
   if(fromTarget)return fromTarget
@@ -93,6 +105,7 @@ function bestFoul(scorecard:Scorecard|null){
 function bestSafe(scorecard:Scorecard|null){
   return uniqueLegs(scorecard)
     .filter(l=>l.confidence!=="D")
+    .filter(l=>marketStatusForLeg(scorecard,l)!=="unavailable")
     .sort((a,b)=>{
       const qa=a.probability+(a.confidence==="A"?.06:a.confidence==="B"?.04:0)+Math.max(0,Number(a.edge??0))*.2
       const qb=b.probability+(b.confidence==="A"?.06:b.confidence==="B"?.04:0)+Math.max(0,Number(b.edge??0))*.2
@@ -100,7 +113,7 @@ function bestSafe(scorecard:Scorecard|null){
     })[0]??null
 }
 function bestShot(scorecard:Scorecard|null){
-  return uniqueLegs(scorecard).filter(l=>l.market.startsWith("shot")||l.market.startsWith("sot")).sort((a,b)=>b.probability-a.probability)[0]??null
+  return uniqueLegs(scorecard).filter(l=>l.market.startsWith("shot")||l.market.startsWith("sot")).filter(l=>marketStatusForLeg(scorecard,l)!=="unavailable").sort((a,b)=>b.probability-a.probability)[0]??null
 }
 function makeMultiSlip(id:string,title:string,subtitle:string,results:MatchResult[],selector:(s:Scorecard|null)=>SlipLeg|null):MultiSlip{
   const legs:MultiLeg[]=[]
@@ -212,7 +225,7 @@ export default function MultiMatchPage(){
       {selected.length?<button onClick={()=>void build()} disabled={building} className="w-full rounded-2xl bg-sky-300 px-4 py-3.5 text-sm font-black text-sky-950 disabled:opacity-60">{building?"Analysing selected matches…":"Build multi-match slips"}</button>:null}
 
       {results.length?<section className="space-y-3">
-        <div className="rounded-2xl border border-white/8 bg-white/[0.035] p-3 text-[0.62rem] text-white/45"><b className="text-white">{results.filter(r=>r.confirmed).length}</b> of {results.length} selected matches currently have confirmed lineups. Unconfirmed games are excluded from the final legs until their XIs are confirmed.</div>
+        <div className="rounded-2xl border border-white/8 bg-white/[0.035] p-3 text-[0.62rem] text-white/45"><b className="text-white">{results.filter(r=>r.confirmed).length}</b> of {results.length} selected matches currently have confirmed lineups. Unconfirmed games are excluded from the final legs until their XIs are confirmed.</div><div className="rounded-2xl border border-amber-300/10 bg-amber-300/5 p-3 text-[0.6rem] text-amber-100/80">If a bookmaker confirms a required market is unavailable — for example no player yellow-card market — that game is skipped for that slip type. Unknown markets stay model-only until verified.</div>
         {slips.map(slip=><MultiSlipCard key={slip.id} slip={slip}/>)}
       </section>:null}
     </div>
