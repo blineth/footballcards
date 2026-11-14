@@ -56,6 +56,23 @@ type FoulTargetSlip = {
   marketStatus?:MarketStatus
 }
 
+type ExactFoulOffer = {
+  player:string
+  team:string
+  position?:string|null
+  threshold:number
+  label:string
+  bookmakerMarket:string
+  bookmakerLabel:string
+  bookmakerOdds:number
+  bookmaker:string
+  probability:number
+  fairOdds:number|null
+  edge:number
+  expectedValue:number
+  confidence:"A"|"B"|"C"|"D"
+}
+
 type Scorecard = {
   ok:boolean
   lineupsConfirmed?:boolean
@@ -65,6 +82,7 @@ type Scorecard = {
   referee?:{name?:string;yellowsPerGame?:number|null}|null
   marketAvailability?:{card:MarketStatus;foul:MarketStatus;fouled:MarketStatus;shot:MarketStatus;sot:MarketStatus}
   slips?:BetSlip[]
+  exactFoulOffers?:ExactFoulOffer[]
   foulTargetSlips?:FoulTargetSlip[]
   error?:string
 }
@@ -160,6 +178,7 @@ export default function BetBuilderPage(){
       {data?.ok&&eligible&&!data.lineupsConfirmed?<section className="rounded-3xl border border-amber-300/15 bg-amber-300/5 p-6 text-center"><Clock3 className="mx-auto size-6 text-amber-300"/><p className="mt-3 font-black">Markets are eligible — waiting for confirmed lineups</p><p className="mx-auto mt-1 max-w-lg text-xs leading-relaxed text-white/40">Both player cards and fouls are available. Final recommendations will appear automatically when the starting XIs are confirmed.</p></section>:null}
 
       {data?.ok&&eligible&&data.lineupsConfirmed?<>
+        <ExactFoulOffers offers={data.exactFoulOffers??[]}/>
         <FoulLadder slips={data.foulTargetSlips??[]}/>
         <section className="space-y-3">
           <div className="px-1"><p className="font-black">Recommended slips</p><p className="text-[0.6rem] text-white/35">Built only from a fixture where both player-card and foul markets are available.</p></div>
@@ -180,8 +199,19 @@ function MarketGate({data}:{data:Scorecard}){
   return <section className="rounded-3xl border border-white/10 bg-white/[0.045] p-4"><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-black">Bet365 market check</p><p className="mt-1 text-[0.58rem] text-white/35">{data.lineupsConfirmed?"Confirmed XI loaded":"Pre-lineup market eligibility"}</p></div><span className="rounded-full bg-white/7 px-2 py-1 text-[0.5rem] font-black text-white/45">{data.oddsFreshness??"UNKNOWN"}</span></div><div className="mt-3 grid grid-cols-2 gap-2">{[c,f].map(x=><div key={x.label} className={"rounded-2xl p-3 "+x.cls}><p className="text-[0.55rem] font-black uppercase opacity-70">{x.label}</p><p className="mt-1 text-sm font-black">{x.text}</p></div>)}</div></section>
 }
 
+function ExactFoulOffers({offers}:{offers:ExactFoulOffer[]}){
+  const top=[...offers].sort((a,b)=>(b.edge-a.edge)||(b.probability-a.probability)).slice(0,30)
+  return <section className="space-y-3">
+    <div className="px-1"><p className="font-black">Exact UK bookmaker foul offers</p><p className="text-[0.6rem] text-white/35">Only exact thresholds actually returned by a UK bookmaker are shown. Our probability and fair odds are calculated against that exact line.</p></div>
+    {top.length?<div className="space-y-2">{top.map((o,i)=><div key={o.player+"|"+o.threshold+"|"+o.bookmaker+"|"+i} className="rounded-2xl border border-white/8 bg-white/[0.04] p-3">
+      <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-sm font-black">{o.player} · {o.label}</p><p className="mt-0.5 text-[0.56rem] text-white/35">{o.team} · {o.bookmaker}</p></div><div className="text-right"><p className="font-mono text-lg font-black">{o.bookmakerOdds.toFixed(2)}</p><p className="text-[0.45rem] uppercase text-white/25">book price</p></div></div>
+      <div className="mt-2 grid grid-cols-3 gap-1.5 text-center"><Metric label="Model" value={percent(o.probability)}/><Metric label="Fair" value={o.fairOdds?.toFixed(2)??"—"}/><Metric label="Edge" value={edgeText(o.edge)} good={o.edge>0}/></div>
+    </div>)}</div>:<div className="rounded-2xl border border-dashed border-white/10 p-5 text-center text-sm text-white/35">No exact player-foul thresholds were returned by the current UK bookmaker feed.</div>}
+  </section>
+}
+
 function FoulLadder({slips}:{slips:FoulTargetSlip[]}){
-  return <section className="space-y-3"><div className="px-1"><p className="font-black">Foul odds ladder</p><p className="text-[0.6rem] text-white/35">High-probability 1+ foul players grouped toward roughly 3/1, 10/1, 20/1, 50/1 and 100/1 targets.</p></div>{slips.map(s=><FoulCard key={s.id} slip={s}/>)}</section>
+  return <section className="space-y-3"><div className="px-1"><p className="font-black">Foul odds ladder</p><p className="text-[0.6rem] text-white/35">Built only from exact UK bookmaker foul lines, using whichever threshold and bookmaker price the model rates best.</p></div>{slips.map(s=><FoulCard key={s.id} slip={s}/>)}</section>
 }
 
 function FoulCard({slip}:{slip:FoulTargetSlip}){
@@ -189,7 +219,7 @@ function FoulCard({slip}:{slip:FoulTargetSlip}){
   const ready=slip.legs.length>0
   return <article className="overflow-hidden rounded-3xl border border-emerald-300/15 bg-gradient-to-br from-emerald-500/15 to-black/20">
     <button onClick={()=>setOpen(x=>!x)} className="w-full p-4 text-left">
-      <div className="flex items-start justify-between gap-3"><div><p className="text-[0.54rem] font-black uppercase tracking-[0.14em] text-emerald-300">FOUL TARGET</p><h3 className="mt-1 text-xl font-black">{slip.targetFractional}</h3><p className="mt-1 text-[0.62rem] text-white/45">{ready?slip.legs.length+" players selected":"No qualifying combination"}</p></div><div className="text-right"><p className="font-mono text-xl font-black">{slip.referenceProductOdds?.toFixed(2)??"—"}</p><p className="text-[0.44rem] uppercase text-white/25">reference</p></div></div>
+      <div className="flex items-start justify-between gap-3"><div><p className="text-[0.54rem] font-black uppercase tracking-[0.14em] text-emerald-300">FOUL TARGET</p><h3 className="mt-1 text-xl font-black">{slip.targetFractional}</h3><p className="mt-1 text-[0.62rem] text-white/45">{ready?slip.legs.length+" exact bookmaker lines selected":"No qualifying combination"}</p></div><div className="text-right"><p className="font-mono text-xl font-black">{slip.referenceProductOdds?.toFixed(2)??"—"}</p><p className="text-[0.44rem] uppercase text-white/25">reference</p></div></div>
       {ready?<div className="mt-3 flex flex-wrap gap-1.5">{slip.legs.map(l=><span key={l.player} className="rounded-full bg-white/7 px-2.5 py-1 text-[0.58rem] font-bold text-white/70">{l.player} 1+ · {percent(l.probability)}</span>)}</div>:null}
     </button>
     {open&&ready?<div className="border-t border-white/8 bg-black/20 p-4"><div className="space-y-2">{slip.legs.map((l,i)=><Leg key={l.player+"|"+i} leg={l}/>)}</div><p className="mt-3 text-[0.55rem] leading-relaxed text-white/30">{slip.note}</p></div>:null}
