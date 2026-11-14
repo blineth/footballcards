@@ -284,7 +284,16 @@ def build() -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, 
     reports: list[dict[str, Any]] = []
 
     for slug, competition in COMPETITIONS:
-        events = collect_events(slug)
+        try:
+            events = collect_events(slug)
+        except Exception as exc:
+            reports.append({
+                "competition": competition,
+                "completed_matches": 0,
+                "failures": [{"stage": "scoreboard", "error": str(exc)}],
+            })
+            print(f"{competition}: scoreboard discovery failed: {exc}", flush=True)
+            continue
         print(f"{competition}: {len(events)} completed matches discovered", flush=True)
         failures = []
 
