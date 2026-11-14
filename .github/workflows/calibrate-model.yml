@@ -40,12 +40,12 @@ jobs:
           p = Path("data/model/calibration.json")
           data = json.loads(p.read_text(encoding="utf-8"))
 
-          assert data["version"] == "walk-forward-v2"
+          assert data["version"] == "walk-forward-v3"
           assert int(data["rowsRead"]) > 1000
           assert int(data["walkForwardPredictions"]) > 1000
           assert len(data["competitions"]) >= 10
 
-          for market in ["card", "foul1", "foul2", "foul3", "fouled1", "shot1", "shot2", "sot1", "sot2"]:
+          for market in ["card", "foul1", "foul2", "foul3", "foul4", "foul5", "fouled1", "shot1", "shot2", "sot1", "sot2"]:
               m = data["global"][market]
               assert int(m["sample"]) > 100
               assert len(m["bands"]) == 20
