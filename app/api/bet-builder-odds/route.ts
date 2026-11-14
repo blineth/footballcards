@@ -10,6 +10,7 @@ export const revalidate = 0
 const API_BASE = "https://v3.football.api-sports.io"
 const UK_ODDS_BASE = "https://api.ukoddsapi.com"
 const FREE_ODDS_CACHE_MS = 3 * 60 * 60 * 1000
+const PREFERRED_UK_BOOKMAKERS = ["Bet365","Sky Bet","William Hill","Paddy Power"] as const
 const LEAGUE_IDS: Record<string, string> = {
   "Premier League": "39",
   Championship: "40",
@@ -157,26 +158,23 @@ async function cachedSnapshot(input:{date:string;home:string;away:string;competi
 
     const latestBucket = new Date(latest.snapshotBucket).getTime()
     const sameBucket = rows.filter(row =>
-      new Date(row.snapshotBucket).getTime() === latestBucket
+      new Date(row.snapshotBucket).getTime() === latestBucket &&
+      preferredBookmakerName(row.bookmaker) != null
     )
+    if (!sameBucket.length) return null
     const rawSelections = sameBucket.map(row => ({
       market:row.market,
       kind:row.kind,
       label:row.label,
       odd:Number(row.odds),
-      bookmaker:row.bookmaker,
+      bookmaker:preferredBookmakerName(row.bookmaker) ?? row.bookmaker,
     }))
-    const selections = await attachMovement({
-      date:input.date,
-      home:input.home,
-      away:input.away,
-      competition:input.competition,
-      bookmaker:"Best UK bookmaker",
-      selections:rawSelections,
-    })
+    const selections = rawSelections
+    const cachedBooks = Array.from(new Set(rawSelections.map(s=>s.bookmaker).filter(Boolean)))
     return {
       connected:true,
-      bookmaker:latest.bookmaker,
+      bookmaker:cachedBooks.length===1 ? cachedBooks[0] : "Best of preferred UK books",
+      bookmakers:cachedBooks,
       source:(latest.source ?? "free odds feed")+" · cache",
       capturedAt:capturedAt.toISOString(),
       selections,
@@ -191,13 +189,16 @@ async function cachedSnapshot(input:{date:string;home:string;away:string;competi
   }
 }
 
-function isUkBookmaker(name:string){
+function preferredBookmakerName(name:string){
   const n=norm(name)
-  return [
-    "bet365","sky bet","skybet","william hill","paddy power","betfair",
-    "ladbrokes","coral","betvictor","betway","boylesports","unibet",
-    "888sport","888 sport","betmgm","betuk","10bet","32red","casumo"
-  ].some(book=>n.includes(norm(book)))
+  if(n.includes("bet365")) return "Bet365"
+  if(n.includes("sky bet") || n.includes("skybet")) return "Sky Bet"
+  if(n.includes("william hill")) return "William Hill"
+  if(n.includes("paddy power")) return "Paddy Power"
+  return null
+}
+function isUkBookmaker(name:string){
+  return preferredBookmakerName(name) != null
 }
 
 function marketKind(name: string) {
@@ -305,8 +306,9 @@ async function fromApiFootball(input: { date: string; home: string; away: string
   const books = new Set<string>()
   for (const row of oddsRows) {
     for (const book of row?.bookmakers ?? []) {
-      const bookmakerName=String(book?.name ?? "")
-      if (!bookmakerName || !isUkBookmaker(bookmakerName)) continue
+      const rawBookmakerName=String(book?.name ?? "")
+      const bookmakerName=preferredBookmakerName(rawBookmakerName)
+      if (!bookmakerName) continue
       books.add(bookmakerName)
       for (const bet of book?.bets ?? []) {
         const kind = marketKind(String(bet?.name ?? ""))
@@ -327,7 +329,7 @@ async function fromApiFootball(input: { date: string; home: string; away: string
 
   return {
     connected: true,
-    bookmaker: books.size === 1 ? [...books][0] : "Best UK bookmaker",
+    bookmaker: books.size === 1 ? [...books][0] : "Best of preferred UK books",
     bookmakers:[...books].sort(),
     source: "API-Football UK bookmaker feed",
     capturedAt: null,
@@ -384,7 +386,8 @@ export async function GET(request: Request) {
     // No paid odds dependency is required. The prediction engine still works from calibrated fair odds.
     return NextResponse.json({
       connected:Boolean(apiKey && LEAGUE_IDS[competition]),
-      bookmaker:"Bet365",
+      bookmaker:"Preferred UK books",
+      bookmakers:[...PREFERRED_UK_BOOKMAKERS],
       source:apiKey && LEAGUE_IDS[competition] ? "API-Football free tier" : null,
       selections:[],
       priceAvailable:false,
@@ -398,7 +401,8 @@ export async function GET(request: Request) {
     console.log("[bet-builder-odds]", error instanceof Error ? error.message : error)
     return NextResponse.json({
       connected:false,
-      bookmaker:"Bet365",
+      bookmaker:"Preferred UK books",
+      bookmakers:[...PREFERRED_UK_BOOKMAKERS],
       selections:[],
       priceAvailable:false,
       freeTier:true,
