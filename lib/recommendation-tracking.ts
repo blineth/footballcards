@@ -168,6 +168,34 @@ export async function recommendationTrackingSummary(days=30){
      FROM recommendation_snapshots
      WHERE fixture_date >= (CURRENT_DATE - $1::int)`,[days],
   )
+  const slips=await pool.query(
+    `WITH grouped AS (
+       SELECT recommendation_key,
+              bool_and(graded_at IS NOT NULL) AS fully_graded,
+              bool_and(COALESCE(outcome,false)) AS won,
+              bool_or(is_top_pick) AS top_pick
+       FROM recommendation_snapshots
+       WHERE fixture_date >= (CURRENT_DATE - $1::int)
+       GROUP BY recommendation_key
+     )
+     SELECT
+       count(*) FILTER (WHERE fully_graded)::int AS complete_slips,
+       count(*) FILTER (WHERE fully_graded AND won)::int AS winning_slips,
+       count(*) FILTER (WHERE fully_graded AND top_pick)::int AS top_pick_slips,
+       count(*) FILTER (WHERE fully_graded AND top_pick AND won)::int AS top_pick_winning_slips
+     FROM grouped`,[days],
+  )
+  const exact=await pool.query(
+    `SELECT
+       count(*)::int AS sample,
+       sum(CASE WHEN outcome THEN bookmaker_odds::numeric - 1 ELSE -1 END) AS profit_units
+     FROM recommendation_snapshots
+     WHERE fixture_date >= (CURRENT_DATE - $1::int)
+       AND graded_at IS NOT NULL
+       AND price_source='exact'
+       AND bookmaker_odds IS NOT NULL
+       AND placeable IS TRUE`,[days],
+  )
   const byMarket=await pool.query(
     `SELECT market,
        count(*)::int AS sample,
@@ -181,10 +209,18 @@ export async function recommendationTrackingSummary(days=30){
      ORDER BY sample DESC`,[days],
   )
   const row=overall.rows[0]??{}
+  const slipRow=slips.rows[0]??{}
+  const exactRow=exact.rows[0]??{}
   const graded=Number(row.graded_legs??0)
   const hits=Number(row.hits??0)
   const topSample=Number(row.top_pick_legs??0)
   const topHits=Number(row.top_pick_hits??0)
+  const completeSlips=Number(slipRow.complete_slips??0)
+  const winningSlips=Number(slipRow.winning_slips??0)
+  const topPickSlips=Number(slipRow.top_pick_slips??0)
+  const topPickWinningSlips=Number(slipRow.top_pick_winning_slips??0)
+  const exactSample=Number(exactRow.sample??0)
+  const exactProfit=numeric(exactRow.profit_units)??0
   return {
     available:true,
     days,
@@ -197,6 +233,15 @@ export async function recommendationTrackingSummary(days=30){
     topPickHits:topHits,
     topPickHitRate:topSample?topHits/topSample:null,
     topPickAvgProbability:numeric(row.top_pick_avg_probability),
+    completeSlips,
+    winningSlips,
+    slipHitRate:completeSlips?winningSlips/completeSlips:null,
+    topPickSlips,
+    topPickWinningSlips,
+    topPickSlipHitRate:topPickSlips?topPickWinningSlips/topPickSlips:null,
+    exactPriceLegs:exactSample,
+    exactPriceProfitUnits:exactSample?exactProfit:null,
+    exactPriceROI:exactSample?exactProfit/exactSample:null,
     byMarket:byMarket.rows.map(r=>({
       market:r.market,
       sample:Number(r.sample??0),
