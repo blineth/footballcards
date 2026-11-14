@@ -117,7 +117,7 @@ async function addDeepEvidence(data: any, home: string, away: string, competitio
   const candidateNames = data.candidates.map((c: any) => String(c.dbName ?? "")).filter(Boolean)
   const allNames = Array.from(new Set([...candidateNames, ...predictedNames])) as string[]
   const [baselines, matchRows, refereeRows] = await Promise.all([
-    db.select().from(playerBaselines).where(eq(playerBaselines.season, competition === "Championship" ? "2026/27" : "2025/26")),
+    db.select().from(playerBaselines).where(eq(playerBaselines.season, "2026/27")),
     db.select().from(playerH2H).where(and(inArray(playerH2H.playerName, candidateNames), eq(playerH2H.competition, competition))),
     refereeName ? db.select().from(playerRefereeHistory).where(and(inArray(playerRefereeHistory.playerName, candidateNames), eq(playerRefereeHistory.refereeName, refereeName))) : Promise.resolve([]),
   ])
@@ -185,7 +185,7 @@ async function addDeepEvidence(data: any, home: string, away: string, competitio
     if (recentYC >= 2) reasons.push(`${recentYC} yellows in last ${candidate.recentFive?.games ?? 5} matches`)
     else if (recentYC === 1) reasons.push("Booked in recent 5-match sample")
     if (recentF90 >= 1.5) reasons.push(`${recentF90.toFixed(2)} fouls/90 over recent matches`)
-    if (Number(candidate.cards90 ?? 0) >= 0.3) reasons.push(`${Number(candidate.cards90).toFixed(2)} cards/90 last season`)
+    if (Number(candidate.cards90 ?? 0) >= 0.3) reasons.push(`${Number(candidate.cards90).toFixed(2)} cards/90 this season`)
     if (matchup && matchupType === "direct-predicted-role") reasons.push(`${candidate.predictedRole} likely facing ${matchup.role} ${matchup.name}${matchupPressure > 0 ? ` (${matchupPressure.toFixed(2)} fouls drawn/90)` : ""}`)
     else if (matchup && matchupPressure >= 1.5) reasons.push(`Likely matchup ${matchup.name} draws ${matchupPressure.toFixed(2)} fouls/90`)
     if (candidate.refereePlayer?.matches >= 2 && refPlayerRate >= 0.4) reasons.push(`Booked in ${candidate.refereePlayer.yellows}/${candidate.refereePlayer.matches} games under this referee`)
