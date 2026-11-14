@@ -24,6 +24,7 @@ type Radar = {
   lineupsConfirmed?:boolean
   referee?:{name:string;yellowsPerGame?:number|null}|null
 }
+type MarketStatus = "available"|"unavailable"|"unknown"
 type SlipLeg = {
   player:string
   team:string
@@ -46,6 +47,8 @@ type BetSlip = {
   legs:SlipLeg[]
   averageLegProbability:number|null
   note:string
+  placeable?:boolean
+  marketAvailability?:Array<{player:string;market:string;status:MarketStatus}>
 }
 type FoulTargetSlip = {
   id:string
@@ -59,15 +62,18 @@ type FoulTargetSlip = {
   usesLivePrices:boolean
   withinTargetRange:boolean
   note:string
+  placeable?:boolean
+  marketStatus?:MarketStatus
 }
 type Scorecard = {
   ok:boolean
   bookmaker?:string|null
   oddsSource?:string|null
-  oddsFreshness?:"LIVE"|"SLIGHTLY STALE"|"STALE"|"UNKNOWN"
+  oddsFreshness?:"LIVE"|"SLIGHTLY STALE"|"CACHED"|"STALE"|"UNKNOWN"
   oddsCapturedAt?:string|null
   priceAvailable?:boolean
   playerCount?:number
+  marketAvailability?:{card:MarketStatus;foul:MarketStatus;fouled:MarketStatus;shot:MarketStatus;sot:MarketStatus}
   slips?:BetSlip[]
   foulTargetSlips?:FoulTargetSlip[]
   error?:string
@@ -100,6 +106,11 @@ function scorecardUrl(f:Fixture,bust=0){
 }
 function radarUrl(f:Fixture,bust=0){
   return "/api/fixture-radar?"+new URLSearchParams({date:fixtureDate(f),home:f.home.name,away:f.away.name,competition:f.competition,refresh:String(bust)})
+}
+function marketStatusLabel(status:MarketStatus|undefined,label:string){
+  if(status==="available") return {text:label+" available",cls:"bg-emerald-400/15 text-emerald-300"}
+  if(status==="unavailable") return {text:label+" unavailable",cls:"bg-rose-400/15 text-rose-200"}
+  return {text:label+" not verified",cls:"bg-amber-300/10 text-amber-200"}
 }
 function slipWhy(slip:BetSlip){
   if(slip.id==="main-safe") return "The model's strongest simple markets in this game, prioritising high calibrated hit rates and avoiding too much exposure to one player."
