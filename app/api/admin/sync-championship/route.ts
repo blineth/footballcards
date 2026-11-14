@@ -104,6 +104,8 @@ function mapped(dataset: Dataset, r: Record<string, string>) {
         matchDate: r.match_date,
         competition: str(r.competition),
         venue: str(r.venue),
+        position: str(r.position),
+        starter: bool(r.starter),
         minutes: int(r.minutes),
         foulsCommitted: int(r.fouls_committed),
         foulsDrawn: int(r.fouls_drawn),
