@@ -721,8 +721,26 @@ export async function GET(request: Request) {
   if (!date || !home || !away) return NextResponse.json({ ok: false, error: "Invalid fixture parameters" }, { status: 400 })
   if (!isDatabaseConfigured) return NextResponse.json({ ok: false, error: "Database not connected" }, { status: 503 })
 
-  await ensureResearchSchema()
-  const radarResponse = await radarGET(request)
+  try {
+    await ensureResearchSchema()
+  } catch (error) {
+    return NextResponse.json({
+      ok:false,
+      error:"Live research database is temporarily unavailable. Recommended can continue from the repository snapshot fallback.",
+      fallbackAvailable:true,
+    },{status:503})
+  }
+
+  let radarResponse:Response
+  try {
+    radarResponse = await radarGET(request)
+  } catch (error) {
+    return NextResponse.json({
+      ok:false,
+      error:"Live player research is temporarily unavailable. Recommended can continue from the repository snapshot fallback.",
+      fallbackAvailable:true,
+    },{status:503})
+  }
   if (!radarResponse.ok) return radarResponse
   const radar = await radarResponse.json()
   const candidates: any[] = Array.isArray(radar?.candidates) ? radar.candidates : []
@@ -758,9 +776,18 @@ export async function GET(request: Request) {
     .filter(([,a])=>a.card==="available"&&a.foul==="available")
     .map(([book])=>book)
 
-  const history = names.length
-    ? await db.select().from(playerH2H).where(and(inArray(playerH2H.playerName, names), lt(playerH2H.matchDate, date)))
-    : []
+  let history: MatchRow[] = []
+  if(names.length){
+    try {
+      history = await db.select().from(playerH2H).where(and(inArray(playerH2H.playerName, names), lt(playerH2H.matchDate, date)))
+    } catch (error) {
+      return NextResponse.json({
+        ok:false,
+        error:"Live player-history database quota is temporarily unavailable. Recommended can continue from the repository snapshot fallback.",
+        fallbackAvailable:true,
+      },{status:503})
+    }
+  }
 
   const countryH2HDates=new Set<string>()
   let countryH2HPlayerSamples=0
