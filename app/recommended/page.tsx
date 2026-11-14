@@ -157,7 +157,7 @@ export default function RecommendedPage(){
       {view==="all"&&tracking?.available?<MiniPerformance tracking={tracking}/>:null}
 
       {loading&&!best?<div className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center"><RefreshCw className="mx-auto mb-3 size-5 animate-spin text-violet-300"/><p className="font-black">Scanning upcoming matches…</p></div>:null}
-      {!loading&&!data?.ok?<div className="rounded-3xl border border-rose-300/15 bg-rose-400/5 p-6 text-center"><p className="font-black">Recommended scan unavailable</p><p className="mt-1 text-sm text-white/40">{data?.error??"Try a manual refresh."}</p></div>:null}
+      {!loading&&data&&!data.ok?<div className="rounded-3xl border border-rose-300/15 bg-rose-400/5 p-6 text-center"><p className="font-black">Recommended scan unavailable</p><p className="mt-1 text-sm text-white/40">{data?.error??"Try a manual refresh."}</p></div>:null}
       {!loading&&data?.ok&&!best?<div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.03] p-8 text-center"><p className="font-black">No recommendation ready yet</p><p className="mt-1 text-sm text-white/35">Recommended only publishes player slips after both starting XIs are confirmed. Matches still waiting for official lineups are withheld.</p></div>:null}
 
       {view==="all"&&best?<RecommendationCard rec={best} hero/>:null}
