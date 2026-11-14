@@ -70,7 +70,7 @@ export default function RecommendedPage(){
           <div>
             <div className="flex items-center gap-2 text-violet-300"><Trophy className="size-4"/><span className="text-[0.62rem] font-black uppercase tracking-[0.16em]">Match Edge</span></div>
             <h1 className="mt-1 text-2xl font-black">Recommended</h1>
-            <p className="mt-1 text-xs text-white/45">One cached server scan across upcoming priority fixtures.</p>
+            <p className="mt-1 text-xs text-white/45">Today’s strongest model recommendations only.</p>
           </div>
           <button onClick={()=>void refresh(true)} className="rounded-xl bg-violet-300 p-2.5 text-violet-950"><RefreshCw className={"size-4 "+(loading?"animate-spin":"")}/></button>
         </div>
@@ -86,7 +86,7 @@ export default function RecommendedPage(){
 
       {loading&&!best?<div className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center"><RefreshCw className="mx-auto mb-3 size-5 animate-spin text-violet-300"/><p className="font-black">Scanning upcoming matches…</p></div>:null}
       {!loading&&!data?.ok?<div className="rounded-3xl border border-rose-300/15 bg-rose-400/5 p-6 text-center"><p className="font-black">Recommended scan unavailable</p><p className="mt-1 text-sm text-white/40">{data?.error??"Try a manual refresh."}</p></div>:null}
-      {!loading&&data?.ok&&!best?<div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.03] p-8 text-center"><p className="font-black">No recommendation ready yet</p><p className="mt-1 text-sm text-white/35">No scanned fixture currently passes the bookmaker/market rules strongly enough.</p></div>:null}
+      {!loading&&data?.ok&&!best?<div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.03] p-8 text-center"><p className="font-black">No recommendation ready yet</p><p className="mt-1 text-sm text-white/35">No remaining fixture today currently passes the model/market rules strongly enough.</p></div>:null}
 
       {best?<RecommendationCard rec={best} hero/>:null}
 
