@@ -1,7 +1,8 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { AlertTriangle, BadgeCheck, RefreshCw, Sparkles, Trophy, Activity } from "lucide-react"
+import Link from "next/link"
+import { AlertTriangle, BadgeCheck, RefreshCw, Sparkles, Trophy, Activity, Flame, Target, TrendingUp, Users, Zap, BarChart3 } from "lucide-react"
 
 type Fixture={id:string;competition:string;kickoff:string;home:{name:string};away:{name:string}}
 type SlipLeg={
@@ -60,6 +61,8 @@ type LiveMatch={
   livePlayerStatsSource?:string|null;
   reasons?:string[]
 }
+type ViewMode="all"|"live"|"value"|"props"|"targets"
+type PropBoardRow={recId:string;fixture:Fixture;leg:SlipLeg;placeable:boolean;marketProbability:number|null;edge:number|null}
 type Response={
   ok:boolean;updatedAt?:string;fixturesScanned?:number;recommendations?:Recommendation[];
   liveMatches?:LiveMatch[];targetOddsGames?:TargetOddsGame[];tracking?:Tracking;error?:string;staleFallback?:boolean;warning?:string
@@ -78,6 +81,7 @@ export default function RecommendedPage(){
   const[loading,setLoading]=useState(false)
   const[data,setData]=useState<Response|null>(null)
   const[selectedTargetFixtureId,setSelectedTargetFixtureId]=useState<string|null>(null)
+  const[view,setView]=useState<ViewMode>("all")
 
   const refresh=useCallback(async(force=false)=>{
     setLoading(true)
@@ -111,6 +115,10 @@ export default function RecommendedPage(){
   const tracking=data?.tracking
   const targetGames=data?.targetOddsGames??[]
   const selectedTargetGame=targetGames.find(g=>g.fixture.id===selectedTargetFixtureId)??targetGames[0]??null
+  const propBoard=useMemo(()=>buildPropBoard(recommendations),[recommendations])
+  const valueBoard=useMemo(()=>propBoard.filter(x=>x.edge!=null&&x.edge>.015).sort((a,b)=>(b.edge??0)-(a.edge??0)).slice(0,12),[propBoard])
+  const topModel=recommendations.length?Math.max(...recommendations.map(r=>avgProbability(r.slip))):null
+  const verified=recommendations.filter(r=>r.placeable).length
 
   return <main className="min-h-screen bg-[#07120e] pb-24 text-white">
     <header className="sticky top-0 z-30 border-b border-white/10 bg-[#07120e]/95 backdrop-blur-xl">
@@ -118,8 +126,8 @@ export default function RecommendedPage(){
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-2 text-violet-300"><Trophy className="size-4"/><span className="text-[0.62rem] font-black uppercase tracking-[0.16em]">Match Edge</span></div>
-            <h1 className="mt-1 text-2xl font-black">Recommended</h1>
-            <p className="mt-1 text-xs text-white/45">Today’s strongest model recommendations only.</p>
+            <h1 className="mt-1 text-2xl font-black">Picks</h1>
+            <p className="mt-1 text-xs text-white/45">One decision board for today's strongest model signals.</p>
           </div>
           <button onClick={()=>void refresh(true)} className="rounded-xl bg-violet-300 p-2.5 text-violet-950"><RefreshCw className={"size-4 "+(loading?"animate-spin":"")}/></button>
         </div>
@@ -132,22 +140,98 @@ export default function RecommendedPage(){
 
     <div className="mx-auto max-w-3xl space-y-4 px-4 py-4">
       {data?.staleFallback?<div className="rounded-2xl border border-amber-300/15 bg-amber-300/[0.06] px-4 py-3 text-xs text-amber-100">{data.warning??"Showing the last successful cached recommendations."}</div>:null}
-      {tracking?.available?<TrackingCard tracking={tracking}/>:null}
-      {liveMatches.length?<LiveNowSection matches={liveMatches}/>:null}
-      {targetGames.length?<TargetOddsSection games={targetGames} selectedId={selectedTargetGame?.fixture.id??null} onSelect={setSelectedTargetFixtureId}/>:null}
+
+      {data?.ok?<section className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <DecisionMetric label="Best model" value={percent(topModel)} sub="avg leg projection"/>
+        <DecisionMetric label="Live now" value={String(liveMatches.length)} sub="recalculating"/>
+        <DecisionMetric label="Verified slips" value={String(verified)} sub="markets checked"/>
+        <DecisionMetric label="Player props" value={String(propBoard.length)} sub="qualified legs"/>
+      </section>:null}
+
+      {data?.ok?<DecisionTabs view={view} setView={setView} liveCount={liveMatches.length} valueCount={valueBoard.length} propCount={propBoard.length}/>:null}
+
+      {(view==="all"||view==="live")&&liveMatches.length?<LiveNowSection matches={liveMatches}/>:null}
+      {(view==="all"||view==="value")&&valueBoard.length?<ValueBoard rows={valueBoard}/>:null}
+      {(view==="all"||view==="props")&&propBoard.length?<PlayerPropsBoard rows={propBoard}/>:null}
+      {(view==="all"||view==="targets")&&targetGames.length?<TargetOddsSection games={targetGames} selectedId={selectedTargetGame?.fixture.id??null} onSelect={setSelectedTargetFixtureId}/>:null}
+      {view==="all"&&tracking?.available?<MiniPerformance tracking={tracking}/>:null}
 
       {loading&&!best?<div className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center"><RefreshCw className="mx-auto mb-3 size-5 animate-spin text-violet-300"/><p className="font-black">Scanning upcoming matches…</p></div>:null}
       {!loading&&!data?.ok?<div className="rounded-3xl border border-rose-300/15 bg-rose-400/5 p-6 text-center"><p className="font-black">Recommended scan unavailable</p><p className="mt-1 text-sm text-white/40">{data?.error??"Try a manual refresh."}</p></div>:null}
       {!loading&&data?.ok&&!best?<div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.03] p-8 text-center"><p className="font-black">No recommendation ready yet</p><p className="mt-1 text-sm text-white/35">Recommended only publishes player slips after both starting XIs are confirmed. Matches still waiting for official lineups are withheld.</p></div>:null}
 
-      {best?<RecommendationCard rec={best} hero/>:null}
+      {view==="all"&&best?<RecommendationCard rec={best} hero/>:null}
 
-      {alternatives.length?<section className="space-y-3">
+      {view==="all"&&alternatives.length?<section className="space-y-3">
         <div className="px-1"><p className="font-black">Other strong options</p><p className="text-[0.6rem] text-white/35">Ranked below the main pick after market calibration, recommendation-level calibration, price source and lineup certainty.</p></div>
         {alternatives.map(r=><RecommendationCard key={r.id} rec={r}/>)}
       </section>:null}
     </div>
   </main>
+}
+
+function buildPropBoard(recommendations:Recommendation[]):PropBoardRow[]{
+  const out:PropBoardRow[]=[]
+  const seen=new Set<string>()
+  for(const rec of recommendations){
+    for(const leg of rec.slip.legs??[]){
+      const key=[rec.fixture.id,leg.player,leg.market,leg.label].join("|")
+      if(seen.has(key))continue
+      seen.add(key)
+      const exact=leg.bookmakerOdds!=null&&leg.priceSource!=="estimated"&&Number(leg.bookmakerOdds)>1
+      const marketProbability=exact?1/Number(leg.bookmakerOdds):null
+      const edge=marketProbability==null?null:Number(leg.probability)-marketProbability
+      out.push({recId:rec.id,fixture:rec.fixture,leg,placeable:rec.placeable,marketProbability,edge})
+    }
+  }
+  return out.sort((a,b)=>b.leg.probability-a.leg.probability)
+}
+
+function DecisionMetric({label,value,sub}:{label:string;value:string;sub:string}){
+  return <div className="rounded-2xl border border-white/8 bg-white/[0.04] p-3"><p className="font-mono text-lg font-black">{value}</p><p className="mt-1 text-[0.48rem] font-black uppercase text-white/30">{label}</p><p className="mt-1 text-[0.45rem] text-white/20">{sub}</p></div>
+}
+
+function DecisionTabs({view,setView,liveCount,valueCount,propCount}:{view:ViewMode;setView:(v:ViewMode)=>void;liveCount:number;valueCount:number;propCount:number}){
+  const tabs=[
+    {id:"all" as const,label:"For you",icon:Sparkles,count:null},
+    {id:"live" as const,label:"Live",icon:Zap,count:liveCount},
+    {id:"value" as const,label:"Value",icon:TrendingUp,count:valueCount},
+    {id:"props" as const,label:"Props",icon:Users,count:propCount},
+    {id:"targets" as const,label:"Target odds",icon:Target,count:null},
+  ]
+  return <section className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none]"><div className="flex min-w-max gap-2 pb-1">{tabs.map(tab=>{const Icon=tab.icon;const active=view===tab.id;return <button key={tab.id} onClick={()=>setView(tab.id)} className={"flex items-center gap-2 rounded-full border px-3.5 py-2.5 text-xs font-black transition "+(active?"border-violet-300/30 bg-violet-300 text-violet-950":"border-white/8 bg-white/[0.04] text-white/50")}><Icon className="size-3.5"/>{tab.label}{tab.count!=null?<span className={"rounded-full px-1.5 py-0.5 text-[0.48rem] "+(active?"bg-violet-950/10":"bg-white/7")}>{tab.count}</span>:null}</button>})}</div></section>
+}
+
+function ValueBoard({rows}:{rows:PropBoardRow[]}){
+  return <section className="space-y-3">
+    <div className="flex items-end justify-between gap-3 px-1"><div><div className="flex items-center gap-2 text-emerald-300"><TrendingUp className="size-4"/><p className="font-black">Best model-vs-price gaps</p></div><p className="mt-1 text-[0.6rem] text-white/35">Only exact recorded bookmaker prices. Gap is model probability minus raw implied price probability.</p></div></div>
+    <div className="space-y-2">{rows.map(row=><div key={row.recId+"|"+row.leg.player+"|"+row.leg.market} className="rounded-2xl border border-emerald-300/10 bg-emerald-400/[0.035] p-3">
+      <div className="flex items-start justify-between gap-3"><div><p className="text-[0.48rem] font-black uppercase text-white/25">{row.fixture.competition} · {row.fixture.home.name} v {row.fixture.away.name}</p><p className="mt-1 text-sm font-black">{row.leg.player} · {row.leg.label}</p><p className="mt-1 text-[0.52rem] text-white/35">{row.leg.bookmakerName??"Bookmaker"} · {row.leg.bookmakerOdds?.toFixed(2)} · Grade {row.leg.confidence}</p></div><div className="text-right"><p className="font-mono text-lg font-black text-emerald-300">+{((row.edge??0)*100).toFixed(1)}pp</p><p className="text-[0.42rem] uppercase text-white/25">model gap</p></div></div>
+      <div className="mt-3 grid grid-cols-3 gap-2"><Stat label="Model" value={percent(row.leg.probability)}/><Stat label="Price implies" value={percent(row.marketProbability)}/><Stat label="Fair odds" value={row.leg.fairOdds?.toFixed(2)??"—"}/></div>
+    </div>)}</div>
+  </section>
+}
+
+function PlayerPropsBoard({rows}:{rows:PropBoardRow[]}){
+  const shown=rows.slice(0,18)
+  return <section className="space-y-3">
+    <div className="px-1"><div className="flex items-center gap-2 text-cyan-300"><Users className="size-4"/><p className="font-black">Player props board</p></div><p className="mt-1 text-[0.6rem] text-white/35">A Statz-style scan of qualified player markets, ranked by model projection rather than hype.</p></div>
+    <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]">
+      <div className="grid grid-cols-[1fr_auto_auto] gap-3 border-b border-white/8 px-3 py-2 text-[0.46rem] font-black uppercase text-white/25"><span>Player / market</span><span>Projection</span><span>Edge</span></div>
+      <div>{shown.map((row,i)=><div key={row.recId+"|"+row.leg.player+"|"+row.leg.market} className={"grid grid-cols-[1fr_auto_auto] items-center gap-3 px-3 py-3 "+(i?"border-t border-white/[0.055]":"")}>
+        <div className="min-w-0"><p className="truncate text-xs font-black">{row.leg.player} · {row.leg.label}</p><p className="mt-0.5 truncate text-[0.46rem] text-white/30">{row.leg.team} · {row.fixture.home.name} v {row.fixture.away.name} · Grade {row.leg.confidence}</p></div>
+        <div className="text-right"><p className="font-mono text-sm font-black">{percent(row.leg.probability)}</p><p className="text-[0.4rem] text-white/20">{row.leg.fairOdds?.toFixed(2)??"—"} fair</p></div>
+        <div className="min-w-[3.1rem] text-right">{row.edge!=null?<><p className={"font-mono text-xs font-black "+(row.edge>0?"text-emerald-300":"text-rose-300")}>{row.edge>=0?"+":""}{(row.edge*100).toFixed(1)}pp</p><p className="text-[0.38rem] text-white/20">{row.leg.bookmakerOdds?.toFixed(2)}</p></>:<><p className="text-xs font-black text-white/25">—</p><p className="text-[0.38rem] text-white/20">no exact price</p></>}</div>
+      </div>)}</div>
+    </div>
+  </section>
+}
+
+function MiniPerformance({tracking}:{tracking:Tracking}){
+  return <Link href="/performance" className="block rounded-3xl border border-emerald-300/10 bg-emerald-400/[0.035] p-4 transition hover:bg-emerald-400/[0.06]">
+    <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-2"><BarChart3 className="size-4 text-emerald-300"/><div><p className="text-sm font-black">Model record</p><p className="text-[0.52rem] text-white/30">{tracking.gradedLegs} graded legs · last {tracking.days} days</p></div></div><span className="text-[0.54rem] font-black text-emerald-300">OPEN RESULTS →</span></div>
+    <div className="mt-3 grid grid-cols-3 gap-2"><Stat label="Hit rate" value={percent(tracking.hitRate)}/><Stat label="Avg model" value={percent(tracking.avgProbability)}/><Stat label="Top-pick hit" value={percent(tracking.topPickHitRate)}/></div>
+  </Link>
 }
 
 function LiveNowSection({matches}:{matches:LiveMatch[]}){
