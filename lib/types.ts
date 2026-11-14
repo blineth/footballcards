@@ -31,6 +31,7 @@ export interface RefereeSummary {
 export interface Fixture {
   id: string
   competition: Competition
+  tournament?: string
   kickoff: string // ISO string, UTC
   status: MatchStatus
   home: TeamRef
