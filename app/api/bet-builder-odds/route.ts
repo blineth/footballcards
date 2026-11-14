@@ -9,13 +9,21 @@ export const revalidate = 0
 
 const API_BASE = "https://v3.football.api-sports.io"
 const UK_ODDS_BASE = "https://api.ukoddsapi.com"
-const FREE_ODDS_CACHE_MS = 3 * 60 * 60 * 1000
-const PREFERRED_UK_BOOKMAKERS = ["Bet365","Sky Bet","William Hill","Paddy Power"] as const
+const ODDS_API_DEV_BASE = "https://api.oddsapi.dev/v1"
+const FREE_ODDS_CACHE_MS = 10 * 60 * 1000
+const PREFERRED_UK_BOOKMAKERS = ["Bet365","Paddy Power","BetMGM UK","Sky Bet","William Hill"] as const
 const LEAGUE_IDS: Record<string, string> = {
   "Premier League": "39",
   Championship: "40",
   "League One": "41",
   "League Two": "42",
+}
+const ODDS_API_DEV_BET365_LEAGUES:Record<string,string[]>={
+  "Premier League":["lg_60298"],
+  Championship:["lg_73017"],
+  "League One":["lg_98740"],
+  "League Two":["lg_52188"],
+  International:["lg_200098"],
 }
 
 function norm(value: string | null | undefined) {
@@ -214,6 +222,7 @@ function preferredBookmakerName(name:string){
   if(n.includes("sky bet") || n.includes("skybet")) return "Sky Bet"
   if(n.includes("william hill")) return "William Hill"
   if(n.includes("paddy power")) return "Paddy Power"
+  if(n.includes("betmgm")) return "BetMGM UK"
   return null
 }
 function isUkBookmaker(name:string){
@@ -230,6 +239,112 @@ function marketKind(name: string) {
   if (/shot/.test(n)) return "shot"
   return "other"
 }
+
+async function oddsApiDev(path:string,params:Record<string,string>,key:string){
+  const url=new URL(ODDS_API_DEV_BASE+path)
+  for(const[k,v]of Object.entries(params))url.searchParams.set(k,v)
+  const response=await fetch(url,{
+    headers:{Authorization:"Bearer "+key,accept:"application/json"},
+    cache:"no-store",
+    signal:AbortSignal.timeout(10000),
+  })
+  if(!response.ok)throw new Error("OddsAPI.dev "+path+" "+response.status)
+  return response.json()
+}
+function oddsDevRows(payload:any){
+  if(Array.isArray(payload?.data))return payload.data
+  if(Array.isArray(payload?.events))return payload.events
+  if(Array.isArray(payload))return payload
+  return []
+}
+function oddsDevTeam(row:any,side:"home"|"away"){
+  return row?.[side+"_team"]?.name
+    ??row?.[side+"_team"]
+    ??row?.[side]?.name
+    ??row?.[side]
+    ??row?.teams?.[side]?.name
+    ??row?.participants?.find?.((x:any)=>String(x?.role??x?.side??"").toLowerCase()===side)?.name
+    ??""
+}
+function oddsDevStart(row:any){
+  return String(row?.starts_at??row?.start_time??row?.start_at??row?.kickoff??row?.commence_time??row?.date??"")
+}
+function dateDistanceHours(a:string,b:string){
+  const x=new Date(a).getTime(),y=new Date(b+"T12:00:00Z").getTime()
+  return Number.isFinite(x)&&Number.isFinite(y)?Math.abs(x-y)/3600000:9999
+}
+function mapOddsDevMarketKey(key:string){
+  const n=norm(key)
+  if(/goal.*scorer.*anytime|anytime.*goal|goalscorer/.test(n))return "goal"
+  if(/shots.*on.*target|shot.*on.*target/.test(n))return "sot"
+  if(/fouls.*won|fouls.*drawn|fouled/.test(n))return "fouled"
+  if(/player.*fouls|fouls/.test(n))return "foul"
+  if(/to.*be.*booked|receive.*card|player.*cards|booked/.test(n))return "card"
+  if(/player.*shots|shots/.test(n))return "shot"
+  return "other"
+}
+function flattenOddsDev(payload:any,bookmakerName:string){
+  const data=payload?.data??payload??{}
+  const markets=Array.isArray(data?.markets)?data.markets:[]
+  const out:Array<{market:string;kind:string;label:string;odd:number|null;bookmaker?:string|null}>=[]
+  for(const market of markets){
+    const marketKey=String(market?.key??market?.name??"")
+    const kind=mapOddsDevMarketKey(marketKey)
+    if(kind==="other")continue
+    const player=String(market?.player??"").trim()
+    for(const outcome of market?.outcomes??[]){
+      const outcomeKey=String(outcome?.key??outcome?.name??"").toLowerCase()
+      const price=Number(outcome?.price??outcome?.odds)
+      if(!Number.isFinite(price)||price<=1)continue
+      if((kind==="goal"||kind==="card")&&/(^no$|under|not)/.test(outcomeKey))continue
+      if(["foul","fouled","shot","sot"].includes(kind)&&outcomeKey&&outcomeKey!=="over"&&!outcomeKey.includes("over"))continue
+      const rawLine=Number(outcome?.line)
+      const threshold=Number.isFinite(rawLine)?Math.floor(rawLine)+1:null
+      const marketLabel=
+        kind==="goal"?"Anytime goalscorer":
+        kind==="card"?"Player to be booked":
+        kind==="foul"?"Player fouls committed":
+        kind==="fouled"?"Player fouls won":
+        kind==="sot"?"Player shots on target":
+        "Player shots"
+      const label=
+        kind==="goal"?((player?player+" · ":"")+"Anytime goalscorer"):
+        kind==="card"?((player?player+" · ":"")+"to be booked"):
+        threshold!=null?((player?player+" · ":"")+threshold+"+ "+(kind==="foul"?"fouls committed":kind==="fouled"?"fouls won":kind==="sot"?"shots on target":"shots")):
+        ((player?player+" · ":"")+String(outcome?.name??outcome?.key??marketLabel))
+      out.push({market:marketLabel,kind,label,odd:price,bookmaker:bookmakerName})
+    }
+  }
+  return out
+}
+async function fromOddsApiDev(input:{date:string;home:string;away:string;competition:string;key:string}){
+  const leagueIds=ODDS_API_DEV_BET365_LEAGUES[input.competition]??[]
+  for(const leagueId of leagueIds){
+    const eventsPayload=await oddsApiDev("/bet365/events",{league_id:leagueId},input.key)
+    const rows=oddsDevRows(eventsPayload)
+      .filter((row:any)=>teamMatch(oddsDevTeam(row,"home"),input.home)&&teamMatch(oddsDevTeam(row,"away"),input.away))
+      .sort((a:any,b:any)=>dateDistanceHours(oddsDevStart(a),input.date)-dateDistanceHours(oddsDevStart(b),input.date))
+    const event=rows[0]
+    const id=String(event?.event_id??event?.id??"")
+    if(!id)continue
+    const oddsPayload=await oddsApiDev("/bet365/events/"+id+"/odds",{},input.key)
+    const selections=flattenOddsDev(oddsPayload,"Bet365")
+    if(!selections.length)continue
+    const capturedAt=String(oddsPayload?.data?.updated_at??oddsPayload?.updated_at??new Date().toISOString())
+    return {
+      connected:true,
+      bookmaker:"Bet365",
+      bookmakers:["Bet365"],
+      source:"OddsAPI.dev Bet365",
+      capturedAt,
+      eventId:id,
+      selections,
+      provider:"oddsapi.dev",
+    }
+  }
+  return null
+}
+
 async function apiFootball(path: string, params: Record<string, string>, key: string) {
   const url = new URL(API_BASE + path)
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v)
@@ -373,54 +488,87 @@ export async function GET(request: Request) {
   }
 
   try {
-    // Free-tier policy: reuse a recent stored bookmaker snapshot before spending API quota.
+    // 1) Dedicated player-props feed: Bet365 boards, future + same-day fixtures.
+    const oddsApiDevKey=process.env.ODDS_API_DEV_KEY
+    if(oddsApiDevKey){
+      try{
+        const primary=await fromOddsApiDev({date,home,away,competition,key:oddsApiDevKey})
+        if(primary){
+          await saveSnapshots({date,home,away,competition,bookmaker:primary.bookmaker,source:primary.source,capturedAt:primary.capturedAt,selections:primary.selections})
+          const selections=await attachMovement({date,home,away,competition,bookmaker:"Bet365",selections:primary.selections})
+          return NextResponse.json({
+            ...primary,selections,priceAvailable:true,freeTier:false,cached:false,maxUsableAgeSeconds:900,
+            marketAvailability:marketAvailability(selections,true),
+            bookmakerAvailability:bookmakerAvailability(selections,["Bet365"]),
+          })
+        }
+      }catch(error){
+        console.log("[bet-builder-odds] OddsAPI.dev:",error instanceof Error?error.message:error)
+      }
+    }
+
+    // 2) UK Odds API full package, when configured.
+    const ukOddsKey=process.env.UK_ODDS_API_KEY
+    if(ukOddsKey){
+      try{
+        const secondary=await fromUkOdds({date,home,away,key:ukOddsKey})
+        if(secondary&&secondary.selections.length){
+          const selections=secondary.selections.map(s=>({...s,bookmaker:"Bet365"}))
+          await saveSnapshots({date,home,away,competition,bookmaker:"Bet365",source:secondary.source,capturedAt:secondary.capturedAt,selections})
+          return NextResponse.json({
+            ...secondary,bookmakers:["Bet365"],selections,priceAvailable:true,freeTier:false,cached:false,maxUsableAgeSeconds:900,
+            marketAvailability:marketAvailability(selections,true),
+            bookmakerAvailability:bookmakerAvailability(selections,["Bet365"]),
+          })
+        }
+      }catch(error){
+        console.log("[bet-builder-odds] UK Odds API:",error instanceof Error?error.message:error)
+      }
+    }
+
+    // 3) Recent last-good snapshot before falling back to broad/free odds.
     const cached = await cachedSnapshot({ date, home, away, competition })
     if (cached) return NextResponse.json(cached)
 
-    // API-Football remains the free bookmaker-data fallback where the free plan supports the league.
+    // 4) API-Football is only a broad fallback. It is not treated as the primary player-props feed.
     const apiKey = process.env.API_FOOTBALL_KEY
     if (apiKey && (LEAGUE_IDS[competition] || competition==="International")) {
       try {
         const fallback = await fromApiFootball({ date, home, away, competition, key: apiKey })
-        if (fallback) {
-          await saveSnapshots({
-            date, home, away, competition,
-            bookmaker:fallback.bookmaker,
-            source:fallback.source,
-            capturedAt:fallback.capturedAt,
-            selections:fallback.selections,
-          })
+        if (fallback?.selections?.length) {
+          await saveSnapshots({date,home,away,competition,bookmaker:fallback.bookmaker,source:fallback.source,capturedAt:fallback.capturedAt,selections:fallback.selections})
           const selections = fallback.selections
           return NextResponse.json({
-            ...fallback,
-            selections,
-            priceAvailable:selections.length > 0,
-            freeTier:true,
-            cached:false,
-            maxUsableAgeSeconds:10800,
+            ...fallback,selections,priceAvailable:true,freeTier:true,cached:false,maxUsableAgeSeconds:900,
             marketAvailability:marketAvailability(selections,true),
             bookmakerAvailability:bookmakerAvailability(selections,fallback.bookmakers??[]),
           })
         }
       } catch (error) {
-        console.log("[bet-builder-odds] free API-Football fallback:", error instanceof Error ? error.message : error)
+        console.log("[bet-builder-odds] API-Football fallback:", error instanceof Error ? error.message : error)
       }
     }
 
-    // No paid odds dependency is required. The prediction engine still works from calibrated fair odds.
     return NextResponse.json({
-      connected:Boolean(apiKey && (LEAGUE_IDS[competition] || competition==="International")),
-      bookmaker:"Preferred UK books",
-      bookmakers:[...PREFERRED_UK_BOOKMAKERS],
-      source:apiKey && (LEAGUE_IDS[competition] || competition==="International") ? "API-Football free tier" : null,
+      connected:Boolean(oddsApiDevKey||ukOddsKey||apiKey),
+      bookmaker:"Bet365",
+      bookmakers:["Bet365"],
+      source:null,
       selections:[],
       priceAvailable:false,
-      freeTier:true,
+      freeTier:!oddsApiDevKey&&!ukOddsKey,
       cached:false,
-      maxUsableAgeSeconds:10800,
+      maxUsableAgeSeconds:900,
       marketAvailability:marketAvailability([],false),
       bookmakerAvailability:bookmakerAvailability([],[]),
-      note:"No free bookmaker player-prop snapshot is available for this fixture. Model probabilities and fair odds remain available.",
+      providerStatus:{
+        oddsApiDev:Boolean(oddsApiDevKey),
+        ukOddsApi:Boolean(ukOddsKey),
+        apiFootball:Boolean(apiKey),
+      },
+      note:oddsApiDevKey||ukOddsKey
+        ?"A dedicated odds provider is configured but did not return a matching player-prop board for this fixture."
+        :"No dedicated player-props odds key is configured. Add ODDS_API_DEV_KEY (recommended) or UK_ODDS_API_KEY; API-Football remains only a fallback.",
     })
   } catch (error) {
     console.log("[bet-builder-odds]", error instanceof Error ? error.message : error)
