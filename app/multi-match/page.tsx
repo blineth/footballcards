@@ -73,6 +73,64 @@ function buildForBook(
   const modelAllHit=legs.length?legs.reduce((p,l)=>p*l.probability,1):null
   return {id,title,subtitle,bookmaker:book,legs,combinedOdds,modelAllHit,complete:complete&&legs.length===results.length}
 }
+function buildTargetMulti(book:string,results:Result[],targetDecimal:number,targetLabel:string):MultiSlip{
+  const fixtureOptions=results.map(r=>{
+    const s=r.scorecard
+    if(!s?.ok||!s.lineupsConfirmed||!(s.eligibleBooks??[]).includes(book))return {fixture:r.fixture,options:[] as Array<{offer:Offer;market:"card"|"foul"}>}
+    const cards=[...(s.exactCardOffers??[])].filter(o=>o.bookmaker===book).sort((a,b)=>quality(b)-quality(a)).slice(0,2)
+    const fouls=[...(s.exactFoulOffers??[])].filter(o=>o.bookmaker===book&&o.probability>=.40).sort((a,b)=>quality(b)-quality(a)).slice(0,3)
+    return {
+      fixture:r.fixture,
+      options:[
+        ...cards.map(offer=>({offer,market:"card" as const})),
+        ...fouls.map(offer=>({offer,market:"foul" as const})),
+      ],
+    }
+  })
+
+  type State={legs:MultiLeg[];odds:number;quality:number}
+  let states:State[]=[{legs:[],odds:1,quality:0}]
+  for(const row of fixtureOptions){
+    const next=[...states]
+    for(const state of states){
+      for(const option of row.options){
+        if(state.legs.length>=12)continue
+        const odds=state.odds*option.offer.bookmakerOdds
+        if(odds>targetDecimal*2.5&&state.legs.length>=1)continue
+        next.push({
+          legs:[...state.legs,{...option.offer,match:row.fixture.home+" v "+row.fixture.away,competition:row.fixture.competition,market:option.market}],
+          odds,
+          quality:state.quality+quality(option.offer),
+        })
+      }
+    }
+    states=next.sort((a,b)=>{
+      const score=(s:State)=>{
+        if(!s.legs.length)return 999
+        const distance=Math.abs(Math.log(Math.max(1.01,s.odds))-Math.log(targetDecimal))
+        return distance*1.8-(s.quality/s.legs.length)*.35
+      }
+      return score(a)-score(b)
+    }).slice(0,240)
+  }
+  const best=states.filter(s=>s.legs.length>=2).sort((a,b)=>{
+    const da=Math.abs(Math.log(a.odds)-Math.log(targetDecimal))
+    const db=Math.abs(Math.log(b.odds)-Math.log(targetDecimal))
+    return da-db
+  })[0]
+  const legs=best?.legs??[]
+  return {
+    id:"target-"+targetLabel.replace("/","-")+"-"+book,
+    title:"~"+targetLabel+" Target",
+    subtitle:"Best same-bookmaker cross-match combination nearest "+targetLabel+" using at most one exact card/foul line per selected game.",
+    bookmaker:book,
+    legs,
+    combinedOdds:best?Math.round(best.odds*100)/100:null,
+    modelAllHit:legs.length?legs.reduce((p,l)=>p*l.probability,1):null,
+    complete:Boolean(best)&&results.every(r=>r.scorecard?.lineupsConfirmed),
+  }
+}
+
 function buildMixedForBook(book:string,results:Result[]):MultiSlip{
   const legs:MultiLeg[]=[]
   let complete=true
@@ -130,6 +188,9 @@ export default function MultiMatchPage(){
       all.push(buildMixedForBook(book,results))
       all.push(buildForBook("cards-"+book,"One Card Per Game","Strongest exact booking price from every selected game.",book,results,bestCard,"card"))
       all.push(buildForBook("fouls-"+book,"One Foul Line Per Game","Strongest exact offered foul threshold from every selected game.",book,results,bestFoul,"foul"))
+      all.push(buildTargetMulti(book,results,6,"5/1"))
+      all.push(buildTargetMulti(book,results,11,"10/1"))
+      all.push(buildTargetMulti(book,results,21,"20/1"))
     }
     return all.filter(s=>s.legs.length)
   },[results,commonBooks])
