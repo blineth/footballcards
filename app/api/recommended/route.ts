@@ -115,7 +115,7 @@ export async function GET(request:Request){
       ? Math.max(.82,Math.min(1.05,liveTopHit/liveTopModel))
       : 1
 
-    const dates=[londonDate(0),londonDate(1),londonDate(2)]
+    const dates=[londonDate(0)]
     const fixtureResponses=await Promise.all(dates.map(date=>fixturesFor(date,refresh)))
     const fixtureMap=new Map<string,Fixture>()
     for(const data of fixtureResponses){
@@ -202,7 +202,7 @@ export async function GET(request:Request){
       tracking,
       methodology:{
         recommendationCalibration:"Final ranking uses a second walk-forward calibration layer built from historical recommendations that survived the selection process.",
-        cache:"Recommended is served from one server endpoint with a five-minute shared-cache target; manual refresh bypasses the normal scan cadence.",
+        cache:"Recommended scans today only and is served from one server endpoint with a five-minute shared-cache target; manual refresh bypasses the normal scan cadence.",
         tracking:"Recommendations are saved before kickoff and graded later from imported player-match data. Model-only recommendations remain visible when bookmaker verification is missing; only verified same-bookmaker markets are marked placeable.",
         liveFeedback:liveTopSample>=50
           ? "Live top-pick calibration is active. Current 30-day reliability multiplier: "+liveReliabilityFactor.toFixed(3)
