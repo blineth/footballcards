@@ -267,7 +267,18 @@ export default function BetBuilderPage(){
 
   if(!fixture)return <main className="min-h-screen bg-[#07120e] px-4 py-10 text-white"><div className="mx-auto max-w-xl rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center"><p className="font-black">Choose a match first</p><p className="mt-2 text-sm text-white/40">Open a fixture from Matches to build it.</p><button onClick={()=>router.push("/")} className="mt-5 rounded-xl bg-emerald-400 px-4 py-2.5 text-sm font-black text-emerald-950">Matches</button></div></main>
 
-  function toggle(row:Selection){setSelected(cur=>{const next={...cur};if(next[row.id])delete next[row.id];else next[row.id]=row;return next})}
+  function toggle(row:Selection){
+    setSelected(cur=>{
+      const next={...cur}
+      if(next[row.id]){delete next[row.id];return next}
+      const family=categoryForMarket(row.market)
+      for(const [id,existing] of Object.entries(next)){
+        if(normPlayer(existing.player)===normPlayer(row.player)&&categoryForMarket(existing.market)===family)delete next[id]
+      }
+      next[row.id]=row
+      return next
+    })
+  }
   function useBuild(build:RiskBuilder){const next:Record<string,Selection>={};for(const leg of build.legs){const row={...leg,id:leg.id||keyOf(leg)};next[row.id]=row}setSelected(next);setTrayOpen(true)}
 
   return <main className="min-h-screen bg-[#07120e] pb-36 text-white">
@@ -317,7 +328,7 @@ function RiskCard({build,onUse}:{build:RiskBuilder;onUse:()=>void}){
   const tone=build.risk==="Safe"?"border-emerald-300/18 bg-emerald-400/[0.06]":build.risk==="Balanced"?"border-amber-300/18 bg-amber-300/[0.05]":"border-rose-300/18 bg-rose-400/[0.05]"
   const accent=build.risk==="Safe"?"text-emerald-300":build.risk==="Balanced"?"text-amber-300":"text-rose-300"
   return <article className={"rounded-2xl border p-3 "+tone}>
-    <div className="flex items-start justify-between gap-2"><div><p className={"text-[0.5rem] font-black uppercase "+accent}>{build.risk}</p><p className="mt-1 text-lg font-black">{build.targetFractional}</p></div><ShieldCheck className={"size-4 "+accent}/></div>
+    <div className="flex items-start justify-between gap-2"><div><p className={"text-[0.5rem] font-black uppercase "+accent}>{build.risk==="High Risk"?"Risky":build.risk}</p><p className="mt-1 text-lg font-black">{build.targetFractional}</p></div><ShieldCheck className={"size-4 "+accent}/></div>
     {build.legs.length?<><div className="mt-2 grid grid-cols-2 gap-1.5"><MiniStat label="Model chance" value={percent(build.modelAllHitProbability,1)}/><MiniStat label="Predicted odds" value={build.referenceProductOdds?.toFixed(2)??"—"}/></div><div className="mt-2 space-y-1">{build.legs.slice(0,4).map(l=><p key={keyOf(l)} className="truncate text-[0.5rem] text-white/60">{l.player} · {l.label}</p>)}{build.legs.length>4?<p className="text-[0.46rem] text-white/25">+{build.legs.length-4} more</p>:null}</div><button onClick={onUse} className="mt-3 w-full rounded-xl bg-white px-3 py-2 text-[0.58rem] font-black text-[#07120e]">Add this slip</button></>:<p className="mt-2 text-[0.54rem] text-white/30">No strong route available yet.</p>}
   </article>
 }
