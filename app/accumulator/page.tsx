@@ -7,6 +7,7 @@ type Leg={fixtureId:string;competition:string;kickoff:string;home:string;away:st
 type Slip={id:string;title:string;subtitle:string;legs:Leg[];fairCombinedOdds:number|null;bookmaker:string|null;exactCombinedOdds:number|null;exactPriced:boolean;available?:boolean;requiredLegs?:number;containsLive?:boolean;modelAllHitProbability?:number|null;adjustedAllHitProbability?:number|null;historicalStructureSample?:number;historicalStructureHitRate?:number|null;combinedProbabilityNote?:string}
 type Prediction={id:string;competition:string;kickoff:string;status?:string;inPlay?:boolean;finished?:boolean;bttsSettled?:boolean;elapsed?:number|null;score?:{home:number;away:number}|null;home:string;away:string;homeCrest?:string|null;awayCrest?:string|null;homeStats:any;awayStats:any;h2h:any;preMatchProbabilities?:{homeWin:number;draw:number;awayWin:number;bttsYes:number;bttsNo:number};probabilities:{homeWin:number;draw:number;awayWin:number;bttsYes:number;bttsNo:number};winnerPick?:{side:string;team:string;loser:string;probability:number;grade:string}|null;drawPick?:{probability:number;grade:string}|null;bttsPick?:{selection:string;probability:number;grade:string}|null;reasons:string[]}
 type RiskMode="safe"|"balanced"|"aggressive"
+type Outcome="home"|"draw"|"away"
 type Response={ok:boolean;date?:string;fixtureCount?:number;activeFixtureCount?:number;finishedFixtureCount?:number;predictions?:Prediction[];finishedPredictions?:Prediction[];slips?:Slip[];generatedAt?:string;cached?:boolean;staleFallback?:boolean;warning?:string;error?:string}
 
 function londonDate(){const p=new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/London",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date());const v=(t:string)=>p.find(x=>x.type===t)?.value??"";return v("year")+"-"+v("month")+"-"+v("day")}
@@ -22,6 +23,8 @@ export default function AccumulatorPage(){
   const[data,setData]=useState<Response|null>(null)
   const[loading,setLoading]=useState(false)
   const[risk,setRisk]=useState<RiskMode>("safe")
+  const[selectedOutcomes,setSelectedOutcomes]=useState<Record<string,Outcome>>({})
+  const[manualOpen,setManualOpen]=useState(false)
   const load=useCallback(async(force=false)=>{
     setLoading(true)
     try{
@@ -69,6 +72,24 @@ export default function AccumulatorPage(){
     return slips.find(s=>(s.requiredLegs??s.legs.length)===target)??slips.sort((a,b)=>Math.abs((a.requiredLegs??a.legs.length)-target)-Math.abs((b.requiredLegs??b.legs.length)-target))[0]??null
   },[data?.slips,risk])
 
+  const manualPicks=useMemo(()=>{
+    const rows:(Prediction&{outcome:Outcome;label:string;probability:number;fairOdds:number})[]=[]
+    for(const p of data?.predictions??[]){
+      const outcome=selectedOutcomes[p.id]
+      if(!outcome)continue
+      const probability=outcome==="home"?p.probabilities.homeWin:outcome==="draw"?p.probabilities.draw:p.probabilities.awayWin
+      const label=outcome==="home"?p.home+" to win":outcome==="away"?p.away+" to win":"Draw"
+      rows.push({...p,outcome,label,probability,fairOdds:probability>0?1/probability:99})
+    }
+    return rows
+  },[data?.predictions,selectedOutcomes])
+  const manualProbability=manualPicks.length?manualPicks.reduce((v,p)=>v*Math.max(.01,p.probability),1):null
+  const manualOdds=manualProbability?1/manualProbability:null
+  const manualRisk=manualOdds==null?"":manualOdds<=5?"Safe":manualOdds<=12?"Balanced":"Risky"
+  function chooseOutcome(fixtureId:string,outcome:Outcome){
+    setSelectedOutcomes(cur=>cur[fixtureId]===outcome?Object.fromEntries(Object.entries(cur).filter(([id])=>id!==fixtureId)):{...cur,[fixtureId]:outcome})
+  }
+
   return <main className="min-h-screen bg-[#07120e] pb-24 text-white">
     <header className="sticky top-0 z-30 border-b border-white/10 bg-[#07120e]/95 backdrop-blur-xl"><div className="mx-auto max-w-3xl px-4 pb-4 pt-[max(1rem,env(safe-area-inset-top))]">
       <div className="flex items-start justify-between gap-3"><div><div className="flex items-center gap-2 text-amber-300"><Trophy className="size-4"/><span className="text-[0.62rem] font-black uppercase tracking-[0.16em]">Match Edge</span></div><h1 className="mt-1 text-2xl font-black">Acca Builder</h1><p className="mt-1 text-xs text-white/45">Choose your risk. The engine builds the strongest multi-match route.</p></div><button onClick={()=>void load(true)} className="rounded-xl bg-amber-300 p-2.5 text-amber-950"><RefreshCw className={"size-4 "+(loading?"animate-spin":"")}/></button></div>
@@ -82,7 +103,7 @@ export default function AccumulatorPage(){
         <div className="mt-4 grid grid-cols-3 gap-2">
           <RiskButton mode="safe" active={risk==="safe"} onClick={()=>setRisk("safe")} title="Safe" sub="5 fold" icon={<ShieldCheck className="size-4"/>}/>
           <RiskButton mode="balanced" active={risk==="balanced"} onClick={()=>setRisk("balanced")} title="Balanced" sub="7 fold" icon={<Activity className="size-4"/>}/>
-          <RiskButton mode="aggressive" active={risk==="aggressive"} onClick={()=>setRisk("aggressive")} title="Aggressive" sub="10 fold" icon={<Flame className="size-4"/>}/>
+          <RiskButton mode="aggressive" active={risk==="aggressive"} onClick={()=>setRisk("aggressive")} title="Risky" sub="10 fold" icon={<Flame className="size-4"/>}/>
         </div>
       </section>
 
@@ -95,9 +116,10 @@ export default function AccumulatorPage(){
 
       <details className="rounded-3xl border border-white/8 bg-white/[0.025] p-4"><summary className="cursor-pointer text-sm font-black text-white/45">Compare all acca builds</summary><div className="mt-3 space-y-3">{(data.slips??[]).map(s=><SlipCard key={"compare-"+s.id} slip={s}/>)}</div></details>
 
-      <section className="space-y-3"><div className="px-1"><p className="font-black">Match-by-match analysis</p><p className="text-[0.6rem] text-white/35">Only upcoming and live matches are shown here.</p></div>{(data.predictions??[]).map(p=><PredictionCard key={p.id} prediction={p}/>)}</section>
+      <section className="space-y-3"><div className="px-1"><p className="font-black">Build your own acca</p><p className="mt-1 text-[0.6rem] text-white/35">Tap Home, Draw or Away. Green is the strongest result call, amber is closer, red is less likely. Your slip updates at the bottom.</p></div>{(data.predictions??[]).map(p=><OutcomeCard key={p.id} prediction={p} selected={selectedOutcomes[p.id]??null} onSelect={o=>chooseOutcome(p.id,o)}/>)}</section>
       {(data.finishedPredictions?.length??0)>0?<details className="rounded-3xl border border-white/8 bg-white/[0.025] p-4"><summary className="cursor-pointer text-sm font-black text-white/45">Finished matches ({data.finishedPredictions?.length})</summary><div className="mt-3 space-y-2">{(data.finishedPredictions??[]).map(p=><PredictionCard key={"finished-"+p.id} prediction={p}/>)}</div></details>:null}</>:null}
     </div>
+    {manualPicks.length?<ManualAccaTray picks={manualPicks} probability={manualProbability} odds={manualOdds} risk={manualRisk} open={manualOpen} setOpen={setManualOpen} onRemove={id=>setSelectedOutcomes(cur=>Object.fromEntries(Object.entries(cur).filter(([key])=>key!==id)))} onClear={()=>setSelectedOutcomes({})}/>:null}
   </main>
 }
 
@@ -127,6 +149,33 @@ function SlipCard({slip,hero=false}:{slip:Slip;hero?:boolean}){
       <div className="mt-3 grid grid-cols-3 gap-1.5"><Small label={slip.containsLive?"Live all hit":"Adj. all hit"} value={percent(slip.adjustedAllHitProbability)}/><Small label="Raw product" value={percent(slip.modelAllHitProbability)}/><Small label={slip.containsLive?"Live legs":"Hist. structure"} value={slip.containsLive?String(slip.legs.filter(l=>l.inPlay).length):percent(slip.historicalStructureHitRate)}/></div><div className="mt-3 flex items-center justify-between"><span className={"rounded-full px-2.5 py-1 text-[0.5rem] font-black "+(slip.exactPriced?"bg-emerald-400/15 text-emerald-300":"bg-white/7 text-white/40")}>{slip.exactPriced?"BOOKMAKER PRICED":"MODEL PRICE"}</span><ChevronDown className={"size-4 text-white/30 transition "+(open?"rotate-180":"")}/></div></button>
     {open?<div className="border-t border-white/8 bg-black/20 p-4"><div className="space-y-2">{slip.legs.map((l,i)=><div key={l.fixtureId+"|"+l.market+"|"+i} className="rounded-2xl bg-white/[0.055] p-3"><div className="flex items-start justify-between gap-3"><div><p className="text-[0.5rem] font-black uppercase text-white/30">{l.competition} · {l.inPlay&&l.score?<span className="text-rose-300">LIVE {l.elapsed??"?"}' · {l.home} {l.score.home}-{l.score.away} {l.away}</span>:<>{time(l.kickoff)} · {l.home} v {l.away}</>}</p><p className="mt-1 text-sm font-black">{l.label}</p><p className="mt-0.5 text-[0.54rem] text-white/35">Grade {l.grade}{l.bookmaker?" · "+l.bookmaker:""}</p></div><div className="text-right"><p className="font-mono text-base font-black">{percent(l.probability)}</p><p className="text-[0.43rem] text-white/25">{(l.bookmakerOdds??l.fairOdds).toFixed(2)} odds</p></div></div><p className="mt-2 text-[0.58rem] leading-relaxed text-white/40">{l.reasons.slice(0,2).join(" · ")}</p></div>)}</div>{!slip.exactPriced?<p className="mt-3 text-[0.52rem] text-white/30">{slip.combinedProbabilityNote??"Fair odds are model-derived across separate matches and are not a bookmaker quote."}</p>:null}</div>:null}
   </article>
+}
+
+function outcomeTone(probability:number,isBest:boolean,selected:boolean){
+  if(selected)return "border-white bg-white text-[#07120e]"
+  if(isBest&&probability>=.40)return "border-emerald-300/35 bg-emerald-400/12 text-emerald-200"
+  if(probability>=.30)return "border-amber-300/25 bg-amber-300/8 text-amber-100"
+  return "border-rose-300/20 bg-rose-400/[0.055] text-rose-100/80"
+}
+function OutcomeCard({prediction:p,selected,onSelect}:{prediction:Prediction;selected:Outcome|null;onSelect:(o:Outcome)=>void}){
+  const probs={home:p.probabilities.homeWin,draw:p.probabilities.draw,away:p.probabilities.awayWin}
+  const best=Math.max(probs.home,probs.draw,probs.away)
+  const rows:[Outcome,string,number][]=[["home",p.home,probs.home],["draw","Draw",probs.draw],["away",p.away,probs.away]]
+  return <article className="rounded-3xl border border-white/9 bg-white/[0.035] p-4">
+    <div className="flex items-start justify-between gap-3"><div><p className="text-[0.5rem] font-black uppercase text-white/25">{p.competition} · {time(p.kickoff)}</p><p className="mt-1 text-sm font-black">{p.home} <span className="text-white/25">v</span> {p.away}</p></div>{p.inPlay&&p.score?<span className="rounded-full bg-rose-300/12 px-2 py-1 text-[0.45rem] font-black text-rose-200">LIVE {p.elapsed??"?"}' · {p.score.home}-{p.score.away}</span>:null}</div>
+    <div className="mt-3 grid grid-cols-3 gap-2">{rows.map(([outcome,label,probability])=><button key={outcome} onClick={()=>onSelect(outcome)} className={"rounded-2xl border px-2 py-3 text-center transition "+outcomeTone(probability,probability===best,selected===outcome)}><p className="truncate text-[0.55rem] font-black">{label}</p><p className="mt-1 font-mono text-lg font-black">{percent(probability)}</p><p className="mt-0.5 text-[0.42rem] font-black uppercase opacity-55">{(1/Math.max(.01,probability)).toFixed(2)} fair</p></button>)}</div>
+    <details className="mt-3"><summary className="cursor-pointer text-[0.5rem] font-black text-white/30">Why these percentages?</summary><p className="mt-2 text-[0.56rem] leading-relaxed text-white/40">{p.reasons.join(" · ")}</p></details>
+  </article>
+}
+
+function ManualAccaTray({picks,probability,odds,risk,open,setOpen,onRemove,onClear}:{picks:Array<Prediction&{outcome:Outcome;label:string;probability:number;fairOdds:number}>;probability:number|null;odds:number|null;risk:string;open:boolean;setOpen:(v:boolean)=>void;onRemove:(id:string)=>void;onClear:()=>void}){
+  const tone=risk==="Safe"?"bg-emerald-300/15 text-emerald-200":risk==="Balanced"?"bg-amber-300/15 text-amber-100":"bg-rose-300/15 text-rose-100"
+  return <div className="fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-40 mx-auto max-w-3xl px-3">
+    <div className="overflow-hidden rounded-3xl border border-white/12 bg-[#0b1813]/98 shadow-2xl backdrop-blur-xl">
+      <button onClick={()=>setOpen(!open)} className="grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 p-3 text-left"><div className="flex size-10 items-center justify-center rounded-2xl bg-amber-300 text-amber-950"><Trophy className="size-5"/></div><div className="min-w-0"><div className="flex items-center gap-2"><p className="text-sm font-black">{picks.length} selection{picks.length===1?"":"s"}</p><span className={"rounded-full px-2 py-0.5 text-[0.42rem] font-black "+tone}>{risk.toUpperCase()}</span></div><p className="mt-0.5 text-[0.5rem] text-white/35">Whole-slip model chance {percent(probability)}</p></div><div className="text-right"><p className="font-mono text-lg font-black">{odds?.toFixed(2)??"—"}</p><p className="text-[0.4rem] uppercase text-white/25">predicted odds</p></div></button>
+      {open?<div className="border-t border-white/8 bg-black/20 p-3"><div className="max-h-64 space-y-2 overflow-y-auto">{picks.map(p=><div key={p.id} className="flex items-center justify-between gap-3 rounded-xl bg-white/[0.05] px-3 py-2"><div className="min-w-0"><p className="truncate text-xs font-black">{p.label}</p><p className="truncate text-[0.46rem] text-white/30">{p.home} v {p.away} · {percent(p.probability)}</p></div><button onClick={()=>onRemove(p.id)} className="rounded-lg bg-white/7 px-2 py-1 text-[0.48rem] font-black text-white/40">REMOVE</button></div>)}</div><div className="mt-3 flex items-center justify-between gap-3"><p className="text-[0.48rem] leading-relaxed text-white/25">Predicted odds are model fair odds, not a bookmaker quote.</p><button onClick={onClear} className="rounded-xl bg-white/7 px-3 py-2 text-[0.5rem] font-black text-white/45">CLEAR</button></div></div>:null}
+    </div>
+  </div>
 }
 
 function PredictionCard({prediction:p}:{prediction:Prediction}){
