@@ -138,14 +138,13 @@ export default function BetBuilderPage(){
       const r=await fetch("/api/fixtures?"+new URLSearchParams({
         date,
         competition,
-        nextIfEmpty:date===londonDate()?"1":"0",
+        nextIfEmpty:"0",
         refresh:String(Date.now()),
       }),{cache:"no-store"})
       if(!r.ok) throw new Error("fixtures")
       const data=await r.json() as FixturesResponse
       const fs=data.leagues?.[competition]??[]
       setFixtures(fs)
-      if(data.showingNextMatchday&&data.date!==date)setDate(data.date)
       setSelectedId(current=>fs.some(f=>f.id===current)?current:"")
       setRadar(null)
       setScorecard(null)
