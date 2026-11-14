@@ -88,6 +88,87 @@ function h2hRank(candidate: any) {
 function candidateOrder(a: any, b: any) {
   return h2hRank(b) - h2hRank(a) || Number(b.h2hYellows ?? 0) - Number(a.h2hYellows ?? 0) || Number(b.h2hFouls ?? 0) - Number(a.h2hFouls ?? 0) || Number(b.score ?? 0) - Number(a.score ?? 0)
 }
+
+function positionGroup(position:string|null|undefined){
+  const p=norm(position)
+  if(p.includes("goal")||p==="gk")return "gk"
+  if(p.includes("back")||p.includes("def")||["cb","lb","rb","lwb","rwb"].includes(p))return "def"
+  if(p.includes("mid")||["dm","cm","am","cdm","cam","lm","rm"].includes(p))return "mid"
+  if(p.includes("wing")||p.includes("forward")||p.includes("striker")||["st","cf","lw","rw"].includes(p))return "att"
+  return "other"
+}
+function predictedStarterScore(candidate:any){
+  const starts=Number(candidate.starts??0),apps=Number(candidate.appearances??0),minutes=Number(candidate.minutes??0)
+  const startRate=apps>0?starts/apps:0
+  const likelihood=Number(candidate.startLikelihood??0)
+  const minutesReliability=Math.min(1,minutes/1800)
+  return likelihood*.58+startRate*.24+minutesReliability*.12+Math.min(1,Number(candidate.score??0)/100)*.06
+}
+function candidateMatchesName(candidate:any,name:string){
+  const a=normalisePredictedName(candidate?.name??candidate?.dbName??"")
+  const b=normalisePredictedName(name)
+  return Boolean(a&&b&&(a===b||a.includes(b)||b.includes(a)))
+}
+function buildPredictedTeam(candidates:any[],teamName:string,curatedTeam:any|null){
+  const teamCandidates=candidates.filter(c=>teamMatch(c.team,teamName))
+  const chosen:any[]=[]
+  const used=new Set<string>()
+  if(curatedTeam?.players?.length){
+    for(const p of curatedTeam.players){
+      const hit=teamCandidates.find(c=>!used.has(String(c.dbName??c.name))&&candidateMatchesName(c,p.name))
+      if(hit){
+        chosen.push({...hit,predictedStarter:true,predictedRole:p.role??hit.position??null,predictedLineupConfidence:curatedTeam.confidence??"predicted",predictedFormation:curatedTeam.formation??null})
+        used.add(String(hit.dbName??hit.name))
+      }
+    }
+  }
+  const remaining=teamCandidates
+    .filter(c=>!used.has(String(c.dbName??c.name)))
+    .sort((a,b)=>predictedStarterScore(b)-predictedStarterScore(a)||Number(b.minutes??0)-Number(a.minutes??0))
+  if(!chosen.some(c=>positionGroup(c.position)==="gk")){
+    const gk=remaining.find(c=>positionGroup(c.position)==="gk")
+    if(gk){
+      chosen.push({...gk,predictedStarter:true,predictedRole:gk.position??"GK",predictedLineupConfidence:curatedTeam?.confidence??"recent-xi-fallback",predictedFormation:curatedTeam?.formation??null})
+      used.add(String(gk.dbName??gk.name))
+    }
+  }
+  for(const candidate of remaining){
+    if(chosen.length>=11)break
+    const key=String(candidate.dbName??candidate.name)
+    if(used.has(key))continue
+    chosen.push({...candidate,predictedStarter:true,predictedRole:candidate.position??null,predictedLineupConfidence:curatedTeam?.confidence??"recent-xi-fallback",predictedFormation:curatedTeam?.formation??null})
+    used.add(key)
+  }
+  return chosen.slice(0,11)
+}
+function applyLineupMode(data:any,date:string,home:string,away:string){
+  if(!Array.isArray(data?.candidates)||!data.candidates.length)return data
+  if(data?.lineupsConfirmed===true){
+    data.lineupMode="confirmed"
+    data.lineupSource="Official starting XI"
+    data.candidates=data.candidates.map((c:any)=>({...c,predictedStarter:false}))
+    return data
+  }
+  const curated=getPredictedFixture(date,home,away)
+  const curatedHome=curated ? Object.entries(curated.teams).find(([name])=>teamMatch(name,home))?.[1] : null
+  const curatedAway=curated ? Object.entries(curated.teams).find(([name])=>teamMatch(name,away))?.[1] : null
+  const homeXI=buildPredictedTeam(data.candidates,home,curatedHome)
+  const awayXI=buildPredictedTeam(data.candidates,away,curatedAway)
+  const predicted=[...homeXI,...awayXI]
+  if(predicted.length){
+    data.candidates=predicted
+    data.lineupMode="predicted"
+    data.lineupSource=curated
+      ?"Published predicted XI with recent-start fallback for any unmatched positions"
+      :"Probable XI from current squad, start rate, minutes and recent selection history"
+    data.predictedLineups={
+      source:data.lineupSource,
+      home:{formation:curatedHome?.formation??null,confidence:curatedHome?.confidence??"recent-xi-fallback",players:homeXI.map((c:any)=>({name:c.name,role:c.predictedRole??c.position??null,startLikelihood:Number(c.startLikelihood??0)}))},
+      away:{formation:curatedAway?.formation??null,confidence:curatedAway?.confidence??"recent-xi-fallback",players:awayXI.map((c:any)=>({name:c.name,role:c.predictedRole??c.position??null,startLikelihood:Number(c.startLikelihood??0)}))},
+    }
+  }
+  return data
+}
 async function addH2HMatchesAndBalance(data: any, home: string, away: string, competition: string, fixtureDate: string) {
   if (!isDatabaseConfigured || !Array.isArray(data?.candidates) || !data.candidates.length) return data
   const names = Array.from(new Set(data.candidates.map((c: any) => String(c.dbName ?? "")).filter(Boolean))) as string[]
@@ -97,10 +178,13 @@ async function addH2HMatchesAndBalance(data: any, home: string, away: string, co
     const matches = rows.filter((row) => row.playerName === candidate.dbName && teamMatch(row.opponent, opponent) && (!fixtureDate || String(row.matchDate) < fixtureDate)).sort((a, b) => String(b.matchDate).localeCompare(String(a.matchDate))).slice(0, 8)
     return { ...candidate, h2hYellows: matches.filter((row) => row.yellowCard === true).length, h2hFouls: matches.reduce((sum, row) => sum + Number(row.foulsCommitted ?? 0), 0), h2hMatches: matches.map((row) => ({ matchDate: String(row.matchDate), opponent: row.opponent, venue: row.venue, competition: row.competition, minutes: row.minutes, goals: row.goals, assists: row.assists, shots: row.shots, shotsOnTarget: row.shotsOnTarget, foulsCommitted: row.foulsCommitted, foulsDrawn: row.foulsDrawn, yellowCard: row.yellowCard, redCard: row.redCard })) }
   })
-  const homeCandidates = data.candidates.filter((c: any) => teamMatch(c.team, home)).sort(candidateOrder).slice(0, 5)
-  const awayCandidates = data.candidates.filter((c: any) => teamMatch(c.team, away)).sort(candidateOrder).slice(0, 5)
+  const maxPerTeam=data?.lineupsConfirmed===true?11:11
+  const homeCandidates = data.candidates.filter((c: any) => teamMatch(c.team, home)).sort(candidateOrder).slice(0, maxPerTeam)
+  const awayCandidates = data.candidates.filter((c: any) => teamMatch(c.team, away)).sort(candidateOrder).slice(0, maxPerTeam)
   data.candidates = [...homeCandidates, ...awayCandidates].sort(candidateOrder)
-  data.rankingMethod = "Top 10: five per team where data is available; H2H bookings first, then H2H fouls, then wider evidence"
+  data.rankingMethod = data?.lineupsConfirmed===true
+    ? "Official starters ranked by H2H, fouls/cards and wider evidence"
+    : "Predicted starters ranked by H2H, fouls/cards and wider evidence"
   return data
 }
 
@@ -178,7 +262,7 @@ async function addDeepEvidence(data: any, home: string, away: string, competitio
     const recentFoulsDrawn=recent.reduce((sum,row)=>sum+Number(row.foulsDrawn??0),0)
     const recentFouled90=recentMinutes>0?Math.round(((recentFoulsDrawn*90)/recentMinutes)*100)/100:null
     const pressureFouled90=fouled90==null?recentFouled90:recentFouled90==null?fouled90:Math.round((fouled90*0.62+recentFouled90*0.38)*100)/100
-    return { ...candidate, predictedRole: predictedPlayer?.role ?? null, predictedStarter: Boolean(predictedPlayer), predictedLineupConfidence: predictedTeam?.confidence ?? null, predictedFormation: predictedTeam?.formation ?? null, fouled90, recentFouled90, pressureFouled90, recentFive: { games: recent.length, minutes: recentMinutes, fouls: recentFouls, foulsDrawn:recentFoulsDrawn, yellows: recentYellows, fouls90: recentFouls90, fouled90:recentFouled90, matches: recent.map((row) => ({ matchDate: String(row.matchDate), opponent: row.opponent, minutes: row.minutes, foulsCommitted: row.foulsCommitted, foulsDrawn: row.foulsDrawn, yellowCard: row.yellowCard })) }, refereePlayer: ref ? { matches: refMatches, yellows: refYellows, fouls: Number(ref.foulsCommitted ?? 0), cardRate: refereeCardRate } : null }
+    return { ...candidate, predictedRole: predictedPlayer?.role ?? candidate.predictedRole ?? null, predictedStarter: predicted ? Boolean(predictedPlayer) : candidate.predictedStarter===true, predictedLineupConfidence: predictedTeam?.confidence ?? candidate.predictedLineupConfidence ?? null, predictedFormation: predictedTeam?.formation ?? candidate.predictedFormation ?? null, fouled90, recentFouled90, pressureFouled90, recentFive: { games: recent.length, minutes: recentMinutes, fouls: recentFouls, foulsDrawn:recentFoulsDrawn, yellows: recentYellows, fouls90: recentFouls90, fouled90:recentFouled90, matches: recent.map((row) => ({ matchDate: String(row.matchDate), opponent: row.opponent, minutes: row.minutes, foulsCommitted: row.foulsCommitted, foulsDrawn: row.foulsDrawn, yellowCard: row.yellowCard })) }, refereePlayer: ref ? { matches: refMatches, yellows: refYellows, fouls: Number(ref.foulsCommitted ?? 0), cardRate: refereeCardRate } : null }
   })
 
   enriched = enriched.map((candidate: any) => {
@@ -226,11 +310,13 @@ async function addDeepEvidence(data: any, home: string, away: string, competitio
   }).sort((a: any, b: any) => Number(b.cardRiskScore ?? 0) - Number(a.cardRiskScore ?? 0))
 
   data.candidates = enriched
-  data.predictedLineups = predicted ? {
-    source: "Starting11 predicted XI / recent-XI fallback where no crowd prediction was available",
-    home: predicted.teams[home] ?? Object.entries(predicted.teams).find(([name]) => teamMatch(name, home))?.[1] ?? null,
-    away: predicted.teams[away] ?? Object.entries(predicted.teams).find(([name]) => teamMatch(name, away))?.[1] ?? null,
-  } : null
+  if(predicted){
+    data.predictedLineups = {
+      source: "Published predicted XI / recent-XI fallback where no crowd prediction was available",
+      home: predicted.teams[home] ?? Object.entries(predicted.teams).find(([name]) => teamMatch(name, home))?.[1] ?? data.predictedLineups?.home ?? null,
+      away: predicted.teams[away] ?? Object.entries(predicted.teams).find(([name]) => teamMatch(name, away))?.[1] ?? data.predictedLineups?.away ?? null,
+    }
+  }
   data.deepEvidence = { description: "Card/foul evidence combines historical cards/fouls, H2H, recent-five form, current-season evidence, referee history and predicted direct positional duels. Direct-opponent pressure blends season and recent-five fouls drawn/90, with predicted role/confidence used before official lineups; confirmed teams remain the final authority." }
   return data
 }
@@ -243,6 +329,7 @@ export async function GET(request: Request) {
     const url = new URL(request.url)
     const date = url.searchParams.get("date") ?? "", home = url.searchParams.get("home") ?? "", away = url.searchParams.get("away") ?? "", competition = url.searchParams.get("competition") ?? "Premier League"
     data = await addCurrentSeasonLayer(data, competition)
+    data = applyLineupMode(data, date, home, away)
     data = await addH2HMatchesAndBalance(data, home, away, competition, date)
 
     let refereeName = data?.referee?.name ?? null
