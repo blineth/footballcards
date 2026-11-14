@@ -377,14 +377,46 @@ def sync(dataset: str, content: str) -> dict[str, Any]:
     base = os.environ.get("SYNC_URL", "").rstrip("/")
     if not base:
         return {"skipped": True}
-    r = requests.post(
-        f"{base}/api/admin/import",
-        json={"dataset": dataset, "format": "csv", "content": content, "replaceCurrentSeason": True},
-        timeout=180,
-    )
-    print(f"Neon {dataset}: {r.status_code} {r.text[:600]}", flush=True)
-    r.raise_for_status()
-    return r.json()
+
+    rows = list(csv.DictReader(io.StringIO(content)))
+    if not rows:
+        return {"rows": 0, "competitions": {}}
+
+    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in rows:
+        grouped[str(row.get("competition") or "Unknown")].append(row)
+
+    result: dict[str, Any] = {"rows": 0, "competitions": {}}
+    chunk_size = 800
+
+    for competition, competition_rows in grouped.items():
+        competition_result = {"rows": 0, "chunks": 0}
+        for offset in range(0, len(competition_rows), chunk_size):
+            chunk = competition_rows[offset:offset + chunk_size]
+            chunk_csv = write_csv(chunk, list(chunk[0].keys()))
+            replace = offset == 0
+            r = requests.post(
+                f"{base}/api/admin/import",
+                json={
+                    "dataset": dataset,
+                    "format": "csv",
+                    "content": chunk_csv,
+                    "replaceCurrentSeason": replace,
+                },
+                timeout=180,
+            )
+            print(
+                f"Neon {dataset} {competition} chunk {offset // chunk_size + 1}: "
+                f"{r.status_code} rows={len(chunk)} replace={replace} {r.text[:300]}",
+                flush=True,
+            )
+            r.raise_for_status()
+            competition_result["rows"] += len(chunk)
+            competition_result["chunks"] += 1
+            result["rows"] += len(chunk)
+        result["competitions"][competition] = competition_result
+
+    return result
 
 
 def main() -> int:
