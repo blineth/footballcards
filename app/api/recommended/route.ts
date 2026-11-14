@@ -54,21 +54,22 @@ function avgProbability(slip:BetSlip|FoulTargetSlip){
   const legs=slipLegs(slip)
   return slip.averageLegProbability??(legs.length?legs.reduce((s,l)=>s+l.probability,0)/legs.length:0)
 }
-function recommendationReliability(probability:number){
+function recommendationReliability(probability:number,liveFactor=1){
   const snapshot:any=recommendationBacktest as any
   const bands=snapshot?.recommendationCalibration?.bands
   if(!Array.isArray(bands)||bands.length!==20)return probability
   const idx=Math.max(0,Math.min(19,Math.floor(Math.max(0,Math.min(.999999,probability))/.05)))
   const value=Number(bands[idx]?.calibratedProbability)
-  return Number.isFinite(value)?value:probability
+  const base=Number.isFinite(value)?value:probability
+  return Math.max(.01,Math.min(.99,base*liveFactor))
 }
-function rankSlip(slip:BetSlip|FoulTargetSlip,confirmed:boolean,placeable:boolean){
+function rankSlip(slip:BetSlip|FoulTargetSlip,confirmed:boolean,placeable:boolean,liveFactor=1){
   const legs=slipLegs(slip)
   if(!legs.length)return -999
   const geo=Math.exp(legs.reduce((s,l)=>s+Math.log(Math.max(.01,l.probability)),0)/legs.length)
   const min=Math.min(...legs.map(l=>l.probability))
   const grade=legs.filter(l=>l.confidence==="A"||l.confidence==="B").length/legs.length
-  const reliability=recommendationReliability(avgProbability(slip))
+  const reliability=recommendationReliability(avgProbability(slip),liveFactor)
   const exactRatio=legs.filter(l=>l.priceSource!=="estimated").length/legs.length
   return geo*.40+min*.20+reliability*.16+grade*.08+exactRatio*.04+(confirmed?.08:0)+(placeable?.04:0)-Math.max(0,legs.length-5)*.006
 }
@@ -105,6 +106,13 @@ export async function GET(request:Request){
 
   try{
     await gradeHistoricalRecommendations(500)
+    const trackingBefore:any=await recommendationTrackingSummary(30)
+    const liveTopSample=Number(trackingBefore?.topPickLegs??0)
+    const liveTopHit=Number(trackingBefore?.topPickHitRate??0)
+    const liveTopModel=Number(trackingBefore?.topPickAvgProbability??0)
+    const liveReliabilityFactor=liveTopSample>=50&&liveTopModel>0
+      ? Math.max(.82,Math.min(1.05,liveTopHit/liveTopModel))
+      : 1
 
     const dates=[londonDate(0),londonDate(1),londonDate(2)]
     const fixtureResponses=await Promise.all(dates.map(date=>fixturesFor(date,refresh)))
@@ -136,21 +144,21 @@ export async function GET(request:Request){
           const placeable=Boolean(slip.placeable)&&!blocked
           candidates.push({
             id:fixture.id+"|"+slip.id,fixture,slip,confirmed,kind:"standard",
-            rank:rankSlip(slip,confirmed,placeable),placeable,blockedReason:blocked,
-            recommendationReliability:recommendationReliability(avgProbability(slip)),
+            rank:rankSlip(slip,confirmed,placeable,liveReliabilityFactor),placeable,blockedReason:blocked,
+            recommendationReliability:recommendationReliability(avgProbability(slip),liveReliabilityFactor),
           })
         }
 
         const preferredFoul=fouls
           .filter(s=>s.bookmaker&&s.legs?.length)
-          .sort((a,b)=>rankSlip(b,confirmed,Boolean(b.placeable))-rankSlip(a,confirmed,Boolean(a.placeable)))[0]
+          .sort((a,b)=>rankSlip(b,confirmed,Boolean(b.placeable),liveReliabilityFactor)-rankSlip(a,confirmed,Boolean(a.placeable),liveReliabilityFactor))[0]
         if(preferredFoul?.legs?.length){
           const blocked=blockedReason(scorecard,preferredFoul,"foul")
           const placeable=Boolean(preferredFoul.placeable)&&!blocked
           candidates.push({
             id:fixture.id+"|"+preferredFoul.id,fixture,slip:preferredFoul,confirmed,kind:"foul",
-            rank:rankSlip(preferredFoul,confirmed,placeable),placeable,blockedReason:blocked,
-            recommendationReliability:recommendationReliability(avgProbability(preferredFoul)),
+            rank:rankSlip(preferredFoul,confirmed,placeable,liveReliabilityFactor),placeable,blockedReason:blocked,
+            recommendationReliability:recommendationReliability(avgProbability(preferredFoul),liveReliabilityFactor),
           })
         }
         return candidates
@@ -183,6 +191,9 @@ export async function GET(request:Request){
         recommendationCalibration:"Final ranking uses a second walk-forward calibration layer built from historical recommendations that survived the selection process.",
         cache:"Recommended is served from one server endpoint with a five-minute shared-cache target; manual refresh bypasses the normal scan cadence.",
         tracking:"Recommendations are saved before kickoff and graded later from imported player-match data. Exact and estimated bookmaker prices remain distinguishable.",
+        liveFeedback:liveTopSample>=50
+          ? "Live top-pick calibration is active. Current 30-day reliability multiplier: "+liveReliabilityFactor.toFixed(3)
+          : "Live top-pick calibration activates after 50 graded top-pick legs.",
       },
     },{
       headers:refresh
