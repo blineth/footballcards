@@ -4,7 +4,7 @@ import { GET as scorecardGET } from "../fixture-scorecard/route"
 import { gradeHistoricalRecommendations, recommendationTrackingSummary, saveRecommendationSnapshots } from "@/lib/recommendation-tracking"
 import recommendationBacktest from "@/data/model/recommendation-backtest.json"
 import calibrationSnapshot from "@/data/model/calibration.json"
-import { snapshotPlayersForFixture } from "@/lib/current-season-snapshot"
+import { snapshotPlayersForFixture, internationalPlayersForFixture } from "@/lib/current-season-snapshot"
 
 export const dynamic="force-dynamic"
 export const revalidate=300
@@ -119,8 +119,49 @@ function calibrateSnapshot(market:"foul1"|"card",raw:number){
   return Number.isFinite(v)?v:raw
 }
 async function fallbackScorecard(f:Fixture):Promise<Scorecard|null>{
-  if(f.competition==="International")return null
   try{
+    if(f.competition==="International"){
+      const profiles=await internationalPlayersForFixture(f.home.name,f.away.name)
+      if(!profiles.length)return null
+      const scored=profiles.map((p:any)=>{
+        const intl=p?.international??{}
+        const current=p?.domesticCurrent??null
+        const previous=p?.domesticPrevious??null
+        const appearances=Number(current?.appearances??0)+Number(intl?.matches??0)
+        const starts=Number(current?.starts??0)+Number(intl?.starts??0)
+        const expectedMinutes=Math.max(45,Math.min(90,appearances>0?60+30*(starts/appearances):65))
+        const foulRate=Math.max(0,Number(p?.blended?.fouls90??current?.fouls90??intl?.fouls90??0))
+        const cardRateParts=[
+          current?Number(current.cards90??0):null,
+          Number(intl.cards90??0),
+          previous?Number(previous.cards90??0):null,
+        ].filter((v:any)=>Number.isFinite(v)&&v!=null) as number[]
+        const cardRate=cardRateParts.length?cardRateParts.reduce((a,b)=>a+b,0)/cardRateParts.length:0
+        const rawFoul=1-Math.exp(-foulRate*(expectedMinutes/90))
+        const rawCard=1-Math.exp(-cardRate*(expectedMinutes/90))
+        const foul=calibrateSnapshot("foul1",Math.max(.01,Math.min(.99,rawFoul)))
+        const card=calibrateSnapshot("card",Math.max(.01,Math.min(.99,rawCard)))
+        const confidence:SlipLeg["confidence"]=appearances>=12&&expectedMinutes>=65?"B":appearances>=6?"C":"D"
+        return {p,foul,card,confidence,expectedMinutes}
+      }).filter((x:any)=>x.confidence!=="D")
+      const foulLegs=scored.sort((a:any,b:any)=>b.foul-a.foul).slice(0,4).map((x:any)=>({
+        player:String(x.p.name),dbPlayerName:String(x.p.name),team:String(x.p.nationalTeam),market:"foul1",
+        label:"1+ foul committed",probability:Math.round(x.foul*1000)/1000,fairOdds:Math.round((1/x.foul)*100)/100,
+        bookmakerOdds:null,bookmakerName:null,edge:null,confidence:x.confidence,
+        reason:"International snapshot fallback: blended current domestic + international foul rate",priceSource:null,
+      } as SlipLeg))
+      const cardLegs=scored.sort((a:any,b:any)=>b.card-a.card).slice(0,3).map((x:any)=>({
+        player:String(x.p.name),dbPlayerName:String(x.p.name),team:String(x.p.nationalTeam),market:"card",
+        label:"Yellow card",probability:Math.round(x.card*1000)/1000,fairOdds:Math.round((1/x.card)*100)/100,
+        bookmakerOdds:null,bookmakerName:null,edge:null,confidence:x.confidence,
+        reason:"International snapshot fallback: blended current domestic + international card rate",priceSource:null,
+      } as SlipLeg))
+      const slips:BetSlip[]=[]
+      if(foulLegs.length>=2)slips.push({id:"intl-snapshot-fouls",title:"International foul picks",risk:"model-only",legs:foulLegs,averageLegProbability:foulLegs.reduce((s,l)=>s+l.probability,0)/foulLegs.length,placeable:false,marketAvailability:foulLegs.map(l=>({player:l.player,market:l.market,status:"unknown" as MarketStatus}))})
+      if(cardLegs.length>=2)slips.push({id:"intl-snapshot-cards",title:"International card picks",risk:"model-only",legs:cardLegs,averageLegProbability:cardLegs.reduce((s,l)=>s+l.probability,0)/cardLegs.length,placeable:false,marketAvailability:cardLegs.map(l=>({player:l.player,market:l.market,status:"unknown" as MarketStatus}))})
+      return {ok:true,lineupsConfirmed:false,eligibleBooks:[],marketAvailability:{card:"unknown",foul:"unknown",fouled:"unknown",shot:"unknown",sot:"unknown"},previewSlips:slips,previewFoulTargetSlips:[]}
+    }
+
     const {players,rows}=await snapshotPlayersForFixture(f.competition,f.home.name,f.away.name)
     const before=rows.filter(r=>r.match_date<fixtureDate(f))
     if(!players.length||!before.length)return null
