@@ -140,7 +140,8 @@ export default function BetBuilderPage(){
     setLoading(true)
     try{
       const r=await fetch(scorecardUrl(f),{cache:"no-store"})
-      setData(r.ok?await r.json() as Scorecard:null)
+      const payload=await r.json().catch(()=>({ok:false,error:"Unable to load the player scorecard."}))
+      setData(payload as Scorecard)
     }finally{
       setLoading(false)
     }
