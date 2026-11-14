@@ -148,6 +148,8 @@ export default function RecommendedPage(){
           const scorecard=await r.json() as Scorecard
           if(!scorecard.ok)return [] as Recommendation[]
           const confirmed=Boolean(scorecard.lineupsConfirmed)
+          const fixtureEligible=scorecard.marketAvailability?.card==="available"&&scorecard.marketAvailability?.foul==="available"
+          if(!fixtureEligible)return [] as Recommendation[]
           const standards=confirmed?(scorecard.slips??[]):(scorecard.previewSlips??[])
           const fouls=confirmed?(scorecard.foulTargetSlips??[]):(scorecard.previewFoulTargetSlips??[])
           const candidates:Recommendation[]=[]
