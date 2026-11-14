@@ -43,6 +43,7 @@ type Fixture = {
 }
 
 type Availability = {
+  goal?:MarketStatus
   card:MarketStatus
   foul:MarketStatus
   fouled:MarketStatus
@@ -96,18 +97,15 @@ function oddsUrl(f:Fixture){
 }
 
 function eligibility(check?:OddsCheck){
-  if(!check)return {eligible:false,checking:true,reason:"Checking preferred bookmaker player markets…",books:[] as string[]}
+  if(!check)return {eligible:true,checking:true,reason:"Loading model and checking available player prices…",books:[] as string[]}
   const books=Object.entries(check.bookmakerAvailability??{})
-    .filter(([,a])=>a.card==="available"&&a.foul==="available")
+    .filter(([,a])=>Object.values(a??{}).some(v=>v==="available"))
     .map(([book])=>book)
-  if(books.length)return {eligible:true,checking:false,reason:"Cards + fouls available together at "+books.join(", "),books}
   const a=check.marketAvailability
-  if(!a)return {eligible:false,checking:false,reason:"Player markets not verified at the preferred bookmakers",books:[] as string[]}
-  const missing:string[]=[]
-  if(a.card!=="available")missing.push(a.card==="unavailable"?"cards unavailable":"cards not verified")
-  if(a.foul!=="available")missing.push(a.foul==="unavailable"?"fouls unavailable":"fouls not verified")
-  if(a.card==="available"&&a.foul==="available")missing.push("cards and fouls are not available together at the same bookmaker")
-  return {eligible:false,checking:false,reason:missing.join(" · "),books:[] as string[]}
+  const available=a?Object.entries(a).filter(([,v])=>v==="available").map(([k])=>k):[]
+  const label=(v:string)=>v==="goal"?"goals":v==="fouled"?"fouled":v==="sot"?"SOT":v
+  const summary=available.length?"Exact prices seen: "+available.map(label).join(", "):"Model probabilities and fair odds available; exact player prices may be missing"
+  return {eligible:true,checking:false,reason:summary,books}
 }
 
 function singleSlipUrl(f:Fixture){
@@ -179,7 +177,6 @@ export default function MatchesPage(){
 
   function toggleMulti(f:Fixture){
     const e=eligibility(availability[f.id])
-    if(!e.eligible)return
     setSelectedMulti(current=>{
       if(current[f.id]){
         const next={...current}
@@ -227,7 +224,7 @@ export default function MatchesPage(){
           </div>
           <button onClick={()=>{setMultiMode(x=>!x);setSelectedMulti({})}} className={"flex items-center gap-2 rounded-2xl px-3 py-2.5 text-xs font-black "+(multiMode?"bg-sky-300 text-sky-950":"bg-white/8 text-white/70")}><Layers3 className="size-4"/>{multiMode?"Cancel":"Multi Match"}</button>
         </div>
-        <p className="mt-2 text-[0.58rem] text-white/30">{lastRefresh?"Market check updated "+lastRefresh.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}):"Checking Bet365 market availability…"} · only games with both player cards and player fouls can be used</p>
+        <p className="mt-2 text-[0.58rem] text-white/30">{lastRefresh?"Market check updated "+lastRefresh.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}):"Checking player-market availability…"} · every match can open the model; exact prices are shown only where verified</p>
       </section>
 
       {loadingFixtures&&!live?<div className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center"><RefreshCw className="mx-auto mb-2 size-5 animate-spin text-emerald-300"/><p className="font-black">Loading matches…</p></div>:null}
@@ -255,18 +252,18 @@ export default function MatchesPage(){
             <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl bg-black/20 p-3">
               <div className="min-w-0">
                 {checking[f.id]&&!availability[f.id]?<p className="text-[0.62rem] font-bold text-white/45">Checking preferred bookmaker player markets…</p>:<>
-                  <p className={"text-[0.62rem] font-black "+(e.eligible?"text-emerald-300":"text-rose-200")}>{e.eligible?"Eligible for betting slip":"Slip locked"}</p>
+                  <p className="text-[0.62rem] font-black text-emerald-300">Match builder ready</p>
                   <p className="mt-0.5 truncate text-[0.56rem] text-white/35">{e.reason}</p>
                 </>}
               </div>
-              {e.eligible?<div className="flex shrink-0 gap-1.5"><span className="rounded-full bg-emerald-400/10 px-2 py-1 text-[0.48rem] font-black text-emerald-300">{e.books[0]??"BOOK"} ✓</span><span className="rounded-full bg-emerald-400/10 px-2 py-1 text-[0.48rem] font-black text-emerald-300">CARDS + FOULS</span></div>:<LockKeyhole className="size-4 shrink-0 text-white/25"/>}
+              <div className="flex shrink-0 gap-1.5">{e.books[0]?<span className="rounded-full bg-emerald-400/10 px-2 py-1 text-[0.48rem] font-black text-emerald-300">{e.books[0]} ✓</span>:null}<span className="rounded-full bg-white/7 px-2 py-1 text-[0.48rem] font-black text-white/40">MODEL READY</span></div>
             </div>
 
             <div className="mt-3">
               {multiMode?
-                <button disabled={!e.eligible} onClick={()=>toggleMulti(f)} className={"flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-black disabled:cursor-not-allowed disabled:opacity-35 "+(picked?"bg-sky-300 text-sky-950":"bg-white/8 text-white")}><span className={"flex size-5 items-center justify-center rounded-md border "+(picked?"border-sky-950/20 bg-sky-950/10":"border-white/20")}>{picked?<Check className="size-3.5"/>:null}</span>{picked?"Selected":"Select for Multi Match"}</button>
+                <button onClick={()=>toggleMulti(f)} className={"flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-black "+(picked?"bg-sky-300 text-sky-950":"bg-white/8 text-white")}><span className={"flex size-5 items-center justify-center rounded-md border "+(picked?"border-sky-950/20 bg-sky-950/10":"border-white/20")}>{picked?<Check className="size-3.5"/>:null}</span>{picked?"Selected":"Select for Multi Match"}</button>
                 :
-                <button disabled={!e.eligible} onClick={()=>router.push(singleSlipUrl(f))} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-400 px-4 py-3 text-sm font-black text-emerald-950 disabled:cursor-not-allowed disabled:bg-white/7 disabled:text-white/25"><TicketCheck className="size-4"/>{e.eligible?"Create Bet Slip":"Bet Slip Unavailable"}</button>
+                <button onClick={()=>router.push(singleSlipUrl(f))} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-400 px-4 py-3 text-sm font-black text-emerald-950 "><TicketCheck className="size-4"/>Open Match Builder</button>
               }
             </div>
           </article>
