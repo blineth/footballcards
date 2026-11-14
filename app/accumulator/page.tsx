@@ -10,15 +10,52 @@ type RiskMode="safe"|"balanced"|"aggressive"
 type Response={ok:boolean;date?:string;fixtureCount?:number;activeFixtureCount?:number;finishedFixtureCount?:number;predictions?:Prediction[];finishedPredictions?:Prediction[];slips?:Slip[];generatedAt?:string;cached?:boolean;staleFallback?:boolean;warning?:string;error?:string}
 
 function londonDate(){const p=new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/London",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date());const v=(t:string)=>p.find(x=>x.type===t)?.value??"";return v("year")+"-"+v("month")+"-"+v("day")}
+function addDays(date:string,days:number){const d=new Date(date+"T12:00:00Z");d.setUTCDate(d.getUTCDate()+days);return d.toISOString().slice(0,10)}
+function prettyDate(date:string){return new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/London",weekday:"long",day:"numeric",month:"long"}).format(new Date(date+"T12:00:00Z"))}
 function percent(v:number|null|undefined){return v==null?"—":Math.round(v*100)+"%"}
 function time(v:string){return new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/London",hour:"2-digit",minute:"2-digit",hour12:false}).format(new Date(v))}
 
 export default function AccumulatorPage(){
   const[date,setDate]=useState(londonDate)
+  const[resolvedDate,setResolvedDate]=useState(londonDate)
+  const[autoAdvanced,setAutoAdvanced]=useState(false)
   const[data,setData]=useState<Response|null>(null)
   const[loading,setLoading]=useState(false)
   const[risk,setRisk]=useState<RiskMode>("safe")
-  const load=useCallback(async(force=false)=>{setLoading(true);try{const q=new URLSearchParams({date});if(force)q.set("refresh",String(Date.now()));const r=await fetch("/api/match-acca?"+q.toString(),{cache:force?"no-store":"default"});setData(r.ok?await r.json():{ok:false,error:"Accumulator analysis failed"})}catch{setData({ok:false,error:"Accumulator analysis failed"})}finally{setLoading(false)}},[date])
+  const load=useCallback(async(force=false)=>{
+    setLoading(true)
+    try{
+      const fetchAcca=async(targetDate:string)=>{
+        const q=new URLSearchParams({date:targetDate})
+        if(force)q.set("refresh",String(Date.now()))
+        const r=await fetch("/api/match-acca?"+q.toString(),{cache:force?"no-store":"default"})
+        return r.ok?await r.json() as Response:{ok:false,error:"Accumulator analysis failed"} as Response
+      }
+      let target=date
+      let response=await fetchAcca(target)
+      let advanced=false
+      const hasActive=(x:Response)=>x.ok&&Number(x.activeFixtureCount??x.predictions?.length??0)>0
+      if(!hasActive(response)){
+        for(let offset=1;offset<=21;offset++){
+          const next=addDays(date,offset)
+          const candidate=await fetchAcca(next)
+          if(hasActive(candidate)){
+            target=next
+            response=candidate
+            advanced=true
+            break
+          }
+        }
+      }
+      setResolvedDate(target)
+      setAutoAdvanced(advanced)
+      setData(response)
+    }catch{
+      setResolvedDate(date)
+      setAutoAdvanced(false)
+      setData({ok:false,error:"Accumulator analysis failed"})
+    }finally{setLoading(false)}
+  },[date])
   useEffect(()=>{void load(false)},[load])
   useEffect(()=>{
     const hasLive=(data?.predictions??[]).some(p=>p.inPlay)
@@ -39,6 +76,7 @@ export default function AccumulatorPage(){
     </div></header>
 
     <div className="mx-auto max-w-3xl space-y-5 px-4 py-4">
+      {autoAdvanced?<section className="rounded-2xl border border-amber-300/15 bg-amber-300/[0.05] px-4 py-3"><p className="text-xs font-black text-amber-100">No more qualifying fixtures on {prettyDate(date)}</p><p className="mt-1 text-[0.58rem] text-white/40">Showing the next available matchday: {prettyDate(resolvedDate)}.</p></section>:null}
       <section className="rounded-3xl border border-amber-300/12 bg-gradient-to-br from-amber-300/[0.08] to-black/20 p-4">
         <div className="flex items-start gap-3"><Target className="mt-0.5 size-4 text-amber-300"/><div><p className="text-sm font-black">Choose your build</p><p className="mt-1 text-[0.62rem] leading-relaxed text-white/45">Like the best acca tools, risk is the first decision. Safe targets five stronger legs, Balanced targets seven, and Aggressive targets ten. Every leg comes from a different match.</p></div></div>
         <div className="mt-4 grid grid-cols-3 gap-2">
@@ -51,9 +89,9 @@ export default function AccumulatorPage(){
       {loading&&!data?<section className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center"><RefreshCw className="mx-auto mb-3 size-5 animate-spin text-amber-300"/><p className="font-black">Analysing the matchday…</p></section>:null}
       {!loading&&data&&!data.ok?<section className="rounded-3xl border border-rose-300/15 bg-rose-400/5 p-6 text-center"><p className="font-black">Accumulator analysis unavailable</p><p className="mt-1 text-sm text-white/40">{data?.error??"Try another date."}</p></section>:null}
 
-      {data?.ok?<>{data.staleFallback?<section className="rounded-2xl border border-amber-300/15 bg-amber-300/5 px-4 py-3 text-[0.62rem] text-amber-100">{data.warning??"Showing the last successful cached analysis because a fresh data pull failed."}</section>:null}<section className="grid grid-cols-2 gap-2 sm:grid-cols-4"><Metric label="Active fixtures" value={String(data.activeFixtureCount??data.predictions?.length??0)}/><Metric label="Live matches" value={String((data.predictions??[]).filter(p=>p.inPlay).length)}/><Metric label="Build" value={risk==="safe"?"5 fold":risk==="balanced"?"7 fold":"10 fold"}/><Metric label="Updated" value={data.generatedAt?new Date(data.generatedAt).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}):"—"}/></section>
+      {data?.ok?<>{data.staleFallback?<section className="rounded-2xl border border-amber-300/15 bg-amber-300/5 px-4 py-3 text-[0.62rem] text-amber-100">{data.warning??"Showing the last successful cached analysis because a fresh data pull failed."}</section>:null}<section className="grid grid-cols-2 gap-2 sm:grid-cols-5"><Metric label="Matchday" value={resolvedDate===date?"Selected":"Next"}/><Metric label="Active fixtures" value={String(data.activeFixtureCount??data.predictions?.length??0)}/><Metric label="Live matches" value={String((data.predictions??[]).filter(p=>p.inPlay).length)}/><Metric label="Build" value={risk==="safe"?"5 fold":risk==="balanced"?"7 fold":"10 fold"}/><Metric label="Updated" value={data.generatedAt?new Date(data.generatedAt).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}):"—"}/></section>
 
-      {selectedSlip?<><AccaSnapshot slip={selectedSlip}/><section className="space-y-3"><div className="px-1"><p className="font-black">{risk==="safe"?"Safer":"Selected"} build</p><p className="text-[0.6rem] text-white/35">The weakest leg and combined chance are visible before you expand the full slip.</p></div><SlipCard slip={selectedSlip} hero/></section></>:<section className="rounded-3xl border border-dashed border-white/10 bg-white/[0.03] p-6 text-center"><p className="font-black">No {risk} build available</p><p className="mt-1 text-sm text-white/35">There are not enough qualifying matches for this risk level today.</p></section>}
+      {selectedSlip?<><AccaSnapshot slip={selectedSlip}/><section className="space-y-3"><div className="px-1"><p className="font-black">{risk==="safe"?"Safer":"Selected"} build</p><p className="text-[0.6rem] text-white/35">The weakest leg and combined chance are visible before you expand the full slip.</p></div><SlipCard slip={selectedSlip} hero/></section></>:<section className="rounded-3xl border border-dashed border-white/10 bg-white/[0.03] p-6 text-center"><p className="font-black">No {risk} build available</p><p className="mt-1 text-sm text-white/35">There are not enough qualifying matches for this risk level on {prettyDate(resolvedDate)}.</p></section>}
 
       <details className="rounded-3xl border border-white/8 bg-white/[0.025] p-4"><summary className="cursor-pointer text-sm font-black text-white/45">Compare all acca builds</summary><div className="mt-3 space-y-3">{(data.slips??[]).map(s=><SlipCard key={"compare-"+s.id} slip={s}/>)}</div></details>
 
