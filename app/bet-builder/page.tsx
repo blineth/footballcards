@@ -67,6 +67,7 @@ type FoulTargetSlip = {
 }
 type Scorecard = {
   ok:boolean
+  lineupsConfirmed?:boolean
   bookmaker?:string|null
   oddsSource?:string|null
   oddsFreshness?:"LIVE"|"SLIGHTLY STALE"|"CACHED"|"STALE"|"UNKNOWN"
@@ -263,9 +264,19 @@ function OddsStatus({data}:{data:Scorecard}){
   const card=marketStatusLabel(data.marketAvailability?.card,"Cards")
   const foul=marketStatusLabel(data.marketAvailability?.foul,"Fouls")
   const sot=marketStatusLabel(data.marketAvailability?.sot,"SOT")
+  const cardBlocked=data.marketAvailability?.card==="unavailable"
+  const foulBlocked=data.marketAvailability?.foul==="unavailable"
+  const blockMessage=cardBlocked&&foulBlocked
+    ?"Bet365 does not currently offer player fouls or player cards for this fixture. Foul/card builders are disabled."
+    :cardBlocked
+      ?"Bet365 does not currently offer player cards for this fixture. Card-based builders are disabled."
+      :foulBlocked
+        ?"Bet365 does not currently offer player fouls for this fixture. Foul-based builders are disabled."
+        :null
   return <section className="rounded-2xl border border-white/8 bg-white/[0.035] p-3">
-    <div className="flex items-center justify-between gap-3"><div><p className="text-xs font-black">Confirmed-lineup model ready</p><p className="mt-0.5 text-[0.58rem] text-white/35">{data.playerCount??0} player profiles analysed</p></div><span className={"rounded-full px-2 py-1 text-[0.54rem] font-black "+cls}>{data.bookmaker??"BET365"} {freshness}</span></div>
+    <div className="flex items-center justify-between gap-3"><div><p className="text-xs font-black">{data.lineupsConfirmed?"Confirmed-lineup model ready":"Bookmaker market check"}</p><p className="mt-0.5 text-[0.58rem] text-white/35">{data.lineupsConfirmed?(data.playerCount??0)+" player profiles analysed":"Markets checked as soon as the fixture is selected"}</p></div><span className={"rounded-full px-2 py-1 text-[0.54rem] font-black "+cls}>{data.bookmaker??"BET365"} {freshness}</span></div>
     <div className="mt-2 flex flex-wrap gap-1.5"><span className={"rounded-full px-2 py-1 text-[0.5rem] font-black "+card.cls}>{card.text}</span><span className={"rounded-full px-2 py-1 text-[0.5rem] font-black "+foul.cls}>{foul.text}</span><span className={"rounded-full px-2 py-1 text-[0.5rem] font-black "+sot.cls}>{sot.text}</span></div>
+    {blockMessage?<p className="mt-2 rounded-xl bg-rose-400/10 px-3 py-2 text-[0.62rem] font-bold leading-relaxed text-rose-100">{blockMessage}</p>:null}
   </section>
 }
 
