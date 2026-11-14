@@ -33,7 +33,7 @@ type ScoreMarket = {key:ScoreMarketKey;label:string;probability:number;fairOdds:
 type ScorePlayer = {name:string;dbName:string;team:string;position?:string|null;sampleMatches:number;sampleMinutes:number;expectedMinutes:number;matchup?:{name:string;role?:string|null;fouled90?:number|null}|null;yellowConditionals:{overall:{matches:number;yellows:number;rate:number};after1PlusFouls:{matches:number;yellows:number;rate:number|null};after2PlusFouls:{matches:number;yellows:number;rate:number|null};after3PlusFouls:{matches:number;yellows:number;rate:number|null}};markets:Record<ScoreMarketKey,ScoreMarket>}
 type SlipLeg = {player:string;team:string;market:ScoreMarketKey;label:string;probability:number;fairOdds:number|null;bookmakerOdds:number|null;edge:number|null;expectedValue:number|null;confidence:"A"|"B"|"C"|"D";reason:string}
 type BetSlip = {id:string;title:string;risk:string;legs:SlipLeg[];combinedOdds:number|null;averageLegProbability:number|null;note:string}
-type ScorecardResponse = {ok:boolean;lineupsConfirmed?:boolean;status?:string;bookmaker?:string|null;priceAvailable?:boolean;playerCount?:number;players?:ScorePlayer[];slips?:BetSlip[];methodology?:{cardConditional?:string;calibrationWarning?:string;slipWarning?:string};error?:string}
+type ScorecardResponse = {ok:boolean;lineupsConfirmed?:boolean;status?:string;bookmaker?:string|null;oddsSource?:string|null;oddsCapturedAt?:string|null;oddsAgeSeconds?:number|null;oddsFreshness?:"LIVE"|"SLIGHTLY STALE"|"STALE"|"UNKNOWN";priceAvailable?:boolean;playerCount?:number;players?:ScorePlayer[];slips?:BetSlip[];methodology?:{cardConditional?:string;calibrationWarning?:string;slipWarning?:string;priceFreshness?:string};error?:string}
 type SotPlayer = {
   name:string; team:string; games:number; minutes:number; sot:number; onePlus:number; twoPlus:number;
   sot90:number; onePlusRate:number; twoPlusRate:number; score:number;
@@ -397,6 +397,45 @@ export default function HomePage(){
       })}
     </div>
   </main>
+}
+
+
+function percent(v:number|null|undefined){return v==null?"—":Math.round(Number(v)*100)+"%"}
+function edgeText(v:number|null|undefined){return v==null?"—":(Number(v)>=0?"+":"")+(Number(v)*100).toFixed(1)+"pp"}
+function BetSlipScorecard({data,confirmed}:{data:ScorecardResponse|undefined;confirmed:boolean}){
+  if(!confirmed)return <section className="rounded-xl border border-dashed border-border bg-card p-4"><p className="text-sm font-black">5-slip builder waiting for confirmed teams</p><p className="mt-1 text-xs text-muted-foreground">The page checks every 60 seconds. Once both XIs are confirmed it rebuilds every starter&apos;s probabilities and compares them with the latest Bet365 prices.</p></section>
+  if(!data)return <section className="rounded-xl border border-border bg-card p-4"><div className="flex items-center gap-2 text-sm font-black"><RefreshCw className="size-4 animate-spin"/>Confirmed lineup detected — building scorecard</div></section>
+  if(!data.ok)return <section className="rounded-xl border border-border bg-card"><Unavailable text={data.error??"Confirmed-lineup scorecard unavailable."}/></section>
+  const freshness=data.oddsFreshness??"UNKNOWN"
+  const freshnessClass=freshness==="LIVE"?"bg-emerald-100 text-emerald-800":freshness==="SLIGHTLY STALE"?"bg-amber-100 text-amber-800":freshness==="STALE"?"bg-red-100 text-red-800":"bg-secondary text-muted-foreground"
+  const captured=data.oddsCapturedAt?new Date(data.oddsCapturedAt).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",second:"2-digit"}):null
+  const priceLine=data.priceAvailable?"Prices from "+(data.oddsSource??"odds feed")+(captured?" · captured "+captured:"")+(data.oddsAgeSeconds!=null?" · "+data.oddsAgeSeconds+"s old":""):"No fresh Bet365 player-prop price available — model probabilities still shown."
+  return <section className="overflow-hidden rounded-xl border border-border bg-card">
+    <div className="border-b border-border p-4">
+      <div className="flex items-start justify-between gap-3"><div><p className="text-sm font-black">Confirmed-lineup probability model</p><p className="mt-1 text-[0.68rem] text-muted-foreground">{data.playerCount??0} starters/profiles analysed · player history · recent form · H2H · direct matchup · referee · expected minutes</p></div><span className={"shrink-0 rounded-full px-2 py-1 text-[0.58rem] font-black "+freshnessClass}>{data.bookmaker??"BET365"} {freshness}</span></div>
+      <p className="mt-2 text-[0.62rem] text-muted-foreground">{priceLine}</p>
+    </div>
+
+    <div className="p-3">
+      <p className="mb-2 text-xs font-black uppercase tracking-wide text-muted-foreground">5 generated slips</p>
+      <div className="space-y-2">{(data.slips??[]).map((slip,index)=><div key={slip.id} className="rounded-xl border border-border bg-secondary/20 p-3">
+        <div className="flex items-start justify-between gap-2"><div><p className="font-black">{index+1}. {slip.title}</p><p className="text-[0.62rem] text-muted-foreground">{slip.risk} risk · avg leg model {percent(slip.averageLegProbability)}</p></div><span className="rounded-lg bg-card px-2 py-1 text-[0.58rem] font-black">{slip.legs.length} legs</span></div>
+        <div className="mt-2 divide-y divide-border rounded-lg border border-border bg-card">{slip.legs.map((leg,i)=><div key={slip.id+"|"+leg.player+"|"+leg.market+"|"+i} className="p-2.5">
+          <div className="flex items-center justify-between gap-2"><div className="min-w-0"><p className="truncate text-xs font-black">{leg.player} · {leg.label}</p><p className="truncate text-[0.58rem] text-muted-foreground">{leg.team} · Grade {leg.confidence}{leg.reason?" · "+leg.reason:""}</p></div><div className="shrink-0 text-right"><p className="font-mono text-sm font-black">{percent(leg.probability)}</p><p className="text-[0.52rem] text-muted-foreground">model</p></div></div>
+          <div className="mt-1.5 grid grid-cols-3 gap-1 text-center"><div className="rounded-md bg-secondary p-1"><p className="font-mono text-xs font-black">{leg.fairOdds?.toFixed(2)??"—"}</p><p className="text-[0.46rem] uppercase text-muted-foreground">Fair odds</p></div><div className="rounded-md bg-secondary p-1"><p className="font-mono text-xs font-black">{leg.bookmakerOdds?.toFixed(2)??"—"}</p><p className="text-[0.46rem] uppercase text-muted-foreground">Bet365</p></div><div className="rounded-md bg-secondary p-1"><p className="font-mono text-xs font-black">{edgeText(leg.edge)}</p><p className="text-[0.46rem] uppercase text-muted-foreground">Edge</p></div></div>
+        </div>)}</div>
+        <p className="mt-2 text-[0.58rem] text-muted-foreground">{slip.note}</p>
+      </div>)}</div>
+    </div>
+
+    <div className="border-t border-border p-3">
+      <p className="mb-2 text-xs font-black uppercase tracking-wide text-muted-foreground">Every player scorecard</p>
+      <div className="overflow-x-auto rounded-lg border border-border">
+        <table className="w-max min-w-full text-[0.62rem]"><thead className="bg-secondary"><tr><Th>Player</Th><Th>Exp min</Th><Th>Sample</Th><Th>1+ foul</Th><Th>2+ fouls</Th><Th>3+ fouls</Th><Th>1+ drawn</Th><Th>Yellow</Th><Th>1+ shot</Th><Th>2+ shots</Th><Th>1+ SOT</Th><Th>2+ SOT</Th><Th>YC if 2+ fouls</Th></tr></thead><tbody>{(data.players??[]).map(p=><tr key={p.dbName} className="border-t border-border"><Td strong><div>{p.name}</div><div className="text-[0.5rem] font-normal text-muted-foreground">{p.team}{p.matchup?.name?" · vs "+p.matchup.name:""}</div></Td><Td>{p.expectedMinutes}</Td><Td>{p.sampleMatches}g / {p.sampleMinutes}m</Td><Td>{percent(p.markets.foul1.probability)}</Td><Td>{percent(p.markets.foul2.probability)}</Td><Td>{percent(p.markets.foul3.probability)}</Td><Td>{percent(p.markets.fouled1.probability)}</Td><Td>{percent(p.markets.card.probability)} · {p.markets.card.confidence}</Td><Td>{percent(p.markets.shot1.probability)}</Td><Td>{percent(p.markets.shot2.probability)}</Td><Td>{percent(p.markets.sot1.probability)}</Td><Td>{percent(p.markets.sot2.probability)}</Td><Td>{p.yellowConditionals.after2PlusFouls.rate==null?"—":percent(p.yellowConditionals.after2PlusFouls.rate)+" ("+p.yellowConditionals.after2PlusFouls.yellows+"/"+p.yellowConditionals.after2PlusFouls.matches+")"}</Td></tr>)}</tbody></table>
+      </div>
+      <p className="mt-2 text-[0.58rem] text-muted-foreground">{data.methodology?.cardConditional} {data.methodology?.calibrationWarning}</p>
+    </div>
+  </section>
 }
 
 function CollapsibleGroup({open,onToggle,title,subtitle,children}:{open:boolean;onToggle:()=>void;title:string;subtitle:string;children:React.ReactNode}){
