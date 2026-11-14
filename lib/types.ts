@@ -1,6 +1,6 @@
 // Shared domain types used across the provider layer, API routes and UI.
 
-export type Competition = "Premier League" | "Championship" | "League One" | "International"
+export type Competition = "Premier League" | "Championship" | "League One" | "League Two" | "International"
 
 export type LineupStatus = "expected" | "confirmed" | "unavailable"
 
@@ -49,6 +49,7 @@ export interface FixturesResponse {
     "Premier League": Fixture[]
     Championship: Fixture[]
     "League One": Fixture[]
+    "League Two": Fixture[]
     International: Fixture[]
   }
 }
