@@ -698,26 +698,26 @@
       "avgModel": 0.3216,
       "brier": 0.16801
     },
-    "wins5": {
-      "sample": 18,
-      "hits": 0,
-      "hitRate": 0.0,
-      "avgModel": 0.0844,
-      "brier": 0.00979
-    },
-    "btts5": {
-      "sample": 16,
-      "hits": 0,
-      "hitRate": 0.0,
-      "avgModel": 0.1881,
-      "brier": 0.03988
-    },
-    "mixed6": {
+    "wins3": {
       "sample": 23,
-      "hits": 1,
-      "hitRate": 0.0435,
-      "avgModel": 0.0978,
-      "brier": 0.05199
+      "hits": 3,
+      "hitRate": 0.1304,
+      "avgModel": 0.2287,
+      "brier": 0.1241
+    },
+    "btts3": {
+      "sample": 23,
+      "hits": 5,
+      "hitRate": 0.2174,
+      "avgModel": 0.3673,
+      "brier": 0.20057
+    },
+    "mixed4": {
+      "sample": 26,
+      "hits": 2,
+      "hitRate": 0.0769,
+      "avgModel": 0.2256,
+      "brier": 0.09857
     }
   }
 }
