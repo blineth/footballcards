@@ -34,6 +34,10 @@ export interface Fixture {
   tournament?: string
   kickoff: string // ISO string, UTC
   status: MatchStatus
+  /** Current score when supplied by the live fixture provider. */
+  score?: { home: number | null; away: number | null }
+  /** Match minute when live/halftime. */
+  elapsed?: number | null
   home: TeamRef
   away: TeamRef
   venue: string | null
