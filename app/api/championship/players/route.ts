@@ -52,7 +52,7 @@ export async function GET() {
     connected: true,
     competition: "Championship",
     season: "2026/27",
-    source: "API-Football live player aggregates; FBref standard/shooting/misc used as cross-check",
+    source: "FBref 2026/27 Championship Standard + Shooting + Misc player tables",
     crossCheck: {
       fbrefStandard: "https://fbref.com/en/comps/10/stats/Championship-Stats",
       fbrefShooting: "https://fbref.com/en/comps/10/shooting/Championship-Stats",
