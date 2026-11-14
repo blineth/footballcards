@@ -24,6 +24,7 @@ type SlipLeg = {
   probability:number
   fairOdds:number|null
   bookmakerOdds:number|null
+  bookmakerName?:string|null
   previousBookmakerOdds?:number|null
   bookmakerMovement?:number|null
   edge:number|null
@@ -196,13 +197,13 @@ function MarketGate({data}:{data:Scorecard}){
   const foul=data.marketAvailability?.foul??"unknown"
   const chip=(label:string,status:MarketStatus)=>({label,cls:status==="available"?"bg-emerald-400/15 text-emerald-300":status==="unavailable"?"bg-rose-400/15 text-rose-200":"bg-amber-300/10 text-amber-200",text:status==="available"?"Available":status==="unavailable"?"Unavailable":"Not verified"})
   const c=chip("Player cards",card),f=chip("Player fouls",foul)
-  return <section className="rounded-3xl border border-white/10 bg-white/[0.045] p-4"><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-black">Bet365 market check</p><p className="mt-1 text-[0.58rem] text-white/35">{data.lineupsConfirmed?"Confirmed XI loaded":"Pre-lineup market eligibility"}</p></div><span className="rounded-full bg-white/7 px-2 py-1 text-[0.5rem] font-black text-white/45">{data.oddsFreshness??"UNKNOWN"}</span></div><div className="mt-3 grid grid-cols-2 gap-2">{[c,f].map(x=><div key={x.label} className={"rounded-2xl p-3 "+x.cls}><p className="text-[0.55rem] font-black uppercase opacity-70">{x.label}</p><p className="mt-1 text-sm font-black">{x.text}</p></div>)}</div></section>
+  return <section className="rounded-3xl border border-white/10 bg-white/[0.045] p-4"><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-black">Preferred bookmaker market check</p><p className="mt-1 text-[0.58rem] text-white/35">Bet365 · Sky Bet · William Hill · Paddy Power</p><p className="mt-1 text-[0.52rem] text-white/25">{data.lineupsConfirmed?"Confirmed XI loaded":"Pre-lineup market eligibility"}</p></div><span className="rounded-full bg-white/7 px-2 py-1 text-[0.5rem] font-black text-white/45">{data.oddsFreshness??"UNKNOWN"}</span></div><div className="mt-3 grid grid-cols-2 gap-2">{[c,f].map(x=><div key={x.label} className={"rounded-2xl p-3 "+x.cls}><p className="text-[0.55rem] font-black uppercase opacity-70">{x.label}</p><p className="mt-1 text-sm font-black">{x.text}</p></div>)}</div></section>
 }
 
 function ExactFoulOffers({offers}:{offers:ExactFoulOffer[]}){
   const top=[...offers].sort((a,b)=>(b.edge-a.edge)||(b.probability-a.probability)).slice(0,30)
   return <section className="space-y-3">
-    <div className="px-1"><p className="font-black">Exact UK bookmaker foul offers</p><p className="text-[0.6rem] text-white/35">Only exact thresholds actually returned by a UK bookmaker are shown. Our probability and fair odds are calculated against that exact line.</p></div>
+    <div className="px-1"><p className="font-black">Exact foul offers</p><p className="text-[0.6rem] text-white/35">Only exact thresholds returned by Bet365, Sky Bet, William Hill or Paddy Power are shown. Our probability and fair odds are calculated against that exact line.</p></div>
     {top.length?<div className="space-y-2">{top.map((o,i)=><div key={o.player+"|"+o.threshold+"|"+o.bookmaker+"|"+i} className="rounded-2xl border border-white/8 bg-white/[0.04] p-3">
       <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-sm font-black">{o.player} · {o.label}</p><p className="mt-0.5 text-[0.56rem] text-white/35">{o.team} · {o.bookmaker}</p></div><div className="text-right"><p className="font-mono text-lg font-black">{o.bookmakerOdds.toFixed(2)}</p><p className="text-[0.45rem] uppercase text-white/25">book price</p></div></div>
       <div className="mt-2 grid grid-cols-3 gap-1.5 text-center"><Metric label="Model" value={percent(o.probability)}/><Metric label="Fair" value={o.fairOdds?.toFixed(2)??"—"}/><Metric label="Edge" value={edgeText(o.edge)} good={o.edge>0}/></div>
@@ -220,7 +221,7 @@ function FoulCard({slip}:{slip:FoulTargetSlip}){
   return <article className="overflow-hidden rounded-3xl border border-emerald-300/15 bg-gradient-to-br from-emerald-500/15 to-black/20">
     <button onClick={()=>setOpen(x=>!x)} className="w-full p-4 text-left">
       <div className="flex items-start justify-between gap-3"><div><p className="text-[0.54rem] font-black uppercase tracking-[0.14em] text-emerald-300">FOUL TARGET</p><h3 className="mt-1 text-xl font-black">{slip.targetFractional}</h3><p className="mt-1 text-[0.62rem] text-white/45">{ready?slip.legs.length+" exact bookmaker lines selected":"No qualifying combination"}</p></div><div className="text-right"><p className="font-mono text-xl font-black">{slip.referenceProductOdds?.toFixed(2)??"—"}</p><p className="text-[0.44rem] uppercase text-white/25">reference</p></div></div>
-      {ready?<div className="mt-3 flex flex-wrap gap-1.5">{slip.legs.map(l=><span key={l.player} className="rounded-full bg-white/7 px-2.5 py-1 text-[0.58rem] font-bold text-white/70">{l.player} 1+ · {percent(l.probability)}</span>)}</div>:null}
+      {ready?<div className="mt-3 flex flex-wrap gap-1.5">{slip.legs.map((l,i)=><span key={l.player+"|"+l.market+"|"+i} className="rounded-full bg-white/7 px-2.5 py-1 text-[0.58rem] font-bold text-white/70">{l.player} · {l.label} · {l.bookmakerName??"book"} · {percent(l.probability)}</span>)}</div>:null}
     </button>
     {open&&ready?<div className="border-t border-white/8 bg-black/20 p-4"><div className="space-y-2">{slip.legs.map((l,i)=><Leg key={l.player+"|"+i} leg={l}/>)}</div><p className="mt-3 text-[0.55rem] leading-relaxed text-white/30">{slip.note}</p></div>:null}
   </article>
@@ -235,7 +236,7 @@ function StandardSlip({slip}:{slip:BetSlip}){
 }
 
 function Leg({leg}:{leg:SlipLeg}){
-  return <div className="rounded-2xl bg-white/[0.055] p-3"><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-black">{leg.player} · {leg.label}</p><p className="mt-0.5 text-[0.56rem] text-white/35">{leg.team} · Grade {leg.confidence}</p></div><p className="font-mono text-base font-black">{percent(leg.probability)}</p></div><p className="mt-2 text-[0.62rem] leading-relaxed text-white/45">{leg.reason}</p><div className="mt-2 grid grid-cols-3 gap-1.5 text-center"><Metric label="Fair" value={leg.fairOdds?.toFixed(2)??"—"}/><Metric label="Bet365" value={leg.bookmakerOdds?.toFixed(2)??"—"}/><Metric label="Edge" value={edgeText(leg.edge)} good={Number(leg.edge??0)>0}/></div></div>
+  return <div className="rounded-2xl bg-white/[0.055] p-3"><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-black">{leg.player} · {leg.label}</p><p className="mt-0.5 text-[0.56rem] text-white/35">{leg.team} · Grade {leg.confidence}{leg.bookmakerName?" · "+leg.bookmakerName:""}</p></div><p className="font-mono text-base font-black">{percent(leg.probability)}</p></div><p className="mt-2 text-[0.62rem] leading-relaxed text-white/45">{leg.reason}</p><div className="mt-2 grid grid-cols-3 gap-1.5 text-center"><Metric label="Fair" value={leg.fairOdds?.toFixed(2)??"—"}/><Metric label="Bet365" value={leg.bookmakerOdds?.toFixed(2)??"—"}/><Metric label="Edge" value={edgeText(leg.edge)} good={Number(leg.edge??0)>0}/></div></div>
 }
 
 function Metric({label,value,good=false}:{label:string;value:string;good?:boolean}){
