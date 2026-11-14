@@ -3,6 +3,7 @@ import { pool, isDatabaseConfigured } from "@/lib/db"
 import { ensureResearchSchema } from "@/lib/db/ensure-research-schema"
 import { londonToday } from "@/lib/date"
 import { GET as fixturesGET } from "../fixtures/route"
+import matchAccaBacktest from "@/data/model/match-acca-backtest.json"
 
 export const dynamic="force-dynamic"
 export const revalidate=900
@@ -22,6 +23,13 @@ function norm(v:any){return String(v??"").normalize("NFD").replace(/[\u0300-\u03
 function same(a:any,b:any){const x=norm(a),y=norm(b);return Boolean(x&&y&&(x===y||x.includes(y)||y.includes(x)))}
 function clamp(v:number,a:number,b:number){return Math.max(a,Math.min(b,v))}
 function pct(v:number){return Math.round(v*1000)/1000}
+function calibrateMarket(market:"homeWin"|"awayWin"|"bttsYes"|"bttsNo",raw:number){
+  const bands=(matchAccaBacktest as any)?.calibration?.[market]?.bands
+  if(!Array.isArray(bands)||bands.length!==20)return raw
+  const idx=Math.max(0,Math.min(19,Math.floor(clamp(raw,0,.999999)/.05)))
+  const value=Number(bands[idx]?.calibratedProbability)
+  return Number.isFinite(value)?clamp(value,.01,.99):raw
+}
 function seasonYear(date:string){const d=new Date(date+"T12:00:00Z");return d.getUTCMonth()>=6?d.getUTCFullYear():d.getUTCFullYear()-1}
 function seasonStart(date:string){return String(seasonYear(date))+"-07-01"}
 function historyStart(date:string){const d=new Date(date+"T12:00:00Z");d.setUTCFullYear(d.getUTCFullYear()-3);return d.toISOString().slice(0,10)}
@@ -118,15 +126,33 @@ export async function GET(request:Request){
     const predictions:any[]=[]
     for(const competition of COMPETITIONS){const pack=packs.get(competition)!,tbl=table(pack.season)
       for(const f of fixtureData?.leagues?.[competition]??[]){const home=canonical(String(f.home?.name??""),tbl.teams),away=canonical(String(f.away?.name??""),tbl.teams),hm=metrics(home,pack.season,tbl.positions,tbl.teams.length||24,"home"),am=metrics(away,pack.season,tbl.positions,tbl.teams.length||24,"away"),hh=h2h(home,away,pack.history),wp=resultProb(hm,am,hh),bp=bttsProb(hm,am,hh)
-        const side=wp.home>=wp.away&&wp.home>=.43?"home":wp.away>wp.home&&wp.away>=.40?"away":null,winnerP=side==="home"?wp.home:side==="away"?wp.away:Math.max(wp.home,wp.away),bpick=bp>=.55?"yes":bp<=.45?"no":null,bprob=bpick==="yes"?bp:bpick==="no"?1-bp:Math.max(bp,1-bp),rel=wp.reliability
+        const rawHome=wp.home,rawAway=wp.away,rawBtts=bp
+        const calibratedHome=calibrateMarket("homeWin",rawHome)
+        const calibratedAway=calibrateMarket("awayWin",rawAway)
+        const resultScale=calibratedHome+calibratedAway
+        const drawBase=clamp(wp.draw,.12,.45)
+        const sideBudget=1-drawBase
+        const homeP=resultScale>0?calibratedHome/resultScale*sideBudget:rawHome
+        const awayP=resultScale>0?calibratedAway/resultScale*sideBudget:rawAway
+        const drawP=1-homeP-awayP
+        const calibratedBttsYes=calibrateMarket("bttsYes",rawBtts)
+        const calibratedBttsNo=calibrateMarket("bttsNo",1-rawBtts)
+        const bttsScale=calibratedBttsYes+calibratedBttsNo
+        const bttsYes=bttsScale>0?calibratedBttsYes/bttsScale:rawBtts
+        const bttsNo=1-bttsYes
+        const side=homeP>=awayP&&homeP>=.43?"home":awayP>homeP&&awayP>=.40?"away":null
+        const winnerP=side==="home"?homeP:side==="away"?awayP:Math.max(homeP,awayP)
+        const bpick=bttsYes>=.56?"yes":bttsNo>=.56?"no":null
+        const bprob=bpick==="yes"?bttsYes:bpick==="no"?bttsNo:Math.max(bttsYes,bttsNo)
+        const rel=wp.reliability
         const reasons=[ordinal(hm.position)+" vs "+ordinal(am.position)+" in "+competition,String(f.home.name)+" home win "+Math.round(hm.venueWinRate*100)+"% · "+String(f.away.name)+" away win "+Math.round(am.venueWinRate*100)+"%","Form "+String(f.home.name)+" "+hm.recentForm+" · "+String(f.away.name)+" "+am.recentForm]
         if(hh.matches>=2)reasons.push("H2H "+String(f.home.name)+" "+hh.homeWins+"W · "+hh.draws+"D · "+String(f.away.name)+" "+hh.awayWins+"W · BTTS "+Math.round(hh.bttsRate*100)+"%")
-        predictions.push({id:String(f.id),competition,kickoff:String(f.kickoff),home:String(f.home.name),away:String(f.away.name),homeCrest:f.home?.crest??null,awayCrest:f.away?.crest??null,homeStats:hm,awayStats:am,h2h:hh,probabilities:{homeWin:wp.home,draw:wp.draw,awayWin:wp.away,bttsYes:bp,bttsNo:pct(1-bp)},winnerPick:side?{side,team:side==="home"?String(f.home.name):String(f.away.name),loser:side==="home"?String(f.away.name):String(f.home.name),probability:pct(winnerP),grade:grade(winnerP,rel)}:null,bttsPick:bpick?{selection:bpick,probability:pct(bprob),grade:grade(.5+Math.abs(bp-.5),rel)}:null,reasons,oddsByBook:priceMap(pack.odds,String(f.home.name),String(f.away.name))})
+        predictions.push({id:String(f.id),competition,kickoff:String(f.kickoff),home:String(f.home.name),away:String(f.away.name),homeCrest:f.home?.crest??null,awayCrest:f.away?.crest??null,homeStats:hm,awayStats:am,h2h:hh,probabilities:{homeWin:pct(homeP),draw:pct(drawP),awayWin:pct(awayP),bttsYes:pct(bttsYes),bttsNo:pct(bttsNo)},winnerPick:side?{side,team:side==="home"?String(f.home.name):String(f.away.name),loser:side==="home"?String(f.away.name):String(f.home.name),probability:pct(winnerP),grade:grade(winnerP,rel)}:null,bttsPick:bpick?{selection:bpick,probability:pct(bprob),grade:grade(.5+Math.abs(bp-.5),rel)}:null,reasons,oddsByBook:priceMap(pack.odds,String(f.home.name),String(f.away.name))})
       }
     }
     const wins=predictions.filter(p=>p.winnerPick&&p.winnerPick.grade!=="D").map(p=>({prediction:p,market:p.winnerPick.side==="home"?"homeWin":"awayWin",label:p.winnerPick.team+" to win",probability:p.winnerPick.probability,grade:p.winnerPick.grade,reasons:p.reasons})).sort((a,b)=>b.probability-a.probability)
     const btts=predictions.filter(p=>p.bttsPick&&p.bttsPick.grade!=="D").map(p=>({prediction:p,market:p.bttsPick.selection==="yes"?"bttsYes":"bttsNo",label:"BTTS "+(p.bttsPick.selection==="yes"?"Yes":"No"),probability:p.bttsPick.probability,grade:p.bttsPick.grade,reasons:p.reasons})).sort((a,b)=>b.probability-a.probability)
     const mixed=predictions.map(p=>{const w=p.winnerPick?{prediction:p,market:p.winnerPick.side==="home"?"homeWin":"awayWin",label:p.winnerPick.team+" to win",probability:p.winnerPick.probability,grade:p.winnerPick.grade,reasons:p.reasons,score:(p.winnerPick.probability-.34)/.45}:null,b=p.bttsPick?{prediction:p,market:p.bttsPick.selection==="yes"?"bttsYes":"bttsNo",label:"BTTS "+(p.bttsPick.selection==="yes"?"Yes":"No"),probability:p.bttsPick.probability,grade:p.bttsPick.grade,reasons:p.reasons,score:(p.bttsPick.probability-.5)/.34}:null;return [w,b].filter(Boolean).sort((a:any,b:any)=>b.score-a.score)[0]??null}).filter(Boolean).sort((a:any,b:any)=>b.score-a.score)
-    return NextResponse.json({ok:true,date,generatedAt:new Date().toISOString(),fixtureCount:predictions.length,predictions,slips:[buildSlip("safer","Safer 3-Leg Acca","Three strongest single-match selections.",mixed.slice(0,3)),buildSlip("win-lose","Win / Lose Acca","Strongest direct winner calls; the opposing team is the model's expected loser.",wins.slice(0,5)),buildSlip("btts","BTTS Acca","Strongest Both Teams To Score Yes/No selections.",btts.slice(0,5)),buildSlip("mixed","Mixed Acca","Best winner or BTTS selection from the strongest fixtures.",mixed.slice(0,6))],methodology:{resultModel:"League position, PPG, recent five-match form, streaks, home/away PPG and win rate, goal difference and recent H2H with sample shrinkage.",bttsModel:"Home/away BTTS, scoring and conceding rates, overall BTTS and H2H BTTS.",pricing:"Exact combined odds are shown only when one preferred bookmaker prices every leg. Otherwise model fair odds are shown.",caution:"Model estimates, not guarantees. Team news and match events can materially change outcomes."}},{headers:{"Cache-Control":"public, s-maxage=900, stale-while-revalidate=900"}})
+    return NextResponse.json({ok:true,date,generatedAt:new Date().toISOString(),fixtureCount:predictions.length,predictions,slips:[buildSlip("safer","Safer 3-Leg Acca","Three strongest single-match selections.",mixed.slice(0,3)),buildSlip("win-lose","Win / Lose Acca","Three strongest direct winner calls; the opposing team is the model's expected loser.",wins.slice(0,3)),buildSlip("btts","BTTS Acca","Three strongest Both Teams To Score Yes/No selections.",btts.slice(0,3)),buildSlip("mixed","Mixed Acca","Best winner or BTTS selection from four of the strongest fixtures.",mixed.slice(0,4))],methodology:{resultModel:"League position, PPG, recent five-match form, streaks, home/away PPG and win rate, goal difference and recent H2H with sample shrinkage, followed by walk-forward calibration.",bttsModel:"Home/away BTTS, scoring and conceding rates, overall BTTS and H2H BTTS.",pricing:"Exact combined odds are shown only when one preferred bookmaker prices every leg. Otherwise model fair odds are shown.",caution:"Model estimates, not guarantees. Team news and match events can materially change outcomes."}},{headers:{"Cache-Control":"public, s-maxage=900, stale-while-revalidate=900"}})
   }catch(error){return NextResponse.json({ok:false,error:error instanceof Error?error.message:"Accumulator analysis failed"},{status:500})}
 }
