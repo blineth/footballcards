@@ -150,7 +150,7 @@ def main():
     by_date=defaultdict(list)
     for r in matches:by_date[r["date"]].append(r)
     history=defaultdict(list)
-    samples=[];structures={"safer5":[],"wins5":[],"btts5":[],"mixed6":[]}
+    samples=[];structures={"fold5":[],"fold7":[],"fold10":[]}
     for date in sorted(by_date):
         day=by_date[date]
         fixtures={}
@@ -178,9 +178,11 @@ def main():
             if bp>=.55 or bp<=.45:
                 p=bp if bp>=.55 else 1-bp;hit=row["btts"] if bp>=.55 else not row["btts"]
                 day_candidates.append({"kind":"btts","model":p,"hit":hit,"score":(p-.5)/.34})
-        for n,key,kind in ((5,"safer5",None),(5,"wins5","win"),(5,"btts5","btts"),(6,"mixed6",None)):
-            pool=[x for x in day_candidates if kind is None or x["kind"]==kind]
-            pool=sorted(pool,key=lambda x:x["score"],reverse=True)[:n]
+        for n,key in ((5,"fold5"),(7,"fold7"),(10,"fold10")):
+            # Keep only the strongest selection from each fixture. day_candidates
+            # are added in fixture order, so duplicate markets from one fixture
+            # must not create multiple legs in the same accumulator.
+            pool=sorted(day_candidates,key=lambda x:x["score"],reverse=True)[:n]
             if len(pool)==n:structures[key].append({"model":math.prod(x["model"] for x in pool),"hit":all(x["hit"] for x in pool)})
         for r in day:history[r["competition"]].append(r)
     output={
