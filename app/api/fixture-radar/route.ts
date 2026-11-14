@@ -125,10 +125,15 @@ async function addDeepEvidence(data: any, home: string, away: string, competitio
     refereeName ? db.select().from(playerRefereeHistory).where(and(inArray(playerRefereeHistory.playerName, candidateNames), eq(playerRefereeHistory.refereeName, refereeName))) : Promise.resolve([]),
   ])
 
-  const baselineForName = (name: string) => baselines.find((row) => {
-    const a = normalisePredictedName(row.playerName), b = normalisePredictedName(name)
-    return a === b || a.includes(b) || b.includes(a)
-  })
+  const baselineForName = (name: string) => {
+    const b = normalisePredictedName(name)
+    return baselines
+      .filter((row) => {
+        const a = normalisePredictedName(row.playerName)
+        return a === b || a.includes(b) || b.includes(a)
+      })
+      .sort((a, z) => Number(z.minutes ?? 0) - Number(a.minutes ?? 0))[0]
+  }
   const foulDrawn90 = (name: string) => {
     const baseline = baselineForName(name)
     const minutes = Number(baseline?.minutes ?? 0)
