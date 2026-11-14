@@ -166,6 +166,101 @@ function slip(id:string,title:string,legs:any[],note:string){
     marketAvailability:legs.map((row:any)=>({player:row.player,market:row.market,status:"unknown"})),
   }
 }
+function snapshotSelections(players:any[]){
+  const out:any[]=[]
+  for(const p of players){
+    for(const m of Object.values(p.markets??{}) as any[]){
+      if(!m||m.confidence==="D")continue
+      out.push({
+        id:[p.name,m.key,m.label].join("|").toLowerCase(),
+        player:p.name,
+        dbPlayerName:p.name,
+        team:p.team,
+        market:m.key,
+        label:m.label,
+        probability:Number(m.probability),
+        fairOdds:Number(m.fairOdds??(m.probability>0?1/m.probability:0)),
+        bookmakerOdds:null,
+        bookmakerName:null,
+        previousBookmakerOdds:null,
+        bookmakerMovement:null,
+        edge:null,
+        expectedValue:null,
+        confidence:m.confidence,
+        reason:Array.isArray(m.reasons)?String(m.reasons[0]??"Snapshot model"):String(m.reason??"Snapshot model"),
+        priceSource:null,
+      })
+    }
+  }
+  return out
+}
+function buildSnapshotRiskBuilders(players:any[]){
+  const rows=snapshotSelections(players)
+  const configs=[
+    {id:"safe-3-1",title:"Safe 3/1",risk:"Safe",targetFractional:"3/1",targetDecimal:4,minProb:.60,maxLegs:5},
+    {id:"balanced-10-1",title:"Balanced 10/1",risk:"Balanced",targetFractional:"10/1",targetDecimal:11,minProb:.34,maxLegs:7},
+    {id:"high-20-1",title:"High Risk 20/1+",risk:"High Risk",targetFractional:"20/1+",targetDecimal:21,minProb:.14,maxLegs:9},
+  ]
+  return configs.map(cfg=>{
+    type State={legs:any[];product:number;prob:number;players:Set<string>;quality:number}
+    const pool=[...rows]
+      .filter(r=>r.probability>=cfg.minProb&&r.fairOdds>1)
+      .sort((a,b)=>(b.probability-a.probability)||((b.fairOdds??0)-(a.fairOdds??0)))
+      .slice(0,70)
+    let states:State[]=[{legs:[],product:1,prob:1,players:new Set(),quality:0}]
+    for(const leg of pool){
+      const next=[...states]
+      for(const state of states){
+        if(state.legs.length>=cfg.maxLegs||state.players.has(String(leg.player).toLowerCase()))continue
+        const odd=Number(leg.fairOdds)
+        if(!(odd>1))continue
+        const product=state.product*odd
+        if(product>cfg.targetDecimal*1.45&&state.legs.length>=1)continue
+        next.push({
+          legs:[...state.legs,leg],
+          product,
+          prob:state.prob*leg.probability,
+          players:new Set([...state.players,String(leg.player).toLowerCase()]),
+          quality:state.quality+leg.probability,
+        })
+      }
+      states=next.sort((a,b)=>{
+        const score=(x:State)=>{
+          const targetGap=Math.abs(Math.log(Math.max(1.01,x.product))-Math.log(cfg.targetDecimal))
+          const below=x.product<cfg.targetDecimal?0.8:0
+          const avg=x.quality/Math.max(1,x.legs.length)
+          return targetGap+below-avg*.18
+        }
+        return score(a)-score(b)
+      }).slice(0,500)
+    }
+    const valid=states.filter(s=>s.legs.length>=2&&s.product>=cfg.targetDecimal)
+      .sort((a,b)=>{
+        const gapA=a.product-cfg.targetDecimal,gapB=b.product-cfg.targetDecimal
+        if(Math.abs(gapA-gapB)>.08)return gapA-gapB
+        return b.prob-a.prob
+      })
+    const best=valid[0]
+    if(!best){
+      return {
+        id:cfg.id,title:cfg.title,risk:cfg.risk,targetFractional:cfg.targetFractional,targetDecimal:cfg.targetDecimal,
+        legs:[],referenceProductOdds:null,averageLegProbability:null,minimumLegProbability:null,modelAllHitProbability:null,
+        exactPriced:false,bookmaker:null,note:"No qualifying combination reaches "+cfg.targetFractional+" yet.",
+      }
+    }
+    return {
+      id:cfg.id,title:cfg.title,risk:cfg.risk,targetFractional:cfg.targetFractional,targetDecimal:cfg.targetDecimal,
+      legs:best.legs,
+      referenceProductOdds:Math.round(best.product*100)/100,
+      averageLegProbability:best.legs.reduce((s,l)=>s+l.probability,0)/best.legs.length,
+      minimumLegProbability:Math.min(...best.legs.map(l=>l.probability)),
+      modelAllHitProbability:best.prob,
+      exactPriced:false,
+      bookmaker:null,
+      note:"Snapshot model fair-odds build. It is only labelled "+cfg.targetFractional+" when the calculated product actually reaches "+cfg.targetDecimal.toFixed(2)+" decimal.",
+    }
+  })
+}
 
 function baseResponse(mode:"confirmed"|"predicted"|"squad"){
   const confirmed=mode==="confirmed"
@@ -330,25 +425,27 @@ export async function buildSnapshotScorecard(input:{
     if(sotLegs.length>=2)slips.push(slip("intl-snapshot-sot","SOT picks",sotLegs,"Model-only fallback from the repository snapshot; verify the bookmaker market and price before placing."))
     if(cardLegs.length>=2)slips.push(slip("intl-snapshot-cards","Card picks",cardLegs,"Model-only fallback from the repository snapshot; verify the bookmaker market and price before placing."))
 
+    const playerRows=scored.map((x:any)=>({
+      name:x.p.name,
+      team:x.p.nationalTeam,
+      lineupStatus:official.confirmed?"confirmed":"predicted",
+      lineupConfidence:official.confirmed?"official":"snapshot-predicted",
+      markets:{
+        goal1:marketRow({key:"goal1",label:"Anytime goalscorer",probability:x.goal,confidence:x.confidence,reason:"Snapshot model: blended current domestic and international scoring rate."}),
+        foul1:marketRow({key:"foul1",label:"1+ foul committed",probability:x.foul,confidence:x.confidence,reason:"Snapshot model: blended current domestic and international foul rate."}),
+        fouled1:marketRow({key:"fouled1",label:"1+ foul drawn",probability:x.fouled,confidence:x.confidence,reason:"Snapshot model: blended current domestic and international fouls-drawn rate."}),
+        shot1:marketRow({key:"shot1",label:"1+ shot",probability:x.shot,confidence:x.confidence,reason:"Snapshot model: blended current domestic and international shot rate."}),
+        sot1:marketRow({key:"sot1",label:"1+ shot on target",probability:x.sot,confidence:x.confidence,reason:"Snapshot model: blended current domestic and international shot-on-target rate."}),
+        card:marketRow({key:"card",label:"Yellow card",probability:x.card,confidence:x.confidence,reason:"Snapshot model: blended domestic, international and prior-season booking rate."}),
+      },
+    }))
     return {
       ...baseResponse(official.confirmed?"confirmed":"predicted"),
       lineupSource:official.confirmed?"Official starting XI":"Probable international XI from recent starts/minutes snapshot",
       playerCount:profiles.length,
-      players:scored.map((x:any)=>({
-        name:x.p.name,
-        team:x.p.nationalTeam,
-        lineupStatus:official.confirmed?"confirmed":"predicted",
-        lineupConfidence:official.confirmed?"official":"snapshot-predicted",
-        markets:{
-          goal1:marketRow({key:"goal1",label:"Anytime goalscorer",probability:x.goal,confidence:x.confidence,reason:"Snapshot model: blended current domestic and international scoring rate."}),
-          foul1:marketRow({key:"foul1",label:"1+ foul committed",probability:x.foul,confidence:x.confidence,reason:"Snapshot model: blended current domestic and international foul rate."}),
-          fouled1:marketRow({key:"fouled1",label:"1+ foul drawn",probability:x.fouled,confidence:x.confidence,reason:"Snapshot model: blended current domestic and international fouls-drawn rate."}),
-          shot1:marketRow({key:"shot1",label:"1+ shot",probability:x.shot,confidence:x.confidence,reason:"Snapshot model: blended current domestic and international shot rate."}),
-          sot1:marketRow({key:"sot1",label:"1+ shot on target",probability:x.sot,confidence:x.confidence,reason:"Snapshot model: blended current domestic and international shot-on-target rate."}),
-          card:marketRow({key:"card",label:"Yellow card",probability:x.card,confidence:x.confidence,reason:"Snapshot model: blended domestic, international and prior-season booking rate."}),
-        },
-      })),
+      players:playerRows,
       slips,
+      riskBuilders:buildSnapshotRiskBuilders(playerRows),
     }
   }
 
@@ -415,24 +512,26 @@ export async function buildSnapshotScorecard(input:{
   if(sotLegs.length>=2)slips.push(slip("snapshot-sot","SOT picks",sotLegs,"Model-only fallback from the repository snapshot; verify the bookmaker market and price before placing."))
   if(cardLegs.length>=2)slips.push(slip("snapshot-cards","Card picks",cardLegs,"Model-only fallback from the repository snapshot; verify the bookmaker market and price before placing."))
 
+  const playerRows=scored.map(x=>({
+    name:x.p.player_name,
+    team:x.p.team,
+    lineupStatus:official.confirmed?"confirmed":"predicted",
+    lineupConfidence:official.confirmed?"official":"snapshot-predicted",
+    markets:{
+      goal1:marketRow({key:"goal1",label:"Anytime goalscorer",probability:x.goal,confidence:x.confidence,reason:"Snapshot model: season and recent scoring history."}),
+      foul1:marketRow({key:"foul1",label:"1+ foul committed",probability:x.foul,confidence:x.confidence,reason:"Snapshot model: season and recent foul history."}),
+      fouled1:marketRow({key:"fouled1",label:"1+ foul drawn",probability:x.fouled,confidence:x.confidence,reason:"Snapshot model: season and recent fouls-drawn history."}),
+      shot1:marketRow({key:"shot1",label:"1+ shot",probability:x.shot,confidence:x.confidence,reason:"Snapshot model: season and recent shot history."}),
+      sot1:marketRow({key:"sot1",label:"1+ shot on target",probability:x.sot,confidence:x.confidence,reason:"Snapshot model: season and recent shot-on-target history."}),
+      card:marketRow({key:"card",label:"Yellow card",probability:x.card,confidence:x.confidence,reason:"Snapshot model: season and recent booking history."}),
+    },
+  }))
   return {
     ...baseResponse(official.confirmed?"confirmed":"predicted"),
     lineupSource:official.confirmed?"Official starting XI":"Probable XI from current-season starts, appearances and minutes snapshot",
     playerCount:players.length,
-    players:scored.map(x=>({
-      name:x.p.player_name,
-      team:x.p.team,
-      lineupStatus:official.confirmed?"confirmed":"predicted",
-      lineupConfidence:official.confirmed?"official":"snapshot-predicted",
-      markets:{
-        goal1:marketRow({key:"goal1",label:"Anytime goalscorer",probability:x.goal,confidence:x.confidence,reason:"Snapshot model: season and recent scoring history."}),
-        foul1:marketRow({key:"foul1",label:"1+ foul committed",probability:x.foul,confidence:x.confidence,reason:"Snapshot model: season and recent foul history."}),
-        fouled1:marketRow({key:"fouled1",label:"1+ foul drawn",probability:x.fouled,confidence:x.confidence,reason:"Snapshot model: season and recent fouls-drawn history."}),
-        shot1:marketRow({key:"shot1",label:"1+ shot",probability:x.shot,confidence:x.confidence,reason:"Snapshot model: season and recent shot history."}),
-        sot1:marketRow({key:"sot1",label:"1+ shot on target",probability:x.sot,confidence:x.confidence,reason:"Snapshot model: season and recent shot-on-target history."}),
-        card:marketRow({key:"card",label:"Yellow card",probability:x.card,confidence:x.confidence,reason:"Snapshot model: season and recent booking history."}),
-      },
-    })),
+    players:playerRows,
     slips,
+    riskBuilders:buildSnapshotRiskBuilders(playerRows),
   }
 }
