@@ -980,6 +980,22 @@ export async function GET(request: Request) {
       }
     }
 
+    // Keep estimated bookmaker ladders monotonic. Exact feed prices are never rewritten.
+    for(const bookmaker of eligibleBooks){
+      const ladder=likelyFoulLines.filter(line=>line.bookmaker===bookmaker).sort((a,b)=>a.threshold-b.threshold)
+      let previous=1
+      for(const line of ladder){
+        if(line.priceSource==="estimated" && line.bookmakerOdds<=previous){
+          const step=previous<2?0.01:previous<4?0.02:previous<8?0.05:0.1
+          line.bookmakerOdds=Math.round((previous+step)*100)/100
+          line.impliedProbability=Math.round((1/line.bookmakerOdds)*1000)/1000
+          line.edge=Math.round((line.probability-line.impliedProbability)*1000)/1000
+          line.expectedValue=Math.round((line.probability*line.bookmakerOdds-1)*1000)/1000
+        }
+        previous=Math.max(previous,line.bookmakerOdds)
+      }
+    }
+
     return {
       name: candidate.name,
       dbName: candidate.dbName,
