@@ -14,7 +14,7 @@ type Fixture = {
   id:string; competition:Competition; dateIso:string; day:string; date:string; time:string;
   home:string; away:string; status?:string; lineupStatus?:string
 }
-type MatchRow = { matchDate:string; opponent?:string|null; minutes?:number|null; foulsCommitted?:number|null; foulsDrawn?:number|null; yellowCard?:boolean|null }
+type MatchRow = { matchDate:string; opponent?:string|null; minutes?:number|null; goals?:number|null; assists?:number|null; shots?:number|null; shotsOnTarget?:number|null; foulsCommitted?:number|null; foulsDrawn?:number|null; yellowCard?:boolean|null }
 type Candidate = {
   name:string; dbName:string; team:string; position?:string|null; predictedRole?:string|null;
   yellows:number; cards90:number; fouls90:number; fouled90?:number|null; sampleLabel:string;
@@ -33,6 +33,16 @@ type SotPlayer = {
   matches:Array<{date:string;opponent:string;sot:number;minutes:number}>
 }
 type SotResponse = { connected:boolean; source?:string; updatedAt?:string; players?:SotPlayer[]; note?:string; error?:string }
+type ChampionshipPlayer = {
+  name:string; team:string; position?:string|null; appearances:number; starts:number; minutes:number;
+  goals:number; assists:number; yellowCards:number; redCards:number; foulsCommitted:number; foulsDrawn:number;
+  shots:number; shotsOnTarget:number; goals90?:number|null; assists90?:number|null; fouls90?:number|null;
+  fouled90?:number|null; cards90?:number|null; shots90?:number|null; shotsOnTarget90?:number|null;
+}
+type ChampionshipPlayersResponse = { connected:boolean; season:string; source?:string; playerCount?:number; loadedAt?:string; players?:ChampionshipPlayer[]; error?:string }
+type H2HPlayer = { name:string;team:string;opponent:string;position?:string|null;minutes:number;goals:number;assists:number;shots:number;shotsOnTarget:number;foulsCommitted:number;foulsDrawn:number;yellowCard:boolean;redCard:boolean }
+type H2HMatch = { id:string;date:string;competition:string;home:string;away:string;homeGoals:number;awayGoals:number;referee?:string|null;players:H2HPlayer[] }
+type H2HResponse = { ok:boolean;source?:string;period?:string;matches?:H2HMatch[];error?:string }
 
 function londonDate(){
   const parts=new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/London",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date())
@@ -102,6 +112,10 @@ export default function HomePage(){
   const[radar,setRadar]=useState<Record<string,Radar>>({})
   const[odds,setOdds]=useState<Record<string,OddsResponse>>({})
   const[sot,setSot]=useState<Record<string,SotResponse>>({})
+  const[championshipDb,setChampionshipDb]=useState<ChampionshipPlayersResponse|null>(null)
+  const[h2h,setH2h]=useState<Record<string,H2HResponse>>({})
+  const[loadingH2h,setLoadingH2h]=useState<Record<string,boolean>>({})
+  const[loadingChampionshipDb,setLoadingChampionshipDb]=useState(false)
   const[loading,setLoading]=useState<Record<string,boolean>>({})
   const[loadingSot,setLoadingSot]=useState<Record<string,boolean>>({})
   const[loadingFixtures,setLoadingFixtures]=useState(false)
@@ -121,6 +135,29 @@ export default function HomePage(){
       }catch{}finally{setLoading(x=>({...x,[f.id]:false}))}
     }))
   },[])
+
+  const loadChampionshipDb=useCallback(async()=>{
+    setLoadingChampionshipDb(true)
+    try{
+      const r=await fetch(`/api/championship/players?refresh=${Date.now()}`,{cache:"no-store"})
+      const d=await r.json() as ChampionshipPlayersResponse
+      setChampionshipDb(d)
+    }catch{
+      setChampionshipDb({connected:false,season:"2026/27",players:[],error:"Championship player database unavailable"})
+    }finally{setLoadingChampionshipDb(false)}
+  },[])
+
+  const loadH2h=useCallback(async(f:Fixture)=>{
+    setLoadingH2h(x=>({...x,[f.id]:true}))
+    try{
+      const r=await fetch(`/api/championship/h2h?${new URLSearchParams({home:f.home,away:f.away,refresh:String(Date.now())})}`,{cache:"no-store"})
+      const d=await r.json() as H2HResponse
+      setH2h(x=>({...x,[f.id]:d}))
+      if(d.ok) await loadResearch([f],Date.now())
+    }catch{
+      setH2h(x=>({...x,[f.id]:{ok:false,matches:[],error:"Last-season H2H research unavailable"}}))
+    }finally{setLoadingH2h(x=>({...x,[f.id]:false}))}
+  },[loadResearch])
 
   const loadSot=useCallback(async(f:Fixture,bust=Date.now())=>{
     setLoadingSot(x=>({...x,[f.id]:true}))
@@ -155,6 +192,7 @@ export default function HomePage(){
   },[competition,selectedDate,loadResearch,loadSot,open,openGroups])
 
   useEffect(()=>{void refresh(false)},[competition,selectedDate])
+  useEffect(()=>{if(competition==="Championship")void loadChampionshipDb()},[competition,loadChampionshipDb])
   useEffect(()=>{const t=window.setInterval(()=>void refresh(false),60000);return()=>window.clearInterval(t)},[refresh])
 
   const today=londonDate()
@@ -165,6 +203,7 @@ export default function HomePage(){
     const next=!openGroups[key]
     setOpenGroups(x=>({...x,[key]:next}))
     if(group==="sot"&&next&&!sot[f.id]&&!loadingSot[f.id]) void loadSot(f)
+    if(group==="h2h"&&next&&f.competition==="Championship"&&!h2h[f.id]&&!loadingH2h[f.id]) void loadH2h(f)
   }
 
   return <main className="min-h-screen bg-background pb-24">
@@ -182,6 +221,8 @@ export default function HomePage(){
       <section className="rounded-2xl border border-border bg-card p-3">
         <div className="flex flex-wrap items-center gap-2"><CalendarDays className="size-4 text-muted-foreground"/><input type="date" value={selectedDate} onChange={e=>{setSelectedDate(e.target.value);setOpen(null)}} className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm font-semibold"/>{selectedDate!==today?<button onClick={()=>{setSelectedDate(today);setOpen(null)}} className="rounded-lg border border-border px-2.5 py-1.5 text-xs font-bold">Today</button>:null}<span className="ml-auto text-[0.68rem] text-muted-foreground">{lastRefresh?`Updated ${lastRefresh.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}`:"Loading…"}</span></div>
       </section>
+
+      {competition==="Championship"?<ChampionshipDatabase data={championshipDb} loading={loadingChampionshipDb} onRefresh={loadChampionshipDb}/>:null}
 
       {loadingFixtures&&!live?<section className="rounded-2xl border border-border bg-card p-6 text-center text-sm text-muted-foreground"><RefreshCw className="mx-auto mb-2 size-5 animate-spin"/>Loading games…</section>:null}
       {noGames?<section className="rounded-2xl border border-border bg-card p-6 text-center"><p className="font-bold">No {competition} games found for this date.</p></section>:null}
@@ -201,6 +242,10 @@ export default function HomePage(){
 
           {isOpen?<div className="space-y-3 border-t border-border bg-secondary/20 p-3">
             <div className="flex items-center justify-between gap-2"><p className="text-xs text-muted-foreground">{d?.referee?.name?`Ref: ${d.referee.name}${d.referee.yellowsPerGame!=null?` · ${d.referee.yellowsPerGame.toFixed(2)} YC/game`:""}`:"Referee not confirmed"}</p><button onClick={()=>void loadResearch([f],Date.now())} className="flex items-center gap-1.5 rounded-lg border bg-card px-2.5 py-2 text-xs font-bold"><RefreshCw className={`size-4 ${loading[f.id]?"animate-spin":""}`}/> Refresh</button></div>
+
+            {f.competition==="Championship"?<CollapsibleGroup open={Boolean(openGroups[`${f.id}:h2h`])} onToggle={()=>toggleGroup(f,"h2h")} title="2025/26 H2H match research" subtitle="Goals · assists · shots · SOT · fouls · fouls won · cards">
+              {loadingH2h[f.id]?<div className="p-4 text-center text-xs text-muted-foreground"><RefreshCw className="mx-auto mb-2 size-4 animate-spin"/>Loading last-season H2H player stats…</div>:<H2HPanel data={h2h[f.id]}/>}
+            </CollapsibleGroup>:null}
 
             <CollapsibleGroup open={Boolean(openGroups[`${f.id}:cards`])} onToggle={()=>toggleGroup(f,"cards")} title="Top 5 most likely carded" subtitle="H2H yellows · this season · recent 5 · cards/90 · fouls">
               {cards.map((c,i)=><CardRow key={c.dbName} rank={i+1} c={c}/>)}
@@ -240,3 +285,31 @@ function Mini({l,v,sub,dec=false,suffix=""}:{l:string;v:number|null|undefined;su
   return <div className="rounded-lg bg-secondary p-1.5"><p className="font-mono text-sm font-black">{v==null?"—":`${dec?Number(v).toFixed(2):Math.round(Number(v))}${suffix}`}</p><p className="text-[0.48rem] font-bold uppercase text-muted-foreground">{l}</p>{sub?<p className="text-[0.46rem] text-muted-foreground">{sub}</p>:null}</div>
 }
 function Unavailable({text}:{text:string}){return <div className="p-4 text-center text-xs text-muted-foreground">{text}</div>}
+
+function ChampionshipDatabase({data,loading,onRefresh}:{data:ChampionshipPlayersResponse|null;loading:boolean;onRefresh:()=>void}){
+  const[q,setQ]=useState("")
+  const[sort,setSort]=useState<keyof ChampionshipPlayer>("foulsCommitted")
+  const players=useMemo(()=>{
+    const query=norm(q)
+    return [...(data?.players??[])]
+      .filter(p=>!query||norm(p.name).includes(query)||norm(p.team).includes(query))
+      .sort((a,b)=>Number(b[sort]??0)-Number(a[sort]??0)||b.minutes-a.minutes)
+  },[data,q,sort])
+  return <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+    <div className="border-b border-border p-4">
+      <div className="flex items-start justify-between gap-3"><div><p className="font-black">2026/27 Championship player database</p><p className="mt-1 text-xs text-muted-foreground">{data?.playerCount??data?.players?.length??0} players · current season · API-Football live data cross-checked against FBref</p></div><button onClick={onRefresh} className="rounded-lg border bg-card p-2"><RefreshCw className={`size-4 ${loading?"animate-spin":""}`}/></button></div>
+      <div className="mt-3 grid grid-cols-[1fr_auto] gap-2"><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search player or club" className="min-w-0 rounded-lg border border-border bg-background px-3 py-2 text-sm"/><select value={sort} onChange={e=>setSort(e.target.value as keyof ChampionshipPlayer)} className="rounded-lg border border-border bg-background px-2 py-2 text-xs font-bold"><option value="foulsCommitted">Fouls</option><option value="foulsDrawn">Fouls won</option><option value="yellowCards">Yellow cards</option><option value="shots">Shots</option><option value="shotsOnTarget">SOT</option><option value="goals">Goals</option><option value="assists">Assists</option><option value="minutes">Minutes</option></select></div>
+    </div>
+    {loading&&!data?<div className="p-6 text-center text-sm text-muted-foreground"><RefreshCw className="mx-auto mb-2 size-5 animate-spin"/>Loading Championship data…</div>:data?.error?<Unavailable text={data.error}/>:<div className="max-h-[34rem] overflow-auto"><table className="w-max min-w-full text-xs"><thead className="sticky top-0 z-10 bg-secondary"><tr className="text-left"><Th>Player</Th><Th>Club</Th><Th>Apps</Th><Th>Min</Th><Th>G</Th><Th>A</Th><Th>Shots</Th><Th>SOT</Th><Th>YC</Th><Th>RC</Th><Th>Fouls</Th><Th>Won</Th><Th>F/90</Th><Th>Won/90</Th><Th>SOT/90</Th></tr></thead><tbody>{players.map(p=><tr key={`${p.name}|${p.team}`} className="border-t border-border"><Td strong>{p.name}</Td><Td>{p.team}</Td><Td>{p.appearances}</Td><Td>{p.minutes}</Td><Td>{p.goals}</Td><Td>{p.assists}</Td><Td>{p.shots}</Td><Td>{p.shotsOnTarget}</Td><Td>{p.yellowCards}</Td><Td>{p.redCards}</Td><Td>{p.foulsCommitted}</Td><Td>{p.foulsDrawn}</Td><Td>{fmt(p.fouls90)}</Td><Td>{fmt(p.fouled90)}</Td><Td>{fmt(p.shotsOnTarget90)}</Td></tr>)}</tbody></table></div>}
+  </section>
+}
+function H2HPanel({data}:{data:H2HResponse|undefined}){
+  if(!data)return <Unavailable text="Open this section to load last season's head-to-head player stats."/>
+  if(!data.ok)return <Unavailable text={data.error??"No H2H data available."}/>
+  if(!(data.matches??[]).length)return <Unavailable text="No meetings were found between these teams during 2025/26."/>
+  return <div className="space-y-3 p-3">{(data.matches??[]).map(m=><div key={m.id} className="overflow-hidden rounded-xl border border-border bg-background"><div className="border-b border-border p-3"><p className="font-bold">{m.home} {m.homeGoals}–{m.awayGoals} {m.away}</p><p className="text-[0.65rem] text-muted-foreground">{m.date} · {m.competition}{m.referee?` · Ref ${m.referee}`:""}</p></div><div className="overflow-x-auto"><table className="w-max min-w-full text-[0.68rem]"><thead className="bg-secondary"><tr><Th>Player</Th><Th>Team</Th><Th>Min</Th><Th>G</Th><Th>A</Th><Th>Sh</Th><Th>SOT</Th><Th>Fouls</Th><Th>Won</Th><Th>YC</Th><Th>RC</Th></tr></thead><tbody>{m.players.filter(p=>p.minutes>0).sort((a,b)=>b.minutes-a.minutes).map(p=><tr key={`${m.id}|${p.name}|${p.team}`} className="border-t border-border"><Td strong>{p.name}</Td><Td>{p.team}</Td><Td>{p.minutes}</Td><Td>{p.goals}</Td><Td>{p.assists}</Td><Td>{p.shots}</Td><Td>{p.shotsOnTarget}</Td><Td>{p.foulsCommitted}</Td><Td>{p.foulsDrawn}</Td><Td>{p.yellowCard?"1":"0"}</Td><Td>{p.redCard?"1":"0"}</Td></tr>)}</tbody></table></div></div>)}</div>
+}
+function Th({children}:{children:React.ReactNode}){return <th className="whitespace-nowrap px-2.5 py-2 font-black">{children}</th>}
+function Td({children,strong=false}:{children:React.ReactNode;strong?:boolean}){return <td className={`whitespace-nowrap px-2.5 py-2 ${strong?"font-bold":""}`}>{children}</td>}
+function fmt(v:number|null|undefined){return v==null?"—":Number(v).toFixed(2)}
+
