@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { CalendarDays, ChevronDown, ChevronUp, RefreshCw } from "lucide-react"
 
-type Competition = "Premier League" | "Championship" | "League One" | "International"
+type Competition = "Premier League" | "Championship" | "League One" | "League Two" | "International"
 type LiveFixture = {
   id:string; competition:Competition; tournament?:string; kickoff:string; status?:string;
   home:{name:string}; away:{name:string};
@@ -118,14 +118,22 @@ export default function HomePage(){
   const[sot,setSot]=useState<Record<string,SotResponse>>({})
   const[championshipDb,setChampionshipDb]=useState<ChampionshipPlayersResponse|null>(null)
   const[premierLeagueDb,setPremierLeagueDb]=useState<ChampionshipPlayersResponse|null>(null)
+  const[leagueOneDb,setLeagueOneDb]=useState<ChampionshipPlayersResponse|null>(null)
+  const[leagueTwoDb,setLeagueTwoDb]=useState<ChampionshipPlayersResponse|null>(null)
   const[h2h,setH2h]=useState<Record<string,H2HResponse>>({})
   const[backtest,setBacktest]=useState<BacktestResponse|null>(null)
   const[premierBacktest,setPremierBacktest]=useState<BacktestResponse|null>(null)
+  const[leagueOneBacktest,setLeagueOneBacktest]=useState<BacktestResponse|null>(null)
+  const[leagueTwoBacktest,setLeagueTwoBacktest]=useState<BacktestResponse|null>(null)
   const[loadingBacktest,setLoadingBacktest]=useState(false)
   const[loadingH2h,setLoadingH2h]=useState<Record<string,boolean>>({})
   const[loadingChampionshipDb,setLoadingChampionshipDb]=useState(false)
   const[loadingPremierLeagueDb,setLoadingPremierLeagueDb]=useState(false)
+  const[loadingLeagueOneDb,setLoadingLeagueOneDb]=useState(false)
+  const[loadingLeagueTwoDb,setLoadingLeagueTwoDb]=useState(false)
   const[loadingPremierBacktest,setLoadingPremierBacktest]=useState(false)
+  const[loadingLeagueOneBacktest,setLoadingLeagueOneBacktest]=useState(false)
+  const[loadingLeagueTwoBacktest,setLoadingLeagueTwoBacktest]=useState(false)
   const[loading,setLoading]=useState<Record<string,boolean>>({})
   const[loadingSot,setLoadingSot]=useState<Record<string,boolean>>({})
   const[loadingFixtures,setLoadingFixtures]=useState(false)
@@ -210,10 +218,30 @@ export default function HomePage(){
     finally{setLoadingLeagueOneBacktest(false)}
   },[])
 
+  const loadLeagueTwoDb=useCallback(async()=>{
+    setLoadingLeagueTwoDb(true)
+    try{
+      const r=await fetch(`/api/league-two/players?refresh=${Date.now()}`,{cache:"no-store"})
+      const d=await r.json() as ChampionshipPlayersResponse
+      setLeagueTwoDb(d)
+    }catch{setLeagueTwoDb({connected:false,season:"2026/27",players:[],error:"League Two player database unavailable"})}
+    finally{setLoadingLeagueTwoDb(false)}
+  },[])
+
+  const loadLeagueTwoBacktest=useCallback(async()=>{
+    setLoadingLeagueTwoBacktest(true)
+    try{
+      const r=await fetch(`/api/league-two/backtest?refresh=${Date.now()}`,{cache:"no-store"})
+      const d=await r.json() as BacktestResponse
+      setLeagueTwoBacktest(d)
+    }catch{setLeagueTwoBacktest({ok:false,error:"League Two backtest unavailable"})}
+    finally{setLoadingLeagueTwoBacktest(false)}
+  },[])
+
   const loadH2h=useCallback(async(f:Fixture)=>{
     setLoadingH2h(x=>({...x,[f.id]:true}))
     try{
-      const base=f.competition==="League One"?"/api/league-one/h2h":"/api/championship/h2h"
+      const base=f.competition==="League One"?"/api/league-one/h2h":f.competition==="League Two"?"/api/league-two/h2h":"/api/championship/h2h"
       const r=await fetch(`${base}?${new URLSearchParams({home:f.home,away:f.away,refresh:String(Date.now())})}`,{cache:"no-store"})
       const d=await r.json() as H2HResponse
       setH2h(x=>({...x,[f.id]:d}))
@@ -257,7 +285,12 @@ export default function HomePage(){
   },[competition,selectedDate,loadResearch,loadSot,open,openGroups])
 
   useEffect(()=>{void refresh(false)},[competition,selectedDate])
-  useEffect(()=>{if(competition==="Championship"){void loadChampionshipDb();void loadBacktest()}else{void loadPremierLeagueDb();void loadPremierBacktest()}},[competition,loadChampionshipDb,loadBacktest,loadPremierLeagueDb,loadPremierBacktest])
+  useEffect(()=>{
+    if(competition==="Championship"){void loadChampionshipDb();void loadBacktest()}
+    else if(competition==="Premier League"){void loadPremierLeagueDb();void loadPremierBacktest()}
+    else if(competition==="League One"){void loadLeagueOneDb();void loadLeagueOneBacktest()}
+    else if(competition==="League Two"){void loadLeagueTwoDb();void loadLeagueTwoBacktest()}
+  },[competition,loadChampionshipDb,loadBacktest,loadPremierLeagueDb,loadPremierBacktest,loadLeagueOneDb,loadLeagueOneBacktest,loadLeagueTwoDb,loadLeagueTwoBacktest])
   useEffect(()=>{const t=window.setInterval(()=>void refresh(false),60000);return()=>window.clearInterval(t)},[refresh])
 
   const today=londonDate()
@@ -268,7 +301,7 @@ export default function HomePage(){
     const next=!openGroups[key]
     setOpenGroups(x=>({...x,[key]:next}))
     if(group==="sot"&&next&&!sot[f.id]&&!loadingSot[f.id]) void loadSot(f)
-    if(group==="h2h"&&next&&(f.competition==="Championship"||f.competition==="League One")&&!h2h[f.id]&&!loadingH2h[f.id]) void loadH2h(f)
+    if(group==="h2h"&&next&&(f.competition==="Championship"||f.competition==="League One"||f.competition==="League Two")&&!h2h[f.id]&&!loadingH2h[f.id]) void loadH2h(f)
   }
 
   return <main className="min-h-screen bg-background pb-24">
@@ -278,7 +311,7 @@ export default function HomePage(){
           <div><h1 className="text-xl font-bold">Match Research</h1><p className="text-sm text-white/70">Cards, SOT, fouls and fouls drawn</p></div>
           <button onClick={()=>void refresh(true)} disabled={loadingFixtures} className="flex shrink-0 items-center gap-2 rounded-xl bg-white px-3 py-2 text-xs font-bold text-slate-950 disabled:opacity-60"><RefreshCw className={`size-4 ${loadingFixtures?"animate-spin":""}`}/> Refresh</button>
         </div>
-        <div className="mt-3 grid grid-cols-2 gap-1 rounded-xl bg-white/10 p-1">{(["Premier League","Championship","League One","International"] as Competition[]).map(c=><button key={c} onClick={()=>{setCompetition(c);setOpen(null)}} className={`rounded-lg px-3 py-2 text-xs font-bold ${competition===c?"bg-white text-slate-950":"text-white/75"}`}>{c}</button>)}</div>
+        <div className="mt-3 grid grid-cols-2 gap-1 rounded-xl bg-white/10 p-1">{(["Premier League","Championship","League One","League Two","International"] as Competition[]).map(c=><button key={c} onClick={()=>{setCompetition(c);setOpen(null)}} className={`rounded-lg px-3 py-2 text-xs font-bold ${competition===c?"bg-white text-slate-950":"text-white/75"}`}>{c}</button>)}</div>
       </div>
     </header>
 
@@ -290,10 +323,16 @@ export default function HomePage(){
       {competition==="Championship"?<>
         <ChampionshipDatabase leagueName="Championship" data={championshipDb} loading={loadingChampionshipDb} onRefresh={loadChampionshipDb}/>
         <BacktestPanel leagueName="Championship" data={backtest} loading={loadingBacktest} onRefresh={loadBacktest}/>
-      </>:<>
+      </>:competition==="Premier League"?<>
         <ChampionshipDatabase leagueName="Premier League" data={premierLeagueDb} loading={loadingPremierLeagueDb} onRefresh={loadPremierLeagueDb}/>
         <BacktestPanel leagueName="Premier League" data={premierBacktest} loading={loadingPremierBacktest} onRefresh={loadPremierBacktest}/>
-      </>}
+      </>:competition==="League One"?<>
+        <ChampionshipDatabase leagueName="League One" data={leagueOneDb} loading={loadingLeagueOneDb} onRefresh={loadLeagueOneDb}/>
+        <BacktestPanel leagueName="League One" data={leagueOneBacktest} loading={loadingLeagueOneBacktest} onRefresh={loadLeagueOneBacktest}/>
+      </>:competition==="League Two"?<>
+        <ChampionshipDatabase leagueName="League Two" data={leagueTwoDb} loading={loadingLeagueTwoDb} onRefresh={loadLeagueTwoDb}/>
+        <BacktestPanel leagueName="League Two" data={leagueTwoBacktest} loading={loadingLeagueTwoBacktest} onRefresh={loadLeagueTwoBacktest}/>
+      </>:null}
 
       {loadingFixtures&&!live?<section className="rounded-2xl border border-border bg-card p-6 text-center text-sm text-muted-foreground"><RefreshCw className="mx-auto mb-2 size-5 animate-spin"/>Loading games…</section>:null}
       {noGames?<section className="rounded-2xl border border-border bg-card p-6 text-center"><p className="font-bold">No {competition} games found for this date.</p></section>:null}
@@ -314,7 +353,7 @@ export default function HomePage(){
           {isOpen?<div className="space-y-3 border-t border-border bg-secondary/20 p-3">
             <div className="flex items-center justify-between gap-2"><p className="text-xs text-muted-foreground">{d?.referee?.name?`Ref: ${d.referee.name}${d.referee.yellowsPerGame!=null?` · ${d.referee.yellowsPerGame.toFixed(2)} YC/game`:""}`:"Referee not confirmed"}</p><button onClick={()=>void loadResearch([f],Date.now())} className="flex items-center gap-1.5 rounded-lg border bg-card px-2.5 py-2 text-xs font-bold"><RefreshCw className={`size-4 ${loading[f.id]?"animate-spin":""}`}/> Refresh</button></div>
 
-            {(f.competition==="Championship"||f.competition==="League One")?<CollapsibleGroup open={Boolean(openGroups[`${f.id}:h2h`])} onToggle={()=>toggleGroup(f,"h2h")} title="2025/26 H2H match research" subtitle="Goals · assists · shots · SOT · fouls · fouls won · cards">
+            {(f.competition==="Championship"||f.competition==="League One"||f.competition==="League Two")?<CollapsibleGroup open={Boolean(openGroups[`${f.id}:h2h`])} onToggle={()=>toggleGroup(f,"h2h")} title="2025/26 H2H match research" subtitle="Goals · assists · shots · SOT · fouls · fouls won · cards">
               {loadingH2h[f.id]?<div className="p-4 text-center text-xs text-muted-foreground"><RefreshCw className="mx-auto mb-2 size-4 animate-spin"/>Loading last-season H2H player stats…</div>:<H2HPanel data={h2h[f.id]}/>}
             </CollapsibleGroup>:null}
 
