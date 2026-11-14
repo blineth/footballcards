@@ -158,13 +158,18 @@ function outcomeTone(probability:number,isBest:boolean,selected:boolean){
   return "border-rose-300/20 bg-rose-400/[0.055] text-rose-100/80"
 }
 function OutcomeCard({prediction:p,selected,onSelect}:{prediction:Prediction;selected:Outcome|null;onSelect:(o:Outcome)=>void}){
+  const[h2hOpen,setH2hOpen]=useState(false)
   const probs={home:p.probabilities.homeWin,draw:p.probabilities.draw,away:p.probabilities.awayWin}
   const best=Math.max(probs.home,probs.draw,probs.away)
   const rows:[Outcome,string,number][]=[["home",p.home,probs.home],["draw","Draw",probs.draw],["away",p.away,probs.away]]
   return <article className="rounded-3xl border border-white/9 bg-white/[0.035] p-4">
     <div className="flex items-start justify-between gap-3"><div><p className="text-[0.5rem] font-black uppercase text-white/25">{p.competition} · {time(p.kickoff)}</p><p className="mt-1 text-sm font-black">{p.home} <span className="text-white/25">v</span> {p.away}</p></div>{p.inPlay&&p.score?<span className="rounded-full bg-rose-300/12 px-2 py-1 text-[0.45rem] font-black text-rose-200">LIVE {p.elapsed??"?"}' · {p.score.home}-{p.score.away}</span>:null}</div>
     <div className="mt-3 grid grid-cols-3 gap-2">{rows.map(([outcome,label,probability])=><button key={outcome} onClick={()=>onSelect(outcome)} className={"rounded-2xl border px-2 py-3 text-center transition "+outcomeTone(probability,probability===best,selected===outcome)}><p className="truncate text-[0.55rem] font-black">{label}</p><p className="mt-1 font-mono text-lg font-black">{percent(probability)}</p><p className="mt-0.5 text-[0.42rem] font-black uppercase opacity-55">{(1/Math.max(.01,probability)).toFixed(2)} fair</p></button>)}</div>
-    <details className="mt-3"><summary className="cursor-pointer text-[0.5rem] font-black text-white/30">Why these percentages?</summary><p className="mt-2 text-[0.56rem] leading-relaxed text-white/40">{p.reasons.join(" · ")}</p></details>
+    <div className="mt-3 flex items-center gap-2">
+      <button onClick={()=>setH2hOpen(v=>!v)} className="rounded-xl bg-white/[0.06] px-3 py-2 text-[0.5rem] font-black text-white/45">{h2hOpen?"Hide H2H":"H2H history"}</button>
+      <details className="flex-1"><summary className="cursor-pointer text-[0.5rem] font-black text-white/30">Why these percentages?</summary><p className="mt-2 text-[0.56rem] leading-relaxed text-white/40">{p.reasons.join(" · ")}</p></details>
+    </div>
+    {h2hOpen?<div className="mt-3 rounded-2xl border border-white/8 bg-black/20 p-3"><div className="flex items-center justify-between gap-2"><p className="text-[0.5rem] font-black uppercase tracking-[0.12em] text-white/35">Recent H2H</p><p className="text-[0.46rem] text-white/25">{p.h2h?.matches??0} tracked meeting{Number(p.h2h?.matches??0)===1?"":"s"}</p></div>{Array.isArray(p.h2h?.recent)&&p.h2h.recent.length?<div className="mt-2 space-y-1.5">{p.h2h.recent.map((m:any,i:number)=><div key={String(m.date)+"|"+i} className="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-xl bg-white/[0.04] px-3 py-2"><p className="text-[0.48rem] font-mono text-white/30">{new Intl.DateTimeFormat("en-GB",{day:"2-digit",month:"short",year:"2-digit"}).format(new Date(String(m.date)+"T12:00:00Z"))}</p><p className="min-w-0 truncate text-[0.54rem] text-white/55">{m.home} v {m.away}</p><p className="font-mono text-sm font-black">{m.homeGoals}-{m.awayGoals}</p></div>)}</div>:<p className="mt-2 text-[0.55rem] text-white/30">No tracked previous meetings found in the current history source.</p>}</div>:null}
   </article>
 }
 
