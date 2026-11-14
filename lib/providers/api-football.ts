@@ -6,6 +6,7 @@ const LEAGUE_IDS: Record<number, Competition> = {
   39: "Premier League",
   40: "Championship",
   41: "League One",
+  42: "League Two",
 }
 
 const API_BASE = "https://v3.football.api-sports.io"
@@ -41,7 +42,7 @@ interface ApiFixtureItem {
     id: number
     date: string
     venue: { name: string | null }
-    status: { short: string }
+    status: { short: string; elapsed?: number | null }
     referee: string | null
   }
   league: { id: number; season: number }
@@ -49,6 +50,7 @@ interface ApiFixtureItem {
     home: { id: number; name: string; logo: string }
     away: { id: number; name: string; logo: string }
   }
+  goals?: { home: number | null; away: number | null }
 }
 
 function toFixture(item: ApiFixtureItem): Fixture | null {
@@ -59,6 +61,8 @@ function toFixture(item: ApiFixtureItem): Fixture | null {
     competition,
     kickoff: item.fixture.date,
     status: mapStatus(item.fixture.status.short),
+    score: { home: item.goals?.home ?? null, away: item.goals?.away ?? null },
+    elapsed: item.fixture.status.elapsed ?? null,
     home: { id: String(item.teams.home.id), name: item.teams.home.name, crest: item.teams.home.logo },
     away: { id: String(item.teams.away.id), name: item.teams.away.name, crest: item.teams.away.logo },
     venue: item.fixture.venue?.name ?? null,
