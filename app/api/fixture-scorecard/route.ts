@@ -6,6 +6,7 @@ import { ensureResearchSchema } from "@/lib/db/ensure-research-schema"
 import { GET as radarGET } from "../fixture-radar/route"
 import { GET as oddsGET } from "../bet-builder-odds/route"
 import calibrationSnapshot from "@/data/model/calibration.json"
+import { buildSnapshotScorecard } from "@/lib/snapshot-scorecard"
 
 export const dynamic = "force-dynamic"
 export const revalidate = 0
@@ -724,22 +725,30 @@ export async function GET(request: Request) {
   try {
     await ensureResearchSchema()
   } catch (error) {
-    return NextResponse.json({
-      ok:false,
-      error:"Live research database is temporarily unavailable. Recommended can continue from the repository snapshot fallback.",
-      fallbackAvailable:true,
-    },{status:503})
+    try {
+      return NextResponse.json(await buildSnapshotScorecard({date,home,away,competition:competition as any}))
+    } catch {
+      return NextResponse.json({
+        ok:false,
+        error:"Live research database is temporarily unavailable and the snapshot fallback could not be loaded.",
+        fallbackAvailable:false,
+      },{status:503})
+    }
   }
 
   let radarResponse:Response
   try {
     radarResponse = await radarGET(request)
   } catch (error) {
-    return NextResponse.json({
-      ok:false,
-      error:"Live player research is temporarily unavailable. Recommended can continue from the repository snapshot fallback.",
-      fallbackAvailable:true,
-    },{status:503})
+    try {
+      return NextResponse.json(await buildSnapshotScorecard({date,home,away,competition:competition as any}))
+    } catch {
+      return NextResponse.json({
+        ok:false,
+        error:"Live player research is temporarily unavailable and the snapshot fallback could not be loaded.",
+        fallbackAvailable:false,
+      },{status:503})
+    }
   }
   if (!radarResponse.ok) return radarResponse
   const radar = await radarResponse.json()
@@ -781,11 +790,15 @@ export async function GET(request: Request) {
     try {
       history = await db.select().from(playerH2H).where(and(inArray(playerH2H.playerName, names), lt(playerH2H.matchDate, date)))
     } catch (error) {
-      return NextResponse.json({
-        ok:false,
-        error:"Live player-history database quota is temporarily unavailable. Recommended can continue from the repository snapshot fallback.",
-        fallbackAvailable:true,
-      },{status:503})
+      try {
+        return NextResponse.json(await buildSnapshotScorecard({date,home,away,competition:competition as any}))
+      } catch {
+        return NextResponse.json({
+          ok:false,
+          error:"Live player-history database quota is temporarily unavailable and the snapshot fallback could not be loaded.",
+          fallbackAvailable:false,
+        },{status:503})
+      }
     }
   }
 
