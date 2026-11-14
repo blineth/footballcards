@@ -11,6 +11,7 @@ const ESPN_LEAGUES: Record<Competition, string[]> = {
   "Premier League": ["eng.1"],
   Championship: ["eng.2"],
   "League One": ["eng.3"],
+  "League Two": ["eng.4"],
   International: ["uefa.nations", "fifa.friendly", "fifa.world", "fifa.worldq.uefa", "uefa.euro", "uefa.euroq"],
 }
 
@@ -142,7 +143,7 @@ async function fixturesForDate(date: string) {
 }
 
 function groupFixtures(fixtures: Fixture[]) {
-  const leagues: FixturesResponse["leagues"] = { "Premier League": [], Championship: [], "League One": [], International: [] }
+  const leagues: FixturesResponse["leagues"] = { "Premier League": [], Championship: [], "League One": [], "League Two": [], International: [] }
   for (const f of fixtures) {
     const league = f.competition as Competition
     if (leagues[league]) leagues[league].push(f)
@@ -163,7 +164,7 @@ export async function GET(request: Request) {
     connected: true,
     updatedAt: new Date().toISOString(),
     date: requestedDate,
-    leagues: { "Premier League": [], Championship: [], "League One": [], International: [] },
+    leagues: { "Premier League": [], Championship: [], "League One": [], "League Two": [], International: [] },
   }
 
   try {
