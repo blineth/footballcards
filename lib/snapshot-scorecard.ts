@@ -26,6 +26,27 @@ function sameTeamName(a:string,b:string){
 function beta(hits:number,total:number,prior:number,strength=6){
   return (hits+prior*strength)/(total+strength)
 }
+function reliability(minutes:number,full:number){
+  return Math.max(0,Math.min(1,Number(minutes||0)/full))
+}
+function blendedRate(input:{
+  international:any;current:any;previous:any;key:string;prior:number;cap:number
+}){
+  const sources=[
+    {row:input.international,weight:.25*reliability(Number(input.international?.minutes??0),900)},
+    {row:input.current,weight:.60*reliability(Number(input.current?.minutes??0),1800)},
+    {row:input.previous,weight:.15*reliability(Number(input.previous?.minutes??0),1800)},
+  ]
+  let weighted=0,total=0
+  for(const source of sources){
+    const value=Number(source.row?.[input.key])
+    if(!Number.isFinite(value)||value<0||source.weight<=0)continue
+    weighted+=Math.min(input.cap,value)*source.weight
+    total+=source.weight
+  }
+  const priorWeight=Math.max(.15,1-Math.min(.85,total))
+  return (weighted+input.prior*priorWeight)/(total+priorWeight)
+}
 function calibrateSnapshot(market:"foul1"|"fouled1"|"card"|"shot1"|"sot1",raw:number){
   const source=(calibrationSnapshot as any)?.global?.[market]
   const bands=source?.bands
@@ -167,17 +188,11 @@ export async function buildSnapshotScorecard(input:{
       const appearances=Number(current?.appearances??0)+Number(intl?.matches??0)
       const starts=Number(current?.starts??0)+Number(intl?.starts??0)
       const expectedMinutes=Math.max(45,Math.min(90,appearances>0?60+30*(starts/appearances):65))
-      const blended=p?.blended??{}
-      const foulRate=Math.max(0,Number(blended?.fouls90??current?.fouls90??intl?.fouls90??previous?.fouls90??0))
-      const fouledRate=Math.max(0,Number(blended?.fouled90??current?.fouled90??intl?.fouled90??previous?.fouled90??0))
-      const shotsRate=Math.max(0,Number(blended?.shots90??current?.shots90??intl?.shots90??previous?.shots90??0))
-      const sotRate=Math.max(0,Number(blended?.shotsOnTarget90??blended?.sot90??current?.shotsOnTarget90??current?.sot90??intl?.shotsOnTarget90??intl?.sot90??previous?.shotsOnTarget90??previous?.sot90??0))
-      const cardRates=[
-        current?Number(current.cards90??0):null,
-        Number(intl.cards90??0),
-        previous?Number(previous.cards90??0):null,
-      ].filter((v:any)=>v!=null&&Number.isFinite(v)) as number[]
-      const cardRate=cardRates.length?cardRates.reduce((a,b)=>a+b,0)/cardRates.length:0
+      const foulRate=blendedRate({international:intl,current,previous,key:"fouls90",prior:1.2,cap:4.5})
+      const fouledRate=blendedRate({international:intl,current,previous,key:"fouled90",prior:1.15,cap:4.5})
+      const shotsRate=blendedRate({international:intl,current,previous,key:"shots90",prior:1.45,cap:5.5})
+      const sotRate=blendedRate({international:intl,current,previous,key:"shotsOnTarget90",prior:.48,cap:2.2})
+      const cardRate=blendedRate({international:intl,current,previous,key:"cards90",prior:.20,cap:1.0})
       const minutesScale=expectedMinutes/90
       const foul=calibrateSnapshot("foul1",1-Math.exp(-foulRate*minutesScale))
       const fouled=calibrateSnapshot("fouled1",1-Math.exp(-fouledRate*minutesScale))
