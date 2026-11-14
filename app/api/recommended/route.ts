@@ -38,6 +38,17 @@ type Recommendation={
   id:string;fixture:Fixture;slip:BetSlip|FoulTargetSlip;confirmed:boolean;kind:"standard"|"foul";
   rank:number;placeable:boolean;blockedReason:string|null;recommendationReliability:number|null
 }
+type TargetOddsLeg={
+  fixtureId:string;competition:Competition;kickoff:string;home:string;away:string;
+  player:string;team:string;market:string;label:string;probability:number;
+  price:number;priceSource:"exact"|"model";bookmaker:string|null;confidence:SlipLeg["confidence"]
+}
+type TargetOddsSlip={
+  id:string;targetFractional:string;targetDecimal:number;available:boolean;
+  achievedOdds:number|null;modelAllHitProbability:number|null;bookmaker:string|null;
+  priceSource:"exact"|"model"|null;placeable:boolean;legs:TargetOddsLeg[];
+  note:string
+}
 
 const competitions:Competition[]=["Premier League","Championship","League One","League Two","International"]
 
@@ -75,6 +86,119 @@ function rankSlip(slip:BetSlip|FoulTargetSlip,confirmed:boolean,placeable:boolea
   const exactRatio=legs.filter(l=>l.bookmakerOdds!=null&&l.priceSource!=="estimated").length/legs.length
   const coreRatio=legs.filter(l=>l.market==="card"||l.market.startsWith("foul")).length/legs.length
   return geo*.38+min*.19+reliability*.16+grade*.08+coreRatio*.07+exactRatio*.04+(confirmed?.05:0)+(placeable?.03:0)-Math.max(0,legs.length-5)*.006
+}
+
+const TARGET_ODDS=[
+  {fractional:"5/1",decimal:6},
+  {fractional:"10/1",decimal:11},
+  {fractional:"15/1",decimal:16},
+  {fractional:"20/1",decimal:21},
+  {fractional:"25/1",decimal:26},
+  {fractional:"50/1",decimal:51},
+] as const
+const TARGET_BOOKS=["Bet365","Sky Bet","William Hill","Paddy Power"] as const
+
+function buildTargetOddsSlips(recommendations:Recommendation[]):TargetOddsSlip[]{
+  type Candidate={
+    fixture:Fixture;leg:SlipLeg;bookmaker:string|null;exactPrice:number|null;
+    fairPrice:number;placeable:boolean
+  }
+  const byFixture=new Map<string,Candidate[]>()
+  for(const rec of recommendations){
+    for(const leg of rec.slip.legs??[]){
+      const p=Math.max(.01,Math.min(.99,Number(leg.probability??0)))
+      if(p<.18)continue
+      const fair=Number(leg.fairOdds??(1/p))
+      if(!Number.isFinite(fair)||fair<=1)continue
+      const book=leg.bookmakerName??rec.slip.bookmaker??null
+      const exact=leg.bookmakerOdds!=null&&leg.priceSource!=="estimated"?Number(leg.bookmakerOdds):null
+      const row:Candidate={fixture:rec.fixture,leg,bookmaker:book,exactPrice:exact,fairPrice:fair,placeable:rec.placeable}
+      const arr=byFixture.get(rec.fixture.id)??[]
+      const key=leg.player+"|"+leg.market+"|"+leg.label+"|"+(book??"model")
+      if(!arr.some(x=>x.leg.player+"|"+x.leg.market+"|"+x.leg.label+"|"+(x.bookmaker??"model")===key))arr.push(row)
+      byFixture.set(rec.fixture.id,arr)
+    }
+  }
+  const fixtures=[...byFixture.entries()].map(([fixtureId,options])=>({
+    fixtureId,
+    options:options.sort((a,b)=>b.leg.probability-a.leg.probability).slice(0,6),
+  }))
+
+  function search(targetDecimal:number,bookmaker:string|null){
+    type State={legs:Candidate[];odds:number;prob:number}
+    let states:State[]=[{legs:[],odds:1,prob:1}]
+    for(const fixture of fixtures){
+      const next=[...states]
+      for(const state of states){
+        if(state.legs.length>=10)continue
+        for(const option of fixture.options){
+          const price=bookmaker
+            ? option.bookmaker===bookmaker&&option.exactPrice!=null?option.exactPrice:null
+            : option.fairPrice
+          if(price==null)continue
+          const odds=state.odds*price
+          if(odds>targetDecimal*1.8&&state.legs.length>=1)continue
+          next.push({legs:[...state.legs,option],odds,prob:state.prob*option.leg.probability})
+        }
+      }
+      const score=(s:State)=>{
+        if(!s.legs.length)return 999
+        const distance=Math.abs(Math.log(Math.max(1.01,s.odds))-Math.log(targetDecimal))
+        const minProb=Math.min(...s.legs.map(x=>x.leg.probability))
+        const avgProb=s.legs.reduce((sum,x)=>sum+x.leg.probability,0)/s.legs.length
+        return distance*2.35-avgProb*.42-minProb*.20+s.legs.length*.008
+      }
+      states=next.sort((a,b)=>score(a)-score(b)).slice(0,350)
+    }
+    const acceptable=states.filter(s=>s.legs.length>=2&&s.odds>=targetDecimal*.78&&s.odds<=targetDecimal*1.30)
+    if(!acceptable.length)return null
+    return acceptable.sort((a,b)=>{
+      const distanceA=Math.abs(Math.log(a.odds)-Math.log(targetDecimal))
+      const distanceB=Math.abs(Math.log(b.odds)-Math.log(targetDecimal))
+      if(Math.abs(distanceA-distanceB)>.025)return distanceA-distanceB
+      return b.prob-a.prob
+    })[0]
+  }
+
+  return TARGET_ODDS.map(target=>{
+    let chosen:{legs:Candidate[];odds:number;prob:number}|null=null
+    let chosenBook:string|null=null
+    for(const book of TARGET_BOOKS){
+      const result=search(target.decimal,book)
+      if(!result)continue
+      if(!chosen||result.prob>chosen.prob){chosen=result;chosenBook=book}
+    }
+    let source:"exact"|"model"|null=chosen?"exact":null
+    if(!chosen){
+      chosen=search(target.decimal,null)
+      chosenBook=null
+      source=chosen?"model":null
+    }
+    if(!chosen)return {
+      id:"target-"+target.fractional.replace("/","-"),targetFractional:target.fractional,targetDecimal:target.decimal,
+      available:false,achievedOdds:null,modelAllHitProbability:null,bookmaker:null,priceSource:null,placeable:false,legs:[],
+      note:"Not enough strong recommendations today to build this target without forcing weak legs.",
+    }
+    const legs:TargetOddsLeg[]=chosen.legs.map(x=>{
+      const price=source==="exact"?Number(x.exactPrice):x.fairPrice
+      return {
+        fixtureId:x.fixture.id,competition:x.fixture.competition,kickoff:x.fixture.kickoff,
+        home:x.fixture.home.name,away:x.fixture.away.name,player:x.leg.player,team:x.leg.team,
+        market:x.leg.market,label:x.leg.label,probability:x.leg.probability,price:Math.round(price*100)/100,
+        priceSource:source!,bookmaker:chosenBook,confidence:x.leg.confidence,
+      }
+    })
+    const placeable=source==="exact"&&chosen.legs.every(x=>x.placeable&&x.bookmaker===chosenBook)
+    return {
+      id:"target-"+target.fractional.replace("/","-"),targetFractional:target.fractional,targetDecimal:target.decimal,
+      available:true,achievedOdds:Math.round(chosen.odds*100)/100,
+      modelAllHitProbability:Math.round(chosen.prob*10000)/10000,
+      bookmaker:chosenBook,priceSource:source,placeable,legs,
+      note:source==="exact"
+        ? "Built from exact individual prices at "+chosenBook+". Combined accumulator price is the product of those separate-match singles."
+        : "Built from model fair prices because one preferred bookmaker did not return exact prices for every leg. Check the bookmaker before placing.",
+    }
+  })
 }
 function blockedReason(scorecard:Scorecard,slip:BetSlip|FoulTargetSlip,kind:"standard"|"foul"){
   if(kind==="foul"){
@@ -281,7 +405,9 @@ export async function GET(request:Request){
       }catch{return [] as Recommendation[]}
     }))
 
-    const recommendations=rows.flat().sort((a,b)=>b.rank-a.rank).slice(0,8)
+    const allRecommendations=rows.flat().sort((a,b)=>b.rank-a.rank)
+    const recommendations=allRecommendations.slice(0,8)
+    const targetOdds=buildTargetOddsSlips(allRecommendations.slice(0,18))
     try{await saveRecommendationSnapshots(recommendations.map((rec,index)=>({
       fixture:rec.fixture,
       slip:{
@@ -303,12 +429,14 @@ export async function GET(request:Request){
       updatedAt:new Date().toISOString(),
       fixturesScanned:upcoming.length,
       recommendations,
+      targetOdds,
       tracking,
       staleFallback:false,
       methodology:{
         recommendationCalibration:"Final ranking uses a second walk-forward calibration layer built from historical recommendations that survived the selection process.",
         cache:"Recommended scans today only and is served from one server endpoint with a five-minute shared-cache target; manual refresh bypasses the normal scan cadence.",
         tracking:"Recommendations are saved before kickoff and graded later from imported player-match data. Model-only recommendations remain visible when bookmaker verification is missing; only verified same-bookmaker markets are marked placeable.",
+        targetOdds:"5/1 through 50/1 targets search today's strongest recommended legs with one leg per fixture. Exact same-bookmaker prices are preferred; otherwise clearly labelled model fair prices are used.",
         liveFeedback:liveTopSample>=50
           ? "Live top-pick calibration is active. Current 30-day reliability multiplier: "+liveReliabilityFactor.toFixed(3)
           : "Live top-pick calibration activates after 50 graded top-pick legs.",
