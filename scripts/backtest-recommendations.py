@@ -75,6 +75,55 @@ def calibrated_probability(raw:float,competition:str,market:str,calibration:dict
     try:return float(bands[idx]["calibratedProbability"])
     except:return raw
 
+def recommendation_bands(picks:list[dict[str,Any]])->list[dict[str,Any]]:
+    width=.05
+    bins=[[] for _ in range(20)]
+    for row in picks:
+        idx=max(0,min(19,int(float(row["probability"])/width)))
+        bins[idx].append(row)
+    raw=[]
+    weights=[]
+    meta=[]
+    for idx,rows in enumerate(bins):
+        low=idx*width
+        high=low+width
+        midpoint=low+width/2
+        n=len(rows)
+        hits=sum(int(r["outcome"]) for r in rows)
+        observed=hits/n if n else midpoint
+        prior=midpoint
+        strength=25.0
+        value=(hits+prior*strength)/(n+strength)
+        raw.append(value)
+        weights.append(max(1,n))
+        meta.append({
+            "from":round(low,2),"to":round(high,2),"sample":n,"hits":hits,
+            "observedRate":round(observed,4) if n else None,
+        })
+    # PAV monotonic smoothing.
+    blocks=[{"start":i,"end":i,"value":raw[i],"weight":weights[i]} for i in range(20)]
+    i=0
+    while i<len(blocks)-1:
+        if blocks[i]["value"]<=blocks[i+1]["value"]:
+            i+=1
+            continue
+        w=blocks[i]["weight"]+blocks[i+1]["weight"]
+        merged={
+            "start":blocks[i]["start"],"end":blocks[i+1]["end"],
+            "value":(blocks[i]["value"]*blocks[i]["weight"]+blocks[i+1]["value"]*blocks[i+1]["weight"])/w,
+            "weight":w,
+        }
+        blocks[i:i+2]=[merged]
+        i=max(0,i-1)
+    out=[0.0]*20
+    for block in blocks:
+        for idx in range(block["start"],block["end"]+1):
+            out[idx]=clamp(float(block["value"]))
+    for idx,v in enumerate(out):
+        meta[idx]["calibratedProbability"]=round(v,4)
+    return meta
+
+
 def main()->int:
     with INPUT.open(encoding="utf-8",newline="") as h:
         rows=[r for r in csv.DictReader(h) if iv(r,"minutes")>0]
@@ -139,6 +188,7 @@ def main()->int:
         "minimumPriorMatches":MIN_MATCHES,
         "minimumPriorMinutes":MIN_MINUTES,
         "overall":summary(picks),
+        "recommendationCalibration":{"binWidth":0.05,"bands":recommendation_bands(picks)},
         "byMarket":by_market,
         "byCompetition":by_comp,
         "recentPicks":picks[-100:],
