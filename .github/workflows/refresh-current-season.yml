@@ -11,6 +11,8 @@ on:
       - "lib/db/schema.ts"
       - "lib/db/ensure-research-schema.ts"
       - "app/api/admin/import/route.ts"
+      - "app/api/admin/sync-international-espn/route.ts"
+      - "app/api/international/players/route.ts"
       - "app/api/version/route.ts"
       - ".github/workflows/refresh-current-season.yml"
 
@@ -60,6 +62,77 @@ jobs:
           SYNC_URL: https://footballcards-wheat.vercel.app
         run: python scripts/backfill-current-season-espn.py
 
+      - name: Refresh international match history and linked player profiles
+        env:
+          SYNC_URL: https://footballcards-wheat.vercel.app
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import time
+          from pathlib import Path
+
+          import requests
+
+          base = os.environ["SYNC_URL"].rstrip("/")
+          offset = 0
+          total = None
+          processed = 0
+
+          for _ in range(250):
+              response = requests.get(
+                  f"{base}/api/admin/sync-international-espn",
+                  params={"offset": offset, "limit": 8},
+                  timeout=120,
+              )
+              print("International sync:", response.status_code, response.text[:800], flush=True)
+              response.raise_for_status()
+              payload = response.json()
+              total = payload.get("totalFixtures", total)
+              processed += int(payload.get("processedFixtures") or 0)
+              if payload.get("done"):
+                  break
+              next_offset = int(payload.get("nextOffset") or offset)
+              if next_offset <= offset:
+                  raise RuntimeError(f"International sync made no progress at offset {offset}")
+              offset = next_offset
+              time.sleep(0.25)
+          else:
+              raise RuntimeError("International sync exceeded the chunk safety limit")
+
+          response = requests.get(f"{base}/api/international/players", timeout=120)
+          print("International profiles:", response.status_code, response.text[:800], flush=True)
+          response.raise_for_status()
+          profiles = response.json()
+
+          out = Path("data/international")
+          out.mkdir(parents=True, exist_ok=True)
+          (out / "player_profiles.json").write_text(
+              json.dumps(profiles, indent=2, ensure_ascii=False) + "\n",
+              encoding="utf-8",
+          )
+
+          if int(profiles.get("playerCount") or 0) <= 0:
+              raise RuntimeError("No international player profiles were produced")
+          coverage = profiles.get("domesticCoverage") or {}
+          if int(coverage.get("current") or 0) <= 0:
+              raise RuntimeError(f"No current domestic links were produced: {coverage}")
+
+          print(
+              json.dumps(
+                  {
+                      "internationalFixtures": total,
+                      "processed": processed,
+                      "playerCount": profiles.get("playerCount"),
+                      "domesticCoverage": coverage,
+                  },
+                  indent=2,
+              ),
+              flush=True,
+          )
+          PY
+
       - name: Validate current-season dataset
         shell: bash
         run: |
@@ -83,7 +156,11 @@ jobs:
           assert sum(1 for r in h2h if str(r.get("yellow_card")).lower() == "true") > 0
           assert report["totals"]["shots_on_target"] > 0
           assert "neon_sync" in report
+          international = json.load((Path("data/international") / "player_profiles.json").open(encoding="utf-8"))
+          assert int(international.get("playerCount") or 0) > 0
+          assert int((international.get("domesticCoverage") or {}).get("current") or 0) > 0
           print("Validation passed:", report["totals"])
+          print("International linked profiles:", international.get("playerCount"), international.get("domesticCoverage"))
           PY
 
       - name: Commit refreshed research snapshot
@@ -91,7 +168,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/current-season/h2h.csv data/current-season/player_baselines.csv data/current-season/quality-report.json data/league-two/player_baselines.csv data/league-two/player_baselines_2025_26_current_players.csv
+          git add data/current-season/h2h.csv data/current-season/player_baselines.csv data/current-season/quality-report.json data/league-two/player_baselines.csv data/league-two/player_baselines_2025_26_current_players.csv data/international/player_profiles.json
           if git diff --cached --quiet; then
             echo "Current-season research snapshot already up to date."
             exit 0
