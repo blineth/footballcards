@@ -8,6 +8,7 @@ on:
       - "scripts/build-model-calibration.py"
       - "scripts/backtest-recommendations.py"
       - "scripts/backtest-builders.py"
+      - "scripts/backtest-match-acca.py"
 
 permissions:
   contents: write
@@ -38,6 +39,9 @@ jobs:
 
       - name: Build builder strategy backtests
         run: python scripts/backtest-builders.py
+
+      - name: Build match accumulator calibration
+        run: python scripts/backtest-match-acca.py
 
       - name: Validate calibration output
         shell: bash
@@ -97,12 +101,27 @@ jobs:
           print(data["foulTargetBuilders"])
           PY
 
+      - name: Validate match accumulator backtest
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path("data/model/match-acca-backtest.json").read_text(encoding="utf-8"))
+          assert data["version"]=="match-acca-walk-forward-v1"
+          assert data["markets"]["homeWin"]["sample"]>50
+          assert data["markets"]["bttsYes"]["sample"]>50
+          print("Match accumulator backtest validation passed")
+          print(data["markets"])
+          print(data["structures"])
+          PY
+
       - name: Commit calibration snapshot
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/model/calibration.json data/model/recommendation-backtest.json data/model/builder-backtest.json
+          git add data/model/calibration.json data/model/recommendation-backtest.json data/model/builder-backtest.json data/model/match-acca-backtest.json
           if git diff --cached --quiet; then
             echo "Calibration snapshot already up to date."
             exit 0
