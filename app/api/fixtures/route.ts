@@ -54,6 +54,11 @@ async function espnFixtures(date: string): Promise<Fixture[]> {
           if (!home?.team || !away?.team) return null
           const statusName = event?.status?.type?.name ?? event?.status?.type?.description ?? ""
           const kickoff = String(event.date ?? contest?.date ?? "")
+          const elapsedRaw = String(event?.status?.displayClock ?? event?.status?.type?.detail ?? "")
+          const elapsedMatch = elapsedRaw.match(/(\d{1,3})/)
+          const elapsed = elapsedMatch ? Number(elapsedMatch[1]) : null
+          const homeScoreRaw = Number(home?.score)
+          const awayScoreRaw = Number(away?.score)
           if (londonYmd(kickoff) !== date) return null
           return {
             id: `${slug}:${String(event.id)}`,
@@ -61,6 +66,11 @@ async function espnFixtures(date: string): Promise<Fixture[]> {
             tournament,
             kickoff,
             status: mapEspnStatus(statusName),
+            score: {
+              home: Number.isFinite(homeScoreRaw) ? homeScoreRaw : null,
+              away: Number.isFinite(awayScoreRaw) ? awayScoreRaw : null,
+            },
+            elapsed,
             home: {
               id: String(home.team.id ?? ""),
               name: String(home.team.displayName ?? home.team.name ?? ""),
