@@ -153,7 +153,7 @@ jobs:
           assert len(competitions) >= 10, competitions
           assert sum(int(r.get("shots_on_target") or 0) for r in h2h) > 0
           assert sum(int(r.get("fouls_committed") or 0) for r in h2h) > 0
-          assert sum(1 for r in h2h if str(r.get("yellow_card")).lower() == "true") > 0
+          assert sum(1 for r in h2h if str(r.get("yellow_card")).lower() in {"true", "1"}) > 0
           assert report["totals"]["shots_on_target"] > 0
           assert "neon_sync" in report
           international = json.load((Path("data/international") / "player_profiles.json").open(encoding="utf-8"))
