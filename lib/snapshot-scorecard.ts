@@ -1,5 +1,6 @@
 import calibrationSnapshot from "@/data/model/calibration.json"
 import { internationalPlayersForFixture, snapshotPlayersForFixture } from "@/lib/current-season-snapshot"
+import { getPredictedFixture, normalisePredictedName } from "@/lib/predicted-lineups"
 
 type Competition="Premier League"|"Championship"|"League One"|"League Two"|"International"
 
@@ -141,11 +142,14 @@ function slip(id:string,title:string,legs:any[],note:string){
   }
 }
 
-function baseResponse(confirmed:boolean){
+function baseResponse(mode:"confirmed"|"predicted"|"squad"){
+  const confirmed=mode==="confirmed"
   return {
     ok:true,
     lineupsConfirmed:confirmed,
-    status:confirmed?"confirmed-lineup-snapshot-fallback":"waiting-for-confirmed-lineup",
+    lineupMode:mode,
+    lineupSource:confirmed?"Official starting XI":mode==="predicted"?"Snapshot probable XI":"Current squad",
+    status:confirmed?"confirmed-lineup-snapshot-fallback":mode==="predicted"?"predicted-lineup-snapshot-fallback":"waiting-for-lineup",
     snapshotFallback:true,
     fallbackReason:"Live research database is temporarily unavailable; using the checked-in player snapshot.",
     bookmaker:null,
@@ -169,17 +173,67 @@ function baseResponse(confirmed:boolean){
   }
 }
 
+
+function sameName(a:string,b:string){
+  const x=normalisePredictedName(a),y=normalisePredictedName(b)
+  return Boolean(x&&y&&(x===y||x.includes(y)||y.includes(x)))
+}
+function isGoalkeeper(position:string|null|undefined){
+  const p=normName(String(position??""))
+  return p==="gk"||p.includes("goalkeeper")
+}
+function startScore(row:any){
+  const apps=Number(row?.appearances??row?.international?.matches??0)
+  const starts=Number(row?.starts??row?.international?.starts??0)
+  const minutes=Number(row?.minutes??row?.international?.minutes??0)
+  const rate=apps>0?starts/apps:0
+  return rate*.7+Math.min(1,minutes/1800)*.3
+}
+function probableDomestic(players:any[],home:string,away:string,date:string){
+  const curated=getPredictedFixture(date,home,away)
+  const choose=(teamName:string)=>{
+    const pool=players.filter(p=>sameTeamName(String(p.team??""),teamName))
+    const curatedTeam=curated?Object.entries(curated.teams).find(([name])=>sameTeamName(name,teamName))?.[1]:null
+    const selected:any[]=[]
+    const used=new Set<string>()
+    if(curatedTeam?.players?.length){
+      for(const cp of curatedTeam.players){
+        const hit=pool.find(p=>!used.has(String(p.player_name))&&sameName(String(p.player_name),cp.name))
+        if(hit){selected.push(hit);used.add(String(hit.player_name))}
+      }
+    }
+    const remaining=pool.filter(p=>!used.has(String(p.player_name))).sort((a,b)=>startScore(b)-startScore(a)||Number(b.minutes??0)-Number(a.minutes??0))
+    if(!selected.some(p=>isGoalkeeper(p.position))){
+      const gk=remaining.find(p=>isGoalkeeper(p.position))
+      if(gk){selected.push(gk);used.add(String(gk.player_name))}
+    }
+    for(const p of remaining){
+      if(selected.length>=11)break
+      if(used.has(String(p.player_name)))continue
+      selected.push(p);used.add(String(p.player_name))
+    }
+    return selected.slice(0,11)
+  }
+  return [...choose(home),...choose(away)]
+}
+function probableInternational(profiles:any[],home:string,away:string){
+  const choose=(team:string)=>profiles
+    .filter(p=>sameTeamName(String(p?.nationalTeam??""),team))
+    .sort((a,b)=>startScore(b)-startScore(a))
+    .slice(0,11)
+  return [...choose(home),...choose(away)]
+}
+
 export async function buildSnapshotScorecard(input:{
   date:string;home:string;away:string;competition:Competition
 }){
   const official=await confirmedStartersForFixture(input)
-  if(!official.confirmed){
-    return {...baseResponse(false),playerCount:0,players:[],slips:[]}
-  }
 
   if(input.competition==="International"){
-    const profiles=(await internationalPlayersForFixture(input.home,input.away))
-      .filter((p:any)=>official.starters.has(normName(String(p?.name??""))))
+    const allProfiles=await internationalPlayersForFixture(input.home,input.away)
+    const profiles=official.confirmed
+      ? allProfiles.filter((p:any)=>official.starters.has(normName(String(p?.name??""))))
+      : probableInternational(allProfiles,input.home,input.away)
 
     const scored=profiles.map((p:any)=>{
       const intl=p?.international??{}
@@ -206,38 +260,39 @@ export async function buildSnapshotScorecard(input:{
     const foulLegs=[...scored].sort((a:any,b:any)=>b.foul-a.foul).slice(0,4).map((x:any)=>leg({
       player:String(x.p.name),team:String(x.p.nationalTeam),market:"foul1",label:"1+ foul committed",
       probability:x.foul,confidence:x.confidence,
-      reason:"Confirmed-XI snapshot fallback: blended current domestic and international foul rate.",
+      reason:"Snapshot lineup model: blended current domestic and international foul rate.",
     }))
     const fouledLegs=[...scored].sort((a:any,b:any)=>b.fouled-a.fouled).slice(0,3).map((x:any)=>leg({
       player:String(x.p.name),team:String(x.p.nationalTeam),market:"fouled1",label:"1+ foul drawn",
       probability:x.fouled,confidence:x.confidence,
-      reason:"Confirmed-XI snapshot fallback: blended current domestic and international fouls-drawn rate.",
+      reason:"Snapshot lineup model: blended current domestic and international fouls-drawn rate.",
     }))
     const shotLegs=[...scored].sort((a:any,b:any)=>b.shot-a.shot).slice(0,4).map((x:any)=>leg({
       player:String(x.p.name),team:String(x.p.nationalTeam),market:"shot1",label:"1+ shot",
       probability:x.shot,confidence:x.confidence,
-      reason:"Confirmed-XI snapshot fallback: blended current domestic and international shot rate.",
+      reason:"Snapshot lineup model: blended current domestic and international shot rate.",
     }))
     const sotLegs=[...scored].sort((a:any,b:any)=>b.sot-a.sot).slice(0,3).map((x:any)=>leg({
       player:String(x.p.name),team:String(x.p.nationalTeam),market:"sot1",label:"1+ shot on target",
       probability:x.sot,confidence:x.confidence,
-      reason:"Confirmed-XI snapshot fallback: blended current domestic and international shot-on-target rate.",
+      reason:"Snapshot lineup model: blended current domestic and international shot-on-target rate.",
     }))
     const cardLegs=[...scored].sort((a:any,b:any)=>b.card-a.card).slice(0,3).map((x:any)=>leg({
       player:String(x.p.name),team:String(x.p.nationalTeam),market:"card",label:"Yellow card",
       probability:x.card,confidence:x.confidence,
-      reason:"Confirmed-XI snapshot fallback: blended domestic, international and prior-season booking rate.",
+      reason:"Snapshot lineup model: blended domestic, international and prior-season booking rate.",
     }))
 
     const slips:any[]=[]
-    if(foulLegs.length>=2)slips.push(slip("intl-snapshot-fouls","Confirmed XI foul picks",foulLegs,"Model-only fallback from the repository snapshot; verify the bookmaker market and price before placing."))
-    if(fouledLegs.length>=2)slips.push(slip("intl-snapshot-fouled","Confirmed XI fouled picks",fouledLegs,"Model-only fallback from the repository snapshot; verify the bookmaker market and price before placing."))
-    if(shotLegs.length>=2)slips.push(slip("intl-snapshot-shots","Confirmed XI shot picks",shotLegs,"Model-only fallback from the repository snapshot; verify the bookmaker market and price before placing."))
-    if(sotLegs.length>=2)slips.push(slip("intl-snapshot-sot","Confirmed XI SOT picks",sotLegs,"Model-only fallback from the repository snapshot; verify the bookmaker market and price before placing."))
-    if(cardLegs.length>=2)slips.push(slip("intl-snapshot-cards","Confirmed XI card picks",cardLegs,"Model-only fallback from the repository snapshot; verify the bookmaker market and price before placing."))
+    if(foulLegs.length>=2)slips.push(slip("intl-snapshot-fouls","Foul picks",foulLegs,"Model-only fallback from the repository snapshot; verify the bookmaker market and price before placing."))
+    if(fouledLegs.length>=2)slips.push(slip("intl-snapshot-fouled","Fouled picks",fouledLegs,"Model-only fallback from the repository snapshot; verify the bookmaker market and price before placing."))
+    if(shotLegs.length>=2)slips.push(slip("intl-snapshot-shots","Shot picks",shotLegs,"Model-only fallback from the repository snapshot; verify the bookmaker market and price before placing."))
+    if(sotLegs.length>=2)slips.push(slip("intl-snapshot-sot","SOT picks",sotLegs,"Model-only fallback from the repository snapshot; verify the bookmaker market and price before placing."))
+    if(cardLegs.length>=2)slips.push(slip("intl-snapshot-cards","Card picks",cardLegs,"Model-only fallback from the repository snapshot; verify the bookmaker market and price before placing."))
 
     return {
-      ...baseResponse(true),
+      ...baseResponse(official.confirmed?"confirmed":"predicted"),
+      lineupSource:official.confirmed?"Official starting XI":"Probable international XI from recent starts/minutes snapshot",
       playerCount:profiles.length,
       players:profiles.map((p:any)=>({name:p.name,team:p.nationalTeam})),
       slips,
@@ -245,7 +300,9 @@ export async function buildSnapshotScorecard(input:{
   }
 
   const snapshot=await snapshotPlayersForFixture(input.competition,input.home,input.away)
-  const players=snapshot.players.filter(p=>official.starters.has(normName(p.player_name)))
+  const players=official.confirmed
+    ? snapshot.players.filter(p=>official.starters.has(normName(p.player_name)))
+    : probableDomestic(snapshot.players,input.home,input.away,input.date)
   const before=snapshot.rows.filter(row=>row.match_date<input.date)
   const scored=players.map(p=>{
     const history=before.filter(row=>row.player_name===p.player_name).sort((a,b)=>a.match_date.localeCompare(b.match_date))
@@ -273,38 +330,39 @@ export async function buildSnapshotScorecard(input:{
   const foulLegs=[...scored].sort((a,b)=>b.foul-a.foul).slice(0,4).map(x=>leg({
     player:x.p.player_name,team:x.p.team,market:"foul1",label:"1+ foul committed",
     probability:x.foul,confidence:x.confidence,
-    reason:"Confirmed-XI snapshot fallback: season and recent foul history.",
+    reason:"Snapshot lineup model: season and recent foul history.",
   }))
   const fouledLegs=[...scored].sort((a,b)=>b.fouled-a.fouled).slice(0,3).map(x=>leg({
     player:x.p.player_name,team:x.p.team,market:"fouled1",label:"1+ foul drawn",
     probability:x.fouled,confidence:x.confidence,
-    reason:"Confirmed-XI snapshot fallback: season and recent fouls-drawn history.",
+    reason:"Snapshot lineup model: season and recent fouls-drawn history.",
   }))
   const shotLegs=[...scored].sort((a,b)=>b.shot-a.shot).slice(0,4).map(x=>leg({
     player:x.p.player_name,team:x.p.team,market:"shot1",label:"1+ shot",
     probability:x.shot,confidence:x.confidence,
-    reason:"Confirmed-XI snapshot fallback: season and recent shot history.",
+    reason:"Snapshot lineup model: season and recent shot history.",
   }))
   const sotLegs=[...scored].sort((a,b)=>b.sot-a.sot).slice(0,3).map(x=>leg({
     player:x.p.player_name,team:x.p.team,market:"sot1",label:"1+ shot on target",
     probability:x.sot,confidence:x.confidence,
-    reason:"Confirmed-XI snapshot fallback: season and recent shot-on-target history.",
+    reason:"Snapshot lineup model: season and recent shot-on-target history.",
   }))
   const cardLegs=[...scored].sort((a,b)=>b.card-a.card).slice(0,3).map(x=>leg({
     player:x.p.player_name,team:x.p.team,market:"card",label:"Yellow card",
     probability:x.card,confidence:x.confidence,
-    reason:"Confirmed-XI snapshot fallback: season and recent booking history.",
+    reason:"Snapshot lineup model: season and recent booking history.",
   }))
 
   const slips:any[]=[]
-  if(foulLegs.length>=2)slips.push(slip("snapshot-fouls","Confirmed XI foul picks",foulLegs,"Model-only fallback from the repository snapshot; verify the bookmaker market and price before placing."))
-  if(fouledLegs.length>=2)slips.push(slip("snapshot-fouled","Confirmed XI fouled picks",fouledLegs,"Model-only fallback from the repository snapshot; verify the bookmaker market and price before placing."))
-  if(shotLegs.length>=2)slips.push(slip("snapshot-shots","Confirmed XI shot picks",shotLegs,"Model-only fallback from the repository snapshot; verify the bookmaker market and price before placing."))
-  if(sotLegs.length>=2)slips.push(slip("snapshot-sot","Confirmed XI SOT picks",sotLegs,"Model-only fallback from the repository snapshot; verify the bookmaker market and price before placing."))
-  if(cardLegs.length>=2)slips.push(slip("snapshot-cards","Confirmed XI card picks",cardLegs,"Model-only fallback from the repository snapshot; verify the bookmaker market and price before placing."))
+  if(foulLegs.length>=2)slips.push(slip("snapshot-fouls","Foul picks",foulLegs,"Model-only fallback from the repository snapshot; verify the bookmaker market and price before placing."))
+  if(fouledLegs.length>=2)slips.push(slip("snapshot-fouled","Fouled picks",fouledLegs,"Model-only fallback from the repository snapshot; verify the bookmaker market and price before placing."))
+  if(shotLegs.length>=2)slips.push(slip("snapshot-shots","Shot picks",shotLegs,"Model-only fallback from the repository snapshot; verify the bookmaker market and price before placing."))
+  if(sotLegs.length>=2)slips.push(slip("snapshot-sot","SOT picks",sotLegs,"Model-only fallback from the repository snapshot; verify the bookmaker market and price before placing."))
+  if(cardLegs.length>=2)slips.push(slip("snapshot-cards","Card picks",cardLegs,"Model-only fallback from the repository snapshot; verify the bookmaker market and price before placing."))
 
   return {
-    ...baseResponse(true),
+    ...baseResponse(official.confirmed?"confirmed":"predicted"),
+    lineupSource:official.confirmed?"Official starting XI":"Probable XI from current-season starts, appearances and minutes snapshot",
     playerCount:players.length,
     players:players.map(p=>({name:p.player_name,team:p.team})),
     slips,
