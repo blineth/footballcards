@@ -160,7 +160,7 @@ function selectionsFrom(data:Scorecard|null){
   const seen=new Set<string>()
   for(const p of data?.players??[]){
     for(const m of Object.values(p.markets??{})){
-      if(!m||m.confidence==="D")continue
+      if(!m)continue
       const row:Selection={id:"",player:p.name,team:p.team,market:m.key,label:m.label,probability:m.probability,fairOdds:m.fairOdds,bookmakerOdds:m.bookmakerOdds,bookmakerName:m.bookmakerName,edge:m.edge,confidence:m.confidence,reason:m.reasons?.[0]??"Player history and current matchup model"}
       row.id=keyOf(row)
       if(seen.has(row.id))continue
