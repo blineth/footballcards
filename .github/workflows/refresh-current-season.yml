@@ -24,7 +24,7 @@ concurrency:
 jobs:
   refresh:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 180
 
     steps:
       - uses: actions/checkout@v4
@@ -73,6 +73,11 @@ jobs:
 
           assert len(h2h) >= 500, len(h2h)
           assert len(baselines) >= 150, len(baselines)
+          competitions = {r.get("competition") for r in baselines}
+          league_two = [r for r in baselines if r.get("competition") == "League Two"]
+          assert "League Two" in competitions, competitions
+          assert len(league_two) >= 200, len(league_two)
+          assert len(competitions) >= 10, competitions
           assert sum(int(r.get("shots_on_target") or 0) for r in h2h) > 0
           assert sum(int(r.get("fouls_committed") or 0) for r in h2h) > 0
           assert sum(1 for r in h2h if str(r.get("yellow_card")).lower() == "true") > 0
@@ -86,7 +91,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/current-season/h2h.csv data/current-season/player_baselines.csv data/current-season/quality-report.json
+          git add data/current-season/h2h.csv data/current-season/player_baselines.csv data/current-season/quality-report.json data/league-two/player_baselines.csv data/league-two/player_baselines_2025_26_current_players.csv
           if git diff --cached --quiet; then
             echo "Current-season research snapshot already up to date."
             exit 0
