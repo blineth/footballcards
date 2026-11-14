@@ -49,7 +49,7 @@ export default function AccumulatorPage(){
       </section>
 
       {loading&&!data?<section className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center"><RefreshCw className="mx-auto mb-3 size-5 animate-spin text-amber-300"/><p className="font-black">Analysing the matchday…</p></section>:null}
-      {!loading&&!data?.ok?<section className="rounded-3xl border border-rose-300/15 bg-rose-400/5 p-6 text-center"><p className="font-black">Accumulator analysis unavailable</p><p className="mt-1 text-sm text-white/40">{data?.error??"Try another date."}</p></section>:null}
+      {!loading&&data&&!data.ok?<section className="rounded-3xl border border-rose-300/15 bg-rose-400/5 p-6 text-center"><p className="font-black">Accumulator analysis unavailable</p><p className="mt-1 text-sm text-white/40">{data?.error??"Try another date."}</p></section>:null}
 
       {data?.ok?<>{data.staleFallback?<section className="rounded-2xl border border-amber-300/15 bg-amber-300/5 px-4 py-3 text-[0.62rem] text-amber-100">{data.warning??"Showing the last successful cached analysis because a fresh data pull failed."}</section>:null}<section className="grid grid-cols-2 gap-2 sm:grid-cols-4"><Metric label="Active fixtures" value={String(data.activeFixtureCount??data.predictions?.length??0)}/><Metric label="Live matches" value={String((data.predictions??[]).filter(p=>p.inPlay).length)}/><Metric label="Build" value={risk==="safe"?"5 fold":risk==="balanced"?"7 fold":"10 fold"}/><Metric label="Updated" value={data.generatedAt?new Date(data.generatedAt).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}):"—"}/></section>
 
