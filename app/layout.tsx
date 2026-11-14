@@ -15,9 +15,9 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: "Football Cards Dashboard",
+  title: "Match Edge | Bet Builder",
   description:
-    "Research dashboard for identifying strong historical evidence for yellow cards and fouls in Premier League and EFL Championship matches.",
+    "Confirmed-lineup football betting research for fouls, cards, shots and shots on target.",
   generator: "v0.app",
   icons: {
     icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
@@ -25,8 +25,8 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  colorScheme: "light",
-  themeColor: "#22273c",
+  colorScheme: "dark",
+  themeColor: "#07120e",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
