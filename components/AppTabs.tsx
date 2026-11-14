@@ -7,8 +7,8 @@ export function AppTabs() {
   const pathname = usePathname()
   const tabs = [
     { href: "/", label: "Matches" },
-    { href: "/shortlist", label: "Shortlist" },
-    { href: "/bet-builder", label: "Bet builder" },
+    { href: "/bet-builder", label: "Bet Builder" },
+    { href: "/multi-match", label: "Multi Match" },
   ]
 
   return (
