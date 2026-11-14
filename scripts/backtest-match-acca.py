@@ -150,7 +150,7 @@ def main():
     by_date=defaultdict(list)
     for r in matches:by_date[r["date"]].append(r)
     history=defaultdict(list)
-    samples=[];structures={"safer3":[],"wins3":[],"btts3":[],"mixed4":[]}
+    samples=[];structures={"safer5":[],"wins5":[],"btts5":[],"mixed6":[]}
     for date in sorted(by_date):
         day=by_date[date]
         fixtures={}
@@ -178,7 +178,7 @@ def main():
             if bp>=.55 or bp<=.45:
                 p=bp if bp>=.55 else 1-bp;hit=row["btts"] if bp>=.55 else not row["btts"]
                 day_candidates.append({"kind":"btts","model":p,"hit":hit,"score":(p-.5)/.34})
-        for n,key,kind in ((3,"safer3",None),(3,"wins3","win"),(3,"btts3","btts"),(4,"mixed4",None)):
+        for n,key,kind in ((5,"safer5",None),(5,"wins5","win"),(5,"btts5","btts"),(6,"mixed6",None)):
             pool=[x for x in day_candidates if kind is None or x["kind"]==kind]
             pool=sorted(pool,key=lambda x:x["score"],reverse=True)[:n]
             if len(pool)==n:structures[key].append({"model":math.prod(x["model"] for x in pool),"hit":all(x["hit"] for x in pool)})
