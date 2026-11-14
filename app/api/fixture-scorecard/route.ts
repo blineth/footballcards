@@ -10,11 +10,12 @@ import calibrationSnapshot from "@/data/model/calibration.json"
 export const dynamic = "force-dynamic"
 export const revalidate = 0
 
-type MarketKey = "foul1" | "foul2" | "foul3" | "fouled1" | "card" | "shot1" | "shot2" | "sot1" | "sot2"
+type MarketKey = "foul1" | "foul2" | "foul3" | "foul4" | "foul5" | "fouled1" | "card" | "shot1" | "shot2" | "sot1" | "sot2"
 type SlipMarketKey = MarketKey | `foul${number}`
 type MatchRow = typeof playerH2H.$inferSelect
 type MarketAvailabilityState = "available" | "unavailable" | "unknown"
 type MarketAvailability = Record<"card"|"foul"|"fouled"|"shot"|"sot", MarketAvailabilityState>
+type BookmakerAvailability = Record<string,MarketAvailability>
 
 type OddSelection = {
   market: string
@@ -126,6 +127,8 @@ const MARKET_LABELS: Record<MarketKey, string> = {
   foul1: "1+ foul committed",
   foul2: "2+ fouls committed",
   foul3: "3+ fouls committed",
+  foul4: "4+ fouls committed",
+  foul5: "5+ fouls committed",
   fouled1: "1+ foul drawn",
   card: "Yellow card",
   shot1: "1+ shot",
@@ -138,6 +141,8 @@ const PRIOR: Record<MarketKey, number> = {
   foul1: 0.70,
   foul2: 0.38,
   foul3: 0.17,
+  foul4: 0.055,
+  foul5: 0.018,
   fouled1: 0.62,
   card: 0.22,
   shot1: 0.62,
@@ -167,6 +172,8 @@ function hit(market: MarketKey, row: MatchRow) {
   if (market === "foul1") return Number(row.foulsCommitted ?? 0) >= 1
   if (market === "foul2") return Number(row.foulsCommitted ?? 0) >= 2
   if (market === "foul3") return Number(row.foulsCommitted ?? 0) >= 3
+  if (market === "foul4") return Number(row.foulsCommitted ?? 0) >= 4
+  if (market === "foul5") return Number(row.foulsCommitted ?? 0) >= 5
   if (market === "fouled1") return Number(row.foulsDrawn ?? 0) >= 1
   if (market === "card") return row.yellowCard === true
   if (market === "shot1") return Number(row.shots ?? 0) >= 1
@@ -200,6 +207,45 @@ function poissonAtLeast(lambda: number, threshold: number) {
     cumulative += Math.exp(-lambda) * Math.pow(lambda, k) / factorial
   }
   return clamp(1 - cumulative)
+}
+function negativeBinomialAtLeast(mean:number,dispersion:number,threshold:number){
+  if(!(mean>0)||!(dispersion>0))return poissonAtLeast(mean,threshold)
+  const r=dispersion
+  const p=r/(r+mean)
+  const logGamma=(z:number)=>{
+    const x=z
+    if(x<=0)return 0
+    return (x-0.5)*Math.log(x)-x+0.5*Math.log(2*Math.PI)+1/(12*x)
+  }
+  let cumulative=0
+  for(let k=0;k<threshold;k++){
+    const logP=logGamma(k+r)-logGamma(r)-logGamma(k+1)+r*Math.log(p)+k*Math.log(1-p)
+    cumulative+=Math.exp(logP)
+  }
+  return clamp(1-cumulative)
+}
+function foulDispersion(rows:MatchRow[]){
+  const values=rows.map(r=>Number(r.foulsCommitted??0))
+  if(values.length<6)return 20
+  const mean=values.reduce((a,b)=>a+b,0)/values.length
+  const variance=values.reduce((s,v)=>s+(v-mean)**2,0)/Math.max(1,values.length-1)
+  if(variance<=mean+0.05)return 30
+  return Math.max(0.6,Math.min(30,(mean*mean)/(variance-mean)))
+}
+function estimateExpectedMinutes(rows:MatchRow[],confirmed:boolean){
+  const ordered=[...rows].sort((a,b)=>String(a.matchDate).localeCompare(String(b.matchDate)))
+  const starters=ordered.filter(r=>r.starter===true).slice(-8)
+  const recent=(confirmed&&starters.length>=3?starters:ordered.slice(-8)).filter(r=>Number(r.minutes??0)>0)
+  if(!recent.length)return confirmed?78:65
+  let weighted=0,weight=0
+  recent.forEach((r,i)=>{
+    const w=i+1
+    weighted+=Number(r.minutes??0)*w
+    weight+=w
+  })
+  const average=weighted/Math.max(1,weight)
+  const low=confirmed?50:30
+  return Math.round(Math.max(low,Math.min(90,average)))
 }
 function blend(base: number, other: number | null, weight: number) {
   if (other == null || !Number.isFinite(other) || weight <= 0) return base
@@ -250,9 +296,8 @@ function confidenceGrade(input: { matches: number; minutes: number; confirmed: b
   return "D" as const
 }
 function thresholdForMarket(market: MarketKey) {
-  if (market.endsWith("3")) return 3
-  if (market.endsWith("2")) return 2
-  return 1
+  const match=market.match(/([1-9])$/)
+  return match?Number(match[1]):1
 }
 
 function availabilityForMarket(availability:MarketAvailability, market:SlipMarketKey):MarketAvailabilityState {
@@ -269,11 +314,30 @@ function oddsKind(market: SlipMarketKey) {
   if (market.startsWith("sot")) return "sot"
   return "shot"
 }
-function playerInLabel(selection: OddSelection, player: string) {
+function playerInLabel(selection: OddSelection, player: string, allPlayers:string[] = []) {
   const hay = norm(selection.market + " " + selection.label)
   const p = norm(player)
-  const surname = p.split(" ").at(-1) ?? p
-  return Boolean(p && (hay.includes(p) || (surname.length >= 4 && hay.includes(surname))))
+  if(!p)return false
+  if(hay.includes(p))return true
+
+  const parts=p.split(" ")
+  const surname=parts.at(-1)??p
+  if(surname.length<4||!hay.includes(surname))return false
+
+  // Only permit surname fallback when that surname is unique in the fixture.
+  const sameSurname=allPlayers.filter(name=>{
+    const n=norm(name)
+    return (n.split(" ").at(-1)??n)===surname
+  })
+  if(sameSurname.length!==1)return false
+
+  // If an initial is present in the bookmaker label, it must agree too.
+  const first=parts[0]??""
+  const initial=first.slice(0,1)
+  const tokens=hay.split(" ")
+  const surnameIndex=tokens.indexOf(surname)
+  if(surnameIndex>0 && tokens[surnameIndex-1]?.length===1 && initial && tokens[surnameIndex-1]!==initial)return false
+  return true
 }
 function selectionThreshold(selection: OddSelection) {
   const raw = (selection.market + " " + selection.label).toLowerCase()
@@ -294,11 +358,11 @@ function selectionThreshold(selection: OddSelection) {
   if (/\bto commit (?:a|one) foul\b|\b1 foul committed\b|\bone foul committed\b/.test(normalized)) return 1
   return null
 }
-function findOdds(selections: OddSelection[], player: string, market: MarketKey) {
+function findOdds(selections: OddSelection[], player: string, market: MarketKey, allPlayers:string[] = []) {
   const desiredKind = oddsKind(market)
   const threshold = thresholdForMarket(market)
   const candidates = selections
-    .filter(s => s.odd != null && Number(s.odd) > 1 && s.kind === desiredKind && playerInLabel(s, player))
+    .filter(s => s.odd != null && Number(s.odd) > 1 && s.kind === desiredKind && playerInLabel(s, player, allPlayers))
     .map(s => ({ ...s, detectedThreshold: selectionThreshold(s) }))
     .filter(s => {
       if (market === "card") return true
@@ -310,18 +374,35 @@ function findOdds(selections: OddSelection[], player: string, market: MarketKey)
     .sort((a, b) => Number(b.odd ?? 0) - Number(a.odd ?? 0))
   return candidates[0] ?? null
 }
-function exactFoulSelections(selections: OddSelection[], player: string) {
-  const byThreshold = new Map<number, OddSelection>()
+function exactFoulSelections(selections: OddSelection[], player: string, allPlayers:string[] = []) {
+  const byBookThreshold = new Map<string,{threshold:number;selection:OddSelection}>()
   for (const selection of selections) {
-    if (selection.kind !== "foul" || selection.odd == null || Number(selection.odd) <= 1 || !playerInLabel(selection, player)) continue
+    if (selection.kind !== "foul" || selection.odd == null || Number(selection.odd) <= 1 || !selection.bookmaker || !playerInLabel(selection, player, allPlayers)) continue
     const threshold = selectionThreshold(selection)
-    if (threshold == null) continue
-    const existing = byThreshold.get(threshold)
-    if (!existing || Number(selection.odd) > Number(existing.odd ?? 0)) byThreshold.set(threshold, selection)
+    if (threshold == null || threshold>8) continue
+    const key=selection.bookmaker+"|"+threshold
+    const existing=byBookThreshold.get(key)
+    if (!existing || Number(selection.odd) > Number(existing.selection.odd ?? 0)) byBookThreshold.set(key,{threshold,selection})
   }
-  return [...byThreshold.entries()]
-    .map(([threshold, selection]) => ({ threshold, selection }))
-    .sort((a,b)=>a.threshold-b.threshold)
+
+  // Sanity-check each bookmaker ladder: higher thresholds should not have shorter prices.
+  const grouped=new Map<string,Array<{threshold:number;selection:OddSelection}>>()
+  for(const row of byBookThreshold.values()){
+    const book=row.selection.bookmaker!
+    grouped.set(book,[...(grouped.get(book)??[]),row])
+  }
+  const clean:Array<{threshold:number;selection:OddSelection}>=[]
+  for(const rows of grouped.values()){
+    rows.sort((a,b)=>a.threshold-b.threshold)
+    let previous=1
+    for(const row of rows){
+      const price=Number(row.selection.odd)
+      if(price+0.03<previous)continue
+      clean.push(row)
+      previous=Math.max(previous,price)
+    }
+  }
+  return clean.sort((a,b)=>a.threshold-b.threshold||String(a.selection.bookmaker).localeCompare(String(b.selection.bookmaker)))
 }
 
 function dynamicFoulProbability(input:{
@@ -337,11 +418,13 @@ function dynamicFoulProbability(input:{
   const recent5=ordered.slice(-5)
   const lambda=Math.max(0.01,input.per90*input.expectedMinutes/90)
   const poisson=poissonAtLeast(lambda,input.threshold)
-  const prior=Math.max(0.01,Math.min(0.99,poisson))
+  const nb=negativeBinomialAtLeast(lambda,foulDispersion(input.rows),input.threshold)
+  const countModel=Math.max(poisson,Math.min(0.99,nb))
+  const prior=Math.max(0.01,Math.min(0.99,countModel))
   const all=betaSmoothed(ordered.filter(hitFor).length,ordered.length,prior,7)
   const ten=betaSmoothed(recent10.filter(hitFor).length,recent10.length,all,5)
   const five=betaSmoothed(recent5.filter(hitFor).length,recent5.length,ten,4)
-  let probability=clamp(all*0.50+ten*0.25+five*0.15+poisson*0.10)
+  let probability=clamp(all*0.48+ten*0.24+five*0.14+countModel*0.14)
   if(input.matchupFouled90!=null&&input.matchupFouled90>0){
     probability=logitAdjust(probability,(input.matchupFouled90-1.35)*0.12)
   }
@@ -622,9 +705,7 @@ export async function GET(request: Request) {
     const h2hRows = rows.filter(row => teamMatch(row.opponent, opponent))
     const recent5Rows = [...rows].sort((a, b) => String(a.matchDate).localeCompare(String(b.matchDate))).slice(-5)
     const sampleMinutes = rows.reduce((sum, row) => sum + Number(row.minutes ?? 0), 0)
-    const expectedMinutes = confirmed
-      ? Math.round(Math.max(55, Math.min(90, rows.filter(r => r.starter === true).reduce((s, r) => s + Number(r.minutes ?? 0), 0) / Math.max(1, rows.filter(r => r.starter === true).length) || 80)))
-      : Math.round(Math.max(35, Math.min(90, sampleMinutes / Math.max(1, rows.length) || 70)))
+    const expectedMinutes = estimateExpectedMinutes(allRows,confirmed)
 
     const matchupCandidate = candidates.find(other => norm(other.name) === norm(candidate?.likelyMatchup?.name) || norm(other.dbName) === norm(candidate?.likelyMatchup?.name))
     const matchupFouls90 = Number(matchupCandidate?.fouls90 ?? 0)
@@ -664,12 +745,16 @@ export async function GET(request: Request) {
               : 0
 
       if (market !== "card" && per90 > 0) {
-        const poisson = poissonAtLeast(per90 * minutesScale, threshold)
-        const poissonWeight = rows.length < 5 ? 0.42 : rows.length < 10 ? 0.28 : 0.16
-        probability = blend(probability, poisson, poissonWeight)
+        const mean=per90*minutesScale
+        const poisson = poissonAtLeast(mean, threshold)
+        const countProbability = market.startsWith("foul")
+          ? Math.max(poisson,negativeBinomialAtLeast(mean,foulDispersion(rows),threshold))
+          : poisson
+        const countWeight = rows.length < 5 ? 0.42 : rows.length < 10 ? 0.28 : 0.18
+        probability = blend(probability, countProbability, countWeight)
       }
 
-      if (market === "foul1" || market === "foul2" || market === "foul3") {
+      if (market.startsWith("foul") && !market.startsWith("fouled")) {
         if (matchupFouled90 != null && matchupFouled90 > 0) probability = logitAdjust(probability, (matchupFouled90 - 1.35) * 0.14)
       }
       if (market === "fouled1" && matchupFouls90 > 0) {
@@ -701,7 +786,7 @@ export async function GET(request: Request) {
       const calibrated = calibrationFor(competition, market, rawProbability)
       probability = calibrated.probability
 
-      const odd = findOdds(usableSelections, candidate.name, market)
+      const odd = findOdds(usableSelections, candidate.name, market, candidates.map(x=>String(x.name??"")))
       const bookmakerOdds = odd?.odd == null ? null : Number(odd.odd)
       const previousBookmakerOdds = odd?.previousOdd == null ? null : Number(odd.previousOdd)
       const bookmakerMovement = odd?.movement == null ? null : Number(odd.movement)
@@ -763,8 +848,8 @@ export async function GET(request: Request) {
         after3PlusFouls: cond3,
       },
       markets,
-      offeredFoulLines: exactFoulSelections(usableSelections, candidate.name).map(({threshold,selection})=>{
-        const standardKey = threshold===1 ? "foul1" : threshold===2 ? "foul2" : threshold===3 ? "foul3" : null
+      offeredFoulLines: exactFoulSelections(usableSelections, candidate.name, candidates.map(x=>String(x.name??""))).map(({threshold,selection})=>{
+        const standardKey = threshold>=1&&threshold<=5 ? ("foul"+threshold) as MarketKey : null
         const probability = standardKey
           ? markets[standardKey].probability
           : dynamicFoulProbability({
@@ -790,7 +875,7 @@ export async function GET(request: Request) {
           fairOdds:fairOdds(probability),
           edge:Math.round((probability-impliedProbability)*1000)/1000,
           expectedValue:Math.round((probability*bookmakerOdds-1)*1000)/1000,
-          calibrated:Boolean(standardKey),
+          calibrated:Boolean(standardKey && (calibrationSnapshot as any)?.global?.[standardKey]),
           sampleMatches:rows.length,
           confidence,
         }
