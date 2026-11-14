@@ -58,7 +58,6 @@ type ScoreMarket = {
   previousBookmakerOdds: number | null
   bookmakerMovement: number | null
   bookmakerLabel: string | null
-  bookmakerName: string | null
   impliedProbability: number | null
   edge: number | null
   expectedValue: number | null
@@ -100,6 +99,7 @@ type SlipLeg = {
   probability: number
   fairOdds: number | null
   bookmakerOdds: number | null
+  bookmakerName: string | null
   previousBookmakerOdds: number | null
   bookmakerMovement: number | null
   edge: number | null
