@@ -16,7 +16,7 @@ const LEAGUE_IDS:Record<Competition,string>={
 const BOOKS=["Bet365","Sky Bet","William Hill","Paddy Power"] as const
 
 type MatchRow={date:string;team:string;opponent:string;venue:"home"|"away"|"";gf:number;ga:number;result:"W"|"D"|"L";btts:boolean}
-type Metrics={team:string;position:number;teams:number;played:number;points:number;ppg:number;winRate:number;drawRate:number;lossRate:number;gd:number;recentForm:string;recentPPG:number;streak:string;venueWinRate:number;venuePPG:number;venueBttsRate:number;venueScoreRate:number;venueConcedeRate:number;bttsRate:number}
+type Metrics={team:string;position:number;teams:number;played:number;points:number;ppg:number;winRate:number;drawRate:number;lossRate:number;gd:number;gfPerGame:number;gaPerGame:number;recentForm:string;recentPPG:number;streak:string;venueWinRate:number;venuePPG:number;venueGFPerGame:number;venueGAPerGame:number;venueBttsRate:number;venueScoreRate:number;venueConcedeRate:number;bttsRate:number}
 type PriceSet={homeWin?:number;draw?:number;awayWin?:number;bttsYes?:number;bttsNo?:number}
 
 function norm(v:any){return String(v??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/\b(afc|fc)\b/g,"").replace(/[^a-z0-9]+/g," ").trim().replace(/\s+/g," ")}
@@ -62,7 +62,8 @@ function metrics(team:string,all:MatchRow[],positions:Map<string,number>,teamCou
   const rows=all.filter(m=>same(m.team,team)).sort((a,b)=>a.date.localeCompare(b.date)),recent=rows.slice(-5),split=rows.filter(m=>m.venue===venue)
   const rate=(xs:MatchRow[],f:(m:MatchRow)=>boolean)=>xs.length?xs.filter(f).length/xs.length:.5
   const pts=rows.reduce((s,m)=>s+points(m.result),0),gf=rows.reduce((s,m)=>s+m.gf,0),ga=rows.reduce((s,m)=>s+m.ga,0)
-  return {team,position:positions.get(norm(team))??teamCount,teams:teamCount,played:rows.length,points:pts,ppg:rows.length?pts/rows.length:1.2,winRate:rate(rows,m=>m.result==="W"),drawRate:rate(rows,m=>m.result==="D"),lossRate:rate(rows,m=>m.result==="L"),gd:gf-ga,recentForm:recent.map(m=>m.result).join("")||"—",recentPPG:recent.length?recent.reduce((s,m)=>s+points(m.result),0)/recent.length:1.2,streak:streak(rows),venueWinRate:rate(split,m=>m.result==="W"),venuePPG:split.length?split.reduce((s,m)=>s+points(m.result),0)/split.length:1.2,venueBttsRate:rate(split,m=>m.btts),venueScoreRate:rate(split,m=>m.gf>0),venueConcedeRate:rate(split,m=>m.ga>0),bttsRate:rate(rows,m=>m.btts)}
+  const splitGF=split.reduce((s,m)=>s+m.gf,0),splitGA=split.reduce((s,m)=>s+m.ga,0)
+  return {team,position:positions.get(norm(team))??teamCount,teams:teamCount,played:rows.length,points:pts,ppg:rows.length?pts/rows.length:1.2,winRate:rate(rows,m=>m.result==="W"),drawRate:rate(rows,m=>m.result==="D"),lossRate:rate(rows,m=>m.result==="L"),gd:gf-ga,gfPerGame:rows.length?gf/rows.length:1.25,gaPerGame:rows.length?ga/rows.length:1.25,recentForm:recent.map(m=>m.result).join("")||"—",recentPPG:recent.length?recent.reduce((s,m)=>s+points(m.result),0)/recent.length:1.2,streak:streak(rows),venueWinRate:rate(split,m=>m.result==="W"),venuePPG:split.length?split.reduce((s,m)=>s+points(m.result),0)/split.length:1.2,venueGFPerGame:split.length?splitGF/split.length:(rows.length?gf/rows.length:1.25),venueGAPerGame:split.length?splitGA/split.length:(rows.length?ga/rows.length:1.25),venueBttsRate:rate(split,m=>m.btts),venueScoreRate:rate(split,m=>m.gf>0),venueConcedeRate:rate(split,m=>m.ga>0),bttsRate:rate(rows,m=>m.btts)}
 }
 function h2h(home:string,away:string,history:MatchRow[]){
   const rows=history.filter(m=>same(m.team,home)&&same(m.opponent,away)).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,6)
@@ -86,6 +87,66 @@ function bttsProb(home:Metrics,away:Metrics,h:any){
   let p=home.venueBttsRate*.24+away.venueBttsRate*.24+home.bttsRate*.13+away.bttsRate*.13+scoring*.18+h.bttsRate*.08
   return pct(clamp(p*rel+.5*(1-rel),.16,.84))
 }
+function poissonPmf(lambda:number,k:number){
+  if(lambda<=0)return k===0?1:0
+  let factorial=1
+  for(let i=2;i<=k;i++)factorial*=i
+  return Math.exp(-lambda)*Math.pow(lambda,k)/factorial
+}
+function inPlayProbabilities(input:{
+  minute:number;homeScore:number;awayScore:number;home:Metrics;away:Metrics;
+  preHome:number;preDraw:number;preAway:number;preBtts:number;finished?:boolean
+}){
+  const minute=clamp(input.minute,0,96)
+  if(input.finished){
+    const home=input.homeScore>input.awayScore?1:0
+    const draw=input.homeScore===input.awayScore?1:0
+    const away=input.awayScore>input.homeScore?1:0
+    const btts=input.homeScore>0&&input.awayScore>0?1:0
+    return {home,draw,away,bttsYes:btts,bttsNo:1-btts,remainingHomeGoals:0,remainingAwayGoals:0}
+  }
+  const remaining=clamp((96-minute)/96,0,1)
+  const baseHome=Math.max(.25,(input.home.venueGFPerGame+input.away.venueGAPerGame)/2)
+  const baseAway=Math.max(.25,(input.away.venueGFPerGame+input.home.venueGAPerGame)/2)
+  const preBias=clamp((input.preHome-input.preAway)*.32,-.18,.18)
+  let lambdaHome=baseHome*remaining*(1+preBias)
+  let lambdaAway=baseAway*remaining*(1-preBias)
+  if(input.homeScore<input.awayScore){lambdaHome*=1.12;lambdaAway*=.92}
+  if(input.awayScore<input.homeScore){lambdaAway*=1.12;lambdaHome*=.92}
+  lambdaHome=clamp(lambdaHome,.001,3.5)
+  lambdaAway=clamp(lambdaAway,.001,3.5)
+
+  let h=0,d=0,a=0,total=0
+  for(let hg=0;hg<=7;hg++){
+    for(let ag=0;ag<=7;ag++){
+      const p=poissonPmf(lambdaHome,hg)*poissonPmf(lambdaAway,ag)
+      total+=p
+      const fh=input.homeScore+hg,fa=input.awayScore+ag
+      if(fh>fa)h+=p
+      else if(fh===fa)d+=p
+      else a+=p
+    }
+  }
+  if(total>0){h/=total;d/=total;a/=total}
+  const priorWeight=clamp(remaining*.22,0,.22)
+  h=h*(1-priorWeight)+input.preHome*priorWeight
+  d=d*(1-priorWeight)+input.preDraw*priorWeight
+  a=a*(1-priorWeight)+input.preAway*priorWeight
+  const resultTotal=h+d+a
+  h/=resultTotal;d/=resultTotal;a/=resultTotal
+
+  let bttsYes:number
+  if(input.homeScore>0&&input.awayScore>0)bttsYes=1
+  else if(input.homeScore>0)bttsYes=1-Math.exp(-lambdaAway)
+  else if(input.awayScore>0)bttsYes=1-Math.exp(-lambdaHome)
+  else bttsYes=(1-Math.exp(-lambdaHome))*(1-Math.exp(-lambdaAway))
+  const bttsPriorWeight=clamp(remaining*.12,0,.12)
+  if(!(input.homeScore>0&&input.awayScore>0)){
+    bttsYes=bttsYes*(1-bttsPriorWeight)+input.preBtts*bttsPriorWeight
+  }
+  bttsYes=clamp(bttsYes,0,1)
+  return {home:pct(h),draw:pct(d),away:pct(a),bttsYes:pct(bttsYes),bttsNo:pct(1-bttsYes),remainingHomeGoals:pct(lambdaHome),remainingAwayGoals:pct(lambdaAway)}
+}
 function grade(certainty:number,reliability:number){const s=certainty*.72+reliability*.28;return s>=.72?"A":s>=.60?"B":s>=.49?"C":"D"}
 function preferredBook(name:string){const n=norm(name);if(n.includes("bet365"))return "Bet365";if(n.includes("sky bet")||n.includes("skybet"))return "Sky Bet";if(n.includes("william hill"))return "William Hill";if(n.includes("paddy power"))return "Paddy Power";return null}
 async function oddsRows(competition:Competition,date:string){
@@ -105,7 +166,7 @@ function priceMap(rows:any[],home:string,away:string){
     }out[book]=p
   }return out
 }
-function exactPrice(pred:any,market:string,book:string){const p=pred.oddsByBook?.[book];if(!p)return null;return market==="homeWin"?p.homeWin??null:market==="awayWin"?p.awayWin??null:market==="bttsYes"?p.bttsYes??null:market==="bttsNo"?p.bttsNo??null:null}
+function exactPrice(pred:any,market:string,book:string){if(pred?.inPlay)return null;const p=pred.oddsByBook?.[book];if(!p)return null;return market==="homeWin"?p.homeWin??null:market==="awayWin"?p.awayWin??null:market==="bttsYes"?p.bttsYes??null:market==="bttsNo"?p.bttsNo??null:null}
 function buildSlip(id:string,title:string,subtitle:string,legs:any[],structureKey:"fold5"|"fold7"|"fold10",requiredLegs:number){
   const xs=legs.filter(Boolean)
   const uniqueByFixture:any[]=[]
@@ -159,23 +220,43 @@ export async function GET(request:Request){
         const bttsScale=calibratedBttsYes+calibratedBttsNo
         const bttsYes=bttsScale>0?calibratedBttsYes/bttsScale:rawBtts
         const bttsNo=1-bttsYes
-        const side=homeP>=awayP&&homeP>=.43?"home":awayP>homeP&&awayP>=.40?"away":null
-        const winnerP=side==="home"?homeP:side==="away"?awayP:Math.max(homeP,awayP)
-        const bpick=bttsYes>=.56?"yes":bttsNo>=.56?"no":null
-        const bprob=bpick==="yes"?bttsYes:bpick==="no"?bttsNo:Math.max(bttsYes,bttsNo)
+        const status=String(f.status??"scheduled")
+        const live=status==="live"||status==="halftime"
+        const finished=status==="finished"
+        const scoreHome=Number(f?.score?.home)
+        const scoreAway=Number(f?.score?.away)
+        const hasScore=Number.isFinite(scoreHome)&&Number.isFinite(scoreAway)
+        const elapsed=status==="halftime"?45:Math.max(0,Math.min(96,Number(f?.elapsed??0)))
+        const inPlay=live&&hasScore
+        const liveModel=inPlay||finished&&hasScore
+          ? inPlayProbabilities({minute:finished?96:elapsed,homeScore:scoreHome,awayScore:scoreAway,home:hm,away:am,preHome:homeP,preDraw:drawP,preAway:awayP,preBtts:bttsYes,finished})
+          : null
+        const currentHome=liveModel?.home??homeP
+        const currentDraw=liveModel?.draw??drawP
+        const currentAway=liveModel?.away??awayP
+        const currentBttsYes=liveModel?.bttsYes??bttsYes
+        const currentBttsNo=liveModel?.bttsNo??bttsNo
+        const side=currentHome>=currentAway&&currentHome>=.43?"home":currentAway>currentHome&&currentAway>=.40?"away":null
+        const winnerP=side==="home"?currentHome:side==="away"?currentAway:Math.max(currentHome,currentAway)
+        const bpick=currentBttsYes>=.56?"yes":currentBttsNo>=.56?"no":null
+        const bprob=bpick==="yes"?currentBttsYes:bpick==="no"?currentBttsNo:Math.max(currentBttsYes,currentBttsNo)
         const rel=wp.reliability
         const reasons=[ordinal(hm.position)+" vs "+ordinal(am.position)+" in "+competition,String(f.home.name)+" home win "+Math.round(hm.venueWinRate*100)+"% · "+String(f.away.name)+" away win "+Math.round(am.venueWinRate*100)+"%","Form "+String(f.home.name)+" "+hm.recentForm+" · "+String(f.away.name)+" "+am.recentForm]
         if(hh.matches>=2)reasons.push("H2H "+String(f.home.name)+" "+hh.homeWins+"W · "+hh.draws+"D · "+String(f.away.name)+" "+hh.awayWins+"W · BTTS "+Math.round(hh.bttsRate*100)+"%")
-        predictions.push({id:String(f.id),competition,kickoff:String(f.kickoff),home:String(f.home.name),away:String(f.away.name),homeCrest:f.home?.crest??null,awayCrest:f.away?.crest??null,homeStats:hm,awayStats:am,h2h:hh,probabilities:{homeWin:pct(homeP),draw:pct(drawP),awayWin:pct(awayP),bttsYes:pct(bttsYes),bttsNo:pct(bttsNo)},winnerPick:side?{side,team:side==="home"?String(f.home.name):String(f.away.name),loser:side==="home"?String(f.away.name):String(f.home.name),probability:pct(winnerP),grade:grade(winnerP,rel)}:null,bttsPick:bpick?{selection:bpick,probability:pct(bprob),grade:grade(.5+Math.abs(bp-.5),rel)}:null,reasons,oddsByBook:priceMap(pack.odds,String(f.home.name),String(f.away.name))})
+        if(inPlay){
+          const state=scoreHome===scoreAway?"level":scoreHome>scoreAway?String(f.home.name)+" leading":String(f.away.name)+" leading"
+          reasons.unshift("LIVE "+elapsed+"' · "+String(scoreHome)+"-"+String(scoreAway)+" · "+state+" · probabilities recalculated from score, time remaining and scoring rates")
+        }
+        predictions.push({id:String(f.id),competition,kickoff:String(f.kickoff),status,inPlay,finished,elapsed:inPlay?elapsed:null,score:hasScore?{home:scoreHome,away:scoreAway}:null,home:String(f.home.name),away:String(f.away.name),homeCrest:f.home?.crest??null,awayCrest:f.away?.crest??null,homeStats:hm,awayStats:am,h2h:hh,preMatchProbabilities:{homeWin:pct(homeP),draw:pct(drawP),awayWin:pct(awayP),bttsYes:pct(bttsYes),bttsNo:pct(bttsNo)},probabilities:{homeWin:pct(currentHome),draw:pct(currentDraw),awayWin:pct(currentAway),bttsYes:pct(currentBttsYes),bttsNo:pct(currentBttsNo)},inPlayModel:liveModel,winnerPick:side&&!finished?{side,team:side==="home"?String(f.home.name):String(f.away.name),loser:side==="home"?String(f.away.name):String(f.home.name),probability:pct(winnerP),grade:grade(winnerP,rel)}:null,bttsPick:bpick&&!finished?{selection:bpick,probability:pct(bprob),grade:grade(.5+Math.abs(currentBttsYes-.5),rel)}:null,reasons,oddsByBook:priceMap(pack.odds,String(f.home.name),String(f.away.name))})
       }
     }
-    const wins=predictions.filter(p=>p.winnerPick&&p.winnerPick.grade!=="D").map(p=>({prediction:p,market:p.winnerPick.side==="home"?"homeWin":"awayWin",label:p.winnerPick.team+" to win",probability:p.winnerPick.probability,grade:p.winnerPick.grade,reasons:p.reasons})).sort((a,b)=>b.probability-a.probability)
-    const btts=predictions.filter(p=>p.bttsPick&&p.bttsPick.grade!=="D").map(p=>({prediction:p,market:p.bttsPick.selection==="yes"?"bttsYes":"bttsNo",label:"BTTS "+(p.bttsPick.selection==="yes"?"Yes":"No"),probability:p.bttsPick.probability,grade:p.bttsPick.grade,reasons:p.reasons})).sort((a,b)=>b.probability-a.probability)
-    const mixed=predictions.map(p=>{const w=p.winnerPick?{prediction:p,market:p.winnerPick.side==="home"?"homeWin":"awayWin",label:p.winnerPick.team+" to win",probability:p.winnerPick.probability,grade:p.winnerPick.grade,reasons:p.reasons,score:(p.winnerPick.probability-.34)/.45}:null,b=p.bttsPick?{prediction:p,market:p.bttsPick.selection==="yes"?"bttsYes":"bttsNo",label:"BTTS "+(p.bttsPick.selection==="yes"?"Yes":"No"),probability:p.bttsPick.probability,grade:p.bttsPick.grade,reasons:p.reasons,score:(p.bttsPick.probability-.5)/.34}:null;return [w,b].filter(Boolean).sort((a:any,b:any)=>b.score-a.score)[0]??null}).filter(Boolean).sort((a:any,b:any)=>b.score-a.score)
+    const wins=predictions.filter(p=>!p.finished&&p.winnerPick&&p.winnerPick.grade!=="D").map(p=>({prediction:p,market:p.winnerPick.side==="home"?"homeWin":"awayWin",label:p.winnerPick.team+" to win",probability:p.winnerPick.probability,grade:p.winnerPick.grade,reasons:p.reasons})).sort((a,b)=>b.probability-a.probability)
+    const btts=predictions.filter(p=>!p.finished&&p.bttsPick&&p.bttsPick.grade!=="D").map(p=>({prediction:p,market:p.bttsPick.selection==="yes"?"bttsYes":"bttsNo",label:"BTTS "+(p.bttsPick.selection==="yes"?"Yes":"No"),probability:p.bttsPick.probability,grade:p.bttsPick.grade,reasons:p.reasons})).sort((a,b)=>b.probability-a.probability)
+    const mixed=predictions.filter(p=>!p.finished).map(p=>{const w=p.winnerPick?{prediction:p,market:p.winnerPick.side==="home"?"homeWin":"awayWin",label:p.winnerPick.team+" to win",probability:p.winnerPick.probability,grade:p.winnerPick.grade,reasons:p.reasons,score:(p.winnerPick.probability-.34)/.45}:null,b=p.bttsPick?{prediction:p,market:p.bttsPick.selection==="yes"?"bttsYes":"bttsNo",label:"BTTS "+(p.bttsPick.selection==="yes"?"Yes":"No"),probability:p.bttsPick.probability,grade:p.bttsPick.grade,reasons:p.reasons,score:(p.bttsPick.probability-.5)/.34}:null;return [w,b].filter(Boolean).sort((a:any,b:any)=>b.score-a.score)[0]??null}).filter(Boolean).sort((a:any,b:any)=>b.score-a.score)
     return NextResponse.json({ok:true,date,generatedAt:new Date().toISOString(),fixtureCount:predictions.length,predictions,slips:[
       buildSlip("fold-5","5-Fold Acca","Five strongest selections from five different matches.",mixed,"fold5",5),
       buildSlip("fold-7","7-Fold Acca","Seven strongest selections from seven different matches.",mixed,"fold7",7),
       buildSlip("fold-10","10-Fold Acca","Ten strongest selections from ten different matches.",mixed,"fold10",10)
-    ],methodology:{resultModel:"League position, PPG, recent five-match form, streaks, home/away PPG and win rate, goal difference and recent H2H with sample shrinkage, followed by walk-forward calibration.",bttsModel:"Home/away BTTS, scoring and conceding rates, overall BTTS and H2H BTTS.",pricing:"Each fold uses one selection per fixture. Exact combined odds are shown only when one preferred bookmaker prices every leg. Model fair combined odds are adjusted using the historical hit-rate of the same fold size rather than naive probability multiplication alone.",caution:"Model estimates, not guarantees. Team news and match events can materially change outcomes."}},{headers:{"Cache-Control":"public, s-maxage=900, stale-while-revalidate=900"}})
+    ],methodology:{resultModel:"League position, PPG, recent five-match form, streaks, home/away PPG and win rate, goal difference and recent H2H with sample shrinkage, followed by walk-forward calibration.",bttsModel:"Home/away BTTS, scoring and conceding rates, overall BTTS and H2H BTTS.",pricing:"Each fold uses one selection per fixture. Exact combined odds are shown only when one preferred bookmaker prices every leg. Model fair combined odds are adjusted using the historical hit-rate of the same fold size rather than naive probability multiplication alone.",inPlay:"Live matches are recalculated from the current score, match minute, remaining-time goal rates and the calibrated pre-match strength. Pre-match bookmaker prices are never reused as if they were live prices.",caution:"Model estimates, not guarantees. Team news, red cards, injuries and other in-play events can materially change outcomes."}},{headers:{"Cache-Control":predictions.some(p=>p.inPlay)?"public, s-maxage=20, stale-while-revalidate=20":"public, s-maxage=900, stale-while-revalidate=900"}})
   }catch(error){return NextResponse.json({ok:false,error:error instanceof Error?error.message:"Accumulator analysis failed"},{status:500})}
 }
