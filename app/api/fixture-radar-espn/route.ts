@@ -121,7 +121,10 @@ export async function GET(request: Request) {
   }
 
   const baselineSeason = "2026/27"
-  const allBaselines = await db.select().from(playerBaselines).where(and(eq(playerBaselines.season, baselineSeason), eq(playerBaselines.competition, competition))).orderBy(desc(playerBaselines.minutes))
+  const [allBaselines, previousBaselines] = await Promise.all([
+    db.select().from(playerBaselines).where(and(eq(playerBaselines.season, baselineSeason), eq(playerBaselines.competition, competition))).orderBy(desc(playerBaselines.minutes)),
+    db.select().from(playerBaselines).where(eq(playerBaselines.season, "2025/26")).orderBy(desc(playerBaselines.minutes)),
+  ])
   const matched: Array<{ player: CurrentPlayer; baseline: (typeof allBaselines)[number] }> = []
   if (currentPlayers.length) {
     for (const current of currentPlayers) {
@@ -148,13 +151,53 @@ export async function GET(request: Request) {
   const opponentNames = Array.from(new Set([...(teamAliases[home] ?? [home]), ...(teamAliases[away] ?? [away])]))
   const h2hRows = names.length ? await db.select().from(playerH2H).where(and(inArray(playerH2H.playerName, names), inArray(playerH2H.opponent, opponentNames))) : []
 
+  const previousSeasonFor = (baseline: (typeof allBaselines)[number]) => {
+    let rows = baseline.externalPlayerId
+      ? previousBaselines.filter((r) => r.externalPlayerId && r.externalPlayerId === baseline.externalPlayerId)
+      : []
+    if (!rows.length) {
+      const scored = previousBaselines.map((r) => ({ r, score: playerNameScore(baseline.playerName, r.playerName) })).filter((x) => x.score >= 90)
+      const best = scored.sort((a,b) => b.score - a.score || Number(b.r.minutes ?? 0) - Number(a.r.minutes ?? 0))[0]
+      rows = best ? previousBaselines.filter((r) => playerNameScore(best.r.playerName, r.playerName) >= 100) : []
+    }
+    if (!rows.length) return null
+    const sum = (key: keyof (typeof rows)[number]) => rows.reduce((s,r) => s + Number(r[key] ?? 0), 0)
+    const minutes = sum("minutes")
+    const clubs = Array.from(new Set(rows.map((r) => r.team).filter(Boolean)))
+    const competitions = Array.from(new Set(rows.map((r) => r.competition).filter(Boolean)))
+    const yellows = sum("yellowCards")
+    const fouls = sum("foulsCommitted")
+    const shots = sum("shots")
+    const sot = sum("shotsOnTarget")
+    return {
+      season: "2025/26",
+      clubs,
+      competitions,
+      appearances: sum("appearances"),
+      starts: sum("starts"),
+      minutes,
+      goals: sum("goals"),
+      assists: sum("assists"),
+      yellows,
+      redCards: sum("redCards"),
+      fouls,
+      foulsDrawn: sum("foulsDrawn"),
+      shots,
+      shotsOnTarget: sot,
+      fouls90: minutes > 0 ? Math.round(((fouls * 90) / minutes) * 100) / 100 : null,
+      cards90: minutes > 0 ? Math.round(((yellows * 90) / minutes) * 100) / 100 : null,
+      shots90: minutes > 0 ? Math.round(((shots * 90) / minutes) * 100) / 100 : null,
+      shotsOnTarget90: minutes > 0 ? Math.round(((sot * 90) / minutes) * 100) / 100 : null,
+    }
+  }
+
   const ranked = pool.map(({ player, baseline }) => {
     const opponent = player.currentTeam === home ? away : home, aliases = teamAliases[opponent] ?? [opponent]
     const h2h = h2hRows.filter((row) => row.playerName === baseline.playerName && aliases.includes(row.opponent))
     const h2hYellows = h2h.filter((row) => row.yellowCard === true).length, h2hFouls = h2h.reduce((sum, row) => sum + Number(row.foulsCommitted ?? 0), 0)
     const cards90 = Number(baseline.cardsPer90 ?? 0), fouls90 = Number(baseline.foulsPer90 ?? 0), yellows = Number(baseline.yellowCards ?? 0), minutes = Number(baseline.minutes ?? 0), starts = Number(baseline.starts ?? 0), apps = Number(baseline.appearances ?? 0)
     const score = scoreCandidate({ cards90, yellows, fouls90, minutes, starts, apps, h2hYellows, h2hFouls, confirmed })
-    return { name: player.name, dbName: baseline.playerName, team: player.currentTeam, dbTeam: baseline.team, historicalCompetition: baseline.competition, baselineSeason, position: player.position ?? baseline.position, yellows, redCards: Number(baseline.redCards ?? 0), goals: Number(baseline.goals ?? 0), assists: Number(baseline.assists ?? 0), shots: Number(baseline.shots ?? 0), shotsOnTarget: Number(baseline.shotsOnTarget ?? 0), cards90, fouls90, fouled90: minutes > 0 ? Math.round(((Number(baseline.foulsDrawn ?? 0) * 90) / minutes) * 100) / 100 : null, shots90: baseline.shotsPer90 == null ? null : Number(baseline.shotsPer90), shotsOnTarget90: baseline.shotsOnTargetPer90 == null ? null : Number(baseline.shotsOnTargetPer90), appearances: apps, starts, minutes, startLikelihood: confirmed ? 1 : startProbability(starts, apps), sampleLabel: sampleLabel(minutes, starts, apps, confirmed), h2hYellows, h2hFouls, score, band: band(score) }
+    return { name: player.name, dbName: baseline.playerName, team: player.currentTeam, dbTeam: baseline.team, historicalCompetition: baseline.competition, baselineSeason, previousSeason: previousSeasonFor(baseline), position: player.position ?? baseline.position, yellows, redCards: Number(baseline.redCards ?? 0), goals: Number(baseline.goals ?? 0), assists: Number(baseline.assists ?? 0), shots: Number(baseline.shots ?? 0), shotsOnTarget: Number(baseline.shotsOnTarget ?? 0), cards90, fouls90, fouled90: minutes > 0 ? Math.round(((Number(baseline.foulsDrawn ?? 0) * 90) / minutes) * 100) / 100 : null, shots90: baseline.shotsPer90 == null ? null : Number(baseline.shotsPer90), shotsOnTarget90: baseline.shotsOnTargetPer90 == null ? null : Number(baseline.shotsOnTargetPer90), appearances: apps, starts, minutes, startLikelihood: confirmed ? 1 : startProbability(starts, apps), sampleLabel: sampleLabel(minutes, starts, apps, confirmed), h2hYellows, h2hFouls, score, band: band(score) }
   }).sort((a, b) => b.score - a.score || b.minutes - a.minutes)
 
   const officialName = summary?.gameInfo?.officials?.[0]?.displayName ?? summary?.gameInfo?.officials?.[0]?.fullName ?? null
