@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { GET as fixturesGET } from "../fixtures/route"
 import { GET as scorecardGET } from "../fixture-scorecard/route"
+import { GET as matchAccaGET } from "../match-acca/route"
 import { gradeHistoricalRecommendations, recommendationTrackingSummary, saveRecommendationSnapshots } from "@/lib/recommendation-tracking"
 import recommendationBacktest from "@/data/model/recommendation-backtest.json"
 import calibrationSnapshot from "@/data/model/calibration.json"
@@ -12,6 +13,7 @@ export const revalidate=120
 type Competition="Premier League"|"Championship"|"League One"|"League Two"|"International"
 type Fixture={
   id:string;competition:Competition;tournament?:string;kickoff:string;status?:string;
+  score?:{home:number|null;away:number|null};elapsed?:number|null;
   home:{name:string};away:{name:string};lineupStatus?:"expected"|"confirmed"|"unavailable"
 }
 type MarketStatus="available"|"unavailable"|"unknown"
@@ -445,6 +447,42 @@ export async function GET(request:Request){
       }
     }
 
+    const liveFixtures=[...fixtureMap.values()]
+      .filter(f=>{
+        const status=String(f.status??"").toLowerCase()
+        return status==="live"||status==="halftime"||status==="in progress"
+      })
+      .sort((a,b)=>a.kickoff.localeCompare(b.kickoff))
+
+    let liveMatches:any[]=[]
+    try{
+      const liveResponse=await matchAccaGET(new Request("http://local/api/match-acca?date="+londonDate(0)+(refresh?"&refresh="+Date.now():"")))
+      const liveData=liveResponse.ok?await liveResponse.json():null
+      const byId=new Map<string,any>((liveData?.predictions??[]).filter((p:any)=>p?.inPlay).map((p:any)=>[String(p.id),p]))
+      liveMatches=liveFixtures.map(f=>{
+        const model=byId.get(String(f.id))
+        if(model)return model
+        const home=Number(f.score?.home),away=Number(f.score?.away)
+        const hasScore=Number.isFinite(home)&&Number.isFinite(away)
+        const bttsSettled=Boolean(hasScore&&home>0&&away>0)
+        return {
+          id:String(f.id),competition:f.competition,kickoff:f.kickoff,status:f.status??"live",
+          inPlay:true,elapsed:f.elapsed??null,score:hasScore?{home,away}:null,
+          home:f.home.name,away:f.away.name,probabilities:null,winnerPick:null,bttsPick:null,bttsSettled,
+          reasons:["Live score available. The live win-probability model is not currently available for this competition."],
+        }
+      })
+    }catch{
+      liveMatches=liveFixtures.map(f=>({
+        id:String(f.id),competition:f.competition,kickoff:f.kickoff,status:f.status??"live",
+        inPlay:true,elapsed:f.elapsed??null,
+        score:f.score??null,home:f.home.name,away:f.away.name,
+        probabilities:null,winnerPick:null,bttsPick:null,
+        bttsSettled:Boolean((f.score?.home??0)>0&&(f.score?.away??0)>0),
+        reasons:["Live score available while the live probability refresh is temporarily unavailable."],
+      }))
+    }
+
     const upcoming=[...fixtureMap.values()]
       .filter(f=>{
         const status=String(f.status??"").toLowerCase()
@@ -530,6 +568,7 @@ export async function GET(request:Request){
       updatedAt:new Date().toISOString(),
       fixturesScanned:upcoming.length,
       recommendations,
+      liveMatches,
       targetOddsGames,
       tracking,
       staleFallback:false,
@@ -538,6 +577,7 @@ export async function GET(request:Request){
         cache:"Recommended scans today only and is served from one server endpoint with a five-minute shared-cache target; manual refresh bypasses the normal scan cadence.",
         tracking:"Recommendations are saved before kickoff and graded later from imported player-match data. Model-only recommendations remain visible when bookmaker verification is missing; only verified same-bookmaker markets are marked placeable.",
         targetOdds:"Select a match, then 5/1 through 50/1 same-game targets search the strongest recommended legs for that fixture only. Exact individual same-bookmaker prices are preferred as a reference, but the final Bet Builder quote can differ because of correlation.",
+        liveRecommended:"Matches remain on Recommended after kick-off. Live rows use the current score and minute with recalculated match-result and unsettled BTTS probabilities; pre-match player-prop prices are not relabelled as live prices.",
         liveFeedback:liveTopSample>=50
           ? "Live top-pick calibration is active. Current 30-day reliability multiplier: "+liveReliabilityFactor.toFixed(3)
           : "Live top-pick calibration activates after 50 graded top-pick legs.",
