@@ -292,8 +292,8 @@ export default function HomePage(){
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-2 text-emerald-300"><Sparkles className="size-4"/><span className="text-[0.65rem] font-black uppercase tracking-[0.18em]">Match Edge</span></div>
-            <h1 className="mt-1 text-2xl font-black tracking-tight">Bet Builder</h1>
-            <p className="mt-1 text-xs text-white/55">Confirmed-lineup picks · model probability · live price value</p>
+            <h1 className="mt-1 text-2xl font-black tracking-tight">Matches</h1>
+            <p className="mt-1 text-xs text-white/55">Browse fixtures · lineup status · match analysis</p>
           </div>
           <button onClick={()=>void refresh(true)} disabled={loadingFixtures} className="flex shrink-0 items-center gap-2 rounded-xl bg-emerald-400 px-3 py-2.5 text-xs font-black text-emerald-950 shadow-lg shadow-emerald-500/10 disabled:opacity-60">
             <RefreshCw className={"size-4 "+(loadingFixtures?"animate-spin":"")}/>Refresh
