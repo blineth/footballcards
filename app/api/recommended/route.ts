@@ -450,7 +450,15 @@ export async function GET(request:Request){
     const liveFixtures=[...fixtureMap.values()]
       .filter(f=>{
         const status=String(f.status??"").toLowerCase()
-        return status==="live"||status==="halftime"||status==="in progress"
+        const explicitLive=["live","halftime","in progress","1h","2h","et","extra time"].includes(status)
+        const explicitFinished=["finished","ft","full time","after extra time","aet"].includes(status)
+        const cancelled=["postponed","cancelled","canceled","abandoned","suspended"].includes(status)
+        const home=Number(f.score?.home),away=Number(f.score?.away)
+        const hasScore=Number.isFinite(home)&&Number.isFinite(away)
+        const kickoffMs=new Date(f.kickoff).getTime()
+        const mins=Number.isFinite(kickoffMs)?Math.floor((Date.now()-kickoffMs)/60000):-1
+        const inferredLive=hasScore&&!explicitFinished&&!cancelled&&mins>=0&&mins<=180
+        return explicitLive||inferredLive
       })
       .sort((a,b)=>a.kickoff.localeCompare(b.kickoff))
 
@@ -458,9 +466,11 @@ export async function GET(request:Request){
     try{
       const liveResponse=await matchAccaGET(new Request("http://local/api/match-acca?date="+londonDate(0)+(refresh?"&refresh="+Date.now():"")))
       const liveData=liveResponse.ok?await liveResponse.json():null
-      const byId=new Map<string,any>((liveData?.predictions??[]).filter((p:any)=>p?.inPlay).map((p:any)=>[String(p.id),p]))
+      const livePredictions=(liveData?.predictions??[]).filter((p:any)=>p?.inPlay)
+      const byId=new Map<string,any>(livePredictions.map((p:any)=>[String(p.id),p]))
+      const byTeams=new Map<string,any>(livePredictions.map((p:any)=>[normName(String(p.home??""))+"|"+normName(String(p.away??"")),p]))
       liveMatches=liveFixtures.map(f=>{
-        const model=byId.get(String(f.id))
+        const model=byId.get(String(f.id))??byTeams.get(normName(f.home.name)+"|"+normName(f.away.name))
         if(model)return model
         const home=Number(f.score?.home),away=Number(f.score?.away)
         const hasScore=Number.isFinite(home)&&Number.isFinite(away)
@@ -566,7 +576,7 @@ export async function GET(request:Request){
     const payload={
       ok:true,
       updatedAt:new Date().toISOString(),
-      fixturesScanned:upcoming.length,
+      fixturesScanned:upcoming.length+liveFixtures.length,
       recommendations,
       liveMatches,
       targetOddsGames,
