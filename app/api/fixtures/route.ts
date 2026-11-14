@@ -7,9 +7,11 @@ import { NextResponse } from "next/server"
 export const dynamic = "force-dynamic"
 export const revalidate = 0
 
-const ESPN_LEAGUES: Record<Competition, string> = {
-  "Premier League": "eng.1",
-  Championship: "eng.2",
+const ESPN_LEAGUES: Record<Competition, string[]> = {
+  "Premier League": ["eng.1"],
+  Championship: ["eng.2"],
+  "League One": ["eng.3"],
+  International: ["uefa.nations", "fifa.friendly", "fifa.world", "fifa.worldq.uefa", "uefa.euro", "uefa.euroq"],
 }
 
 function mapEspnStatus(value: string | undefined): MatchStatus {
@@ -24,45 +26,51 @@ function mapEspnStatus(value: string | undefined): MatchStatus {
 
 async function espnFixtures(date: string): Promise<Fixture[]> {
   const ymd = date.replaceAll("-", "")
-  const all = await Promise.all(
-    (Object.entries(ESPN_LEAGUES) as [Competition, string][]).map(async ([competition, slug]) => {
-      const response = await fetch(
-        `https://site.api.espn.com/apis/site/v2/sports/soccer/${slug}/scoreboard?dates=${ymd}`,
-        { cache: "no-store", signal: AbortSignal.timeout(8000), headers: { accept: "application/json" } },
-      )
-      if (!response.ok) throw new Error(`ESPN ${slug} ${response.status}`)
-      const data = await response.json()
-      return (data?.events ?? []).map((event: any): Fixture | null => {
-        const contest = event?.competitions?.[0]
-        const competitors = contest?.competitors ?? []
-        const home = competitors.find((row: any) => row.homeAway === "home")
-        const away = competitors.find((row: any) => row.homeAway === "away")
-        if (!home?.team || !away?.team) return null
-        const statusName = event?.status?.type?.name ?? event?.status?.type?.description ?? ""
-        return {
-          id: String(event.id),
-          competition,
-          kickoff: String(event.date ?? contest?.date ?? ""),
-          status: mapEspnStatus(statusName),
-          home: {
-            id: String(home.team.id ?? ""),
-            name: String(home.team.displayName ?? home.team.name ?? ""),
-            shortName: home.team.shortDisplayName ?? undefined,
-            crest: home.team.logo ?? undefined,
-          },
-          away: {
-            id: String(away.team.id ?? ""),
-            name: String(away.team.displayName ?? away.team.name ?? ""),
-            shortName: away.team.shortDisplayName ?? undefined,
-            crest: away.team.logo ?? undefined,
-          },
-          venue: contest?.venue?.fullName ?? null,
-          referee: null,
-          lineupStatus: "expected",
-        }
-      }).filter((row: Fixture | null): row is Fixture => Boolean(row))
-    }),
-  )
+  const requests: Array<Promise<Fixture[]>> = []
+  for (const [competition, slugs] of Object.entries(ESPN_LEAGUES) as [Competition, string[]][]) {
+    for (const slug of slugs) {
+      requests.push((async () => {
+        const response = await fetch(
+          `https://site.api.espn.com/apis/site/v2/sports/soccer/${slug}/scoreboard?dates=${ymd}&limit=300`,
+          { cache: "no-store", signal: AbortSignal.timeout(8000), headers: { accept: "application/json" } },
+        )
+        if (!response.ok) return []
+        const data = await response.json()
+        const tournament = String(data?.leagues?.[0]?.name ?? data?.leagues?.[0]?.abbreviation ?? competition)
+        return (data?.events ?? []).map((event: any): Fixture | null => {
+          const contest = event?.competitions?.[0]
+          const competitors = contest?.competitors ?? []
+          const home = competitors.find((row: any) => row.homeAway === "home")
+          const away = competitors.find((row: any) => row.homeAway === "away")
+          if (!home?.team || !away?.team) return null
+          const statusName = event?.status?.type?.name ?? event?.status?.type?.description ?? ""
+          return {
+            id: `${slug}:${String(event.id)}`,
+            competition,
+            tournament,
+            kickoff: String(event.date ?? contest?.date ?? ""),
+            status: mapEspnStatus(statusName),
+            home: {
+              id: String(home.team.id ?? ""),
+              name: String(home.team.displayName ?? home.team.name ?? ""),
+              shortName: home.team.shortDisplayName ?? undefined,
+              crest: home.team.logo ?? undefined,
+            },
+            away: {
+              id: String(away.team.id ?? ""),
+              name: String(away.team.displayName ?? away.team.name ?? ""),
+              shortName: away.team.shortDisplayName ?? undefined,
+              crest: away.team.logo ?? undefined,
+            },
+            venue: contest?.venue?.fullName ?? null,
+            referee: null,
+            lineupStatus: "expected",
+          }
+        }).filter((row: Fixture | null): row is Fixture => Boolean(row))
+      })())
+    }
+  }
+  const all = await Promise.all(requests)
   return all.flat()
 }
 
@@ -124,7 +132,7 @@ async function fixturesForDate(date: string) {
 }
 
 function groupFixtures(fixtures: Fixture[]) {
-  const leagues: FixturesResponse["leagues"] = { "Premier League": [], Championship: [] }
+  const leagues: FixturesResponse["leagues"] = { "Premier League": [], Championship: [], "League One": [], International: [] }
   for (const f of fixtures) {
     const league = f.competition as Competition
     if (leagues[league]) leagues[league].push(f)
@@ -145,7 +153,7 @@ export async function GET(request: Request) {
     connected: true,
     updatedAt: new Date().toISOString(),
     date: requestedDate,
-    leagues: { "Premier League": [], Championship: [] },
+    leagues: { "Premier League": [], Championship: [], "League One": [], International: [] },
   }
 
   try {
