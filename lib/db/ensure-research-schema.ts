@@ -13,6 +13,8 @@ export function ensureResearchSchema() {
 
   migration = (async () => {
     await pool.query(`ALTER TABLE player_h2h ADD COLUMN IF NOT EXISTS venue text`)
+    await pool.query(`ALTER TABLE player_h2h ADD COLUMN IF NOT EXISTS position text`)
+    await pool.query(`ALTER TABLE player_h2h ADD COLUMN IF NOT EXISTS starter boolean`)
     await pool.query(`ALTER TABLE player_h2h ADD COLUMN IF NOT EXISTS shots integer`)
     await pool.query(`ALTER TABLE player_h2h ADD COLUMN IF NOT EXISTS shots_on_target integer`)
     await pool.query(`ALTER TABLE player_h2h ADD COLUMN IF NOT EXISTS goals integer`)
