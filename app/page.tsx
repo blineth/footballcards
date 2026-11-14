@@ -44,7 +44,7 @@ type H2HPlayer = { name:string;team:string;opponent:string;position?:string|null
 type H2HMatch = { id:string;date:string;competition:string;home:string;away:string;homeGoals:number;awayGoals:number;referee?:string|null;players:H2HPlayer[] }
 type H2HResponse = { ok:boolean;source?:string;period?:string;matches?:H2HMatch[];error?:string }
 type BacktestMetric = {testedFixtures:number;eligiblePlayerRows:number;baseRate:number;top1:{selections:number;hits:number;hitRate:number;lift:number|null};top3:{selections:number;hits:number;hitRate:number;lift:number|null}}
-type BacktestResponse = {ok:boolean;competition?:string;season?:string;methodology?:string;warning?:string;fixturesInDatabase?:number;playerMatchRows?:number;metrics?:Record<"card"|"foul1"|"foul2"|"sot1",BacktestMetric>;error?:string}
+type BacktestResponse = {ok:boolean;competition?:string;season?:string;methodology?:string;warning?:string;fixturesInDatabase?:number;playerMatchRows?:number;dataQuality?:{playedRows:number;positionRows:number;positionCoverage:number;starterRows:number};metrics?:Record<"card"|"foul1"|"foul2"|"sot1",BacktestMetric>;error?:string}
 
 function londonDate(){
   const parts=new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/London",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date())
@@ -338,7 +338,7 @@ function BacktestPanel({data,loading,onRefresh}:{data:BacktestResponse|null;load
     <div className="flex items-start justify-between gap-3 border-b border-border p-4"><div><p className="font-black">Championship signal backtest</p><p className="mt-1 text-xs text-muted-foreground">Walk-forward only · no future-match leakage</p></div><button onClick={onRefresh} className="rounded-lg border bg-card p-2"><RefreshCw className={`size-4 ${loading?"animate-spin":""}`}/></button></div>
     {!data&&loading?<div className="p-5 text-center text-xs text-muted-foreground">Running backtest…</div>:data?.error?<Unavailable text={data.error}/>:data?.metrics?<div className="p-3">
       <div className="grid grid-cols-2 gap-2">{Object.entries(data.metrics).map(([key,m])=><div key={key} className="rounded-xl border border-border bg-secondary/20 p-3"><p className="text-xs font-black">{labels[key]??key}</p><p className="mt-2 font-mono text-lg font-black">{Math.round(m.top3.hitRate*100)}%</p><p className="text-[0.62rem] text-muted-foreground">Top 3 hit rate · {m.top3.hits}/{m.top3.selections}</p><p className="mt-1 text-[0.62rem] text-muted-foreground">All eligible: {Math.round(m.baseRate*100)}%{m.top3.lift!=null?` · ${m.top3.lift.toFixed(2)}× lift`:""}</p></div>)}</div>
-      <p className="mt-3 text-[0.65rem] text-muted-foreground">{data.fixturesInDatabase??0} fixtures · {data.playerMatchRows??0} player-match rows. {data.warning}</p>
+      <p className="mt-3 text-[0.65rem] text-muted-foreground">{data.fixturesInDatabase??0} fixtures · {data.playerMatchRows??0} player-match rows{data.dataQuality?` · ${Math.round(data.dataQuality.positionCoverage*100)}% of played rows have a recorded match role`:""}. {data.warning}</p>
     </div>:<Unavailable text="No backtest results yet."/>}
   </section>
 }
