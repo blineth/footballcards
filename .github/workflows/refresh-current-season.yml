@@ -42,27 +42,31 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests
 
-      - name: Wait for this commit to be live on Vercel
-        shell: bash
-        run: |
-          for i in {1..40}; do
-            BODY="$(curl -fsS https://footballcards-wheat.vercel.app/api/version || true)"
-            echo "$BODY"
-            if echo "$BODY" | grep -q "$GITHUB_SHA"; then
-              echo "Production is on $GITHUB_SHA"
-              exit 0
-            fi
-            sleep 15
-          done
-          echo "Production did not reach $GITHUB_SHA in time"
-          exit 1
-
-      - name: Scrape current-season match stats and sync Neon
-        env:
-          SYNC_URL: https://footballcards-wheat.vercel.app
+      - name: Scrape current-season match stats to repository snapshot
         run: python scripts/backfill-current-season-espn.py
 
+      - name: Check whether production can accept database sync
+        id: live_check
+        shell: bash
+        run: |
+          BODY="$(curl -fsS https://footballcards-wheat.vercel.app/api/version || true)"
+          echo "$BODY"
+          if echo "$BODY" | grep -q "$GITHUB_SHA"; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+            echo "Production is on $GITHUB_SHA; Neon/international sync can run."
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "Production is not on this commit; keeping the refreshed repository snapshot and skipping live sync."
+          fi
+
+      - name: Sync refreshed current-season snapshot to Neon
+        if: steps.live_check.outputs.ready == 'true'
+        env:
+          SYNC_URL: https://footballcards-wheat.vercel.app
+        run: python scripts/backfill-current-season-espn.py --sync-only
+
       - name: Refresh international match history and linked player profiles
+        if: steps.live_check.outputs.ready == 'true'
         env:
           SYNC_URL: https://footballcards-wheat.vercel.app
         shell: bash
@@ -155,11 +159,11 @@ jobs:
           assert sum(int(r.get("fouls_committed") or 0) for r in h2h) > 0
           assert sum(1 for r in h2h if str(r.get("yellow_card")).lower() in {"true", "1"}) > 0
           assert report["totals"]["shots_on_target"] > 0
-          assert "neon_sync" in report
           international = json.load((Path("data/international") / "player_profiles.json").open(encoding="utf-8"))
           assert int(international.get("playerCount") or 0) > 0
           assert int((international.get("domesticCoverage") or {}).get("current") or 0) > 0
           print("Validation passed:", report["totals"])
+          print("Neon sync:", report.get("neon_sync", "skipped until production catches up"))
           print("International linked profiles:", international.get("playerCount"), international.get("domesticCoverage"))
           PY
 
