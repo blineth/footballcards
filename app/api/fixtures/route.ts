@@ -14,6 +14,14 @@ const ESPN_LEAGUES: Record<Competition, string[]> = {
   International: ["uefa.nations", "fifa.friendly", "fifa.world", "fifa.worldq.uefa", "uefa.euro", "uefa.euroq"],
 }
 
+function londonYmd(value: string) {
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return ""
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(d)
+  const get = (type:string) => parts.find(p=>p.type===type)?.value ?? ""
+  return `${get("year")}-${get("month")}-${get("day")}`
+}
+
 function mapEspnStatus(value: string | undefined): MatchStatus {
   const v = String(value ?? "").toLowerCase()
   if (v.includes("in") || v.includes("live")) return "live"
@@ -44,11 +52,13 @@ async function espnFixtures(date: string): Promise<Fixture[]> {
           const away = competitors.find((row: any) => row.homeAway === "away")
           if (!home?.team || !away?.team) return null
           const statusName = event?.status?.type?.name ?? event?.status?.type?.description ?? ""
+          const kickoff = String(event.date ?? contest?.date ?? "")
+          if (londonYmd(kickoff) !== date) return null
           return {
             id: `${slug}:${String(event.id)}`,
             competition,
             tournament,
-            kickoff: String(event.date ?? contest?.date ?? ""),
+            kickoff,
             status: mapEspnStatus(statusName),
             home: {
               id: String(home.team.id ?? ""),
