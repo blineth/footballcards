@@ -1,4 +1,7 @@
 import { NextResponse } from "next/server"
+import { db, isDatabaseConfigured } from "@/lib/db"
+import { ensureResearchSchema } from "@/lib/db/ensure-research-schema"
+import { oddsSnapshots } from "@/lib/db/schema"
 
 export const dynamic = "force-dynamic"
 export const revalidate = 0
@@ -30,6 +33,32 @@ function seasonFor(date: string) {
   const month = d.getUTCMonth()
   return String(month >= 7 ? year : year - 1)
 }
+async function saveSnapshots(input:{date:string;home:string;away:string;competition:string;bookmaker?:string;source?:string|null;capturedAt?:string|null;selections:Array<{market:string;kind:string;label:string;odd:number|null}>}) {
+  if (!isDatabaseConfigured || !input.selections.length) return
+  await ensureResearchSchema()
+  const now = new Date()
+  const bucket = new Date(Math.floor(now.getTime() / 300000) * 300000)
+  const captured = input.capturedAt ? new Date(input.capturedAt) : now
+  const capturedAt = Number.isNaN(captured.getTime()) ? now : captured
+  const rows = input.selections
+    .filter(s => s.odd != null && Number.isFinite(Number(s.odd)) && Number(s.odd) > 1)
+    .map(s => ({
+      competition: input.competition,
+      fixtureDate: input.date,
+      homeTeam: input.home,
+      awayTeam: input.away,
+      bookmaker: input.bookmaker ?? "Unknown",
+      source: input.source ?? null,
+      market: s.market,
+      kind: s.kind,
+      label: s.label,
+      odds: String(Number(s.odd)),
+      snapshotBucket: bucket,
+      capturedAt,
+    }))
+  if (rows.length) await db.insert(oddsSnapshots).values(rows).onConflictDoNothing()
+}
+
 function marketKind(name: string) {
   const n = norm(name)
   if (/shot.*target|target.*shot/.test(n)) return "sot"
@@ -177,7 +206,10 @@ export async function GET(request: Request) {
     if (ukKey) {
       try {
         const fresh = await fromUkOdds({ date, home, away, key: ukKey })
-        if (fresh) return NextResponse.json({ ...fresh, priceAvailable: fresh.selections.length > 0 })
+        if (fresh) {
+          await saveSnapshots({ date, home, away, competition, bookmaker:fresh.bookmaker, source:fresh.source, capturedAt:fresh.capturedAt, selections:fresh.selections })
+          return NextResponse.json({ ...fresh, priceAvailable: fresh.selections.length > 0 })
+        }
       } catch (error) {
         console.log("[bet-builder-odds] UK Odds fallback:", error instanceof Error ? error.message : error)
       }
@@ -186,7 +218,10 @@ export async function GET(request: Request) {
     const apiKey = process.env.API_FOOTBALL_KEY
     if (apiKey) {
       const fallback = await fromApiFootball({ date, home, away, competition, key: apiKey })
-      if (fallback) return NextResponse.json({ ...fallback, priceAvailable: fallback.selections.length > 0 })
+      if (fallback) {
+        await saveSnapshots({ date, home, away, competition, bookmaker:fallback.bookmaker, source:fallback.source, capturedAt:fallback.capturedAt, selections:fallback.selections })
+        return NextResponse.json({ ...fallback, priceAvailable: fallback.selections.length > 0 })
+      }
     }
 
     return NextResponse.json({
