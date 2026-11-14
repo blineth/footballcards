@@ -121,7 +121,7 @@ async function addDeepEvidence(data: any, home: string, away: string, competitio
   const allNames = Array.from(new Set([...candidateNames, ...predictedNames])) as string[]
   const [baselines, matchRows, refereeRows] = await Promise.all([
     db.select().from(playerBaselines).where(eq(playerBaselines.season, "2026/27")),
-    db.select().from(playerH2H).where(and(inArray(playerH2H.playerName, candidateNames), eq(playerH2H.competition, competition))),
+    db.select().from(playerH2H).where(and(inArray(playerH2H.playerName, allNames), eq(playerH2H.competition, competition))),
     refereeName ? db.select().from(playerRefereeHistory).where(and(inArray(playerRefereeHistory.playerName, candidateNames), eq(playerRefereeHistory.refereeName, refereeName))) : Promise.resolve([]),
   ])
 
@@ -134,10 +134,29 @@ async function addDeepEvidence(data: any, home: string, away: string, competitio
       })
       .sort((a, z) => Number(z.minutes ?? 0) - Number(a.minutes ?? 0))[0]
   }
-  const foulDrawn90 = (name: string) => {
+  const foulDrawnProfile = (name: string) => {
     const baseline = baselineForName(name)
     const minutes = Number(baseline?.minutes ?? 0)
-    return minutes > 0 ? Math.round(((Number(baseline?.foulsDrawn ?? 0) * 90) / minutes) * 100) / 100 : null
+    const season = minutes > 0 ? (Number(baseline?.foulsDrawn ?? 0) * 90) / minutes : null
+    const actualName=baseline?.playerName ?? name
+    const recent=matchRows
+      .filter((row:any)=>normalisePredictedName(row.playerName)===normalisePredictedName(actualName))
+      .sort((a:any,b:any)=>String(b.matchDate).localeCompare(String(a.matchDate)))
+      .slice(0,5)
+    const recentMinutes=recent.reduce((sum:any,row:any)=>sum+Number(row.minutes??0),0)
+    const recentDrawn=recent.reduce((sum:any,row:any)=>sum+Number(row.foulsDrawn??0),0)
+    const recent90=recentMinutes>0?(recentDrawn*90)/recentMinutes:null
+    const pressure=season==null
+      ? recent90
+      : recent90==null
+        ? season
+        : season*0.62+recent90*0.38
+    return {
+      seasonFouled90:season==null?null:Math.round(season*100)/100,
+      recentFouled90:recent90==null?null:Math.round(recent90*100)/100,
+      pressureFouled90:pressure==null?null:Math.round(pressure*100)/100,
+      recentGames:recent.length,
+    }
   }
 
   let enriched = data.candidates.map((candidate: any) => {
@@ -156,7 +175,10 @@ async function addDeepEvidence(data: any, home: string, away: string, competitio
     const refereeCardRate = refMatches > 0 ? Math.round((refYellows / refMatches) * 100) / 100 : null
     const predictedTeam = predicted ? Object.entries(predicted.teams).find(([teamName]) => teamMatch(teamName, candidate.team))?.[1] : undefined
     const predictedPlayer = getPredictedPlayer(predictedTeam, candidate.name) ?? getPredictedPlayer(predictedTeam, candidate.dbName)
-    return { ...candidate, predictedRole: predictedPlayer?.role ?? null, predictedStarter: Boolean(predictedPlayer), predictedLineupConfidence: predictedTeam?.confidence ?? null, predictedFormation: predictedTeam?.formation ?? null, fouled90, recentFive: { games: recent.length, minutes: recentMinutes, fouls: recentFouls, yellows: recentYellows, fouls90: recentFouls90, matches: recent.map((row) => ({ matchDate: String(row.matchDate), opponent: row.opponent, minutes: row.minutes, foulsCommitted: row.foulsCommitted, foulsDrawn: row.foulsDrawn, yellowCard: row.yellowCard })) }, refereePlayer: ref ? { matches: refMatches, yellows: refYellows, fouls: Number(ref.foulsCommitted ?? 0), cardRate: refereeCardRate } : null }
+    const recentFoulsDrawn=recent.reduce((sum,row)=>sum+Number(row.foulsDrawn??0),0)
+    const recentFouled90=recentMinutes>0?Math.round(((recentFoulsDrawn*90)/recentMinutes)*100)/100:null
+    const pressureFouled90=fouled90==null?recentFouled90:recentFouled90==null?fouled90:Math.round((fouled90*0.62+recentFouled90*0.38)*100)/100
+    return { ...candidate, predictedRole: predictedPlayer?.role ?? null, predictedStarter: Boolean(predictedPlayer), predictedLineupConfidence: predictedTeam?.confidence ?? null, predictedFormation: predictedTeam?.formation ?? null, fouled90, recentFouled90, pressureFouled90, recentFive: { games: recent.length, minutes: recentMinutes, fouls: recentFouls, foulsDrawn:recentFoulsDrawn, yellows: recentYellows, fouls90: recentFouls90, fouled90:recentFouled90, matches: recent.map((row) => ({ matchDate: String(row.matchDate), opponent: row.opponent, minutes: row.minutes, foulsCommitted: row.foulsCommitted, foulsDrawn: row.foulsDrawn, yellowCard: row.yellowCard })) }, refereePlayer: ref ? { matches: refMatches, yellows: refYellows, fouls: Number(ref.foulsCommitted ?? 0), cardRate: refereeCardRate } : null }
   })
 
   enriched = enriched.map((candidate: any) => {
@@ -167,20 +189,23 @@ async function addDeepEvidence(data: any, home: string, away: string, competitio
       const desired = directOpponentRoles(candidate.predictedRole)
       if (opponentTeamEntry && desired.length) {
         const direct = opponentTeamEntry[1].players.filter((player) => desired.includes(player.role.toUpperCase()))
-          .map((player) => ({ name: player.name, role: player.role, fouled90: foulDrawn90(player.name), confidence: opponentTeamEntry[1].confidence }))
+          .map((player) => {
+            const profile=foulDrawnProfile(player.name)
+            return { name: player.name, role: player.role, fouled90: profile.pressureFouled90, ...profile, confidence: opponentTeamEntry[1].confidence }
+          })
           .sort((a, b) => Number(b.fouled90 ?? -1) - Number(a.fouled90 ?? -1))[0]
         if (direct) { matchup = direct; matchupType = "direct-predicted-role" }
       }
     }
     if (!matchup) {
       const opposing = enriched.filter((other: any) => !teamMatch(other.team, candidate.team) && compatibleRole(candidate.position, other.position))
-      matchup = opposing.sort((a: any, b: any) => Number(b.fouled90 ?? -1) - Number(a.fouled90 ?? -1))[0] ?? null
+      matchup = opposing.sort((a: any, b: any) => Number(b.pressureFouled90 ?? b.fouled90 ?? -1) - Number(a.pressureFouled90 ?? a.fouled90 ?? -1))[0] ?? null
     }
 
     const repeatedH2H = Number(candidate.h2hYellows ?? 0)
     const recentYC = Number(candidate.recentFive?.yellows ?? 0)
     const recentF90 = Number(candidate.recentFive?.fouls90 ?? 0)
-    const matchupPressure = Number(matchup?.fouled90 ?? 0)
+    const matchupPressure = Number(matchup?.pressureFouled90 ?? matchup?.fouled90 ?? 0)
     const refPlayerRate = Number(candidate.refereePlayer?.cardRate ?? 0)
     const starterBoost = candidate.predictedStarter ? 3 : 0
     const directMatchupBoost = matchupType === "direct-predicted-role" ? Math.min(8, matchupPressure * 3) : Math.min(5, matchupPressure * 2)
@@ -197,7 +222,7 @@ async function addDeepEvidence(data: any, home: string, away: string, competitio
     if (matchup && matchupType === "direct-predicted-role") reasons.push(`${candidate.predictedRole} likely facing ${matchup.role} ${matchup.name}${matchupPressure > 0 ? ` (${matchupPressure.toFixed(2)} fouls drawn/90)` : ""}`)
     else if (matchup && matchupPressure >= 1.5) reasons.push(`Likely matchup ${matchup.name} draws ${matchupPressure.toFixed(2)} fouls/90`)
     if (candidate.refereePlayer?.matches >= 2 && refPlayerRate >= 0.4) reasons.push(`Booked in ${candidate.refereePlayer.yellows}/${candidate.refereePlayer.matches} games under this referee`)
-    return { ...candidate, likelyMatchup: matchup ? { name: matchup.name, role: matchup.role ?? matchup.position ?? null, position: matchup.position ?? null, fouled90: matchup.fouled90, type: matchupType, confidence: matchup.confidence ?? null } : null, cardRiskScore: deepScore, shortlistReasons: reasons.slice(0, 4) }
+    return { ...candidate, likelyMatchup: matchup ? { name: matchup.name, role: matchup.role ?? matchup.position ?? null, position: matchup.position ?? null, fouled90: matchupPressure || matchup.fouled90, seasonFouled90:matchup.seasonFouled90 ?? matchup.fouled90 ?? null, recentFouled90:matchup.recentFouled90 ?? null, pressureFouled90:matchupPressure || null, recentGames:matchup.recentGames ?? null, type: matchupType, confidence: matchup.confidence ?? null } : null, cardRiskScore: deepScore, shortlistReasons: reasons.slice(0, 4) }
   }).sort((a: any, b: any) => Number(b.cardRiskScore ?? 0) - Number(a.cardRiskScore ?? 0))
 
   data.candidates = enriched
@@ -206,7 +231,7 @@ async function addDeepEvidence(data: any, home: string, away: string, competitio
     home: predicted.teams[home] ?? Object.entries(predicted.teams).find(([name]) => teamMatch(name, home))?.[1] ?? null,
     away: predicted.teams[away] ?? Object.entries(predicted.teams).find(([name]) => teamMatch(name, away))?.[1] ?? null,
   } : null
-  data.deepEvidence = { description: "Card evidence combines historical cards/fouls, H2H, recent-five form, current-season evidence, referee history and predicted direct positional duels. Predicted LB/RB/LW/RW/CB/ST roles are used before official lineups; confirmed teams remain the final authority." }
+  data.deepEvidence = { description: "Card/foul evidence combines historical cards/fouls, H2H, recent-five form, current-season evidence, referee history and predicted direct positional duels. Direct-opponent pressure blends season and recent-five fouls drawn/90, with predicted role/confidence used before official lineups; confirmed teams remain the final authority." }
   return data
 }
 
