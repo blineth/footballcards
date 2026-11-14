@@ -138,6 +138,8 @@ export async function GET(request: Request) {
             matchDate: match.date,
             competition: "Championship",
             venue: teamMatch(p.team, match.home) ? "Home" : "Away",
+            position: p.position,
+            starter: p.starter,
             minutes: p.minutes,
             foulsCommitted: p.foulsCommitted,
             foulsDrawn: p.foulsDrawn,
