@@ -142,3 +142,48 @@ export type PlayerBaseline = typeof playerBaselines.$inferSelect
 export type PlayerH2H = typeof playerH2H.$inferSelect
 export type Referee = typeof referees.$inferSelect
 export type PlayerRefereeHistory = typeof playerRefereeHistory.$inferSelect
+
+
+export const recommendationSnapshots = pgTable(
+  "recommendation_snapshots",
+  {
+    id: serial("id").primaryKey(),
+    recommendationKey: text("recommendation_key").notNull(),
+    fixtureId: text("fixture_id").notNull(),
+    competition: text("competition").notNull(),
+    fixtureDate: date("fixture_date").notNull(),
+    kickoff: timestamp("kickoff", { withTimezone: true }).notNull(),
+    homeTeam: text("home_team").notNull(),
+    awayTeam: text("away_team").notNull(),
+    slipId: text("slip_id").notNull(),
+    slipTitle: text("slip_title").notNull(),
+    recommendationRank: integer("recommendation_rank"),
+    isTopPick: boolean("is_top_pick").notNull().default(false),
+    bookmaker: text("bookmaker"),
+    playerName: text("player_name").notNull(),
+    dbPlayerName: text("db_player_name"),
+    playerTeam: text("player_team"),
+    opponentTeam: text("opponent_team"),
+    market: text("market").notNull(),
+    threshold: integer("threshold"),
+    label: text("label").notNull(),
+    modelProbability: numeric("model_probability").notNull(),
+    fairOdds: numeric("fair_odds"),
+    bookmakerOdds: numeric("bookmaker_odds"),
+    edge: numeric("edge"),
+    priceSource: text("price_source"),
+    confidence: text("confidence"),
+    lineupConfirmed: boolean("lineup_confirmed").notNull().default(false),
+    placeable: boolean("placeable").notNull().default(false),
+    outcome: boolean("outcome"),
+    resultValue: integer("result_value"),
+    gradedAt: timestamp("graded_at", { withTimezone: true }),
+    capturedAt: timestamp("captured_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    uniq: unique().on(t.recommendationKey, t.playerName, t.market, t.bookmaker),
+  }),
+)
+
+export type RecommendationSnapshot = typeof recommendationSnapshots.$inferSelect
