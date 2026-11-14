@@ -1,0 +1,128 @@
+{
+  "version": "builder-walk-forward-v1",
+  "source": "data/current-season/h2h.csv",
+  "methodology": "Walk-forward structural validation using only prior player rows and the live calibration snapshot. Historical exact bookmaker prices are unavailable, so foul target builders use margin-adjusted likely prices solely to test selection structure. All-hit model products are independence guides and not same-game bookmaker quotes.",
+  "markets": {
+    "card": {
+      "sample": 54106,
+      "hits": 7230,
+      "hitRate": 0.1336,
+      "avgModel": 0.133,
+      "brier": 0.1145
+    },
+    "foul1": {
+      "sample": 54106,
+      "hits": 27440,
+      "hitRate": 0.5072,
+      "avgModel": 0.5,
+      "brier": 0.22072
+    },
+    "foul2": {
+      "sample": 54106,
+      "hits": 11568,
+      "hitRate": 0.2138,
+      "avgModel": 0.2126,
+      "brier": 0.1583
+    },
+    "foul3": {
+      "sample": 54106,
+      "hits": 4050,
+      "hitRate": 0.0749,
+      "avgModel": 0.0745,
+      "brier": 0.06721
+    },
+    "foul4": {
+      "sample": 54106,
+      "hits": 1258,
+      "hitRate": 0.0233,
+      "avgModel": 0.0237,
+      "brier": 0.02243
+    },
+    "foul5": {
+      "sample": 54106,
+      "hits": 335,
+      "hitRate": 0.0062,
+      "avgModel": 0.0106,
+      "brier": 0.00615
+    }
+  },
+  "cardBuilders": {
+    "twoCard": {
+      "sample": 2596,
+      "hits": 78,
+      "hitRate": 0.03,
+      "avgModel": 0.0333,
+      "brier": 0.02908
+    },
+    "threeCard": {
+      "sample": 2578,
+      "hits": 15,
+      "hitRate": 0.0058,
+      "avgModel": 0.0057,
+      "brier": 0.00577
+    }
+  },
+  "foulTargetBuilders": {
+    "3/1": {
+      "sample": 1513,
+      "hits": 480,
+      "hitRate": 0.3173,
+      "avgModel": 0.3161,
+      "brier": 0.20111,
+      "avgLegs": 3.46,
+      "avgReferencePrice": 2.83
+    },
+    "10/1": {
+      "sample": 2451,
+      "hits": 316,
+      "hitRate": 0.1289,
+      "avgModel": 0.1327,
+      "brier": 0.10456,
+      "avgLegs": 5.44,
+      "avgReferencePrice": 7.58
+    },
+    "20/1": {
+      "sample": 2525,
+      "hits": 105,
+      "hitRate": 0.0416,
+      "avgModel": 0.0452,
+      "brier": 0.03865,
+      "avgLegs": 7.24,
+      "avgReferencePrice": 18.07
+    },
+    "50/1": {
+      "sample": 2546,
+      "hits": 43,
+      "hitRate": 0.0169,
+      "avgModel": 0.015,
+      "brier": 0.01608,
+      "avgLegs": 9.06,
+      "avgReferencePrice": 48.71
+    },
+    "100/1": {
+      "sample": 2554,
+      "hits": 19,
+      "hitRate": 0.0074,
+      "avgModel": 0.0084,
+      "brier": 0.00708,
+      "avgLegs": 10.19,
+      "avgReferencePrice": 96.47
+    }
+  },
+  "multiMatch": {
+    "threeMatchesOneFoulEach": {
+      "sample": 83,
+      "hits": 39,
+      "hitRate": 0.4699,
+      "avgModel": 0.4716,
+      "brier": 0.23845
+    },
+    "fiveMatchesOneFoulEach": {
+      "sample": 75,
+      "hits": 18,
+      "hitRate": 0.24,
+      "avgModel": 0.2716,
+      "brier": 0.167
+    }
+  }
+}
