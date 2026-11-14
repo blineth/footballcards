@@ -263,11 +263,10 @@ export default function HomePage(){
     const bust=Date.now()
     setLoadingFixtures(true)
     try{
-      const r=await fetch("/api/fixtures?"+new URLSearchParams({date:selectedDate,competition,nextIfEmpty:selectedDate===londonDate()?"1":"0",refresh:String(bust)}),{cache:"no-store"})
+      const r=await fetch("/api/fixtures?"+new URLSearchParams({date:selectedDate,competition,nextIfEmpty:"0",refresh:String(bust)}),{cache:"no-store"})
       if(!r.ok)throw new Error("fixtures failed")
       const data=await r.json() as FixturesResponse
       setLive(data)
-      if(data.showingNextMatchday&&data.date!==selectedDate)setSelectedDate(data.date)
       const fs=((data.leagues?.[competition]??[]) as LiveFixture[]).map(displayFixture)
       await Promise.all(fs.map(f=>loadMatch(f,bust)))
       setLastRefresh(new Date())
