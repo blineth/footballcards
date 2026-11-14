@@ -1,0 +1,723 @@
+{
+  "version": "match-acca-walk-forward-v1",
+  "source": "data/current-season/h2h.csv",
+  "methodology": "Walk-forward English-league validation using only team results dated before each fixture. Probabilities use the same league position, PPG, recent form, venue split, goal-difference, streak and H2H structure as the live Accumulator model.",
+  "markets": {
+    "homeWin": {
+      "sample": 464,
+      "hits": 211,
+      "hitRate": 0.4547,
+      "avgModel": 0.4002,
+      "brier": 0.25431
+    },
+    "awayWin": {
+      "sample": 464,
+      "hits": 129,
+      "hitRate": 0.278,
+      "avgModel": 0.3309,
+      "brier": 0.21036
+    },
+    "bttsYes": {
+      "sample": 464,
+      "hits": 249,
+      "hitRate": 0.5366,
+      "avgModel": 0.5547,
+      "brier": 0.26021
+    },
+    "bttsNo": {
+      "sample": 464,
+      "hits": 215,
+      "hitRate": 0.4634,
+      "avgModel": 0.4453,
+      "brier": 0.26021
+    }
+  },
+  "calibration": {
+    "homeWin": {
+      "bands": [
+        {
+          "from": 0.0,
+          "to": 0.05,
+          "sample": 0,
+          "hits": 0,
+          "observedRate": null,
+          "calibratedProbability": 0.025
+        },
+        {
+          "from": 0.05,
+          "to": 0.1,
+          "sample": 8,
+          "hits": 5,
+          "observedRate": 0.625,
+          "calibratedProbability": 0.1886
+        },
+        {
+          "from": 0.1,
+          "to": 0.15,
+          "sample": 15,
+          "hits": 4,
+          "observedRate": 0.2667,
+          "calibratedProbability": 0.1886
+        },
+        {
+          "from": 0.15,
+          "to": 0.2,
+          "sample": 29,
+          "hits": 10,
+          "observedRate": 0.3448,
+          "calibratedProbability": 0.2662
+        },
+        {
+          "from": 0.2,
+          "to": 0.25,
+          "sample": 28,
+          "hits": 10,
+          "observedRate": 0.3571,
+          "calibratedProbability": 0.2948
+        },
+        {
+          "from": 0.25,
+          "to": 0.3,
+          "sample": 45,
+          "hits": 16,
+          "observedRate": 0.3556,
+          "calibratedProbability": 0.3268
+        },
+        {
+          "from": 0.3,
+          "to": 0.35,
+          "sample": 61,
+          "hits": 28,
+          "observedRate": 0.459,
+          "calibratedProbability": 0.4173
+        },
+        {
+          "from": 0.35,
+          "to": 0.4,
+          "sample": 46,
+          "hits": 20,
+          "observedRate": 0.4348,
+          "calibratedProbability": 0.4173
+        },
+        {
+          "from": 0.4,
+          "to": 0.45,
+          "sample": 46,
+          "hits": 19,
+          "observedRate": 0.413,
+          "calibratedProbability": 0.4173
+        },
+        {
+          "from": 0.45,
+          "to": 0.5,
+          "sample": 48,
+          "hits": 29,
+          "observedRate": 0.6042,
+          "calibratedProbability": 0.5046
+        },
+        {
+          "from": 0.5,
+          "to": 0.55,
+          "sample": 60,
+          "hits": 26,
+          "observedRate": 0.4333,
+          "calibratedProbability": 0.5046
+        },
+        {
+          "from": 0.55,
+          "to": 0.6,
+          "sample": 34,
+          "hits": 19,
+          "observedRate": 0.5588,
+          "calibratedProbability": 0.5624
+        },
+        {
+          "from": 0.6,
+          "to": 0.65,
+          "sample": 21,
+          "hits": 10,
+          "observedRate": 0.4762,
+          "calibratedProbability": 0.5624
+        },
+        {
+          "from": 0.65,
+          "to": 0.7,
+          "sample": 18,
+          "hits": 10,
+          "observedRate": 0.5556,
+          "calibratedProbability": 0.625
+        },
+        {
+          "from": 0.7,
+          "to": 0.75,
+          "sample": 2,
+          "hits": 2,
+          "observedRate": 1.0,
+          "calibratedProbability": 0.7454
+        },
+        {
+          "from": 0.75,
+          "to": 0.8,
+          "sample": 3,
+          "hits": 3,
+          "observedRate": 1.0,
+          "calibratedProbability": 0.7991
+        },
+        {
+          "from": 0.8,
+          "to": 0.85,
+          "sample": 0,
+          "hits": 0,
+          "observedRate": null,
+          "calibratedProbability": 0.825
+        },
+        {
+          "from": 0.85,
+          "to": 0.9,
+          "sample": 0,
+          "hits": 0,
+          "observedRate": null,
+          "calibratedProbability": 0.875
+        },
+        {
+          "from": 0.9,
+          "to": 0.95,
+          "sample": 0,
+          "hits": 0,
+          "observedRate": null,
+          "calibratedProbability": 0.925
+        },
+        {
+          "from": 0.95,
+          "to": 1.0,
+          "sample": 0,
+          "hits": 0,
+          "observedRate": null,
+          "calibratedProbability": 0.975
+        }
+      ]
+    },
+    "awayWin": {
+      "bands": [
+        {
+          "from": 0.0,
+          "to": 0.05,
+          "sample": 5,
+          "hits": 1,
+          "observedRate": 0.2,
+          "calibratedProbability": 0.0542
+        },
+        {
+          "from": 0.05,
+          "to": 0.1,
+          "sample": 13,
+          "hits": 3,
+          "observedRate": 0.2308,
+          "calibratedProbability": 0.1283
+        },
+        {
+          "from": 0.1,
+          "to": 0.15,
+          "sample": 36,
+          "hits": 6,
+          "observedRate": 0.1667,
+          "calibratedProbability": 0.1496
+        },
+        {
+          "from": 0.15,
+          "to": 0.2,
+          "sample": 57,
+          "hits": 17,
+          "observedRate": 0.2982,
+          "calibratedProbability": 0.2506
+        },
+        {
+          "from": 0.2,
+          "to": 0.25,
+          "sample": 51,
+          "hits": 15,
+          "observedRate": 0.2941,
+          "calibratedProbability": 0.2506
+        },
+        {
+          "from": 0.25,
+          "to": 0.3,
+          "sample": 52,
+          "hits": 10,
+          "observedRate": 0.1923,
+          "calibratedProbability": 0.2506
+        },
+        {
+          "from": 0.3,
+          "to": 0.35,
+          "sample": 35,
+          "hits": 7,
+          "observedRate": 0.2,
+          "calibratedProbability": 0.2521
+        },
+        {
+          "from": 0.35,
+          "to": 0.4,
+          "sample": 49,
+          "hits": 12,
+          "observedRate": 0.2449,
+          "calibratedProbability": 0.2889
+        },
+        {
+          "from": 0.4,
+          "to": 0.45,
+          "sample": 64,
+          "hits": 17,
+          "observedRate": 0.2656,
+          "calibratedProbability": 0.3104
+        },
+        {
+          "from": 0.45,
+          "to": 0.5,
+          "sample": 34,
+          "hits": 12,
+          "observedRate": 0.3529,
+          "calibratedProbability": 0.4047
+        },
+        {
+          "from": 0.5,
+          "to": 0.55,
+          "sample": 32,
+          "hits": 13,
+          "observedRate": 0.4062,
+          "calibratedProbability": 0.4583
+        },
+        {
+          "from": 0.55,
+          "to": 0.6,
+          "sample": 15,
+          "hits": 9,
+          "observedRate": 0.6,
+          "calibratedProbability": 0.5817
+        },
+        {
+          "from": 0.6,
+          "to": 0.65,
+          "sample": 9,
+          "hits": 4,
+          "observedRate": 0.4444,
+          "calibratedProbability": 0.5817
+        },
+        {
+          "from": 0.65,
+          "to": 0.7,
+          "sample": 9,
+          "hits": 3,
+          "observedRate": 0.3333,
+          "calibratedProbability": 0.5846
+        },
+        {
+          "from": 0.7,
+          "to": 0.75,
+          "sample": 2,
+          "hits": 0,
+          "observedRate": 0.0,
+          "calibratedProbability": 0.6713
+        },
+        {
+          "from": 0.75,
+          "to": 0.8,
+          "sample": 1,
+          "hits": 0,
+          "observedRate": 0.0,
+          "calibratedProbability": 0.7452
+        },
+        {
+          "from": 0.8,
+          "to": 0.85,
+          "sample": 0,
+          "hits": 0,
+          "observedRate": null,
+          "calibratedProbability": 0.825
+        },
+        {
+          "from": 0.85,
+          "to": 0.9,
+          "sample": 0,
+          "hits": 0,
+          "observedRate": null,
+          "calibratedProbability": 0.875
+        },
+        {
+          "from": 0.9,
+          "to": 0.95,
+          "sample": 0,
+          "hits": 0,
+          "observedRate": null,
+          "calibratedProbability": 0.925
+        },
+        {
+          "from": 0.95,
+          "to": 1.0,
+          "sample": 0,
+          "hits": 0,
+          "observedRate": null,
+          "calibratedProbability": 0.975
+        }
+      ]
+    },
+    "bttsYes": {
+      "bands": [
+        {
+          "from": 0.0,
+          "to": 0.05,
+          "sample": 0,
+          "hits": 0,
+          "observedRate": null,
+          "calibratedProbability": 0.025
+        },
+        {
+          "from": 0.05,
+          "to": 0.1,
+          "sample": 0,
+          "hits": 0,
+          "observedRate": null,
+          "calibratedProbability": 0.075
+        },
+        {
+          "from": 0.1,
+          "to": 0.15,
+          "sample": 0,
+          "hits": 0,
+          "observedRate": null,
+          "calibratedProbability": 0.125
+        },
+        {
+          "from": 0.15,
+          "to": 0.2,
+          "sample": 0,
+          "hits": 0,
+          "observedRate": null,
+          "calibratedProbability": 0.175
+        },
+        {
+          "from": 0.2,
+          "to": 0.25,
+          "sample": 1,
+          "hits": 0,
+          "observedRate": 0.0,
+          "calibratedProbability": 0.2163
+        },
+        {
+          "from": 0.25,
+          "to": 0.3,
+          "sample": 7,
+          "hits": 5,
+          "observedRate": 0.7143,
+          "calibratedProbability": 0.3711
+        },
+        {
+          "from": 0.3,
+          "to": 0.35,
+          "sample": 10,
+          "hits": 5,
+          "observedRate": 0.5,
+          "calibratedProbability": 0.375
+        },
+        {
+          "from": 0.35,
+          "to": 0.4,
+          "sample": 27,
+          "hits": 14,
+          "observedRate": 0.5185,
+          "calibratedProbability": 0.4495
+        },
+        {
+          "from": 0.4,
+          "to": 0.45,
+          "sample": 48,
+          "hits": 24,
+          "observedRate": 0.5,
+          "calibratedProbability": 0.4743
+        },
+        {
+          "from": 0.45,
+          "to": 0.5,
+          "sample": 61,
+          "hits": 30,
+          "observedRate": 0.4918,
+          "calibratedProbability": 0.4869
+        },
+        {
+          "from": 0.5,
+          "to": 0.55,
+          "sample": 70,
+          "hits": 38,
+          "observedRate": 0.5429,
+          "calibratedProbability": 0.5382
+        },
+        {
+          "from": 0.55,
+          "to": 0.6,
+          "sample": 83,
+          "hits": 48,
+          "observedRate": 0.5783,
+          "calibratedProbability": 0.5533
+        },
+        {
+          "from": 0.6,
+          "to": 0.65,
+          "sample": 52,
+          "hits": 24,
+          "observedRate": 0.4615,
+          "calibratedProbability": 0.5533
+        },
+        {
+          "from": 0.65,
+          "to": 0.7,
+          "sample": 42,
+          "hits": 24,
+          "observedRate": 0.5714,
+          "calibratedProbability": 0.6101
+        },
+        {
+          "from": 0.7,
+          "to": 0.75,
+          "sample": 34,
+          "hits": 19,
+          "observedRate": 0.5588,
+          "calibratedProbability": 0.6292
+        },
+        {
+          "from": 0.75,
+          "to": 0.8,
+          "sample": 19,
+          "hits": 14,
+          "observedRate": 0.7368,
+          "calibratedProbability": 0.7396
+        },
+        {
+          "from": 0.8,
+          "to": 0.85,
+          "sample": 10,
+          "hits": 4,
+          "observedRate": 0.4,
+          "calibratedProbability": 0.7396
+        },
+        {
+          "from": 0.85,
+          "to": 0.9,
+          "sample": 0,
+          "hits": 0,
+          "observedRate": null,
+          "calibratedProbability": 0.875
+        },
+        {
+          "from": 0.9,
+          "to": 0.95,
+          "sample": 0,
+          "hits": 0,
+          "observedRate": null,
+          "calibratedProbability": 0.925
+        },
+        {
+          "from": 0.95,
+          "to": 1.0,
+          "sample": 0,
+          "hits": 0,
+          "observedRate": null,
+          "calibratedProbability": 0.975
+        }
+      ]
+    },
+    "bttsNo": {
+      "bands": [
+        {
+          "from": 0.0,
+          "to": 0.05,
+          "sample": 0,
+          "hits": 0,
+          "observedRate": null,
+          "calibratedProbability": 0.025
+        },
+        {
+          "from": 0.05,
+          "to": 0.1,
+          "sample": 0,
+          "hits": 0,
+          "observedRate": null,
+          "calibratedProbability": 0.075
+        },
+        {
+          "from": 0.1,
+          "to": 0.15,
+          "sample": 0,
+          "hits": 0,
+          "observedRate": null,
+          "calibratedProbability": 0.125
+        },
+        {
+          "from": 0.15,
+          "to": 0.2,
+          "sample": 10,
+          "hits": 6,
+          "observedRate": 0.6,
+          "calibratedProbability": 0.2604
+        },
+        {
+          "from": 0.2,
+          "to": 0.25,
+          "sample": 19,
+          "hits": 5,
+          "observedRate": 0.2632,
+          "calibratedProbability": 0.2604
+        },
+        {
+          "from": 0.25,
+          "to": 0.3,
+          "sample": 34,
+          "hits": 15,
+          "observedRate": 0.4412,
+          "calibratedProbability": 0.3708
+        },
+        {
+          "from": 0.3,
+          "to": 0.35,
+          "sample": 42,
+          "hits": 18,
+          "observedRate": 0.4286,
+          "calibratedProbability": 0.3899
+        },
+        {
+          "from": 0.35,
+          "to": 0.4,
+          "sample": 52,
+          "hits": 28,
+          "observedRate": 0.5385,
+          "calibratedProbability": 0.4467
+        },
+        {
+          "from": 0.4,
+          "to": 0.45,
+          "sample": 83,
+          "hits": 35,
+          "observedRate": 0.4217,
+          "calibratedProbability": 0.4467
+        },
+        {
+          "from": 0.45,
+          "to": 0.5,
+          "sample": 60,
+          "hits": 29,
+          "observedRate": 0.4833,
+          "calibratedProbability": 0.4809
+        },
+        {
+          "from": 0.5,
+          "to": 0.55,
+          "sample": 71,
+          "hits": 34,
+          "observedRate": 0.4789,
+          "calibratedProbability": 0.4909
+        },
+        {
+          "from": 0.55,
+          "to": 0.6,
+          "sample": 48,
+          "hits": 24,
+          "observedRate": 0.5,
+          "calibratedProbability": 0.5257
+        },
+        {
+          "from": 0.6,
+          "to": 0.65,
+          "sample": 27,
+          "hits": 13,
+          "observedRate": 0.4815,
+          "calibratedProbability": 0.5505
+        },
+        {
+          "from": 0.65,
+          "to": 0.7,
+          "sample": 11,
+          "hits": 5,
+          "observedRate": 0.4545,
+          "calibratedProbability": 0.6076
+        },
+        {
+          "from": 0.7,
+          "to": 0.75,
+          "sample": 6,
+          "hits": 2,
+          "observedRate": 0.3333,
+          "calibratedProbability": 0.6492
+        },
+        {
+          "from": 0.75,
+          "to": 0.8,
+          "sample": 1,
+          "hits": 1,
+          "observedRate": 1.0,
+          "calibratedProbability": 0.7837
+        },
+        {
+          "from": 0.8,
+          "to": 0.85,
+          "sample": 0,
+          "hits": 0,
+          "observedRate": null,
+          "calibratedProbability": 0.825
+        },
+        {
+          "from": 0.85,
+          "to": 0.9,
+          "sample": 0,
+          "hits": 0,
+          "observedRate": null,
+          "calibratedProbability": 0.875
+        },
+        {
+          "from": 0.9,
+          "to": 0.95,
+          "sample": 0,
+          "hits": 0,
+          "observedRate": null,
+          "calibratedProbability": 0.925
+        },
+        {
+          "from": 0.95,
+          "to": 1.0,
+          "sample": 0,
+          "hits": 0,
+          "observedRate": null,
+          "calibratedProbability": 0.975
+        }
+      ]
+    }
+  },
+  "structures": {
+    "safer3": {
+      "sample": 31,
+      "hits": 5,
+      "hitRate": 0.1613,
+      "avgModel": 0.3216,
+      "brier": 0.16801
+    },
+    "wins5": {
+      "sample": 18,
+      "hits": 0,
+      "hitRate": 0.0,
+      "avgModel": 0.0844,
+      "brier": 0.00979
+    },
+    "btts5": {
+      "sample": 16,
+      "hits": 0,
+      "hitRate": 0.0,
+      "avgModel": 0.1881,
+      "brier": 0.03988
+    },
+    "mixed6": {
+      "sample": 23,
+      "hits": 1,
+      "hitRate": 0.0435,
+      "avgModel": 0.0978,
+      "brier": 0.05199
+    }
+  }
+}
