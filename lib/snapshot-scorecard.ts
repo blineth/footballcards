@@ -26,7 +26,7 @@ function sameTeamName(a:string,b:string){
 function beta(hits:number,total:number,prior:number,strength=6){
   return (hits+prior*strength)/(total+strength)
 }
-function calibrateSnapshot(market:"foul1"|"card",raw:number){
+function calibrateSnapshot(market:"foul1"|"fouled1"|"card"|"shot1"|"sot1",raw:number){
   const source=(calibrationSnapshot as any)?.global?.[market]
   const bands=source?.bands
   if(!Array.isArray(bands)||bands.length!==20)return raw
@@ -86,7 +86,7 @@ export async function confirmedStartersForFixture(input:{
 }
 
 function leg(input:{
-  player:string;team:string;market:"foul1"|"card";label:string;probability:number;
+  player:string;team:string;market:"foul1"|"fouled1"|"card"|"shot1"|"sot1";label:string;probability:number;
   confidence:"A"|"B"|"C"|"D";reason:string
 }){
   const probability=Math.max(.01,Math.min(.99,input.probability))
@@ -167,23 +167,46 @@ export async function buildSnapshotScorecard(input:{
       const appearances=Number(current?.appearances??0)+Number(intl?.matches??0)
       const starts=Number(current?.starts??0)+Number(intl?.starts??0)
       const expectedMinutes=Math.max(45,Math.min(90,appearances>0?60+30*(starts/appearances):65))
-      const foulRate=Math.max(0,Number(p?.blended?.fouls90??current?.fouls90??intl?.fouls90??0))
+      const blended=p?.blended??{}
+      const foulRate=Math.max(0,Number(blended?.fouls90??current?.fouls90??intl?.fouls90??previous?.fouls90??0))
+      const fouledRate=Math.max(0,Number(blended?.fouled90??current?.fouled90??intl?.fouled90??previous?.fouled90??0))
+      const shotsRate=Math.max(0,Number(blended?.shots90??current?.shots90??intl?.shots90??previous?.shots90??0))
+      const sotRate=Math.max(0,Number(blended?.shotsOnTarget90??blended?.sot90??current?.shotsOnTarget90??current?.sot90??intl?.shotsOnTarget90??intl?.sot90??previous?.shotsOnTarget90??previous?.sot90??0))
       const cardRates=[
         current?Number(current.cards90??0):null,
         Number(intl.cards90??0),
         previous?Number(previous.cards90??0):null,
       ].filter((v:any)=>v!=null&&Number.isFinite(v)) as number[]
       const cardRate=cardRates.length?cardRates.reduce((a,b)=>a+b,0)/cardRates.length:0
-      const foul=calibrateSnapshot("foul1",1-Math.exp(-foulRate*(expectedMinutes/90)))
-      const card=calibrateSnapshot("card",1-Math.exp(-cardRate*(expectedMinutes/90)))
+      const minutesScale=expectedMinutes/90
+      const foul=calibrateSnapshot("foul1",1-Math.exp(-foulRate*minutesScale))
+      const fouled=calibrateSnapshot("fouled1",1-Math.exp(-fouledRate*minutesScale))
+      const shot=calibrateSnapshot("shot1",1-Math.exp(-shotsRate*minutesScale))
+      const sot=calibrateSnapshot("sot1",1-Math.exp(-sotRate*minutesScale))
+      const card=calibrateSnapshot("card",1-Math.exp(-cardRate*minutesScale))
       const confidence:"A"|"B"|"C"|"D"=appearances>=12&&expectedMinutes>=65?"B":appearances>=6?"C":"D"
-      return {p,foul,card,confidence}
+      return {p,foul,fouled,shot,sot,card,confidence}
     }).filter((x:any)=>x.confidence!=="D")
 
     const foulLegs=[...scored].sort((a:any,b:any)=>b.foul-a.foul).slice(0,4).map((x:any)=>leg({
       player:String(x.p.name),team:String(x.p.nationalTeam),market:"foul1",label:"1+ foul committed",
       probability:x.foul,confidence:x.confidence,
       reason:"Confirmed-XI snapshot fallback: blended current domestic and international foul rate.",
+    }))
+    const fouledLegs=[...scored].sort((a:any,b:any)=>b.fouled-a.fouled).slice(0,3).map((x:any)=>leg({
+      player:String(x.p.name),team:String(x.p.nationalTeam),market:"fouled1",label:"1+ foul drawn",
+      probability:x.fouled,confidence:x.confidence,
+      reason:"Confirmed-XI snapshot fallback: blended current domestic and international fouls-drawn rate.",
+    }))
+    const shotLegs=[...scored].sort((a:any,b:any)=>b.shot-a.shot).slice(0,4).map((x:any)=>leg({
+      player:String(x.p.name),team:String(x.p.nationalTeam),market:"shot1",label:"1+ shot",
+      probability:x.shot,confidence:x.confidence,
+      reason:"Confirmed-XI snapshot fallback: blended current domestic and international shot rate.",
+    }))
+    const sotLegs=[...scored].sort((a:any,b:any)=>b.sot-a.sot).slice(0,3).map((x:any)=>leg({
+      player:String(x.p.name),team:String(x.p.nationalTeam),market:"sot1",label:"1+ shot on target",
+      probability:x.sot,confidence:x.confidence,
+      reason:"Confirmed-XI snapshot fallback: blended current domestic and international shot-on-target rate.",
     }))
     const cardLegs=[...scored].sort((a:any,b:any)=>b.card-a.card).slice(0,3).map((x:any)=>leg({
       player:String(x.p.name),team:String(x.p.nationalTeam),market:"card",label:"Yellow card",
@@ -193,6 +216,9 @@ export async function buildSnapshotScorecard(input:{
 
     const slips:any[]=[]
     if(foulLegs.length>=2)slips.push(slip("intl-snapshot-fouls","Confirmed XI foul picks",foulLegs,"Model-only fallback from the repository snapshot; verify the bookmaker market and price before placing."))
+    if(fouledLegs.length>=2)slips.push(slip("intl-snapshot-fouled","Confirmed XI fouled picks",fouledLegs,"Model-only fallback from the repository snapshot; verify the bookmaker market and price before placing."))
+    if(shotLegs.length>=2)slips.push(slip("intl-snapshot-shots","Confirmed XI shot picks",shotLegs,"Model-only fallback from the repository snapshot; verify the bookmaker market and price before placing."))
+    if(sotLegs.length>=2)slips.push(slip("intl-snapshot-sot","Confirmed XI SOT picks",sotLegs,"Model-only fallback from the repository snapshot; verify the bookmaker market and price before placing."))
     if(cardLegs.length>=2)slips.push(slip("intl-snapshot-cards","Confirmed XI card picks",cardLegs,"Model-only fallback from the repository snapshot; verify the bookmaker market and price before placing."))
 
     return {
@@ -211,19 +237,43 @@ export async function buildSnapshotScorecard(input:{
     if(history.length<3)return null
     const recent=history.slice(-5)
     const foulHits=history.filter(row=>row.fouls_committed>=1).length
+    const fouledHits=history.filter(row=>row.fouls_drawn>=1).length
+    const shotHits=history.filter(row=>row.shots>=1).length
+    const sotHits=history.filter(row=>row.shots_on_target>=1).length
     const cardHits=history.filter(row=>row.yellow_card).length
     const recentFoul=recent.filter(row=>row.fouls_committed>=1).length
+    const recentFouled=recent.filter(row=>row.fouls_drawn>=1).length
+    const recentShot=recent.filter(row=>row.shots>=1).length
+    const recentSot=recent.filter(row=>row.shots_on_target>=1).length
     const recentCard=recent.filter(row=>row.yellow_card).length
     const foul=calibrateSnapshot("foul1",beta(foulHits,history.length,.50,6)*.72+beta(recentFoul,recent.length,.50,4)*.28)
+    const fouled=calibrateSnapshot("fouled1",beta(fouledHits,history.length,.45,6)*.72+beta(recentFouled,recent.length,.45,4)*.28)
+    const shot=calibrateSnapshot("shot1",beta(shotHits,history.length,.58,6)*.72+beta(recentShot,recent.length,.58,4)*.28)
+    const sot=calibrateSnapshot("sot1",beta(sotHits,history.length,.32,6)*.72+beta(recentSot,recent.length,.32,4)*.28)
     const card=calibrateSnapshot("card",beta(cardHits,history.length,.20,7)*.72+beta(recentCard,recent.length,.20,4)*.28)
     const confidence:"A"|"B"|"C"|"D"=history.length>=10&&p.minutes>=600?"B":history.length>=5?"C":"D"
-    return {p,foul,card,confidence}
-  }).filter(Boolean) as Array<{p:any;foul:number;card:number;confidence:"A"|"B"|"C"|"D"}>
+    return {p,foul,fouled,shot,sot,card,confidence}
+  }).filter(Boolean) as Array<{p:any;foul:number;fouled:number;shot:number;sot:number;card:number;confidence:"A"|"B"|"C"|"D"}>
 
   const foulLegs=[...scored].sort((a,b)=>b.foul-a.foul).slice(0,4).map(x=>leg({
     player:x.p.player_name,team:x.p.team,market:"foul1",label:"1+ foul committed",
     probability:x.foul,confidence:x.confidence,
     reason:"Confirmed-XI snapshot fallback: season and recent foul history.",
+  }))
+  const fouledLegs=[...scored].sort((a,b)=>b.fouled-a.fouled).slice(0,3).map(x=>leg({
+    player:x.p.player_name,team:x.p.team,market:"fouled1",label:"1+ foul drawn",
+    probability:x.fouled,confidence:x.confidence,
+    reason:"Confirmed-XI snapshot fallback: season and recent fouls-drawn history.",
+  }))
+  const shotLegs=[...scored].sort((a,b)=>b.shot-a.shot).slice(0,4).map(x=>leg({
+    player:x.p.player_name,team:x.p.team,market:"shot1",label:"1+ shot",
+    probability:x.shot,confidence:x.confidence,
+    reason:"Confirmed-XI snapshot fallback: season and recent shot history.",
+  }))
+  const sotLegs=[...scored].sort((a,b)=>b.sot-a.sot).slice(0,3).map(x=>leg({
+    player:x.p.player_name,team:x.p.team,market:"sot1",label:"1+ shot on target",
+    probability:x.sot,confidence:x.confidence,
+    reason:"Confirmed-XI snapshot fallback: season and recent shot-on-target history.",
   }))
   const cardLegs=[...scored].sort((a,b)=>b.card-a.card).slice(0,3).map(x=>leg({
     player:x.p.player_name,team:x.p.team,market:"card",label:"Yellow card",
@@ -233,6 +283,9 @@ export async function buildSnapshotScorecard(input:{
 
   const slips:any[]=[]
   if(foulLegs.length>=2)slips.push(slip("snapshot-fouls","Confirmed XI foul picks",foulLegs,"Model-only fallback from the repository snapshot; verify the bookmaker market and price before placing."))
+  if(fouledLegs.length>=2)slips.push(slip("snapshot-fouled","Confirmed XI fouled picks",fouledLegs,"Model-only fallback from the repository snapshot; verify the bookmaker market and price before placing."))
+  if(shotLegs.length>=2)slips.push(slip("snapshot-shots","Confirmed XI shot picks",shotLegs,"Model-only fallback from the repository snapshot; verify the bookmaker market and price before placing."))
+  if(sotLegs.length>=2)slips.push(slip("snapshot-sot","Confirmed XI SOT picks",sotLegs,"Model-only fallback from the repository snapshot; verify the bookmaker market and price before placing."))
   if(cardLegs.length>=2)slips.push(slip("snapshot-cards","Confirmed XI card picks",cardLegs,"Model-only fallback from the repository snapshot; verify the bookmaker market and price before placing."))
 
   return {
