@@ -25,6 +25,13 @@ const ODDS_API_DEV_BET365_LEAGUES:Record<string,string[]>={
   "League Two":["lg_52188"],
   International:["lg_200098"],
 }
+const ODDS_API_DEV_INTL_SEARCHES=[
+  "uefa nations league",
+  "world cup qualifying",
+  "international friendly",
+  "euro qualifying",
+] as const
+const oddsDevLeagueCache=new Map<string,{ids:string[];expires:number}>()
 
 function norm(value: string | null | undefined) {
   return String(value ?? "")
@@ -253,9 +260,32 @@ async function oddsApiDev(path:string,params:Record<string,string>,key:string){
 }
 function oddsDevRows(payload:any){
   if(Array.isArray(payload?.data))return payload.data
+  if(Array.isArray(payload?.data?.events))return payload.data.events
   if(Array.isArray(payload?.events))return payload.events
+  if(Array.isArray(payload?.results))return payload.results
   if(Array.isArray(payload))return payload
   return []
+}
+function oddsDevLeagueRows(payload:any){
+  if(Array.isArray(payload?.data))return payload.data
+  if(Array.isArray(payload?.data?.leagues))return payload.data.leagues
+  if(Array.isArray(payload?.leagues))return payload.leagues
+  if(Array.isArray(payload?.results))return payload.results
+  return []
+}
+async function oddsDevLeagueIds(search:string,key:string){
+  const cacheKey=norm(search)
+  const cached=oddsDevLeagueCache.get(cacheKey)
+  if(cached&&cached.expires>Date.now())return cached.ids
+  try{
+    const payload=await oddsApiDev("/bet365/leagues",{search},key)
+    const ids=oddsDevLeagueRows(payload)
+      .map((row:any)=>String(row?.league_id??row?.id??row?.key??""))
+      .filter((id:string)=>id.startsWith("lg_"))
+      .slice(0,12)
+    oddsDevLeagueCache.set(cacheKey,{ids,expires:Date.now()+6*60*60*1000})
+    return ids
+  }catch{return []}
 }
 function oddsDevTeam(row:any,side:"home"|"away"){
   return row?.[side+"_team"]?.name
@@ -318,7 +348,12 @@ function flattenOddsDev(payload:any,bookmakerName:string){
   return out
 }
 async function fromOddsApiDev(input:{date:string;home:string;away:string;competition:string;key:string}){
-  const leagueIds=ODDS_API_DEV_BET365_LEAGUES[input.competition]??[]
+  const leagueIds=[...(ODDS_API_DEV_BET365_LEAGUES[input.competition]??[])]
+  if(input.competition==="International"){
+    for(const search of ODDS_API_DEV_INTL_SEARCHES){
+      for(const id of await oddsDevLeagueIds(search,input.key))if(!leagueIds.includes(id))leagueIds.push(id)
+    }
+  }
   for(const leagueId of leagueIds){
     const eventsPayload=await oddsApiDev("/bet365/events",{league_id:leagueId},input.key)
     const rows=oddsDevRows(eventsPayload)
