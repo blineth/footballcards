@@ -770,7 +770,10 @@ export async function GET(request: Request) {
 
     const matchupCandidate = candidates.find(other => norm(other.name) === norm(candidate?.likelyMatchup?.name) || norm(other.dbName) === norm(candidate?.likelyMatchup?.name))
     const matchupFouls90 = Number(matchupCandidate?.fouls90 ?? 0)
-    const matchupFouled90 = candidate?.likelyMatchup?.fouled90 == null ? null : Number(candidate.likelyMatchup.fouled90)
+    const matchupFouledRaw = candidate?.likelyMatchup?.pressureFouled90 ?? candidate?.likelyMatchup?.fouled90
+    const matchupFouled90 = matchupFouledRaw == null ? null : Number(matchupFouledRaw)
+    const directMatchup = candidate?.likelyMatchup?.type === "direct-predicted-role"
+    const matchupConfidence = Number(candidate?.likelyMatchup?.confidence ?? 0)
 
     const yellowOverall = rows.filter(row => row.yellowCard === true).length
     const cond0 = conditionalExact(rows, fouls => fouls === 0)
@@ -816,7 +819,12 @@ export async function GET(request: Request) {
       }
 
       if (market.startsWith("foul") && !market.startsWith("fouled")) {
-        if (matchupFouled90 != null && matchupFouled90 > 0) probability = logitAdjust(probability, (matchupFouled90 - 1.35) * 0.14)
+        if (matchupFouled90 != null && matchupFouled90 > 0) {
+          const roleWeight=directMatchup ? 0.17 : 0.10
+          const confidenceWeight=directMatchup ? Math.max(0.78,Math.min(1.08,matchupConfidence||0.9)) : 0.82
+          const thresholdWeight=Math.min(1.35,0.92+threshold*0.08)
+          probability = logitAdjust(probability, (matchupFouled90 - 1.35) * roleWeight * confidenceWeight * thresholdWeight)
+        }
       }
       if (market === "fouled1" && matchupFouls90 > 0) {
         probability = logitAdjust(probability, (matchupFouls90 - 1.35) * 0.12)
@@ -838,7 +846,10 @@ export async function GET(request: Request) {
           probability += (item.bucket.rate - overallRate) * item.probability * reliability * item.weight
         }
         probability = clamp(probability)
-        if (matchupFouled90 != null && matchupFouled90 > 0) probability = logitAdjust(probability, (matchupFouled90 - 1.35) * 0.08)
+        if (matchupFouled90 != null && matchupFouled90 > 0) {
+          const cardMatchupWeight=directMatchup ? 0.10 : 0.055
+          probability = logitAdjust(probability, (matchupFouled90 - 1.35) * cardMatchupWeight)
+        }
         const refYellows = Number(radar?.referee?.yellowsPerGame ?? 0)
         if (refYellows > 0) probability = logitAdjust(probability, (refYellows - 4.2) * 0.055)
       }
@@ -977,7 +988,7 @@ export async function GET(request: Request) {
       sampleMatches: rows.length,
       sampleMinutes,
       expectedMinutes,
-      matchup: candidate?.likelyMatchup ? { name: candidate.likelyMatchup.name, role: candidate.likelyMatchup.role ?? null, fouled90: matchupFouled90 } : null,
+      matchup: candidate?.likelyMatchup ? { name: candidate.likelyMatchup.name, role: candidate.likelyMatchup.role ?? null, fouled90: matchupFouled90, type:candidate.likelyMatchup.type ?? null, seasonFouled90:candidate.likelyMatchup.seasonFouled90 ?? null, recentFouled90:candidate.likelyMatchup.recentFouled90 ?? null } : null,
       yellowConditionals: {
         overall: { matches: rows.length, yellows: yellowOverall, rate: rows.length ? Math.round((yellowOverall / rows.length) * 1000) / 1000 : 0 },
         zeroFouls: cond0,
@@ -1065,7 +1076,7 @@ export async function GET(request: Request) {
     previewFoulTargetSlips,
     methodology: {
       version: "scorecard-v2-calibrated",
-      description: "Player-level pre-match probabilities use only match rows dated before the target fixture. They combine smoothed historical hit rates, recency, H2H, expected minutes, direct matchup pressure, count-rate cross-checks, referee/card context and walk-forward calibration.",
+      description: "Player-level pre-match probabilities use only match rows dated before the target fixture. They combine smoothed historical hit rates, recency, H2H, expected minutes, direct positional matchup pressure blended from season and recent fouls drawn, count-rate cross-checks, referee/card context and walk-forward calibration.",
       cardConditional: "Yellow-card estimates measure each player's booking rate at 0 fouls, exactly 1, exactly 2, 3+, 1+ and 2+ foul states, with sample-size reliability. Match-level data still cannot identify the exact foul that triggered the booking.",
       calibrationWarning: "Displayed probabilities are adjusted through walk-forward calibration built from earlier-match-only predictions across 30 competitions. They remain estimates, not guarantees.",
       slipWarning: "Same-player and same-match legs can be correlated. Exact individual bookmaker foul lines are mirrored only when their threshold is explicitly present in the feed. Bet365's same-game Builder price is proprietary and is not labelled exact unless a bookmaker builder quote is supplied.",
