@@ -11,6 +11,7 @@ export const dynamic = "force-dynamic"
 export const revalidate = 0
 
 type MarketKey = "foul1" | "foul2" | "foul3" | "fouled1" | "card" | "shot1" | "shot2" | "sot1" | "sot2"
+type SlipMarketKey = MarketKey | `foul${number}`
 type MatchRow = typeof playerH2H.$inferSelect
 type MarketAvailabilityState = "available" | "unavailable" | "unknown"
 type MarketAvailability = Record<"card"|"foul"|"fouled"|"shot"|"sot", MarketAvailabilityState>
@@ -31,6 +32,7 @@ type OfferedFoulLine = {
   bookmakerMarket: string
   bookmakerLabel: string
   bookmakerOdds: number
+  bookmaker: string
   previousBookmakerOdds: number | null
   bookmakerMovement: number | null
   impliedProbability: number
@@ -52,6 +54,7 @@ type ScoreMarket = {
   fairOdds: number | null
   confidence: "A" | "B" | "C" | "D"
   bookmakerOdds: number | null
+  bookmakerName: string | null
   previousBookmakerOdds: number | null
   bookmakerMovement: number | null
   bookmakerLabel: string | null
@@ -92,7 +95,7 @@ type ScorePlayer = {
 type SlipLeg = {
   player: string
   team: string
-  market: MarketKey
+  market: SlipMarketKey
   label: string
   probability: number
   fairOdds: number | null
@@ -252,14 +255,14 @@ function thresholdForMarket(market: MarketKey) {
   return 1
 }
 
-function availabilityForMarket(availability:MarketAvailability, market:MarketKey):MarketAvailabilityState {
+function availabilityForMarket(availability:MarketAvailability, market:SlipMarketKey):MarketAvailabilityState {
   if (market === "card") return availability.card
   if (market.startsWith("fouled")) return availability.fouled
   if (market.startsWith("foul")) return availability.foul
   if (market.startsWith("sot")) return availability.sot
   return availability.shot
 }
-function oddsKind(market: MarketKey) {
+function oddsKind(market: SlipMarketKey) {
   if (market.startsWith("fouled")) return "fouled"
   if (market.startsWith("foul")) return "foul"
   if (market === "card") return "card"
@@ -384,6 +387,7 @@ function marketLeg(player: ScorePlayer, market: MarketKey): SlipLeg {
     probability: m.probability,
     fairOdds: m.fairOdds,
     bookmakerOdds: m.bookmakerOdds,
+    bookmakerName: m.bookmakerName,
     previousBookmakerOdds: m.previousBookmakerOdds,
     bookmakerMovement: m.bookmakerMovement,
     edge: m.edge,
@@ -422,88 +426,88 @@ function referenceOdd(leg: SlipLeg) {
 function buildFoulTargetSlips(players: ScorePlayer[]): FoulTargetSlip[] {
   const targets = [
     { id:"foul-3-1", fractional:"3/1", decimal:4, minProbability:0.66 },
-    { id:"foul-10-1", fractional:"10/1", decimal:11, minProbability:0.62 },
-    { id:"foul-20-1", fractional:"20/1", decimal:21, minProbability:0.58 },
-    { id:"foul-50-1", fractional:"50/1", decimal:51, minProbability:0.54 },
-    { id:"foul-100-1", fractional:"100/1", decimal:101, minProbability:0.50 },
+    { id:"foul-10-1", fractional:"10/1", decimal:11, minProbability:0.60 },
+    { id:"foul-20-1", fractional:"20/1", decimal:21, minProbability:0.55 },
+    { id:"foul-50-1", fractional:"50/1", decimal:51, minProbability:0.48 },
+    { id:"foul-100-1", fractional:"100/1", decimal:101, minProbability:0.42 },
   ] as const
 
-  const pool = players
-    .map(player => marketLeg(player, "foul1"))
-    .filter(leg => leg.confidence !== "D")
-    .filter(leg => Number.isFinite(referenceOdd(leg)) && referenceOdd(leg) > 1)
-    .sort((a,b) => {
-      const qualityA = a.probability + Math.max(0, Number(a.edge ?? 0)) * 0.25
-      const qualityB = b.probability + Math.max(0, Number(b.edge ?? 0)) * 0.25
-      return qualityB - qualityA
+  const pool:SlipLeg[] = players.flatMap(player =>
+    player.offeredFoulLines.map(line => ({
+      player:player.name,
+      team:player.team,
+      market:(("foul"+line.threshold) as SlipMarketKey),
+      label:line.label,
+      probability:line.probability,
+      fairOdds:line.fairOdds,
+      bookmakerOdds:line.bookmakerOdds,
+      bookmakerName:line.bookmaker,
+      previousBookmakerOdds:line.previousBookmakerOdds,
+      bookmakerMovement:line.bookmakerMovement,
+      edge:line.edge,
+      expectedValue:line.expectedValue,
+      confidence:line.confidence,
+      reason:"Exact "+line.threshold+"+ foul line offered by "+line.bookmaker+" at "+line.bookmakerOdds.toFixed(2),
+    }))
+  )
+    .filter(leg=>leg.confidence!=="D")
+    .filter(leg=>leg.bookmakerOdds!=null&&Number(leg.bookmakerOdds)>1)
+    .sort((a,b)=>{
+      const qa=a.probability+Math.max(0,Number(a.edge??0))*0.35
+      const qb=b.probability+Math.max(0,Number(b.edge??0))*0.35
+      return qb-qa
     })
 
-  return targets.map(target => {
-    const candidates = pool.filter(leg => leg.probability >= target.minProbability)
-    type State = { legs:SlipLeg[]; product:number; teamCounts:Record<string,number>; quality:number }
-    let states:State[] = [{legs:[], product:1, teamCounts:{}, quality:0}]
+  return targets.map(target=>{
+    const candidates=pool.filter(leg=>leg.probability>=target.minProbability)
+    type State={legs:SlipLeg[];product:number;teamCounts:Record<string,number>;quality:number}
+    let states:State[]=[{legs:[],product:1,teamCounts:{},quality:0}]
 
-    for (const leg of candidates) {
-      const next = [...states]
-      for (const state of states) {
-        if (state.legs.length >= 12) continue
-        const count = state.teamCounts[leg.team] ?? 0
-        if (count >= 6) continue
-        if (state.legs.some(existing => existing.player === leg.player)) continue
-        const product = state.product * referenceOdd(leg)
-        if (product > target.decimal * 2.25 && state.legs.length >= 2) continue
+    for(const leg of candidates){
+      const next=[...states]
+      for(const state of states){
+        if(state.legs.length>=12)continue
+        if(state.legs.some(existing=>existing.player===leg.player))continue
+        const count=state.teamCounts[leg.team]??0
+        if(count>=6)continue
+        const product=state.product*Number(leg.bookmakerOdds)
+        if(product>target.decimal*2.5&&state.legs.length>=2)continue
         next.push({
-          legs:[...state.legs, leg],
+          legs:[...state.legs,leg],
           product,
           teamCounts:{...state.teamCounts,[leg.team]:count+1},
-          quality:state.quality + leg.probability,
+          quality:state.quality+leg.probability+Math.max(0,Number(leg.edge??0))*0.25,
         })
       }
-      states = next
-        .filter(state => state.legs.length <= 12)
-        .sort((a,b) => {
-          const score = (state:State) => {
-            if (!state.legs.length) return Number.POSITIVE_INFINITY
-            const distance = Math.abs(Math.log(Math.max(1.01,state.product)) - Math.log(target.decimal))
-            const avg = state.quality / state.legs.length
-            const underPenalty = state.product < target.decimal * 0.72 ? 0.7 : 0
-            return distance * 1.7 + underPenalty - avg * 0.55
-          }
-          return score(a)-score(b)
-        })
-        .slice(0,180)
+      states=next.sort((a,b)=>{
+        const score=(state:State)=>{
+          if(!state.legs.length)return Number.POSITIVE_INFINITY
+          const distance=Math.abs(Math.log(Math.max(1.01,state.product))-Math.log(target.decimal))
+          const avg=state.quality/state.legs.length
+          const under=state.product<target.decimal*0.72?0.7:0
+          return distance*1.8+under-avg*0.5
+        }
+        return score(a)-score(b)
+      }).slice(0,220)
     }
 
-    const viable = states
-      .filter(state => state.legs.length >= 2)
-      .sort((a,b) => {
-        const distanceA = Math.abs(Math.log(a.product)-Math.log(target.decimal))
-        const distanceB = Math.abs(Math.log(b.product)-Math.log(target.decimal))
-        const avgA = a.quality/a.legs.length
-        const avgB = b.quality/b.legs.length
-        return (distanceA*1.8-avgA*0.5)-(distanceB*1.8-avgB*0.5)
-      })
-    const best = viable[0]
-    if (!best) {
+    const best=states.filter(s=>s.legs.length>=2).sort((a,b)=>{
+      const da=Math.abs(Math.log(a.product)-Math.log(target.decimal))
+      const db=Math.abs(Math.log(b.product)-Math.log(target.decimal))
+      return da-db
+    })[0]
+
+    if(!best){
       return {
-        id:target.id,
-        targetFractional:target.fractional,
-        targetDecimal:target.decimal,
-        legs:[],
-        referenceProductOdds:null,
-        averageLegProbability:null,
-        minimumLegProbability:null,
-        pricedLegs:0,
-        usesLivePrices:false,
-        withinTargetRange:false,
-        note:"Not enough qualifying 1+ foul selections for this target while respecting Bet365's 12-selection and six-players-per-team limits.",
+        id:target.id,targetFractional:target.fractional,targetDecimal:target.decimal,
+        legs:[],referenceProductOdds:null,averageLegProbability:null,minimumLegProbability:null,
+        pricedLegs:0,usesLivePrices:false,withinTargetRange:false,
+        note:"No combination of exact UK-bookmaker foul lines meets the model threshold for this target.",
       }
     }
 
-    const pricedLegs = best.legs.filter(leg=>leg.bookmakerOdds!=null).length
-    const avg = best.legs.reduce((s,l)=>s+l.probability,0)/best.legs.length
-    const min = Math.min(...best.legs.map(l=>l.probability))
-    const within = best.product >= target.decimal*0.72 && best.product <= target.decimal*1.45
+    const avg=best.legs.reduce((s,l)=>s+l.probability,0)/best.legs.length
+    const min=Math.min(...best.legs.map(l=>l.probability))
     return {
       id:target.id,
       targetFractional:target.fractional,
@@ -512,14 +516,13 @@ function buildFoulTargetSlips(players: ScorePlayer[]): FoulTargetSlip[] {
       referenceProductOdds:Math.round(best.product*100)/100,
       averageLegProbability:Math.round(avg*1000)/1000,
       minimumLegProbability:Math.round(min*1000)/1000,
-      pricedLegs,
-      usesLivePrices:pricedLegs===best.legs.length,
-      withinTargetRange:within,
-      note:"Built from calibrated 1+ foul probabilities, with a maximum of 12 selections and no more than six players from either team. The reference product uses individual live prices where available, otherwise fair odds. Bet365's actual Bet Builder price is correlation-adjusted and must be taken from the bookmaker rather than by multiplying these legs.",
+      pricedLegs:best.legs.length,
+      usesLivePrices:true,
+      withinTargetRange:best.product>=target.decimal*0.72&&best.product<=target.decimal*1.45,
+      note:"Built only from exact foul thresholds and prices returned by UK bookmakers. The reference price is the product of individual prices, not an exact same-game Bet Builder quote; bookmaker correlation adjustments can change the final builder price.",
     }
   })
 }
-
 function buildSlips(players: ScorePlayer[]) {
   const used = new Set<string>()
   const safeMarkets: MarketKey[] = ["foul1", "fouled1", "shot1", "sot1", "card"]
