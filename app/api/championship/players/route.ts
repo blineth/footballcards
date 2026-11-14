@@ -13,11 +13,35 @@ export async function GET() {
   }
 
   await ensureResearchSchema()
-  const rows = await db
-    .select()
-    .from(playerBaselines)
-    .where(and(eq(playerBaselines.competition, "Championship"), eq(playerBaselines.season, "2026/27")))
-    .orderBy(desc(playerBaselines.minutes))
+  const [rows, previousRows] = await Promise.all([
+    db.select().from(playerBaselines)
+      .where(and(eq(playerBaselines.competition, "Championship"), eq(playerBaselines.season, "2026/27")))
+      .orderBy(desc(playerBaselines.minutes)),
+    db.select().from(playerBaselines).where(eq(playerBaselines.season, "2025/26")).orderBy(desc(playerBaselines.minutes)),
+  ])
+  const norm = (v:string) => String(v??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim()
+  const previousFor = (r:(typeof rows)[number]) => {
+    let matches = r.externalPlayerId ? previousRows.filter(p=>p.externalPlayerId===r.externalPlayerId) : []
+    if(!matches.length){
+      const name=norm(r.playerName)
+      matches=previousRows.filter(p=>norm(p.playerName)===name)
+    }
+    if(!matches.length)return null
+    const sum=(key:keyof (typeof matches)[number])=>matches.reduce((s,p)=>s+Number(p[key]??0),0)
+    const minutes=sum("minutes"),yc=sum("yellowCards"),fouls=sum("foulsCommitted"),shots=sum("shots"),sot=sum("shotsOnTarget")
+    return {
+      season:"2025/26",
+      clubs:Array.from(new Set(matches.map(p=>p.team).filter(Boolean))),
+      competitions:Array.from(new Set(matches.map(p=>p.competition).filter(Boolean))),
+      appearances:sum("appearances"),starts:sum("starts"),minutes,
+      goals:sum("goals"),assists:sum("assists"),yellowCards:yc,redCards:sum("redCards"),
+      foulsCommitted:fouls,foulsDrawn:sum("foulsDrawn"),shots,shotsOnTarget:sot,
+      fouls90:minutes?Math.round((fouls*90/minutes)*100)/100:null,
+      cards90:minutes?Math.round((yc*90/minutes)*100)/100:null,
+      shots90:minutes?Math.round((shots*90/minutes)*100)/100:null,
+      shotsOnTarget90:minutes?Math.round((sot*90/minutes)*100)/100:null,
+    }
+  }
 
   const players = rows.map((r) => {
     const minutes = Number(r.minutes ?? 0)
@@ -45,6 +69,7 @@ export async function GET() {
       shots90: r.shotsPer90 == null ? per90(Number(r.shots ?? 0)) : Number(r.shotsPer90),
       shotsOnTarget90: r.shotsOnTargetPer90 == null ? per90(Number(r.shotsOnTarget ?? 0)) : Number(r.shotsOnTargetPer90),
       externalPlayerId: r.externalPlayerId,
+      previousSeason: previousFor(r),
     }
   })
 
