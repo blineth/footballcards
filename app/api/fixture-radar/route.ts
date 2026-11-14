@@ -7,7 +7,8 @@ import { NextResponse } from "next/server"
 import { GET as espnGET } from "../fixture-radar-espn/route"
 
 export const dynamic = "force-dynamic"
-const CURRENT_SEASON_START = "2026-08-21"
+const PREMIER_LEAGUE_SEASON_START = "2026-08-21"
+const CHAMPIONSHIP_SEASON_START = "2026-08-01"
 
 function norm(value: string | null | undefined) {
   return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\b(afc|fc)\b/g, "").replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ")
@@ -52,21 +53,27 @@ async function addCurrentSeasonLayer(data: any, competition: string) {
   if (!isDatabaseConfigured || !Array.isArray(data?.candidates) || !data.candidates.length) return data
   const names = Array.from(new Set(data.candidates.map((c: any) => String(c.dbName ?? "")).filter(Boolean))) as string[]
   const rows = names.length ? await db.select().from(playerH2H).where(and(inArray(playerH2H.playerName, names), eq(playerH2H.competition, competition))) : []
-  const currentRows = rows.filter((row) => String(row.matchDate ?? "") >= CURRENT_SEASON_START)
+  const seasonStart = competition === "Championship" ? CHAMPIONSHIP_SEASON_START : PREMIER_LEAGUE_SEASON_START
+  const currentRows = rows.filter((row) => String(row.matchDate ?? "") >= seasonStart)
   data.candidates = data.candidates.map((candidate: any) => {
     const playerRows = currentRows.filter((row) => row.playerName === candidate.dbName)
     const games = playerRows.length
     const minutes = playerRows.reduce((sum, row) => sum + Number(row.minutes ?? 0), 0)
     const fouls = playerRows.reduce((sum, row) => sum + Number(row.foulsCommitted ?? 0), 0)
     const yellows = playerRows.filter((row) => row.yellowCard === true).length
+    const goals = playerRows.reduce((sum, row) => sum + Number(row.goals ?? 0), 0)
+    const assists = playerRows.reduce((sum, row) => sum + Number(row.assists ?? 0), 0)
+    const shots = playerRows.reduce((sum, row) => sum + Number(row.shots ?? 0), 0)
+    const shotsOnTarget = playerRows.reduce((sum, row) => sum + Number(row.shotsOnTarget ?? 0), 0)
+    const foulsDrawn = playerRows.reduce((sum, row) => sum + Number(row.foulsDrawn ?? 0), 0)
     const fouls90 = minutes > 0 ? (fouls * 90) / minutes : null
     const cards90 = minutes > 0 ? (yellows * 90) / minutes : null
     const recentScore = minutes > 0 ? Math.min(100, (Math.min(1, Number(fouls90) / 2.5) * 55) + (Math.min(1, Number(cards90) / 0.6) * 45)) : Number(candidate.score ?? 0)
     const recentWeight = Math.min(0.35, minutes / 900)
     const score = Math.round(((Number(candidate.score ?? 0) * (1 - recentWeight)) + (recentScore * recentWeight)) * 10) / 10
-    return { ...candidate, score, band: score >= 70 ? "STRONG" : score >= 55 ? "GOOD" : "WATCH", currentSeason: { season: "2026/27", games, minutes, fouls, yellows, fouls90: fouls90 == null ? null : Math.round(fouls90 * 100) / 100, cards90: cards90 == null ? null : Math.round(cards90 * 100) / 100, evidenceWeight: Math.round(recentWeight * 100) } }
+    return { ...candidate, score, band: score >= 70 ? "STRONG" : score >= 55 ? "GOOD" : "WATCH", currentSeason: { season: "2026/27", games, minutes, fouls, foulsDrawn, yellows, goals, assists, shots, shotsOnTarget, fouls90: fouls90 == null ? null : Math.round(fouls90 * 100) / 100, cards90: cards90 == null ? null : Math.round(cards90 * 100) / 100, evidenceWeight: Math.round(recentWeight * 100) } }
   })
-  data.currentSeasonLayer = { season: "2026/27", from: CURRENT_SEASON_START, playerMatchRows: currentRows.length, weighting: "Recent season starts at about 10% after one full match and grows to a 35% cap" }
+  data.currentSeasonLayer = { season: "2026/27", from: seasonStart, playerMatchRows: currentRows.length, weighting: "Recent season starts at about 10% after one full match and grows to a 35% cap" }
   return data
 }
 
@@ -85,7 +92,7 @@ async function addH2HMatchesAndBalance(data: any, home: string, away: string, co
   data.candidates = data.candidates.map((candidate: any) => {
     const opponent = teamMatch(candidate.team, home) ? away : home
     const matches = rows.filter((row) => row.playerName === candidate.dbName && teamMatch(row.opponent, opponent) && (!fixtureDate || String(row.matchDate) < fixtureDate)).sort((a, b) => String(b.matchDate).localeCompare(String(a.matchDate))).slice(0, 8)
-    return { ...candidate, h2hYellows: matches.filter((row) => row.yellowCard === true).length, h2hFouls: matches.reduce((sum, row) => sum + Number(row.foulsCommitted ?? 0), 0), h2hMatches: matches.map((row) => ({ matchDate: String(row.matchDate), opponent: row.opponent, venue: row.venue, competition: row.competition, minutes: row.minutes, foulsCommitted: row.foulsCommitted, foulsDrawn: row.foulsDrawn, yellowCard: row.yellowCard, redCard: row.redCard })) }
+    return { ...candidate, h2hYellows: matches.filter((row) => row.yellowCard === true).length, h2hFouls: matches.reduce((sum, row) => sum + Number(row.foulsCommitted ?? 0), 0), h2hMatches: matches.map((row) => ({ matchDate: String(row.matchDate), opponent: row.opponent, venue: row.venue, competition: row.competition, minutes: row.minutes, goals: row.goals, assists: row.assists, shots: row.shots, shotsOnTarget: row.shotsOnTarget, foulsCommitted: row.foulsCommitted, foulsDrawn: row.foulsDrawn, yellowCard: row.yellowCard, redCard: row.redCard })) }
   })
   const homeCandidates = data.candidates.filter((c: any) => teamMatch(c.team, home)).sort(candidateOrder).slice(0, 5)
   const awayCandidates = data.candidates.filter((c: any) => teamMatch(c.team, away)).sort(candidateOrder).slice(0, 5)
@@ -110,7 +117,7 @@ async function addDeepEvidence(data: any, home: string, away: string, competitio
   const candidateNames = data.candidates.map((c: any) => String(c.dbName ?? "")).filter(Boolean)
   const allNames = Array.from(new Set([...candidateNames, ...predictedNames])) as string[]
   const [baselines, matchRows, refereeRows] = await Promise.all([
-    db.select().from(playerBaselines).where(eq(playerBaselines.season, "2025/26")),
+    db.select().from(playerBaselines).where(eq(playerBaselines.season, competition === "Championship" ? "2026/27" : "2025/26")),
     db.select().from(playerH2H).where(and(inArray(playerH2H.playerName, candidateNames), eq(playerH2H.competition, competition))),
     refereeName ? db.select().from(playerRefereeHistory).where(and(inArray(playerRefereeHistory.playerName, candidateNames), eq(playerRefereeHistory.refereeName, refereeName))) : Promise.resolve([]),
   ])
