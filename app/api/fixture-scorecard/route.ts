@@ -11,11 +11,11 @@ import { buildSnapshotScorecard } from "@/lib/snapshot-scorecard"
 export const dynamic = "force-dynamic"
 export const revalidate = 0
 
-type MarketKey = "foul1" | "foul2" | "foul3" | "foul4" | "foul5" | "fouled1" | "card" | "shot1" | "shot2" | "sot1" | "sot2"
+type MarketKey = "goal1" | "foul1" | "foul2" | "foul3" | "foul4" | "foul5" | "fouled1" | "card" | "shot1" | "shot2" | "sot1" | "sot2"
 type SlipMarketKey = MarketKey | `foul${number}`
 type MatchRow = typeof playerH2H.$inferSelect
 type MarketAvailabilityState = "available" | "unavailable" | "unknown"
-type MarketAvailability = Record<"card"|"foul"|"fouled"|"shot"|"sot", MarketAvailabilityState>
+type MarketAvailability = Record<"goal"|"card"|"foul"|"fouled"|"shot"|"sot", MarketAvailabilityState>
 type BookmakerAvailability = Record<string,MarketAvailability>
 
 type OddSelection = {
@@ -143,6 +143,7 @@ type FoulTargetSlip = {
 }
 
 const MARKET_LABELS: Record<MarketKey, string> = {
+  goal1: "Anytime goalscorer",
   foul1: "1+ foul committed",
   foul2: "2+ fouls committed",
   foul3: "3+ fouls committed",
@@ -157,6 +158,7 @@ const MARKET_LABELS: Record<MarketKey, string> = {
 }
 
 const PRIOR: Record<MarketKey, number> = {
+  goal1: 0.24,
   foul1: 0.70,
   foul2: 0.38,
   foul3: 0.17,
@@ -188,6 +190,7 @@ function starterRows(rows: MatchRow[]) {
   return starters.length >= 3 ? starters : rows
 }
 function hit(market: MarketKey, row: MatchRow) {
+  if (market === "goal1") return Number(row.goals ?? 0) >= 1
   if (market === "foul1") return Number(row.foulsCommitted ?? 0) >= 1
   if (market === "foul2") return Number(row.foulsCommitted ?? 0) >= 2
   if (market === "foul3") return Number(row.foulsCommitted ?? 0) >= 3
@@ -320,6 +323,7 @@ function thresholdForMarket(market: MarketKey) {
 }
 
 function availabilityForMarket(availability:MarketAvailability, market:SlipMarketKey):MarketAvailabilityState {
+  if (market.startsWith("goal")) return availability.goal
   if (market === "card") return availability.card
   if (market.startsWith("fouled")) return availability.fouled
   if (market.startsWith("foul")) return availability.foul
@@ -327,6 +331,7 @@ function availabilityForMarket(availability:MarketAvailability, market:SlipMarke
   return availability.shot
 }
 function oddsKind(market: SlipMarketKey) {
+  if (market.startsWith("goal")) return "goal"
   if (market.startsWith("fouled")) return "fouled"
   if (market.startsWith("foul")) return "foul"
   if (market === "card") return "card"
@@ -384,7 +389,7 @@ function findOdds(selections: OddSelection[], player: string, market: MarketKey,
     .filter(s => s.odd != null && Number(s.odd) > 1 && s.kind === desiredKind && playerInLabel(s, player, allPlayers))
     .map(s => ({ ...s, detectedThreshold: selectionThreshold(s) }))
     .filter(s => {
-      if (market === "card") return true
+      if (market === "card" || market.startsWith("goal")) return true
       // Never attach a bookmaker price to a count market unless the exact line
       // can be read from the bookmaker feed. This prevents a generic foul price
       // being displayed as 1+, 2+ or 3+ by mistake.
@@ -670,7 +675,7 @@ function buildFoulTargetSlips(players: ScorePlayer[]): FoulTargetSlip[] {
 }
 function buildSlips(players: ScorePlayer[]) {
   const used = new Set<string>()
-  const safeMarkets: MarketKey[] = ["foul1", "fouled1", "shot1", "sot1", "card"]
+  const safeMarkets: MarketKey[] = ["goal1", "foul1", "fouled1", "shot1", "sot1", "card"]
   const safe: SlipLeg[] = []
   for (const market of safeMarkets) {
     const leg = bestLeg(players, market, used)
@@ -711,6 +716,92 @@ function buildSlips(players: ScorePlayer[]) {
     makeSlip("yellow-foul", "Yellow + foul pressure", "Higher", yellowFoul, "Pairs 1+ foul with a yellow for the same high-pressure players. These legs are correlated, so their probabilities should not be multiplied as if independent."),
     makeSlip("fouls-shots", "Fouls + shots mix", "Medium", mixed, "Best 2+ foul, 2+ shot and 1+ SOT opportunities, limited to one leg per player."),
   ]
+}
+
+
+type RiskBuilder = {
+  id:string
+  title:string
+  risk:"Safe"|"Balanced"|"High Risk"
+  targetFractional:string
+  targetDecimal:number
+  legs:SlipLeg[]
+  referenceProductOdds:number|null
+  averageLegProbability:number|null
+  minimumLegProbability:number|null
+  modelAllHitProbability:number|null
+  exactPriced:boolean
+  bookmaker:string|null
+  note:string
+}
+
+function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
+  const configs=[
+    {id:"safe-3-1",title:"Safe 3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4,minProb:.62,maxLegs:5},
+    {id:"balanced-10-1",title:"Balanced 10/1",risk:"Balanced" as const,targetFractional:"10/1",targetDecimal:11,minProb:.48,maxLegs:6},
+    {id:"high-20-1",title:"High Risk 20/1+",risk:"High Risk" as const,targetFractional:"20/1+",targetDecimal:21,minProb:.30,maxLegs:7},
+  ]
+  const marketOrder:MarketKey[]=["goal1","shot1","sot1","foul1","fouled1","card","shot2","sot2","foul2","foul3"]
+  const pool=players.flatMap(player=>marketOrder.map(m=>marketLeg(player,m)))
+    .filter(leg=>leg.confidence!=="D"&&leg.probability>=.20)
+    .filter(leg=>leg.expectedValue==null||leg.expectedValue>=-.10)
+    .sort((a,b)=>legRank(b)-legRank(a))
+
+  return configs.map(config=>{
+    type State={legs:SlipLeg[];product:number;quality:number;prob:number;players:Set<string>}
+    let states:State[]=[{legs:[],product:1,quality:0,prob:1,players:new Set()}]
+    for(const leg of pool.filter(l=>l.probability>=config.minProb)){
+      const next=[...states]
+      for(const state of states){
+        if(state.legs.length>=config.maxLegs)continue
+        const pkey=norm(leg.player)
+        if(state.players.has(pkey))continue
+        const odd=referenceOdd(leg)
+        if(!(odd>1))continue
+        const product=state.product*odd
+        if(product>config.targetDecimal*1.8&&state.legs.length>=1)continue
+        next.push({
+          legs:[...state.legs,leg],
+          product,
+          quality:state.quality+legRank(leg),
+          prob:state.prob*leg.probability,
+          players:new Set([...state.players,pkey]),
+        })
+      }
+      const score=(s:State)=>{
+        if(!s.legs.length)return 999
+        const distance=Math.abs(Math.log(Math.max(1.01,s.product))-Math.log(config.targetDecimal))
+        const under=s.product<config.targetDecimal*.82?.55:0
+        const avg=s.quality/s.legs.length
+        const weak=Math.min(...s.legs.map(l=>l.probability))
+        return distance*1.7+under-avg*.34-weak*.22
+      }
+      states=next.sort((a,b)=>score(a)-score(b)).slice(0,260)
+    }
+    const best=states.filter(s=>s.legs.length>=2).sort((a,b)=>{
+      const sa=Math.abs(Math.log(a.product)-Math.log(config.targetDecimal))-(a.quality/Math.max(1,a.legs.length))*.16
+      const sb=Math.abs(Math.log(b.product)-Math.log(config.targetDecimal))-(b.quality/Math.max(1,b.legs.length))*.16
+      return sa-sb
+    })[0]
+    if(!best)return {
+      id:config.id,title:config.title,risk:config.risk,targetFractional:config.targetFractional,targetDecimal:config.targetDecimal,
+      legs:[],referenceProductOdds:null,averageLegProbability:null,minimumLegProbability:null,modelAllHitProbability:null,
+      exactPriced:false,bookmaker:null,note:"Not enough qualifying player selections for this target."
+    }
+    const books=[...new Set(best.legs.map(l=>l.bookmakerName).filter(Boolean))] as string[]
+    const exactPriced=best.legs.every(l=>l.bookmakerOdds!=null)&&books.length===1
+    const avg=best.legs.reduce((s,l)=>s+l.probability,0)/best.legs.length
+    const min=Math.min(...best.legs.map(l=>l.probability))
+    return {
+      id:config.id,title:config.title,risk:config.risk,targetFractional:config.targetFractional,targetDecimal:config.targetDecimal,
+      legs:best.legs,referenceProductOdds:Math.round(best.product*100)/100,
+      averageLegProbability:Math.round(avg*1000)/1000,minimumLegProbability:Math.round(min*1000)/1000,
+      modelAllHitProbability:Math.round(best.prob*10000)/10000,exactPriced,bookmaker:exactPriced?books[0]:null,
+      note:exactPriced
+        ?"All displayed singles have exact prices at "+books[0]+". The bookmaker's final same-game Builder price can still differ because of correlation."
+        :"Target uses exact singles where available and model fair odds otherwise. It is a guide to the strongest route toward "+config.targetFractional+", not a quoted bookmaker Builder price."
+    }
+  })
 }
 
 export async function GET(request: Request) {
@@ -774,6 +865,7 @@ export async function GET(request: Request) {
         : "STALE"
   const usableSelections = oddsFreshness === "STALE" ? [] : selections
   const marketAvailability:MarketAvailability = {
+    goal: odds?.marketAvailability?.goal ?? "unknown",
     card: odds?.marketAvailability?.card ?? "unknown",
     foul: odds?.marketAvailability?.foul ?? "unknown",
     fouled: odds?.marketAvailability?.fouled ?? "unknown",
@@ -865,15 +957,18 @@ export async function GET(request: Request) {
 
       const threshold = thresholdForMarket(market)
       const minutesScale = expectedMinutes / 90
-      const per90 = market.startsWith("sot")
-        ? Number(candidate.shotsOnTarget90 ?? 0)
-        : market.startsWith("shot")
-          ? Number(candidate.shots90 ?? 0)
-          : market.startsWith("fouled")
-            ? Number(candidate.fouled90 ?? 0)
-            : market.startsWith("foul")
-              ? Number(candidate.fouls90 ?? 0)
-              : 0
+      const historicGoal90 = sampleMinutes>0 ? (rows.reduce((sum,row)=>sum+Number(row.goals??0),0)*90)/sampleMinutes : 0
+      const per90 = market.startsWith("goal")
+        ? historicGoal90
+        : market.startsWith("sot")
+          ? Number(candidate.shotsOnTarget90 ?? 0)
+          : market.startsWith("shot")
+            ? Number(candidate.shots90 ?? 0)
+            : market.startsWith("fouled")
+              ? Number(candidate.fouled90 ?? 0)
+              : market.startsWith("foul")
+                ? Number(candidate.fouls90 ?? 0)
+                : 0
 
       if (market !== "card" && per90 > 0) {
         const mean=per90*minutesScale
@@ -1114,6 +1209,7 @@ export async function GET(request: Request) {
   // calculated above, but it must never be exposed as a bet slip.
   const slips = confirmed ? enrichedRecommendationSlips : []
   const previewSlips: typeof enrichedRecommendationSlips = []
+  const riskBuilders = confirmed ? buildRiskBuilders(players) : []
   const foulRecommendations = buildFoulTargetSlips(players).map(slip => ({
     ...slip,
     placeable: confirmed && slip.legs.length > 0 && Boolean(slip.bookmaker) && eligibleBooks.includes(slip.bookmaker!) && slip.usesLivePrices && slip.withinTargetRange,
@@ -1169,6 +1265,7 @@ export async function GET(request: Request) {
     }))).sort((a,b) => (b.edge-a.edge) || (b.probability-a.probability)),
     slips,
     previewSlips,
+    riskBuilders,
     foulTargetSlips,
     previewFoulTargetSlips,
     methodology: {
