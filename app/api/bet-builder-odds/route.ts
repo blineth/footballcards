@@ -62,8 +62,10 @@ async function saveSnapshots(input:{date:string;home:string;away:string;competit
 function marketKind(name: string) {
   const n = norm(name)
   if (/shot.*target|target.*shot/.test(n)) return "sot"
+  if (/fouled|fouls won|fouls drawn/.test(n)) return "fouled"
   if (/foul/.test(n)) return "foul"
   if (/card|book/.test(n)) return "card"
+  if (/shot/.test(n)) return "shot"
   return "other"
 }
 async function apiFootball(path: string, params: Record<string, string>, key: string) {
