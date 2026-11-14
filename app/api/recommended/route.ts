@@ -96,10 +96,12 @@ async function fixturesFor(date:string,refresh:boolean){
   return res.ok?await res.json():null
 }
 async function scorecardFor(f:Fixture,refresh:boolean){
-  const q=new URLSearchParams({date:fixtureDate(f),home:f.home.name,away:f.away.name,competition:f.competition})
-  if(refresh)q.set("refresh",String(Date.now()))
-  const res=await scorecardGET(new Request("http://local/api/fixture-scorecard?"+q.toString()))
-  return res.ok?await res.json() as Scorecard:null
+  try{
+    const q=new URLSearchParams({date:fixtureDate(f),home:f.home.name,away:f.away.name,competition:f.competition})
+    if(refresh)q.set("refresh",String(Date.now()))
+    const res=await scorecardGET(new Request("http://local/api/fixture-scorecard?"+q.toString()))
+    return res.ok?await res.json() as Scorecard:null
+  }catch{return null}
 }
 
 
