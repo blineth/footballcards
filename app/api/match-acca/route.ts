@@ -168,6 +168,7 @@ function grade(certainty:number,reliability:number){const s=certainty*.72+reliab
 function preferredBook(name:string){const n=norm(name);if(n.includes("bet365"))return "Bet365";if(n.includes("sky bet")||n.includes("skybet"))return "Sky Bet";if(n.includes("william hill"))return "William Hill";if(n.includes("paddy power"))return "Paddy Power";return null}
 
 const internationalPredictionCache=new Map<string,{expires:number,value:any}>()
+const internationalTeamFormCache=new Map<string,{expires:number,value:any}>()
 async function apiFootballRequest(path:string,params:Record<string,string>){
   const key=process.env.API_FOOTBALL_KEY
   if(!key)return null
@@ -184,6 +185,45 @@ function pctString(v:any){
   const n=Number(String(v??"").replace("%",""))
   return Number.isFinite(n)?clamp(n/100,.01,.99):null
 }
+async function recentInternationalForm(teamId:string,beforeDate:string){
+  const cacheKey=teamId+"|"+beforeDate
+  const cached=internationalTeamFormCache.get(cacheKey)
+  if(cached&&cached.expires>Date.now())return cached.value
+  const rows=await apiFootballRequest("/fixtures",{team:teamId,last:"8",timezone:"Europe/London"})??[]
+  const finished=rows.filter((row:any)=>{
+    const status=String(row?.fixture?.status?.short??"")
+    const d=String(row?.fixture?.date??"").slice(0,10)
+    return ["FT","AET","PEN"].includes(status)&&d<beforeDate
+  }).slice(-8)
+  if(!finished.length)return null
+  let points=0,gf=0,ga=0,wins=0,draws=0
+  for(const row of finished){
+    const home=String(row?.teams?.home?.id??"")===teamId
+    const a=Number(home?row?.goals?.home:row?.goals?.away)
+    const b=Number(home?row?.goals?.away:row?.goals?.home)
+    const scored=Number.isFinite(a)?a:0,conceded=Number.isFinite(b)?b:0
+    gf+=scored;ga+=conceded
+    if(scored>conceded){points+=3;wins++}
+    else if(scored===conceded){points+=1;draws++}
+  }
+  const n=finished.length
+  const value={matches:n,ppg:points/n,winRate:wins/n,drawRate:draws/n,gfPerGame:gf/n,gaPerGame:ga/n,goalDiffPerGame:(gf-ga)/n}
+  internationalTeamFormCache.set(cacheKey,{expires:Date.now()+6*60*60*1000,value})
+  return value
+}
+function internationalFormProb(home:any,away:any){
+  if(!home||!away)return null
+  const hStrength=home.ppg/3*.42+home.winRate*.18+clamp((home.goalDiffPerGame+2)/4,0,1)*.22+clamp(home.gfPerGame/3,0,1)*.18
+  const aStrength=away.ppg/3*.42+away.winRate*.18+clamp((away.goalDiffPerGame+2)/4,0,1)*.22+clamp(away.gfPerGame/3,0,1)*.18
+  const diff=hStrength-aStrength+.035
+  const closeness=1-Math.min(1,Math.abs(diff)/.45)
+  const baseDraw=clamp((home.drawRate+away.drawRate)/2*.5+.14,.18,.36)
+  const draw=clamp(baseDraw+closeness*.045,.19,.38)
+  const sideBudget=1-draw
+  const share=1/(1+Math.exp(-diff*5.2))
+  const homeP=sideBudget*share,awayP=sideBudget*(1-share)
+  return {home:homeP,draw,away:awayP,source:"API-Football recent international form"}
+}
 async function internationalApiPredictions(date:string,fixtures:any[]){
   const needed=fixtures.filter(f=>String(f?.status??"scheduled").toLowerCase()==="scheduled")
   if(!needed.length||!process.env.API_FOOTBALL_KEY)return new Map<string,any>()
@@ -198,18 +238,26 @@ async function internationalApiPredictions(date:string,fixtures:any[]){
     if(cached&&cached.expires>Date.now()){matches.set(String(f.id),cached.value);continue}
     const rows=await apiFootballRequest("/predictions",{fixture:id})
     const row=rows?.[0]
-    if(!row)continue
     const home=pctString(row?.predictions?.percent?.home)
     const draw=pctString(row?.predictions?.percent?.draw)
     const away=pctString(row?.predictions?.percent?.away)
-    if(home==null||draw==null||away==null)continue
-    const total=home+draw+away
-    const value={
-      home:home/total,draw:draw/total,away:away/total,
-      advice:String(row?.predictions?.advice??""),
-      winner:String(row?.predictions?.winner?.name??""),
-      source:"API-Football predictions",
+    let value:any=null
+    if(home!=null&&draw!=null&&away!=null){
+      const total=home+draw+away
+      value={
+        home:home/total,draw:draw/total,away:away/total,
+        advice:String(row?.predictions?.advice??""),
+        winner:String(row?.predictions?.winner?.name??""),
+        source:"API-Football predictions",
+      }
+    }else{
+      const homeId=String(hit?.teams?.home?.id??""),awayId=String(hit?.teams?.away?.id??"")
+      if(homeId&&awayId){
+        const [homeForm,awayForm]=await Promise.all([recentInternationalForm(homeId,date),recentInternationalForm(awayId,date)])
+        value=internationalFormProb(homeForm,awayForm)
+      }
     }
+    if(!value)continue
     internationalPredictionCache.set(key,{expires:Date.now()+12*60*60*1000,value})
     matches.set(String(f.id),value)
   }
@@ -344,7 +392,7 @@ export async function GET(request:Request){
         const rel=wp.reliability
         const reasons=competition==="International"&&hm.played===0&&am.played===0
           ? [intlFallback
-              ? "International fallback uses API-Football's independent team-statistics/form prediction because the local country-history sample is empty."
+              ? "International fallback uses "+String(intlFallback.source??"API-Football team form")+" because the local country-history sample is empty."
               : "International history is sparse, so this match is heavily shrunk toward neutral priors."]
           : [ordinal(hm.position)+" vs "+ordinal(am.position)+" in "+competition,String(f.home.name)+" home win "+Math.round(hm.venueWinRate*100)+"% · "+String(f.away.name)+" away win "+Math.round(am.venueWinRate*100)+"%","Form "+String(f.home.name)+" "+hm.recentForm+" · "+String(f.away.name)+" "+am.recentForm]
         if(hh.matches>=2)reasons.push("H2H "+String(f.home.name)+" "+hh.homeWins+"W · "+hh.draws+"D · "+String(f.away.name)+" "+hh.awayWins+"W · BTTS "+Math.round(hh.bttsRate*100)+"%")
