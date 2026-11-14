@@ -80,6 +80,9 @@ type ScoreMarket = {
   recent5HitRate: number
   seasonHitRate: number
   h2hHitRate: number | null
+  h2hMatches: number
+  h2hLineupOverlap: number | null
+  sameMatchupMeetings: number
   reasons: string[]
 }
 
@@ -94,6 +97,18 @@ type ScorePlayer = {
   sampleMinutes: number
   expectedMinutes: number
   matchup: { name: string; role?: string | null; fouled90?: number | null } | null
+  h2hContext: {
+    matches:number
+    cards:number
+    fouls:number
+    fouled:number
+    shots:number
+    shotsOnTarget:number
+    averageLineupOverlap:number|null
+    sameMatchupMeetings:number
+    sameMatchupCards:number
+    sameMatchupFouls:number
+  }
   yellowConditionals: {
     overall: { matches: number; yellows: number; rate: number }
     zeroFouls: { matches: number; yellows: number; rate: number | null }
@@ -208,6 +223,71 @@ function hit(market: MarketKey, row: MatchRow) {
 function hitRate(rows: MatchRow[], market: MarketKey) {
   if (!rows.length) return 0
   return rows.filter(row => hit(market, row)).length / rows.length
+}
+function rowDate(row:MatchRow){return String(row.matchDate??"").slice(0,10)}
+function playerNameMatch(a:string|null|undefined,b:string|null|undefined){
+  const x=norm(a),y=norm(b)
+  return Boolean(x&&y&&(x===y||x.includes(y)||y.includes(x)))
+}
+function weightedH2HContext(input:{
+  candidate:any
+  opponent:string
+  h2hRows:MatchRow[]
+  allHistory:MatchRow[]
+  currentCandidates:any[]
+  matchupCandidate:any|null
+  targetDate:string
+}){
+  const currentOpponents=input.currentCandidates.filter(c=>teamMatch(c.team,input.opponent))
+  let weightedOverlap=0,totalWeight=0
+  let sameMatchupMeetings=0,sameMatchupCards=0,sameMatchupFouls=0
+  const weightedRows:Array<{row:MatchRow;weight:number;overlap:number;sameMatchup:boolean}>=[]
+  for(const row of input.h2hRows){
+    const d=rowDate(row)
+    const pastCurrentOpponents=input.allHistory.filter(r=>
+      rowDate(r)===d &&
+      teamMatch(r.team,input.opponent) &&
+      teamMatch(r.opponent,input.candidate.team) &&
+      played(r)
+    )
+    const pastNames=pastCurrentOpponents.map(r=>String(r.playerName??""))
+    const overlapCount=currentOpponents.filter(c=>pastNames.some(name=>playerNameMatch(name,c.dbName??c.name))).length
+    const overlap=Math.max(0,Math.min(1,overlapCount/Math.max(1,Math.min(11,currentOpponents.length||11))))
+    const sameMatchup=Boolean(input.matchupCandidate&&pastNames.some(name=>playerNameMatch(name,input.matchupCandidate.dbName??input.matchupCandidate.name)))
+    if(sameMatchup){
+      sameMatchupMeetings++
+      if(row.yellowCard===true)sameMatchupCards++
+      sameMatchupFouls+=Number(row.foulsCommitted??0)
+    }
+    const targetMs=new Date(input.targetDate+"T12:00:00Z").getTime()
+    const rowMs=new Date(d+"T12:00:00Z").getTime()
+    const days=Number.isFinite(targetMs)&&Number.isFinite(rowMs)?Math.max(0,(targetMs-rowMs)/86400000):9999
+    const recency=days<=180?.30:days<=365?.18:days<=730?.08:0
+    const weight=1+overlap*1.15+(sameMatchup?.65:0)+recency
+    weightedRows.push({row,weight,overlap,sameMatchup})
+    weightedOverlap+=overlap*weight
+    totalWeight+=weight
+  }
+  const weightedRate=(market:MarketKey)=>{
+    let numerator=0,denominator=0
+    for(const item of weightedRows){
+      numerator+=(hit(market,item.row)?1:0)*item.weight
+      denominator+=item.weight
+    }
+    return denominator>0?numerator/denominator:null
+  }
+  return {
+    weightedRate,
+    averageLineupOverlap:totalWeight>0?weightedOverlap/totalWeight:null,
+    sameMatchupMeetings,
+    sameMatchupCards,
+    sameMatchupFouls,
+    cards:input.h2hRows.filter(r=>r.yellowCard===true).length,
+    fouls:input.h2hRows.reduce((s,r)=>s+Number(r.foulsCommitted??0),0),
+    fouled:input.h2hRows.reduce((s,r)=>s+Number(r.foulsDrawn??0),0),
+    shots:input.h2hRows.reduce((s,r)=>s+Number(r.shots??0),0),
+    shotsOnTarget:input.h2hRows.reduce((s,r)=>s+Number(r.shotsOnTarget??0),0),
+  }
 }
 function betaSmoothed(hits: number, total: number, prior: number, priorStrength = 6) {
   return (hits + prior * priorStrength) / (total + priorStrength)
@@ -488,12 +568,27 @@ function marketReasons(input: {
   season: number
   h2hRate: number | null
   h2hN: number
+  h2hCards?: number
+  h2hLineupOverlap?: number | null
+  sameMatchupMeetings?: number
+  sameMatchupCards?: number
+  sameMatchupFouls?: number
   matchupName?: string | null
   matchupFouled90?: number | null
   conditional2?: { matches: number; yellows: number; rate: number | null }
   countryH2H?: { matches:number; playerSamples:number; cardRate:number|null; foulsPerPlayer:number|null } | null
 }) {
   const reasons: string[] = []
+  if(input.market==="card"&&Number(input.h2hCards??0)>0){
+    const overlap=input.h2hLineupOverlap==null?"":" · "+Math.round(Number(input.h2hLineupOverlap)*100)+"% current-opponent lineup overlap"
+    reasons.push("Booked in "+input.h2hCards+"/"+input.h2hN+" previous meetings"+overlap)
+  }
+  if((input.market.startsWith("foul")&&!input.market.startsWith("fouled"))&&Number(input.sameMatchupMeetings??0)>0&&Number(input.sameMatchupFouls??0)>0){
+    reasons.push("Same likely direct opponent appeared in "+input.sameMatchupMeetings+" H2H meeting"+(input.sameMatchupMeetings===1?"":"s")+" · "+input.sameMatchupFouls+" fouls committed")
+  }
+  if(input.market==="card"&&Number(input.sameMatchupCards??0)>0){
+    reasons.push("Booked with the same likely direct matchup on the pitch before")
+  }
   if (input.recent5 >= input.season + 0.12) reasons.push("Recent form is above longer-run rate")
   if (input.season >= 0.65 && input.market !== "card") reasons.push("Strong historical hit rate")
   if (input.market === "card" && input.conditional2 && input.conditional2.matches >= 3 && Number(input.conditional2.rate ?? 0) >= 0.45) {
@@ -939,6 +1034,15 @@ export async function GET(request: Request) {
     const matchupFouled90 = matchupFouledRaw == null ? null : Number(matchupFouledRaw)
     const directMatchup = candidate?.likelyMatchup?.type === "direct-predicted-role"
     const matchupConfidence = Number(candidate?.likelyMatchup?.confidence ?? 0)
+    const h2hContext=weightedH2HContext({
+      candidate,
+      opponent,
+      h2hRows,
+      allHistory:history,
+      currentCandidates:candidates,
+      matchupCandidate:matchupCandidate??null,
+      targetDate:date,
+    })
 
     const yellowOverall = rows.filter(row => row.yellowCard === true).length
     const cond0 = conditionalExact(rows, fouls => fouls === 0)
@@ -958,8 +1062,13 @@ export async function GET(request: Request) {
       const recent5HitRate = hitRate(recent5Rows, market)
       const seasonHitRate = hitRate(rows, market)
       const h2hHitRate = h2hRows.length ? hitRate(h2hRows, market) : null
-      const h2hWeight = Math.min(0.18, h2hRows.length / 30)
-      probability = blend(probability, h2hHitRate, h2hWeight)
+      const weightedH2HRate=h2hContext.weightedRate(market)
+      const overlap=h2hContext.averageLineupOverlap??0
+      const sampleReliability=h2hRows.length/(h2hRows.length+3)
+      const sameMatchupBoost=h2hContext.sameMatchupMeetings>0?0.05:0
+      const maxWeight=market==="card"||market.startsWith("foul")?0.34:market.startsWith("shot")||market.startsWith("sot")?0.26:0.22
+      const h2hWeight=Math.min(maxWeight,(0.10+overlap*0.16+sameMatchupBoost)*sampleReliability)
+      probability = blend(probability, weightedH2HRate??h2hHitRate, h2hWeight)
 
       const threshold = thresholdForMarket(market)
       const minutesScale = expectedMinutes / 90
@@ -987,6 +1096,11 @@ export async function GET(request: Request) {
       }
 
       if (market.startsWith("foul") && !market.startsWith("fouled")) {
+        if(h2hContext.sameMatchupMeetings>0&&h2hContext.sameMatchupFouls>0){
+          const perMeeting=h2hContext.sameMatchupFouls/Math.max(1,h2hContext.sameMatchupMeetings)
+          const reliability=Math.min(1,h2hContext.sameMatchupMeetings/3)
+          probability=logitAdjust(probability,Math.min(.22,(perMeeting-1)*.10*reliability))
+        }
         if (matchupFouled90 != null && matchupFouled90 > 0) {
           const roleWeight=directMatchup ? 0.17 : 0.10
           const confidenceWeight=directMatchup ? Math.max(0.78,Math.min(1.08,matchupConfidence||0.9)) : 0.82
@@ -999,6 +1113,15 @@ export async function GET(request: Request) {
       }
       if (market === "card") {
         const overallRate = rows.length ? yellowOverall / rows.length : PRIOR.card
+        if(h2hRows.length>0&&h2hContext.cards>0){
+          const cardRate=h2hContext.cards/h2hRows.length
+          const overlap=h2hContext.averageLineupOverlap??0
+          const reliability=Math.min(1,h2hRows.length/4)
+          probability=logitAdjust(probability,Math.min(.34,(cardRate-overallRate)*(.38+.32*overlap)*reliability))
+        }
+        if(h2hContext.sameMatchupCards>0){
+          probability=logitAdjust(probability,Math.min(.20,.10*h2hContext.sameMatchupCards))
+        }
         const foul1Probability = empiricalProbability(rows, "foul1")
         const foul2Probability = empiricalProbability(rows, "foul2")
         const foul3Probability = empiricalProbability(rows, "foul3")
@@ -1059,6 +1182,9 @@ export async function GET(request: Request) {
         recent5HitRate: Math.round(recent5HitRate * 1000) / 1000,
         seasonHitRate: Math.round(seasonHitRate * 1000) / 1000,
         h2hHitRate: h2hHitRate == null ? null : Math.round(h2hHitRate * 1000) / 1000,
+        h2hMatches:h2hRows.length,
+        h2hLineupOverlap:h2hContext.averageLineupOverlap==null?null:Math.round(h2hContext.averageLineupOverlap*1000)/1000,
+        sameMatchupMeetings:h2hContext.sameMatchupMeetings,
         reasons: marketReasons({
           market,
           probability,
@@ -1066,6 +1192,11 @@ export async function GET(request: Request) {
           season: seasonHitRate,
           h2hRate: h2hHitRate,
           h2hN: h2hRows.length,
+          h2hCards:h2hContext.cards,
+          h2hLineupOverlap:h2hContext.averageLineupOverlap,
+          sameMatchupMeetings:h2hContext.sameMatchupMeetings,
+          sameMatchupCards:h2hContext.sameMatchupCards,
+          sameMatchupFouls:h2hContext.sameMatchupFouls,
           matchupName: candidate?.likelyMatchup?.name ?? null,
           matchupFouled90,
           conditional2: cond2,
@@ -1181,6 +1312,18 @@ export async function GET(request: Request) {
       sampleMinutes,
       expectedMinutes,
       matchup: candidate?.likelyMatchup ? { name: candidate.likelyMatchup.name, role: candidate.likelyMatchup.role ?? null, fouled90: matchupFouled90, type:candidate.likelyMatchup.type ?? null, seasonFouled90:candidate.likelyMatchup.seasonFouled90 ?? null, recentFouled90:candidate.likelyMatchup.recentFouled90 ?? null } : null,
+      h2hContext:{
+        matches:h2hRows.length,
+        cards:h2hContext.cards,
+        fouls:h2hContext.fouls,
+        fouled:h2hContext.fouled,
+        shots:h2hContext.shots,
+        shotsOnTarget:h2hContext.shotsOnTarget,
+        averageLineupOverlap:h2hContext.averageLineupOverlap==null?null:Math.round(h2hContext.averageLineupOverlap*1000)/1000,
+        sameMatchupMeetings:h2hContext.sameMatchupMeetings,
+        sameMatchupCards:h2hContext.sameMatchupCards,
+        sameMatchupFouls:h2hContext.sameMatchupFouls,
+      },
       yellowConditionals: {
         overall: { matches: rows.length, yellows: yellowOverall, rate: rows.length ? Math.round((yellowOverall / rows.length) * 1000) / 1000 : 0 },
         zeroFouls: cond0,
@@ -1281,7 +1424,7 @@ export async function GET(request: Request) {
     previewFoulTargetSlips,
     methodology: {
       version: "scorecard-v2-calibrated",
-      description: "Player-level pre-match probabilities use only match rows dated before the target fixture. Before official teams are released, the model uses a probable XI built from current squad availability, start rate, minutes and any stronger published predicted-XI source available. Once official lineups arrive, predicted starters are discarded and the scorecard is rebuilt from the confirmed XI. Probabilities combine domestic and international player history, recency, opponent H2H, expected minutes, matchup pressure, count-rate checks, referee/card context and walk-forward calibration.",
+      description: "Player-level pre-match probabilities use only match rows dated before the target fixture. Before official teams are released, the model uses a probable XI built from current squad availability, start rate, minutes and any stronger published predicted-XI source available. Once official lineups arrive, predicted starters are discarded and the scorecard is rebuilt from the confirmed XI. Probabilities combine domestic and international player history, recency, opponent H2H, expected minutes, matchup pressure, count-rate checks, referee/card context and walk-forward calibration. H2H is lineup-aware: previous meetings receive more weight when more of today's predicted/confirmed opponents also played, and the strongest extra weight is reserved for a returning likely direct matchup.",
       cardConditional: "Yellow-card estimates measure each player's booking rate at 0 fouls, exactly 1, exactly 2, 3+, 1+ and 2+ foul states, with sample-size reliability. Match-level data still cannot identify the exact foul that triggered the booking.",
       calibrationWarning: "Displayed probabilities are adjusted through walk-forward calibration built from earlier-match-only predictions across 30 competitions. They remain estimates, not guarantees.",
       slipWarning: "Same-player and same-match legs can be correlated. Exact individual bookmaker foul lines are mirrored only when their threshold is explicitly present in the feed. Bet365's same-game Builder price is proprietary and is not labelled exact unless a bookmaker builder quote is supplied.",
