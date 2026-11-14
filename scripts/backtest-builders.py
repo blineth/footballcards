@@ -190,6 +190,8 @@ def main()->int:
                 built=beam_builder(candidates,target)
                 if not built:continue
                 legs=built["legs"]
+                if not (target["decimal"]*.80 <= built["price"] <= target["decimal"]*1.35):
+                    continue
                 all_hit=all(bool(l["hit"]) for l in legs)
                 model=math.prod(float(l["p"]) for l in legs)
                 target_rows[target["id"]].append({
