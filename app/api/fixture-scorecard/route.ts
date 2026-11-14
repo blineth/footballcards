@@ -686,21 +686,25 @@ export async function GET(request: Request) {
     }
   }).sort((a, b) => b.markets.foul1.probability - a.markets.foul1.probability)
 
-  const allSlips = confirmed ? buildSlips(players) : []
-  const slips = allSlips.map(slip => ({
+  const recommendationSlips = buildSlips(players)
+  const enrichedRecommendationSlips = recommendationSlips.map(slip => ({
     ...slip,
-    placeable: slip.legs.every(leg => availabilityForMarket(marketAvailability, leg.market) === "available"),
+    placeable: confirmed && slip.legs.every(leg => availabilityForMarket(marketAvailability, leg.market) === "available"),
     marketAvailability: slip.legs.map(leg => ({
       player: leg.player,
       market: leg.market,
       status: availabilityForMarket(marketAvailability, leg.market),
     })),
   }))
-  const foulTargetSlips = (confirmed ? buildFoulTargetSlips(players) : []).map(slip => ({
+  const slips = confirmed ? enrichedRecommendationSlips : []
+  const previewSlips = confirmed ? [] : enrichedRecommendationSlips
+  const foulRecommendations = buildFoulTargetSlips(players).map(slip => ({
     ...slip,
-    placeable: slip.legs.length > 0 && marketAvailability.foul === "available",
+    placeable: confirmed && slip.legs.length > 0 && marketAvailability.foul === "available",
     marketStatus: marketAvailability.foul,
   }))
+  const foulTargetSlips = confirmed ? foulRecommendations : []
+  const previewFoulTargetSlips = confirmed ? [] : foulRecommendations
 
   return NextResponse.json({
     ok: true,
@@ -722,7 +726,9 @@ export async function GET(request: Request) {
     playerCount: players.length,
     players,
     slips,
+    previewSlips,
     foulTargetSlips,
+    previewFoulTargetSlips,
     methodology: {
       version: "scorecard-v2-calibrated",
       description: "Player-level pre-match probabilities use only match rows dated before the target fixture. They combine smoothed historical hit rates, recency, H2H, expected minutes, direct matchup pressure, count-rate cross-checks, referee/card context and walk-forward calibration.",
