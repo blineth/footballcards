@@ -82,6 +82,20 @@ type SlipLeg = {
   reason: string
 }
 
+type FoulTargetSlip = {
+  id: string
+  targetFractional: string
+  targetDecimal: number
+  legs: SlipLeg[]
+  referenceProductOdds: number | null
+  averageLegProbability: number | null
+  minimumLegProbability: number | null
+  pricedLegs: number
+  usesLivePrices: boolean
+  withinTargetRange: boolean
+  note: string
+}
+
 const MARKET_LABELS: Record<MarketKey, string> = {
   foul1: "1+ foul committed",
   foul2: "2+ fouls committed",
@@ -315,6 +329,111 @@ function makeSlip(id: string, title: string, risk: string, legs: SlipLeg[], note
     note: note + " Same-match Bet Builder legs are not multiplied into a fake combined price; an explicit bookmaker combo price is required.",
   }
 }
+
+function referenceOdd(leg: SlipLeg) {
+  return Number(leg.bookmakerOdds ?? leg.fairOdds ?? (leg.probability > 0 ? 1 / leg.probability : 0))
+}
+function buildFoulTargetSlips(players: ScorePlayer[]): FoulTargetSlip[] {
+  const targets = [
+    { id:"foul-3-1", fractional:"3/1", decimal:4, minProbability:0.66 },
+    { id:"foul-10-1", fractional:"10/1", decimal:11, minProbability:0.62 },
+    { id:"foul-20-1", fractional:"20/1", decimal:21, minProbability:0.58 },
+    { id:"foul-50-1", fractional:"50/1", decimal:51, minProbability:0.54 },
+    { id:"foul-100-1", fractional:"100/1", decimal:101, minProbability:0.50 },
+  ] as const
+
+  const pool = players
+    .map(player => marketLeg(player, "foul1"))
+    .filter(leg => leg.confidence !== "D")
+    .filter(leg => Number.isFinite(referenceOdd(leg)) && referenceOdd(leg) > 1)
+    .sort((a,b) => {
+      const qualityA = a.probability + Math.max(0, Number(a.edge ?? 0)) * 0.25
+      const qualityB = b.probability + Math.max(0, Number(b.edge ?? 0)) * 0.25
+      return qualityB - qualityA
+    })
+
+  return targets.map(target => {
+    const candidates = pool.filter(leg => leg.probability >= target.minProbability)
+    type State = { legs:SlipLeg[]; product:number; teamCounts:Record<string,number>; quality:number }
+    let states:State[] = [{legs:[], product:1, teamCounts:{}, quality:0}]
+
+    for (const leg of candidates) {
+      const next = [...states]
+      for (const state of states) {
+        if (state.legs.length >= 12) continue
+        const count = state.teamCounts[leg.team] ?? 0
+        if (count >= 6) continue
+        if (state.legs.some(existing => existing.player === leg.player)) continue
+        const product = state.product * referenceOdd(leg)
+        if (product > target.decimal * 2.25 && state.legs.length >= 2) continue
+        next.push({
+          legs:[...state.legs, leg],
+          product,
+          teamCounts:{...state.teamCounts,[leg.team]:count+1},
+          quality:state.quality + leg.probability,
+        })
+      }
+      states = next
+        .filter(state => state.legs.length <= 12)
+        .sort((a,b) => {
+          const score = (state:State) => {
+            if (!state.legs.length) return Number.POSITIVE_INFINITY
+            const distance = Math.abs(Math.log(Math.max(1.01,state.product)) - Math.log(target.decimal))
+            const avg = state.quality / state.legs.length
+            const underPenalty = state.product < target.decimal * 0.72 ? 0.7 : 0
+            return distance * 1.7 + underPenalty - avg * 0.55
+          }
+          return score(a)-score(b)
+        })
+        .slice(0,180)
+    }
+
+    const viable = states
+      .filter(state => state.legs.length >= 2)
+      .sort((a,b) => {
+        const distanceA = Math.abs(Math.log(a.product)-Math.log(target.decimal))
+        const distanceB = Math.abs(Math.log(b.product)-Math.log(target.decimal))
+        const avgA = a.quality/a.legs.length
+        const avgB = b.quality/b.legs.length
+        return (distanceA*1.8-avgA*0.5)-(distanceB*1.8-avgB*0.5)
+      })
+    const best = viable[0]
+    if (!best) {
+      return {
+        id:target.id,
+        targetFractional:target.fractional,
+        targetDecimal:target.decimal,
+        legs:[],
+        referenceProductOdds:null,
+        averageLegProbability:null,
+        minimumLegProbability:null,
+        pricedLegs:0,
+        usesLivePrices:false,
+        withinTargetRange:false,
+        note:"Not enough qualifying 1+ foul selections for this target while respecting Bet365's 12-selection and six-players-per-team limits.",
+      }
+    }
+
+    const pricedLegs = best.legs.filter(leg=>leg.bookmakerOdds!=null).length
+    const avg = best.legs.reduce((s,l)=>s+l.probability,0)/best.legs.length
+    const min = Math.min(...best.legs.map(l=>l.probability))
+    const within = best.product >= target.decimal*0.72 && best.product <= target.decimal*1.45
+    return {
+      id:target.id,
+      targetFractional:target.fractional,
+      targetDecimal:target.decimal,
+      legs:best.legs,
+      referenceProductOdds:Math.round(best.product*100)/100,
+      averageLegProbability:Math.round(avg*1000)/1000,
+      minimumLegProbability:Math.round(min*1000)/1000,
+      pricedLegs,
+      usesLivePrices:pricedLegs===best.legs.length,
+      withinTargetRange:within,
+      note:"Built from calibrated 1+ foul probabilities, with a maximum of 12 selections and no more than six players from either team. The reference product uses individual live prices where available, otherwise fair odds. Bet365's actual Bet Builder price is correlation-adjusted and must be taken from the bookmaker rather than by multiplying these legs.",
+    }
+  })
+}
+
 function buildSlips(players: ScorePlayer[]) {
   const used = new Set<string>()
   const safeMarkets: MarketKey[] = ["foul1", "fouled1", "shot1", "sot1", "card"]
@@ -544,6 +663,7 @@ export async function GET(request: Request) {
   }).sort((a, b) => b.markets.foul1.probability - a.markets.foul1.probability)
 
   const slips = confirmed ? buildSlips(players) : []
+  const foulTargetSlips = confirmed ? buildFoulTargetSlips(players) : []
 
   return NextResponse.json({
     ok: true,
@@ -563,9 +683,10 @@ export async function GET(request: Request) {
     playerCount: players.length,
     players,
     slips,
+    foulTargetSlips,
     methodology: {
       version: "scorecard-v2-calibrated",
-      description: "Player-level pre-match probabilities use only match rows dated before the target fixture. They combine smoothed historical hit rates, recency, H2H, expected minutes, direct matchup pressure, count-rate cross-checks and referee/card context.",
+      description: "Player-level pre-match probabilities use only match rows dated before the target fixture. They combine smoothed historical hit rates, recency, H2H, expected minutes, direct matchup pressure, count-rate cross-checks, referee/card context and walk-forward calibration.",
       cardConditional: "Yellow-card estimates measure each player's booking rate at 0 fouls, exactly 1, exactly 2, 3+, 1+ and 2+ foul states, with sample-size reliability. Match-level data still cannot identify the exact foul that triggered the booking.",
       calibrationWarning: "Displayed probabilities are adjusted through walk-forward calibration built from earlier-match-only predictions across 30 competitions. They remain estimates, not guarantees.",
       slipWarning: "Same-player and same-match legs can be correlated. Combined slip probability is deliberately not calculated by multiplying leg probabilities.",
