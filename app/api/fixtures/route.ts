@@ -12,8 +12,12 @@ const ESPN_LEAGUES: Record<Competition, string[]> = {
   Championship: ["eng.2"],
   "League One": ["eng.3"],
   "League Two": ["eng.4"],
-  International: ["uefa.nations", "fifa.friendly", "fifa.world", "fifa.worldq.uefa", "uefa.euro", "uefa.euroq"],
+  International: ["uefa.nations", "fifa.friendly", "fifa.world", "fifa.worldq.uefa", "fifa.worldq.conmebol", "fifa.worldq.concacaf", "fifa.worldq.afc", "fifa.worldq.caf", "uefa.euro", "uefa.euroq"],
 }
+
+type FixtureCacheEntry={fixtures:Fixture[];updatedAt:number}
+const fixtureCache=new Map<string,FixtureCacheEntry>()
+const FIXTURE_CACHE_MS=12*60*60*1000
 
 function londonYmd(value: string) {
   const d = new Date(value)
@@ -122,7 +126,36 @@ function addDays(date: string, days: number) {
 }
 
 function fixtureKey(f: Fixture) {
-  return [f.competition, f.kickoff.slice(0,10), f.home.name, f.away.name].join("|").toLowerCase()
+  const clean=(value:string)=>value.toLowerCase().replace(/\b(afc|fc)\b/g,"").replace(/[^a-z0-9]+/g," ").trim()
+  return [f.competition, londonYmd(f.kickoff), clean(f.home.name), clean(f.away.name)].join("|")
+}
+
+function stateRank(status:MatchStatus|undefined){
+  if(status==="finished")return 5
+  if(status==="halftime")return 4
+  if(status==="live")return 4
+  if(status==="postponed")return 3
+  if(status==="scheduled")return 1
+  return 0
+}
+
+function mergeFixture(existing:Fixture|undefined,incoming:Fixture){
+  if(!existing)return incoming
+  const richer=stateRank(incoming.status)>=stateRank(existing.status)?incoming:existing
+  const incomingScore=(incoming.score?.home!=null||incoming.score?.away!=null)?incoming.score:null
+  const existingScore=(existing.score?.home!=null||existing.score?.away!=null)?existing.score:null
+  return {
+    ...existing,
+    ...incoming,
+    status:richer.status,
+    score:incomingScore??existingScore??richer.score,
+    elapsed:incoming.elapsed??existing.elapsed??null,
+    home:{...existing.home,...incoming.home,name:incoming.home.name||existing.home.name},
+    away:{...existing.away,...incoming.away,name:incoming.away.name||existing.away.name},
+    venue:incoming.venue??existing.venue??null,
+    referee:incoming.referee??existing.referee??null,
+    lineupStatus:incoming.lineupStatus==="confirmed"||existing.lineupStatus!=="confirmed"?incoming.lineupStatus:existing.lineupStatus,
+  } satisfies Fixture
 }
 
 async function fixturesForDate(date: string) {
@@ -144,12 +177,28 @@ async function fixturesForDate(date: string) {
     console.log("[v0] ESPN fixture fetch failed:", error instanceof Error ? error.message : error)
   }
 
-  // Merge rather than only falling back when the primary provider is totally empty.
-  // This prevents one competition disappearing when the provider has partial coverage.
+  // Merge all live sources, then merge the last-good same-day snapshot.
+  // A provider can briefly drop a competition or revert a live row back to scheduled;
+  // neither should make a match disappear from the product.
   const merged = new Map<string, Fixture>()
-  for (const f of espn) merged.set(fixtureKey(f), f)
-  for (const f of providerFixtures) merged.set(fixtureKey(f), f)
-  return [...merged.values()]
+  for (const f of espn) merged.set(fixtureKey(f), mergeFixture(merged.get(fixtureKey(f)),f))
+  for (const f of providerFixtures) merged.set(fixtureKey(f), mergeFixture(merged.get(fixtureKey(f)),f))
+
+  const cached=fixtureCache.get(date)
+  if(cached&&Date.now()-cached.updatedAt<FIXTURE_CACHE_MS){
+    for(const f of cached.fixtures){
+      const key=fixtureKey(f)
+      merged.set(key,mergeFixture(f,merged.get(key)??f))
+    }
+  }
+
+  const fixtures=[...merged.values()]
+  if(fixtures.length){
+    fixtureCache.set(date,{fixtures,updatedAt:Date.now()})
+    return fixtures
+  }
+  if(cached&&Date.now()-cached.updatedAt<FIXTURE_CACHE_MS)return cached.fixtures
+  return []
 }
 
 function groupFixtures(fixtures: Fixture[]) {
