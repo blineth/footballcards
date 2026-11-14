@@ -1,6 +1,7 @@
 import { londonToday } from "@/lib/date"
 import { getProvider } from "@/lib/providers"
 import { getRefereeByName } from "@/lib/historical"
+import { isDatabaseConfigured, pool } from "@/lib/db"
 import type { Competition, Fixture, FixturesResponse, MatchStatus } from "@/lib/types"
 import { NextResponse } from "next/server"
 
@@ -17,7 +18,52 @@ const ESPN_LEAGUES: Record<Competition, string[]> = {
 
 type FixtureCacheEntry={fixtures:Fixture[];updatedAt:number}
 const fixtureCache=new Map<string,FixtureCacheEntry>()
-const FIXTURE_CACHE_MS=12*60*60*1000
+const FIXTURE_CACHE_MS=18*60*60*1000
+let fixtureCacheTableReady=false
+
+async function ensureFixtureCacheTable(){
+  if(!isDatabaseConfigured)return false
+  if(fixtureCacheTableReady)return true
+  try{
+    await pool.query(`CREATE TABLE IF NOT EXISTS fixture_day_cache (
+      fixture_date date PRIMARY KEY,
+      payload jsonb NOT NULL,
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )`)
+    fixtureCacheTableReady=true
+    return true
+  }catch{return false}
+}
+
+async function readPersistentFixtureCache(date:string):Promise<FixtureCacheEntry|null>{
+  if(!(await ensureFixtureCacheTable()))return null
+  try{
+    const result=await pool.query(
+      `SELECT payload,updated_at FROM fixture_day_cache
+       WHERE fixture_date=$1 AND updated_at > now() - interval '18 hours'
+       LIMIT 1`,[date],
+    )
+    const row=result.rows[0]
+    const fixtures=Array.isArray(row?.payload)?row.payload as Fixture[]:[]
+    if(!fixtures.length)return null
+    const entry={fixtures,updatedAt:new Date(row.updated_at).getTime()}
+    fixtureCache.set(date,entry)
+    return entry
+  }catch{return null}
+}
+
+async function writePersistentFixtureCache(date:string,fixtures:Fixture[]){
+  if(!fixtures.length||!(await ensureFixtureCacheTable()))return
+  try{
+    await pool.query(
+      `INSERT INTO fixture_day_cache (fixture_date,payload,updated_at)
+       VALUES ($1,$2::jsonb,now())
+       ON CONFLICT (fixture_date)
+       DO UPDATE SET payload=EXCLUDED.payload,updated_at=now()`,
+      [date,JSON.stringify(fixtures)],
+    )
+  }catch{}
+}
 
 function londonYmd(value: string) {
   const d = new Date(value)
@@ -184,7 +230,11 @@ async function fixturesForDate(date: string) {
   for (const f of espn) merged.set(fixtureKey(f), mergeFixture(merged.get(fixtureKey(f)),f))
   for (const f of providerFixtures) merged.set(fixtureKey(f), mergeFixture(merged.get(fixtureKey(f)),f))
 
-  const cached=fixtureCache.get(date)
+  const hasFresh=espn.length+providerFixtures.length>0
+  let cached=fixtureCache.get(date)??null
+  if((!cached||Date.now()-cached.updatedAt>=FIXTURE_CACHE_MS)&&isDatabaseConfigured){
+    cached=await readPersistentFixtureCache(date)
+  }
   if(cached&&Date.now()-cached.updatedAt<FIXTURE_CACHE_MS){
     for(const f of cached.fixtures){
       const key=fixtureKey(f)
@@ -194,7 +244,9 @@ async function fixturesForDate(date: string) {
 
   const fixtures=[...merged.values()]
   if(fixtures.length){
-    fixtureCache.set(date,{fixtures,updatedAt:Date.now()})
+    const entry={fixtures,updatedAt:Date.now()}
+    fixtureCache.set(date,entry)
+    if(hasFresh)await writePersistentFixtureCache(date,fixtures)
     return fixtures
   }
   if(cached&&Date.now()-cached.updatedAt<FIXTURE_CACHE_MS)return cached.fixtures
