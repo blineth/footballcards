@@ -21,6 +21,9 @@ type Tracking={
   available:boolean;days:number;gradedLegs:number;hits?:number;hitRate?:number|null;
   avgProbability?:number|null;brier?:number|null;topPickLegs?:number;topPickHits?:number;
   topPickHitRate?:number|null;topPickAvgProbability?:number|null;
+  completeSlips?:number;winningSlips?:number;slipHitRate?:number|null;
+  topPickSlips?:number;topPickWinningSlips?:number;topPickSlipHitRate?:number|null;
+  exactPriceLegs?:number;exactPriceProfitUnits?:number|null;exactPriceROI?:number|null;
   byMarket?:Array<{market:string;sample:number;hits:number;hitRate:number|null;avgProbability:number|null;avgExactOdds:number|null}>
 }
 type Response={
@@ -109,9 +112,17 @@ function TrackingCard({tracking}:{tracking:Tracking}){
             <Stat label="Avg model" value={percent(tracking.avgProbability)}/>
           </div>
           <div className="mt-2 grid grid-cols-2 gap-2">
+            <Stat label="Whole-slip hit" value={percent(tracking.slipHitRate)}/>
+            <Stat label="Top-pick slip hit" value={percent(tracking.topPickSlipHitRate)}/>
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-2">
             <Stat label="Top-pick leg hit" value={percent(tracking.topPickHitRate)}/>
             <Stat label="Top-pick model" value={percent(tracking.topPickAvgProbability)}/>
           </div>
+          {(tracking.exactPriceLegs??0)>=20?<div className="mt-2 grid grid-cols-2 gap-2">
+            <Stat label="Exact-price legs" value={String(tracking.exactPriceLegs??0)}/>
+            <Stat label="Exact-price ROI" value={tracking.exactPriceROI==null?"—":((tracking.exactPriceROI>=0?"+":"")+(tracking.exactPriceROI*100).toFixed(1)+"%")}/>
+          </div>:null}
         </>}
       </div>
     </div>
