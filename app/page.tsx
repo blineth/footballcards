@@ -115,11 +115,15 @@ export default function HomePage(){
   const[odds,setOdds]=useState<Record<string,OddsResponse>>({})
   const[sot,setSot]=useState<Record<string,SotResponse>>({})
   const[championshipDb,setChampionshipDb]=useState<ChampionshipPlayersResponse|null>(null)
+  const[premierLeagueDb,setPremierLeagueDb]=useState<ChampionshipPlayersResponse|null>(null)
   const[h2h,setH2h]=useState<Record<string,H2HResponse>>({})
   const[backtest,setBacktest]=useState<BacktestResponse|null>(null)
+  const[premierBacktest,setPremierBacktest]=useState<BacktestResponse|null>(null)
   const[loadingBacktest,setLoadingBacktest]=useState(false)
   const[loadingH2h,setLoadingH2h]=useState<Record<string,boolean>>({})
   const[loadingChampionshipDb,setLoadingChampionshipDb]=useState(false)
+  const[loadingPremierLeagueDb,setLoadingPremierLeagueDb]=useState(false)
+  const[loadingPremierBacktest,setLoadingPremierBacktest]=useState(false)
   const[loading,setLoading]=useState<Record<string,boolean>>({})
   const[loadingSot,setLoadingSot]=useState<Record<string,boolean>>({})
   const[loadingFixtures,setLoadingFixtures]=useState(false)
@@ -151,6 +155,17 @@ export default function HomePage(){
     }finally{setLoadingChampionshipDb(false)}
   },[])
 
+  const loadPremierLeagueDb=useCallback(async()=>{
+    setLoadingPremierLeagueDb(true)
+    try{
+      const r=await fetch(`/api/premier-league/players?refresh=${Date.now()}`,{cache:"no-store"})
+      const d=await r.json() as ChampionshipPlayersResponse
+      setPremierLeagueDb(d)
+    }catch{
+      setPremierLeagueDb({connected:false,season:"2026/27",players:[],error:"Premier League player database unavailable"})
+    }finally{setLoadingPremierLeagueDb(false)}
+  },[])
+
   const loadBacktest=useCallback(async()=>{
     setLoadingBacktest(true)
     try{
@@ -160,6 +175,17 @@ export default function HomePage(){
     }catch{
       setBacktest({ok:false,error:"Championship backtest unavailable"})
     }finally{setLoadingBacktest(false)}
+  },[])
+
+  const loadPremierBacktest=useCallback(async()=>{
+    setLoadingPremierBacktest(true)
+    try{
+      const r=await fetch(`/api/premier-league/backtest?refresh=${Date.now()}`,{cache:"no-store"})
+      const d=await r.json() as BacktestResponse
+      setPremierBacktest(d)
+    }catch{
+      setPremierBacktest({ok:false,error:"Premier League backtest unavailable"})
+    }finally{setLoadingPremierBacktest(false)}
   },[])
 
   const loadH2h=useCallback(async(f:Fixture)=>{
@@ -207,7 +233,7 @@ export default function HomePage(){
   },[competition,selectedDate,loadResearch,loadSot,open,openGroups])
 
   useEffect(()=>{void refresh(false)},[competition,selectedDate])
-  useEffect(()=>{if(competition==="Championship"){void loadChampionshipDb();void loadBacktest()}},[competition,loadChampionshipDb,loadBacktest])
+  useEffect(()=>{if(competition==="Championship"){void loadChampionshipDb();void loadBacktest()}else{void loadPremierLeagueDb();void loadPremierBacktest()}},[competition,loadChampionshipDb,loadBacktest,loadPremierLeagueDb,loadPremierBacktest])
   useEffect(()=>{const t=window.setInterval(()=>void refresh(false),60000);return()=>window.clearInterval(t)},[refresh])
 
   const today=londonDate()
@@ -238,9 +264,12 @@ export default function HomePage(){
       </section>
 
       {competition==="Championship"?<>
-        <ChampionshipDatabase data={championshipDb} loading={loadingChampionshipDb} onRefresh={loadChampionshipDb}/>
-        <BacktestPanel data={backtest} loading={loadingBacktest} onRefresh={loadBacktest}/>
-      </>:null}
+        <ChampionshipDatabase leagueName="Championship" data={championshipDb} loading={loadingChampionshipDb} onRefresh={loadChampionshipDb}/>
+        <BacktestPanel leagueName="Championship" data={backtest} loading={loadingBacktest} onRefresh={loadBacktest}/>
+      </>:<>
+        <ChampionshipDatabase leagueName="Premier League" data={premierLeagueDb} loading={loadingPremierLeagueDb} onRefresh={loadPremierLeagueDb}/>
+        <BacktestPanel leagueName="Premier League" data={premierBacktest} loading={loadingPremierBacktest} onRefresh={loadPremierBacktest}/>
+      </>}
 
       {loadingFixtures&&!live?<section className="rounded-2xl border border-border bg-card p-6 text-center text-sm text-muted-foreground"><RefreshCw className="mx-auto mb-2 size-5 animate-spin"/>Loading games…</section>:null}
       {noGames?<section className="rounded-2xl border border-border bg-card p-6 text-center"><p className="font-bold">No {competition} games found for this date.</p></section>:null}
@@ -304,7 +333,7 @@ function Mini({l,v,sub,dec=false,suffix=""}:{l:string;v:number|null|undefined;su
 }
 function Unavailable({text}:{text:string}){return <div className="p-4 text-center text-xs text-muted-foreground">{text}</div>}
 
-function ChampionshipDatabase({data,loading,onRefresh}:{data:ChampionshipPlayersResponse|null;loading:boolean;onRefresh:()=>void}){
+function ChampionshipDatabase({leagueName,data,loading,onRefresh}:{leagueName:string;data:ChampionshipPlayersResponse|null;loading:boolean;onRefresh:()=>void}){
   const[q,setQ]=useState("")
   const[sort,setSort]=useState<keyof ChampionshipPlayer>("foulsCommitted")
   const players=useMemo(()=>{
@@ -315,7 +344,7 @@ function ChampionshipDatabase({data,loading,onRefresh}:{data:ChampionshipPlayers
   },[data,q,sort])
   return <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
     <div className="border-b border-border p-4">
-      <div className="flex items-start justify-between gap-3"><div><p className="font-black">2026/27 Championship player database</p><p className="mt-1 text-xs text-muted-foreground">{data?.playerCount??data?.players?.length??0} players · current season · FBref Standard + Shooting + Misc</p></div><button onClick={onRefresh} className="rounded-lg border bg-card p-2"><RefreshCw className={`size-4 ${loading?"animate-spin":""}`}/></button></div>
+      <div className="flex items-start justify-between gap-3"><div><p className="font-black">2026/27 {leagueName} player database</p><p className="mt-1 text-xs text-muted-foreground">{data?.playerCount??data?.players?.length??0} players · current season · FBref Standard + Shooting + Misc</p></div><button onClick={onRefresh} className="rounded-lg border bg-card p-2"><RefreshCw className={`size-4 ${loading?"animate-spin":""}`}/></button></div>
       <div className="mt-3 grid grid-cols-[1fr_auto] gap-2"><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search player or club" className="min-w-0 rounded-lg border border-border bg-background px-3 py-2 text-sm"/><select value={sort} onChange={e=>setSort(e.target.value as keyof ChampionshipPlayer)} className="rounded-lg border border-border bg-background px-2 py-2 text-xs font-bold"><option value="foulsCommitted">Fouls</option><option value="foulsDrawn">Fouls won</option><option value="yellowCards">Yellow cards</option><option value="shots">Shots</option><option value="shotsOnTarget">SOT</option><option value="goals">Goals</option><option value="assists">Assists</option><option value="minutes">Minutes</option></select></div>
     </div>
     {loading&&!data?<div className="p-6 text-center text-sm text-muted-foreground"><RefreshCw className="mx-auto mb-2 size-5 animate-spin"/>Loading Championship data…</div>:data?.error?<Unavailable text={data.error}/>:<div className="max-h-[34rem] overflow-auto"><table className="w-max min-w-full text-xs"><thead className="sticky top-0 z-10 bg-secondary"><tr className="text-left"><Th>Player</Th><Th>Club</Th><Th>Apps</Th><Th>Min</Th><Th>G</Th><Th>A</Th><Th>Shots</Th><Th>SOT</Th><Th>YC</Th><Th>RC</Th><Th>Fouls</Th><Th>Won</Th><Th>F/90</Th><Th>Won/90</Th><Th>SOT/90</Th></tr></thead><tbody>{players.map(p=><tr key={`${p.name}|${p.team}`} className="border-t border-border"><Td strong>{p.name}</Td><Td>{p.team}</Td><Td>{p.appearances}</Td><Td>{p.minutes==null?"—":p.minutes}</Td><Td>{p.goals}</Td><Td>{p.assists}</Td><Td>{p.shots}</Td><Td>{p.shotsOnTarget}</Td><Td>{p.yellowCards}</Td><Td>{p.redCards}</Td><Td>{p.foulsCommitted}</Td><Td>{p.foulsDrawn}</Td><Td>{fmt(p.fouls90)}</Td><Td>{fmt(p.fouled90)}</Td><Td>{fmt(p.shotsOnTarget90)}</Td></tr>)}</tbody></table></div>}
@@ -332,10 +361,10 @@ function Td({children,strong=false}:{children:React.ReactNode;strong?:boolean}){
 function fmt(v:number|null|undefined){return v==null?"—":Number(v).toFixed(2)}
 
 
-function BacktestPanel({data,loading,onRefresh}:{data:BacktestResponse|null;loading:boolean;onRefresh:()=>void}){
+function BacktestPanel({leagueName,data,loading,onRefresh}:{leagueName:string;data:BacktestResponse|null;loading:boolean;onRefresh:()=>void}){
   const labels:Record<string,string>={card:"Yellow card",foul1:"1+ foul",foul2:"2+ fouls",sot1:"1+ SOT"}
   return <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-    <div className="flex items-start justify-between gap-3 border-b border-border p-4"><div><p className="font-black">Championship signal backtest</p><p className="mt-1 text-xs text-muted-foreground">Walk-forward only · no future-match leakage</p></div><button onClick={onRefresh} className="rounded-lg border bg-card p-2"><RefreshCw className={`size-4 ${loading?"animate-spin":""}`}/></button></div>
+    <div className="flex items-start justify-between gap-3 border-b border-border p-4"><div><p className="font-black">{leagueName} signal backtest</p><p className="mt-1 text-xs text-muted-foreground">Walk-forward only · no future-match leakage</p></div><button onClick={onRefresh} className="rounded-lg border bg-card p-2"><RefreshCw className={`size-4 ${loading?"animate-spin":""}`}/></button></div>
     {!data&&loading?<div className="p-5 text-center text-xs text-muted-foreground">Running backtest…</div>:data?.error?<Unavailable text={data.error}/>:data?.metrics?<div className="p-3">
       <div className="grid grid-cols-2 gap-2">{Object.entries(data.metrics).map(([key,m])=><div key={key} className="rounded-xl border border-border bg-secondary/20 p-3"><p className="text-xs font-black">{labels[key]??key}</p><p className="mt-2 font-mono text-lg font-black">{Math.round(m.top3.hitRate*100)}%</p><p className="text-[0.62rem] text-muted-foreground">Top 3 hit rate · {m.top3.hits}/{m.top3.selections}</p><p className="mt-1 text-[0.62rem] text-muted-foreground">All eligible: {Math.round(m.baseRate*100)}%{m.top3.lift!=null?` · ${m.top3.lift.toFixed(2)}× lift`:""}</p></div>)}</div>
       <p className="mt-3 text-[0.65rem] text-muted-foreground">{data.fixturesInDatabase??0} fixtures · {data.playerMatchRows??0} player-match rows{data.dataQuality?` · ${Math.round(data.dataQuality.positionCoverage*100)}% of played rows have a recorded match role`:""}. {data.warning}</p>
