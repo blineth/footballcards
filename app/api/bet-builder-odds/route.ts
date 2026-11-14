@@ -99,8 +99,32 @@ async function attachMovement(input:{date:string;home:string;away:string;competi
 type MarketAvailabilityState = "available" | "unavailable" | "unknown"
 type MarketAvailability = Record<"card"|"foul"|"fouled"|"shot"|"sot", MarketAvailabilityState>
 
-function marketAvailability(selections:Array<{kind:string}>, verified:boolean):MarketAvailability {
-  const state = (kind:string):MarketAvailabilityState => selections.some(s=>s.kind===kind) ? "available" : verified ? "unavailable" : "unknown"
+function isPlayerPropSelection(selection:{market?:string;label?:string;kind:string}) {
+  const market = norm(selection.market)
+  const label = norm(selection.label)
+  const text = (market + " " + label).trim()
+
+  if (selection.kind === "card") {
+    return /\bplayer\b/.test(market) || /\bto be booked\b|\bbooked\b|\bto receive a card\b|\bcarded\b/.test(text)
+  }
+  if (selection.kind === "foul") {
+    return /\bplayer\b/.test(market) || /\bto commit\b|\bplayer fouls committed\b|\bfouls committed by\b/.test(text)
+  }
+  if (selection.kind === "fouled") {
+    return /\bplayer\b/.test(market) || /\bto be fouled\b|\bfouls drawn\b|\bfouls won\b/.test(text)
+  }
+  if (selection.kind === "sot") {
+    return /\bplayer\b/.test(market) || /\bplayer shots on target\b|\bshots on target by\b/.test(text)
+  }
+  if (selection.kind === "shot") {
+    return /\bplayer\b/.test(market) || /\bplayer shots\b|\bshots by\b/.test(text)
+  }
+  return false
+}
+
+function marketAvailability(selections:Array<{market?:string;label?:string;kind:string}>, verified:boolean):MarketAvailability {
+  const playerSelections = selections.filter(isPlayerPropSelection)
+  const state = (kind:string):MarketAvailabilityState => playerSelections.some(s=>s.kind===kind) ? "available" : verified ? "unavailable" : "unknown"
   return {
     card:state("card"),
     foul:state("foul"),
