@@ -46,6 +46,18 @@ COMPETITIONS = [
     ("aut.1", "Austrian Bundesliga"),
     ("gre.1", "Greek Super League"),
     ("den.1", "Danish Superliga"),
+    ("usa.1", "MLS"),
+    ("mex.1", "Liga MX"),
+    ("arg.1", "Argentine Liga Profesional"),
+    ("bra.1", "Brazil Serie A"),
+    ("ksa.1", "Saudi Pro League"),
+    ("jpn.1", "J League"),
+    ("aus.1", "A-League Men"),
+    ("sui.1", "Swiss Super League"),
+    ("nor.1", "Norwegian Eliteserien"),
+    ("swe.1", "Swedish Allsvenskan"),
+    ("pol.1", "Polish Ekstraklasa"),
+    ("cze.1", "Czech First League"),
 ]
 
 SESSION = requests.Session()
