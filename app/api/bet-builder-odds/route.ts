@@ -199,7 +199,7 @@ export async function GET(request: Request) {
   const away = url.searchParams.get("away") ?? ""
   const competition = url.searchParams.get("competition") ?? "Premier League"
 
-  if (!date || !home || !away || !LEAGUE_IDS[competition]) {
+  if (!date || !home || !away) {
     return NextResponse.json({ connected: false, selections: [], error: "Invalid fixture parameters" }, { status: 400 })
   }
 
@@ -218,7 +218,7 @@ export async function GET(request: Request) {
     }
 
     const apiKey = process.env.API_FOOTBALL_KEY
-    if (apiKey) {
+    if (apiKey && LEAGUE_IDS[competition]) {
       const fallback = await fromApiFootball({ date, home, away, competition, key: apiKey })
       if (fallback) {
         await saveSnapshots({ date, home, away, competition, bookmaker:fallback.bookmaker, source:fallback.source, capturedAt:fallback.capturedAt, selections:fallback.selections })
