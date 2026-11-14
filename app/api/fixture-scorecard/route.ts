@@ -616,7 +616,7 @@ function buildFoulTargetSlips(players: ScorePlayer[]): FoulTargetSlip[] {
             if(!state.legs.length)return Number.POSITIVE_INFINITY
             const distance=Math.abs(Math.log(Math.max(1.01,state.product))-Math.log(target.decimal))
             const avg=state.quality/state.legs.length
-            const under=state.product<target.decimal*0.72?0.7:0
+            const under=state.product<target.decimal*0.80?0.7:0
             return distance*1.8+under-avg*0.5
           }
           return score(a)-score(b)
@@ -655,7 +655,7 @@ function buildFoulTargetSlips(players: ScorePlayer[]): FoulTargetSlip[] {
       minimumLegProbability:Math.round(min*1000)/1000,
       pricedLegs:best.legs.length,
       usesLivePrices:best.legs.every(leg=>leg.priceSource==="exact"),
-      withinTargetRange:best.product>=target.decimal*0.72&&best.product<=target.decimal*1.45,
+      withinTargetRange:best.product>=target.decimal*0.80&&best.product<=target.decimal*1.35,
       note:(best.legs.every(leg=>leg.priceSource==="exact")
         ?"Every leg in this builder is an exact offered line from "+best.bookmaker+". "
         :"This builder contains one or more estimated prices for "+best.bookmaker+" and must be checked in the bookmaker before placing. ")
@@ -1025,7 +1025,7 @@ export async function GET(request: Request) {
   const previewSlips = confirmed ? [] : enrichedRecommendationSlips
   const foulRecommendations = buildFoulTargetSlips(players).map(slip => ({
     ...slip,
-    placeable: confirmed && slip.legs.length > 0 && Boolean(slip.bookmaker) && eligibleBooks.includes(slip.bookmaker!) && slip.usesLivePrices,
+    placeable: confirmed && slip.legs.length > 0 && Boolean(slip.bookmaker) && eligibleBooks.includes(slip.bookmaker!) && slip.usesLivePrices && slip.withinTargetRange,
     marketStatus: slip.bookmaker ? (bookmakerAvailability[slip.bookmaker]?.foul ?? "unknown") : "unknown",
   }))
   const foulTargetSlips = confirmed ? foulRecommendations : []
