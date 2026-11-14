@@ -5,6 +5,7 @@ import { type FootballDataProvider, ProviderNotConfiguredError } from "./types"
 const LEAGUE_IDS: Record<number, Competition> = {
   39: "Premier League",
   40: "Championship",
+  41: "League One",
 }
 
 const API_BASE = "https://v3.football.api-sports.io"
