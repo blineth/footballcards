@@ -262,10 +262,13 @@ function MatchHeader({fixture,radar,confirmed}:{fixture:Fixture;radar:Radar|null
 
 function OddsStatus({data}:{data:Scorecard}){
   const freshness=data.oddsFreshness??"UNKNOWN"
-  const cls=freshness==="LIVE"?"bg-emerald-400 text-emerald-950":freshness==="SLIGHTLY STALE"?"bg-amber-300 text-amber-950":freshness==="STALE"?"bg-rose-300 text-rose-950":"bg-white/10 text-white/50"
-  return <section className="flex items-center justify-between rounded-2xl border border-white/8 bg-white/[0.035] p-3">
-    <div><p className="text-xs font-black">Confirmed-lineup model ready</p><p className="mt-0.5 text-[0.58rem] text-white/35">{data.playerCount??0} player profiles analysed</p></div>
-    <span className={"rounded-full px-2 py-1 text-[0.54rem] font-black "+cls}>{data.bookmaker??"BET365"} {freshness}</span>
+  const cls=freshness==="LIVE"?"bg-emerald-400 text-emerald-950":freshness==="CACHED"?"bg-sky-300 text-sky-950":freshness==="SLIGHTLY STALE"?"bg-amber-300 text-amber-950":freshness==="STALE"?"bg-rose-300 text-rose-950":"bg-white/10 text-white/50"
+  const card=marketStatusLabel(data.marketAvailability?.card,"Cards")
+  const foul=marketStatusLabel(data.marketAvailability?.foul,"Fouls")
+  const sot=marketStatusLabel(data.marketAvailability?.sot,"SOT")
+  return <section className="rounded-2xl border border-white/8 bg-white/[0.035] p-3">
+    <div className="flex items-center justify-between gap-3"><div><p className="text-xs font-black">Confirmed-lineup model ready</p><p className="mt-0.5 text-[0.58rem] text-white/35">{data.playerCount??0} player profiles analysed</p></div><span className={"rounded-full px-2 py-1 text-[0.54rem] font-black "+cls}>{data.bookmaker??"BET365"} {freshness}</span></div>
+    <div className="mt-2 flex flex-wrap gap-1.5"><span className={"rounded-full px-2 py-1 text-[0.5rem] font-black "+card.cls}>{card.text}</span><span className={"rounded-full px-2 py-1 text-[0.5rem] font-black "+foul.cls}>{foul.text}</span><span className={"rounded-full px-2 py-1 text-[0.5rem] font-black "+sot.cls}>{sot.text}</span></div>
   </section>
 }
 
@@ -279,6 +282,7 @@ function FoulLadder({slips}:{slips:FoulTargetSlip[]}){
 function FoulTargetCard({slip}:{slip:FoulTargetSlip}){
   const[open,setOpen]=useState(false)
   const ready=slip.legs.length>0
+  const marketNote=slip.marketStatus==="unavailable"?"Foul market unavailable at this bookmaker":slip.marketStatus==="unknown"?"Foul market not verified on the free bookmaker feed":null
   return <article className={"overflow-hidden rounded-3xl border "+(ready?"border-emerald-400/15 bg-gradient-to-br from-emerald-500/15 to-black/20":"border-white/8 bg-white/[0.03]")}>
     <button onClick={()=>setOpen(x=>!x)} className="w-full p-4 text-left">
       <div className="flex items-start justify-between gap-3">
@@ -289,6 +293,7 @@ function FoulTargetCard({slip}:{slip:FoulTargetSlip}){
       <div className="mt-3 rounded-2xl bg-black/20 p-3 text-[0.67rem] leading-relaxed text-white/55">
         {ready?"Why: the model keeps adding the strongest calibrated 1+ foul candidates until it gets near this odds target, while protecting the Bet365 player/team limits.":"The model would have to use weaker foul legs than the current threshold to chase this price, so it leaves the target blank instead."}
       </div>
+      {marketNote?<p className={"mt-2 rounded-xl px-3 py-2 text-[0.6rem] "+(slip.marketStatus==="unavailable"?"bg-rose-400/10 text-rose-100":"bg-amber-300/10 text-amber-100")}>{marketNote}</p>:null}
     </button>
     {open&&ready?<div className="border-t border-white/8 bg-black/20 p-4">
       <div className="space-y-2">{slip.legs.map(leg=><Leg key={leg.player+"|"+leg.market} leg={leg}/>)}</div>
@@ -299,9 +304,11 @@ function FoulTargetCard({slip}:{slip:FoulTargetSlip}){
 
 function StandardSlip({slip}:{slip:BetSlip}){
   const[open,setOpen]=useState(false)
+  const unavailable=slip.marketAvailability?.filter(x=>x.status==="unavailable")??[]
+  const unknown=slip.marketAvailability?.filter(x=>x.status==="unknown")??[]
   return <article className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.045]">
     <button onClick={()=>setOpen(x=>!x)} className="w-full p-4 text-left">
-      <div className="flex items-start justify-between gap-3"><div><p className="text-[0.55rem] font-black uppercase text-white/35">{slip.risk} risk · {slip.legs.length} legs</p><h3 className="mt-1 font-black">{slip.title}</h3><p className="mt-1 text-[0.65rem] leading-relaxed text-white/50">{slipWhy(slip)}</p></div><div className="text-right"><p className="font-mono text-xl font-black">{percent(slip.averageLegProbability)}</p><p className="text-[0.45rem] uppercase text-white/30">avg leg</p></div></div>
+      <div className="flex items-start justify-between gap-3"><div><p className="text-[0.55rem] font-black uppercase text-white/35">{slip.risk} risk · {slip.legs.length} legs</p><h3 className="mt-1 font-black">{slip.title}</h3><p className="mt-1 text-[0.65rem] leading-relaxed text-white/50">{slipWhy(slip)}</p>{unavailable.length?<p className="mt-2 rounded-lg bg-rose-400/10 px-2.5 py-1.5 text-[0.58rem] text-rose-100">Bookmaker market unavailable: {Array.from(new Set(unavailable.map(x=>x.market))).join(", ")}</p>:unknown.length?<p className="mt-2 rounded-lg bg-amber-300/10 px-2.5 py-1.5 text-[0.58rem] text-amber-100">Market availability not verified on the free feed</p>:<p className="mt-2 text-[0.55rem] font-black text-emerald-300">Markets verified available</p>}</div><div className="text-right"><p className="font-mono text-xl font-black">{percent(slip.averageLegProbability)}</p><p className="text-[0.45rem] uppercase text-white/30">avg leg</p></div></div>
     </button>
     {open?<div className="border-t border-white/8 bg-black/20 p-4"><div className="space-y-2">{slip.legs.map((leg,i)=><Leg key={leg.player+"|"+leg.market+"|"+i} leg={leg}/>)}</div></div>:null}
   </article>
