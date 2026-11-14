@@ -21,12 +21,31 @@ OUT.mkdir(parents=True, exist_ok=True)
 CACHE.mkdir(parents=True, exist_ok=True)
 
 SEASON_LABEL = "2026/27"
-START_DATE = date(2026, 8, 1)
+START_DATE = date(2026, 7, 1)
 END_DATE = date.today()
 
 COMPETITIONS = [
     ("eng.1", "Premier League"),
     ("eng.2", "Championship"),
+    ("eng.3", "League One"),
+    ("eng.4", "League Two"),
+    ("esp.1", "La Liga"),
+    ("esp.2", "La Liga 2"),
+    ("ita.1", "Serie A"),
+    ("ita.2", "Serie B"),
+    ("ger.1", "Bundesliga"),
+    ("ger.2", "2. Bundesliga"),
+    ("fra.1", "Ligue 1"),
+    ("fra.2", "Ligue 2"),
+    ("ned.1", "Eredivisie"),
+    ("ned.2", "Eerste Divisie"),
+    ("por.1", "Primeira Liga"),
+    ("bel.1", "Belgian Pro League"),
+    ("tur.1", "Turkish Super Lig"),
+    ("sco.1", "Scottish Premiership"),
+    ("aut.1", "Austrian Bundesliga"),
+    ("gre.1", "Greek Super League"),
+    ("den.1", "Danish Superliga"),
 ]
 
 SESSION = requests.Session()
@@ -38,12 +57,12 @@ SESSION.headers.update({
 
 H2H_FIELDS = [
     "player_name", "team", "opponent", "match_date", "competition", "venue",
-    "minutes", "fouls_committed", "fouls_drawn", "shots", "shots_on_target",
+    "minutes", "goals", "assists", "fouls_committed", "fouls_drawn", "shots", "shots_on_target",
     "yellow_card", "red_card", "external_player_id",
 ]
 BASELINE_FIELDS = [
     "player_name", "team", "competition", "season", "appearances", "starts",
-    "minutes", "yellow_cards", "red_cards", "fouls_committed", "fouls_drawn",
+    "minutes", "goals", "assists", "yellow_cards", "red_cards", "fouls_committed", "fouls_drawn",
     "shots", "shots_on_target", "fouls_per_90", "cards_per_90", "shots_per_90",
     "shots_on_target_per_90", "position", "external_player_id",
 ]
@@ -224,6 +243,8 @@ def parse_event(slug: str, competition: str, event: dict[str, Any]) -> list[dict
                 "competition": competition,
                 "venue": venue,
                 "minutes": int(minutes),
+                "goals": int(stats.get("totalGoals", 0)),
+                "assists": int(stats.get("goalAssists", 0)),
                 "fouls_committed": int(stats.get("foulsCommitted", 0)),
                 "fouls_drawn": int(stats.get("foulsSuffered", 0)),
                 "shots": int(stats.get("totalShots", 0)),
@@ -274,7 +295,7 @@ def build() -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, 
     all_rows.sort(key=lambda r: (r["competition"], r["match_date"], r["team"], r["player_name"]))
 
     agg: dict[tuple[str, str, str, str], dict[str, Any]] = defaultdict(lambda: {
-        "appearances": 0, "starts": 0, "minutes": 0, "yellow_cards": 0, "red_cards": 0,
+        "appearances": 0, "starts": 0, "minutes": 0, "goals": 0, "assists": 0, "yellow_cards": 0, "red_cards": 0,
         "fouls_committed": 0, "fouls_drawn": 0, "shots": 0, "shots_on_target": 0,
         "positions": [],
     })
@@ -285,6 +306,8 @@ def build() -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, 
         a["appearances"] += 1
         a["starts"] += int(row["_starter"])
         a["minutes"] += row["minutes"]
+        a["goals"] += row["goals"]
+        a["assists"] += row["assists"]
         a["yellow_cards"] += row["yellow_card"]
         a["red_cards"] += row["red_card"]
         a["fouls_committed"] += row["fouls_committed"]
@@ -307,6 +330,8 @@ def build() -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, 
             "appearances": a["appearances"],
             "starts": a["starts"],
             "minutes": mins,
+            "goals": a["goals"],
+            "assists": a["assists"],
             "yellow_cards": a["yellow_cards"],
             "red_cards": a["red_cards"],
             "fouls_committed": a["fouls_committed"],
@@ -350,9 +375,43 @@ def main() -> int:
     (OUT / "h2h.csv").write_text(h2h_csv, encoding="utf-8")
     (OUT / "player_baselines.csv").write_text(baseline_csv, encoding="utf-8")
 
+    league_two_rows = [row for row in baselines if row["competition"] == "League Two"]
+    league_two_dir = ROOT / "data" / "league-two"
+    league_two_dir.mkdir(parents=True, exist_ok=True)
+    (league_two_dir / "player_baselines.csv").write_text(write_csv(league_two_rows, BASELINE_FIELDS), encoding="utf-8")
+
+    previous_path = ROOT / "data" / "previous-season" / "player_baselines_2025_26.csv"
+    if previous_path.exists():
+        def player_key(value: str) -> str:
+            import unicodedata, re
+            value = unicodedata.normalize("NFD", str(value or ""))
+            value = "".join(ch for ch in value if unicodedata.category(ch) != "Mn").casefold()
+            return re.sub(r"[^a-z0-9]+", " ", value).strip()
+        current_by_name = {player_key(row["player_name"]): row for row in league_two_rows}
+        with previous_path.open(encoding="utf-8") as handle:
+            previous_rows = list(csv.DictReader(handle))
+        linked = []
+        for row in previous_rows:
+            current = current_by_name.get(player_key(row.get("player_name", "")))
+            if not current:
+                continue
+            linked.append({
+                "player_name": row.get("player_name", ""),
+                "team": current["team"],
+                "current_competition": "League Two",
+                "source_club": row.get("team", ""),
+                "source_competition": row.get("competition", ""),
+                **{key: row.get(key, "") for key in BASELINE_FIELDS if key not in {"player_name", "team", "competition"}},
+            })
+        linked_fields = ["player_name", "team", "current_competition", "source_club", "source_competition"] + [key for key in BASELINE_FIELDS if key not in {"player_name", "team", "competition"}]
+        (league_two_dir / "player_baselines_2025_26_current_players.csv").write_text(write_csv(linked, linked_fields), encoding="utf-8")
+
     totals = {
         "player_match_rows": len(h2h),
         "player_baselines": len(baselines),
+        "league_two_players": len(league_two_rows),
+        "goals": sum(int(r["goals"]) for r in h2h),
+        "assists": sum(int(r["assists"]) for r in h2h),
         "shots": sum(int(r["shots"]) for r in h2h),
         "shots_on_target": sum(int(r["shots_on_target"]) for r in h2h),
         "yellows": sum(int(r["yellow_card"]) for r in h2h),
