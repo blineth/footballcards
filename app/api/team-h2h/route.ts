@@ -18,6 +18,111 @@ function same(a:string|null|undefined,b:string|null|undefined){
 function dateOnly(v:any){return String(v??"").slice(0,10)}
 function n(v:any){const x=Number(v);return Number.isFinite(x)?x:0}
 
+const apiH2HCache=new Map<string,{expires:number;meetings:any[]}>()
+async function apiFootball(path:string,params:Record<string,string>){
+  const key=process.env.API_FOOTBALL_KEY
+  if(!key)return null
+  try{
+    const url=new URL("https://v3.football.api-sports.io"+path)
+    for(const[k,v]of Object.entries(params))url.searchParams.set(k,v)
+    const r=await fetch(url,{headers:{"x-apisports-key":key},cache:"no-store",signal:AbortSignal.timeout(9000)})
+    if(!r.ok)return null
+    const j=await r.json()
+    return Array.isArray(j?.response)?j.response:null
+  }catch{return null}
+}
+async function resolveTeamIds(date:string,home:string,away:string){
+  const fixtures=await apiFootball("/fixtures",{date,timezone:"Europe/London"})??[]
+  const hit=fixtures.find((f:any)=>same(f?.teams?.home?.name,home)&&same(f?.teams?.away?.name,away))
+  if(hit?.teams?.home?.id&&hit?.teams?.away?.id){
+    return {homeId:String(hit.teams.home.id),awayId:String(hit.teams.away.id)}
+  }
+  const [homeRows,awayRows]=await Promise.all([
+    apiFootball("/teams",{search:home}),
+    apiFootball("/teams",{search:away}),
+  ])
+  const pick=(rows:any[]|null,name:string)=>{
+    const exact=(rows??[]).find((x:any)=>norm(x?.team?.name)===norm(name))
+    const fuzzy=exact??(rows??[]).find((x:any)=>same(x?.team?.name,name))
+    return fuzzy?.team?.id?String(fuzzy.team.id):""
+  }
+  return {homeId:pick(homeRows,home),awayId:pick(awayRows,away)}
+}
+function basicApiMeeting(row:any){
+  const actualHome=String(row?.teams?.home?.name??"")
+  const actualAway=String(row?.teams?.away?.name??"")
+  return {
+    fixtureId:String(row?.fixture?.id??""),
+    date:dateOnly(row?.fixture?.date),
+    home:actualHome,
+    away:actualAway,
+    homeGoals:n(row?.goals?.home),
+    awayGoals:n(row?.goals?.away),
+    scorers:[] as any[],
+    bookings:[] as any[],
+    players:[] as any[],
+    totals:{
+      home:{yellow:0,red:0,fouls:0,shots:0,sot:0},
+      away:{yellow:0,red:0,fouls:0,shots:0,sot:0},
+    },
+  }
+}
+async function enrichApiMeeting(meeting:any){
+  if(!meeting.fixtureId)return meeting
+  const teams=await apiFootball("/fixtures/players",{fixture:meeting.fixtureId})
+  if(!teams?.length)return meeting
+  const players:any[]=[]
+  for(const teamBlock of teams){
+    const teamName=String(teamBlock?.team?.name??"")
+    for(const p of teamBlock?.players??[]){
+      const s=Array.isArray(p?.statistics)?p.statistics[0]??{}:{}
+      players.push({
+        player:String(p?.player?.name??"Unknown"),
+        team:teamName,
+        minutes:n(s?.games?.minutes),
+        goals:n(s?.goals?.total),
+        assists:n(s?.goals?.assists),
+        foulsCommitted:n(s?.fouls?.committed),
+        foulsDrawn:n(s?.fouls?.drawn),
+        shots:n(s?.shots?.total),
+        shotsOnTarget:n(s?.shots?.on),
+        yellow:n(s?.cards?.yellow)>0,
+        red:n(s?.cards?.red)>0,
+      })
+    }
+  }
+  const homePlayers=players.filter(p=>same(p.team,meeting.home))
+  const awayPlayers=players.filter(p=>same(p.team,meeting.away))
+  return {
+    ...meeting,
+    scorers:players.filter(p=>p.goals>0).map(p=>({player:p.player,team:p.team,goals:p.goals,assists:p.assists})).sort((a,b)=>b.goals-a.goals||a.player.localeCompare(b.player)),
+    bookings:players.filter(p=>p.yellow||p.red).map(p=>({player:p.player,team:p.team,yellow:p.yellow,red:p.red})),
+    players:players.filter(p=>p.minutes>0||p.goals>0||p.yellow||p.red),
+    totals:{
+      home:{yellow:homePlayers.filter(p=>p.yellow).length,red:homePlayers.filter(p=>p.red).length,fouls:homePlayers.reduce((s,p)=>s+p.foulsCommitted,0),shots:homePlayers.reduce((s,p)=>s+p.shots,0),sot:homePlayers.reduce((s,p)=>s+p.shotsOnTarget,0)},
+      away:{yellow:awayPlayers.filter(p=>p.yellow).length,red:awayPlayers.filter(p=>p.red).length,fouls:awayPlayers.reduce((s,p)=>s+p.foulsCommitted,0),shots:awayPlayers.reduce((s,p)=>s+p.shots,0),sot:awayPlayers.reduce((s,p)=>s+p.shotsOnTarget,0)},
+    },
+  }
+}
+async function apiFootballH2H(date:string,home:string,away:string){
+  const cacheKey=[date,norm(home),norm(away)].join("|")
+  const cached=apiH2HCache.get(cacheKey)
+  if(cached&&cached.expires>Date.now())return cached.meetings
+  const ids=await resolveTeamIds(date,home,away)
+  if(!ids.homeId||!ids.awayId)return []
+  const rows=await apiFootball("/fixtures/headtohead",{h2h:ids.homeId+"-"+ids.awayId,last:"8"})
+  if(!rows?.length)return []
+  const basics=rows
+    .filter((row:any)=>dateOnly(row?.fixture?.date)<date)
+    .sort((a:any,b:any)=>dateOnly(b?.fixture?.date).localeCompare(dateOnly(a?.fixture?.date)))
+    .slice(0,8)
+    .map(basicApiMeeting)
+  const detailed=await Promise.all(basics.slice(0,3).map(enrichApiMeeting))
+  const meetings=[...detailed,...basics.slice(3)]
+  apiH2HCache.set(cacheKey,{expires:Date.now()+12*60*60*1000,meetings})
+  return meetings
+}
+
 type Row={
   playerName:string
   team:string
@@ -103,6 +208,13 @@ export async function GET(request:Request){
     }catch{}
   }
 
-  const meetings=aggregate(rows,home,away)
+  let meetings=aggregate(rows,home,away)
+  if(!meetings.length){
+    const apiMeetings=await apiFootballH2H(date,home,away)
+    if(apiMeetings.length){
+      meetings=apiMeetings
+      source="API-Football H2H"
+    }
+  }
   return NextResponse.json({ok:true,home,away,competition,date,source,meetings,count:meetings.length})
 }
