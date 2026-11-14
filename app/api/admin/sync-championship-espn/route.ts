@@ -132,6 +132,8 @@ export async function GET(request: Request) {
             matchDate: date,
             competition: "Championship",
             venue: team === home ? "Home" : "Away",
+            position: playerRow?.position?.abbreviation ?? playerRow?.position?.displayName ?? playerRow?.athlete?.position?.abbreviation ?? playerRow?.athlete?.position?.displayName ?? null,
+            starter: playerRow?.starter === true,
             minutes: minutes.get(playerId) ?? (playerRow?.starter === true ? 90 : 0),
             foulsCommitted: stat(playerRow, "foulsCommitted"),
             foulsDrawn: stat(playerRow, "foulsSuffered"),
