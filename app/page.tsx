@@ -21,6 +21,7 @@ type FixturesResponse = {
   connected:boolean
   updatedAt:string
   date:string
+  requestedDate?:string
   leagues:Record<Competition,LiveFixture[]>
 }
 type Fixture = {
@@ -42,12 +43,20 @@ type Fixture = {
   lineupStatus?:string
 }
 
-const competitions:Competition[]=["Premier League","Championship","League One","League Two","International"]
+const competitionOrder:Competition[]=["International","Premier League","Championship","League One","League Two"]
 
 function londonDate(){
   const parts=new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/London",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date())
   const v=(t:string)=>parts.find(p=>p.type===t)?.value??""
   return v("year")+"-"+v("month")+"-"+v("day")
+}
+function addDays(date:string,days:number){
+  const d=new Date(date+"T12:00:00Z")
+  d.setUTCDate(d.getUTCDate()+days)
+  return d.toISOString().slice(0,10)
+}
+function prettyDate(date:string){
+  return new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/London",weekday:"long",day:"numeric",month:"long"}).format(new Date(date+"T12:00:00Z"))
 }
 function displayFixture(raw:LiveFixture):Fixture{
   const d=new Date(raw.kickoff)
@@ -67,31 +76,75 @@ function matchUrl(f:Fixture){
   }).toString()
 }
 function isLive(f:Fixture){
-  return ["live","halftime","1h","2h","in_progress"].includes(String(f.status??"").toLowerCase())
+  return ["live","halftime","1h","2h","in_progress","in progress"].includes(String(f.status??"").toLowerCase())
+}
+function isFinished(raw:LiveFixture|Fixture){
+  const status=String(raw.status??"").toLowerCase()
+  return ["finished","ft","full time","after extra time","aet","cancelled","canceled","postponed","abandoned"].includes(status)
+}
+function hasRemainingGames(data:FixturesResponse|null){
+  if(!data)return false
+  return competitionOrder.some(c=>(data.leagues?.[c]??[]).some(f=>!isFinished(f)))
 }
 
 export default function MatchesPage(){
   const router=useRouter()
-  const[competition,setCompetition]=useState<Competition>("Premier League")
   const[selectedDate,setSelectedDate]=useState(londonDate)
+  const[resolvedDate,setResolvedDate]=useState(londonDate)
   const[live,setLive]=useState<FixturesResponse|null>(null)
   const[loading,setLoading]=useState(false)
   const[lastRefresh,setLastRefresh]=useState<Date|null>(null)
+  const[autoAdvanced,setAutoAdvanced]=useState(false)
 
-  const fixtures=useMemo(()=>((live?.leagues?.[competition]??[]) as LiveFixture[]).map(displayFixture),[live,competition])
+  const grouped=useMemo(()=>competitionOrder.map(competition=>({
+    competition,
+    fixtures:((live?.leagues?.[competition]??[]) as LiveFixture[])
+      .filter(f=>!isFinished(f))
+      .map(displayFixture),
+  })).filter(group=>group.fixtures.length),[live])
+
+  const totalRemaining=grouped.reduce((sum,g)=>sum+g.fixtures.length,0)
+
+  const fetchDate=useCallback(async(date:string)=>{
+    const r=await fetch("/api/fixtures?"+new URLSearchParams({
+      date,nextIfEmpty:"0",refresh:String(Date.now()),
+    }),{cache:"no-store"})
+    if(!r.ok)throw new Error("fixtures")
+    return await r.json() as FixturesResponse
+  },[])
 
   const refresh=useCallback(async()=>{
     setLoading(true)
     try{
-      const r=await fetch("/api/fixtures?"+new URLSearchParams({
-        date:selectedDate,competition,nextIfEmpty:"0",refresh:String(Date.now()),
-      }),{cache:"no-store"})
-      if(!r.ok)throw new Error("fixtures")
-      setLive(await r.json())
+      let date=selectedDate
+      let data=await fetchDate(date)
+      let advanced=false
+
+      if(!hasRemainingGames(data)){
+        for(let offset=1;offset<=21;offset++){
+          const next=addDays(selectedDate,offset)
+          const candidate=await fetchDate(next)
+          if(hasRemainingGames(candidate)){
+            date=next
+            data=candidate
+            advanced=true
+            break
+          }
+        }
+      }
+
+      setResolvedDate(date)
+      setLive(data)
+      setAutoAdvanced(advanced)
       setLastRefresh(new Date())
-    }catch{setLive(null)}
-    finally{setLoading(false)}
-  },[competition,selectedDate])
+    }catch{
+      setLive(null)
+      setResolvedDate(selectedDate)
+      setAutoAdvanced(false)
+    }finally{
+      setLoading(false)
+    }
+  },[fetchDate,selectedDate])
 
   useEffect(()=>{void refresh()},[refresh])
   useEffect(()=>{const t=window.setInterval(()=>void refresh(),60000);return()=>window.clearInterval(t)},[refresh])
@@ -103,12 +156,9 @@ export default function MatchesPage(){
           <div>
             <div className="flex items-center gap-2 text-emerald-300"><Sparkles className="size-4"/><span className="text-[0.62rem] font-black uppercase tracking-[0.16em]">Match Edge</span></div>
             <h1 className="mt-1 text-2xl font-black">Matches</h1>
-            <p className="mt-1 text-xs text-white/45">Choose a game. We build the strongest bets inside it.</p>
+            <p className="mt-1 text-xs text-white/45">Choose a game. See the model's Safe, Balanced and Risky builds inside.</p>
           </div>
           <button onClick={()=>void refresh()} className="rounded-xl bg-emerald-400 p-2.5 text-emerald-950"><RefreshCw className={"size-4 "+(loading?"animate-spin":"")}/></button>
-        </div>
-        <div className="mt-4 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
-          {competitions.map(c=><button key={c} onClick={()=>setCompetition(c)} className={"shrink-0 rounded-full px-3.5 py-2 text-xs font-black "+(competition===c?"bg-white text-[#07120e]":"bg-white/7 text-white/55")}>{c}</button>)}
         </div>
       </div>
     </header>
@@ -120,30 +170,39 @@ export default function MatchesPage(){
         <span className="text-[0.48rem] font-black uppercase text-white/25">{lastRefresh?"Updated "+lastRefresh.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}):"Loading"}</span>
       </section>
 
-      {loading&&!live?<div className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center"><RefreshCw className="mx-auto mb-2 size-5 animate-spin text-emerald-300"/><p className="font-black">Loading matches…</p></div>:null}
-      {!loading&&live&&fixtures.length===0?<div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.03] p-8 text-center"><p className="font-black">No {competition} matches on this date</p><p className="mt-1 text-sm text-white/35">Choose another date or competition.</p></div>:null}
+      {autoAdvanced?<section className="rounded-2xl border border-emerald-300/15 bg-emerald-400/[0.05] px-4 py-3"><p className="text-xs font-black text-emerald-200">No more games on {prettyDate(selectedDate)}</p><p className="mt-1 text-[0.58rem] text-white/40">Showing the next available matchday: {prettyDate(resolvedDate)}.</p></section>:null}
 
-      <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03]">
-        {fixtures.map((f,i)=>{
-          const liveNow=isLive(f)
-          const confirmed=f.lineupStatus==="confirmed"
-          return <button key={f.id} onClick={()=>router.push(matchUrl(f))} className={"grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 px-3 py-4 text-left transition hover:bg-white/[0.035] "+(i?"border-t border-white/[0.055]":"")}>
-            <div className="w-12 text-center">
-              {liveNow?<><p className="text-[0.55rem] font-black text-rose-300">LIVE</p><p className="mt-0.5 font-mono text-xs font-black">{f.elapsed??""}'</p></>:<><p className="font-mono text-sm font-black">{f.time}</p><p className="mt-0.5 text-[0.44rem] text-white/25">{f.day}</p></>}
-            </div>
-            <div className="min-w-0">
-              <TeamRow name={f.home} crest={f.homeCrest} score={f.score?.home}/>
-              <TeamRow name={f.away} crest={f.awayCrest} score={f.score?.away}/>
-              <div className="mt-1.5 flex items-center gap-1.5"><span className={"rounded-full px-1.5 py-0.5 text-[0.4rem] font-black "+(confirmed?"bg-emerald-400/12 text-emerald-300":"bg-amber-300/10 text-amber-200")}>{confirmed?"XI CONFIRMED":"PREDICTED XI"}</span><span className="truncate text-[0.43rem] text-white/20">{f.tournament??f.competition}</span></div>
-            </div>
-            <div className="flex items-center gap-2"><span className="hidden rounded-full bg-white/6 px-2 py-1 text-[0.43rem] font-black text-white/30 sm:inline">3 BUILDS</span><ChevronRight className="size-4 text-white/25"/></div>
-          </button>
-        })}
-      </section>
+      {!loading&&live&&totalRemaining>0?<div className="flex items-end justify-between gap-3 px-1"><div><p className="text-lg font-black">{prettyDate(resolvedDate)}</p><p className="mt-0.5 text-[0.56rem] text-white/30">{totalRemaining} upcoming/live match{totalRemaining===1?"":"es"}</p></div><p className="text-[0.46rem] font-black uppercase text-white/20">INT → PL → CH → L1 → L2</p></div>:null}
 
-      <p className="px-2 text-center text-[0.5rem] leading-relaxed text-white/25">Open any match to see three model-built slips first, then add or remove player markets yourself.</p>
+      {loading&&!live?<div className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center"><RefreshCw className="mx-auto mb-2 size-5 animate-spin text-emerald-300"/><p className="font-black">Finding the next matchday…</p></div>:null}
+      {!loading&&live&&totalRemaining===0?<div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.03] p-8 text-center"><p className="font-black">No upcoming matches found</p><p className="mt-1 text-sm text-white/35">Nothing was found across International, Premier League, Championship, League One or League Two in the next 21 days.</p></div>:null}
+
+      {grouped.map(group=><CompetitionSection key={group.competition} competition={group.competition} fixtures={group.fixtures} onOpen={f=>router.push(matchUrl(f))}/>)}
+
+      <p className="px-2 text-center text-[0.5rem] leading-relaxed text-white/25">Finished fixtures are hidden from the active match list. When the day's football is over, Matches automatically rolls forward to the next available date.</p>
     </div>
   </main>
+}
+
+function CompetitionSection({competition,fixtures,onOpen}:{competition:Competition;fixtures:Fixture[];onOpen:(f:Fixture)=>void}){
+  return <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03]">
+    <div className="flex items-center justify-between border-b border-white/8 px-4 py-3"><div><p className="text-sm font-black">{competition}</p><p className="mt-0.5 text-[0.46rem] text-white/25">{fixtures.length} match{fixtures.length===1?"":"es"}</p></div><span className="rounded-full bg-white/6 px-2 py-1 text-[0.42rem] font-black text-white/30">3 MODEL BUILDS PER MATCH</span></div>
+    {fixtures.map((f,i)=>{
+      const liveNow=isLive(f)
+      const confirmed=f.lineupStatus==="confirmed"
+      return <button key={f.id} onClick={()=>onOpen(f)} className={"grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 px-3 py-4 text-left transition hover:bg-white/[0.035] "+(i?"border-t border-white/[0.055]":"")}>
+        <div className="w-12 text-center">
+          {liveNow?<><p className="text-[0.55rem] font-black text-rose-300">LIVE</p><p className="mt-0.5 font-mono text-xs font-black">{f.elapsed??""}'</p></>:<><p className="font-mono text-sm font-black">{f.time}</p><p className="mt-0.5 text-[0.44rem] text-white/25">{f.day}</p></>}
+        </div>
+        <div className="min-w-0">
+          <TeamRow name={f.home} crest={f.homeCrest} score={f.score?.home}/>
+          <TeamRow name={f.away} crest={f.awayCrest} score={f.score?.away}/>
+          <div className="mt-1.5 flex items-center gap-1.5"><span className={"rounded-full px-1.5 py-0.5 text-[0.4rem] font-black "+(confirmed?"bg-emerald-400/12 text-emerald-300":"bg-amber-300/10 text-amber-200")}>{confirmed?"XI CONFIRMED":"PREDICTED XI"}</span>{f.tournament&&f.tournament!==competition?<span className="truncate text-[0.43rem] text-white/20">{f.tournament}</span>:null}</div>
+        </div>
+        <ChevronRight className="size-4 text-white/25"/>
+      </button>
+    })}
+  </section>
 }
 
 function TeamRow({name,crest,score}:{name:string;crest?:string;score?:number|null}){
