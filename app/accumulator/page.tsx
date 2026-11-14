@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
 import { Activity, CalendarDays, ChevronDown, Flame, RefreshCw, ShieldCheck, Sparkles, Target, Trophy } from "lucide-react"
 
 type Leg={fixtureId:string;competition:string;kickoff:string;home:string;away:string;inPlay?:boolean;elapsed?:number|null;score?:{home:number;away:number}|null;market:string;label:string;probability:number;fairOdds:number;bookmakerOdds:number|null;bookmaker:string|null;grade:"A"|"B"|"C"|"D";reasons:string[]}
@@ -63,7 +63,7 @@ export default function AccumulatorPage(){
   </main>
 }
 
-function RiskButton({active,onClick,title,sub,icon}:{mode:RiskMode;active:boolean;onClick:()=>void;title:string;sub:string;icon:React.ReactNode}){
+function RiskButton({active,onClick,title,sub,icon}:{mode:RiskMode;active:boolean;onClick:()=>void;title:string;sub:string;icon:ReactNode}){
   return <button onClick={onClick} className={"rounded-2xl border p-3 text-left transition "+(active?"border-amber-300/35 bg-amber-300 text-amber-950":"border-white/8 bg-black/20 text-white/50")}><div className="flex items-center gap-2">{icon}<p className="text-xs font-black">{title}</p></div><p className={"mt-1 text-[0.48rem] font-black uppercase "+(active?"text-amber-950/60":"text-white/25")}>{sub}</p></button>
 }
 
