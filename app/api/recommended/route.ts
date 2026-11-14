@@ -3,6 +3,8 @@ import { GET as fixturesGET } from "../fixtures/route"
 import { GET as scorecardGET } from "../fixture-scorecard/route"
 import { gradeHistoricalRecommendations, recommendationTrackingSummary, saveRecommendationSnapshots } from "@/lib/recommendation-tracking"
 import recommendationBacktest from "@/data/model/recommendation-backtest.json"
+import calibrationSnapshot from "@/data/model/calibration.json"
+import { snapshotPlayersForFixture } from "@/lib/current-season-snapshot"
 
 export const dynamic="force-dynamic"
 export const revalidate=300
@@ -100,14 +102,71 @@ async function scorecardFor(f:Fixture,refresh:boolean){
   return res.ok?await res.json() as Scorecard:null
 }
 
+
+let lastGoodRecommended:any=null
+let lastGoodAt=0
+const STALE_CACHE_MS=60*60*1000
+
+function beta(hits:number,total:number,prior:number,strength=6){
+  return (hits+prior*strength)/(total+strength)
+}
+function calibrateSnapshot(market:"foul1"|"card",raw:number){
+  const source=(calibrationSnapshot as any)?.global?.[market]
+  const bands=source?.bands
+  if(!Array.isArray(bands)||bands.length!==20)return raw
+  const idx=Math.max(0,Math.min(19,Math.floor(Math.max(0,Math.min(.999999,raw))/.05)))
+  const v=Number(bands[idx]?.calibratedProbability)
+  return Number.isFinite(v)?v:raw
+}
+async function fallbackScorecard(f:Fixture):Promise<Scorecard|null>{
+  if(f.competition==="International")return null
+  try{
+    const {players,rows}=await snapshotPlayersForFixture(f.competition,f.home.name,f.away.name)
+    const before=rows.filter(r=>r.match_date<fixtureDate(f))
+    if(!players.length||!before.length)return null
+    const scored=players.map(p=>{
+      const history=before.filter(r=>r.player_name===p.player_name)
+      if(history.length<3)return null
+      const recent=history.slice(-5)
+      const foulHits=history.filter(r=>r.fouls_committed>=1).length
+      const cardHits=history.filter(r=>r.yellow_card).length
+      const recentFoul=recent.filter(r=>r.fouls_committed>=1).length
+      const recentCard=recent.filter(r=>r.yellow_card).length
+      const rawFoul=beta(foulHits,history.length,.50,6)*.72+beta(recentFoul,recent.length,.50,4)*.28
+      const rawCard=beta(cardHits,history.length,.20,7)*.72+beta(recentCard,recent.length,.20,4)*.28
+      const foul=calibrateSnapshot("foul1",Math.max(.01,Math.min(.99,rawFoul)))
+      const card=calibrateSnapshot("card",Math.max(.01,Math.min(.99,rawCard)))
+      const confidence:SlipLeg["confidence"]=history.length>=10&&p.minutes>=600?"B":history.length>=5?"C":"D"
+      return {p,history,foul,card,confidence}
+    }).filter(Boolean) as Array<{p:any;history:any[];foul:number;card:number;confidence:SlipLeg["confidence"]}>
+    const foulLegs=scored.sort((a,b)=>b.foul-a.foul).slice(0,4).map(x=>({
+      player:x.p.player_name,dbPlayerName:x.p.player_name,team:x.p.team,market:"foul1",
+      label:"1+ foul committed",probability:Math.round(x.foul*1000)/1000,fairOdds:Math.round((1/x.foul)*100)/100,
+      bookmakerOdds:null,bookmakerName:null,edge:null,confidence:x.confidence,
+      reason:"Repository snapshot fallback: season + recent foul history",priceSource:null,
+    } as SlipLeg))
+    const cardLegs=scored.sort((a,b)=>b.card-a.card).slice(0,3).map(x=>({
+      player:x.p.player_name,dbPlayerName:x.p.player_name,team:x.p.team,market:"card",
+      label:"Yellow card",probability:Math.round(x.card*1000)/1000,fairOdds:Math.round((1/x.card)*100)/100,
+      bookmakerOdds:null,bookmakerName:null,edge:null,confidence:x.confidence,
+      reason:"Repository snapshot fallback: season + recent booking history",priceSource:null,
+    } as SlipLeg))
+    const slips:BetSlip[]=[]
+    if(foulLegs.length>=2)slips.push({id:"snapshot-fouls",title:"Snapshot foul picks",risk:"model-only",legs:foulLegs,averageLegProbability:foulLegs.reduce((s,l)=>s+l.probability,0)/foulLegs.length,placeable:false,marketAvailability:foulLegs.map(l=>({player:l.player,market:l.market,status:"unknown" as MarketStatus}))})
+    if(cardLegs.length>=2)slips.push({id:"snapshot-cards",title:"Snapshot card picks",risk:"model-only",legs:cardLegs,averageLegProbability:cardLegs.reduce((s,l)=>s+l.probability,0)/cardLegs.length,placeable:false,marketAvailability:cardLegs.map(l=>({player:l.player,market:l.market,status:"unknown" as MarketStatus}))})
+    return {ok:true,lineupsConfirmed:false,eligibleBooks:[],marketAvailability:{card:"unknown",foul:"unknown",fouled:"unknown",shot:"unknown",sot:"unknown"},previewSlips:slips,previewFoulTargetSlips:[]}
+  }catch{return null}
+}
+
 export async function GET(request:Request){
   const url=new URL(request.url)
   const refresh=url.searchParams.get("refresh")==="1"
   const maxFixtures=Math.max(6,Math.min(24,Number(url.searchParams.get("limit")??18)||18))
 
   try{
-    await gradeHistoricalRecommendations(500)
-    const trackingBefore:any=await recommendationTrackingSummary(30)
+    try{await gradeHistoricalRecommendations(500)}catch{}
+    let trackingBefore:any={available:false,topPickLegs:0}
+    try{trackingBefore=await recommendationTrackingSummary(30)}catch{}
     const liveTopSample=Number(trackingBefore?.topPickLegs??0)
     const liveTopHit=Number(trackingBefore?.topPickHitRate??0)
     const liveTopModel=Number(trackingBefore?.topPickAvgProbability??0)
@@ -136,7 +195,8 @@ export async function GET(request:Request){
 
     const rows=await Promise.all(upcoming.map(async fixture=>{
       try{
-        const scorecard=await scorecardFor(fixture,refresh)
+        let scorecard=await scorecardFor(fixture,refresh)
+        if(!scorecard?.ok)scorecard=await fallbackScorecard(fixture)
         if(!scorecard?.ok)return [] as Recommendation[]
         const confirmed=Boolean(scorecard.lineupsConfirmed)
         const standards=confirmed?(scorecard.slips??[]):(scorecard.previewSlips??[])
@@ -179,7 +239,7 @@ export async function GET(request:Request){
     }))
 
     const recommendations=rows.flat().sort((a,b)=>b.rank-a.rank).slice(0,8)
-    await saveRecommendationSnapshots(recommendations.map((rec,index)=>({
+    try{await saveRecommendationSnapshots(recommendations.map((rec,index)=>({
       fixture:rec.fixture,
       slip:{
         id:rec.slip.id,
@@ -191,15 +251,17 @@ export async function GET(request:Request){
       position:index+1,
       confirmed:rec.confirmed,
       placeable:rec.placeable,
-    })))
-    const tracking=await recommendationTrackingSummary(30)
+    })))}catch{}
+    let tracking:any=trackingBefore
+    try{tracking=await recommendationTrackingSummary(30)}catch{}
 
-    return NextResponse.json({
+    const payload={
       ok:true,
       updatedAt:new Date().toISOString(),
       fixturesScanned:upcoming.length,
       recommendations,
       tracking,
+      staleFallback:false,
       methodology:{
         recommendationCalibration:"Final ranking uses a second walk-forward calibration layer built from historical recommendations that survived the selection process.",
         cache:"Recommended scans today only and is served from one server endpoint with a five-minute shared-cache target; manual refresh bypasses the normal scan cadence.",
@@ -208,12 +270,18 @@ export async function GET(request:Request){
           ? "Live top-pick calibration is active. Current 30-day reliability multiplier: "+liveReliabilityFactor.toFixed(3)
           : "Live top-pick calibration activates after 50 graded top-pick legs.",
       },
-    },{
+    }
+    lastGoodRecommended=payload
+    lastGoodAt=Date.now()
+    return NextResponse.json(payload,{
       headers:refresh
-        ?{"Cache-Control":"no-store"}
-        :{"Cache-Control":"public, s-maxage=300, stale-while-revalidate=300"},
+        ?{"Cache-Control":"public, s-maxage=30, stale-while-revalidate=300"}
+        :{"Cache-Control":"public, s-maxage=300, stale-while-revalidate=1800"},
     })
   }catch(error){
+    if(lastGoodRecommended&&Date.now()-lastGoodAt<STALE_CACHE_MS){
+      return NextResponse.json({...lastGoodRecommended,staleFallback:true,warning:"Fresh pull failed; showing the last successful Recommended snapshot."},{headers:{"Cache-Control":"public, s-maxage=60, stale-while-revalidate=1800"}})
+    }
     return NextResponse.json({ok:false,error:error instanceof Error?error.message:"Recommended scan failed"},{status:500})
   }
 }
