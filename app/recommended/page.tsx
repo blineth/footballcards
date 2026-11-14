@@ -41,12 +41,19 @@ type TargetOddsGame={
   fixture:Fixture
   targets:TargetOddsSlip[]
 }
+type LivePlayerProp={
+  player:string;team:string;market:"card"|"foul1"|"fouled1"|"shot1"|"sot1";label:string;
+  probability:number;fullMatchProbability:number;fairOdds:number;
+  confidence:"A"|"B"|"C"|"D";marketStatus:"available"|"unavailable"|"unknown";
+  bookmakerOdds?:number|null;bookmakerName?:string|null;reason?:string
+}
 type LiveMatch={
   id:string;competition:string;kickoff:string;status?:string;inPlay?:boolean;elapsed?:number|null;
   score?:{home:number;away:number}|null;home:string;away:string;
   probabilities?:{homeWin:number;draw:number;awayWin:number;bttsYes:number;bttsNo:number}|null;
   winnerPick?:{side:string;team:string;loser:string;probability:number;grade:string}|null;
   bttsPick?:{selection:string;probability:number;grade:string}|null;bttsSettled?:boolean;
+  livePlayerProps?:LivePlayerProp[];
   reasons?:string[]
 }
 type Response={
@@ -149,6 +156,23 @@ function LiveNowSection({matches}:{matches:LiveMatch[]}){
 function LiveMatchCard({match}:{match:LiveMatch}){
   const score=match.score
   const probs=match.probabilities
+  const playerProps=match.livePlayerProps??[]
+  const propGroups=[
+    {market:"card" as const,title:"Cards",selection:"to be carded"},
+    {market:"foul1" as const,title:"Fouls",selection:"1+ foul"},
+    {market:"fouled1" as const,title:"Fouled",selection:"1+ foul drawn"},
+    {market:"shot1" as const,title:"Shots",selection:"1+ shot"},
+    {market:"sot1" as const,title:"Shots on target",selection:"1+ SOT"},
+  ].map(group=>({...group,picks:playerProps.filter(p=>p.market===group.market).sort((a,b)=>b.probability-a.probability).slice(0,3)})).filter(group=>group.picks.length)
+  const suggestedProps:LivePlayerProp[]=[]
+  const usedPlayers=new Set<string>()
+  for(const group of propGroups){
+    const pick=group.picks.find(p=>!usedPlayers.has(p.player.toLowerCase()))
+    if(!pick)continue
+    suggestedProps.push(pick)
+    usedPlayers.add(pick.player.toLowerCase())
+    if(suggestedProps.length>=4)break
+  }
   const liveLegs=[
     match.winnerPick?{label:match.winnerPick.team+" to win",probability:match.winnerPick.probability,grade:match.winnerPick.grade}:null,
     !match.bttsSettled&&match.bttsPick?{label:"BTTS "+(match.bttsPick.selection==="yes"?"Yes":"No"),probability:match.bttsPick.probability,grade:match.bttsPick.grade}:null,
@@ -173,6 +197,15 @@ function LiveMatchCard({match}:{match:LiveMatch}){
       {liveLegs.length?<div className="mt-2 space-y-2">{liveLegs.map((leg,i)=><div key={leg.label+"|"+i} className="flex items-center justify-between gap-3 rounded-xl bg-black/20 px-3 py-2"><div><p className="text-sm font-black">{leg.label}</p><p className="text-[0.48rem] text-white/30">Grade {leg.grade} · current live model</p></div><p className="font-mono text-base font-black">{percent(leg.probability)}</p></div>)}</div>:<p className="mt-2 text-[0.58rem] leading-relaxed text-white/40">No live selection currently clears the model threshold. The match stays visible and will be reassessed on the next refresh.</p>}
       <p className="mt-2 text-[0.5rem] leading-relaxed text-white/25">Live bookmaker prices are not reused from pre-match odds. Check the current price in your bookmaker before placing anything.</p>
     </div>
+
+    {playerProps.length?<div className="mt-3 rounded-2xl border border-cyan-300/15 bg-cyan-400/[0.045] p-3">
+      <div className="flex items-start justify-between gap-3"><div><p className="text-[0.52rem] font-black uppercase tracking-[0.12em] text-cyan-300">Live player props</p><p className="mt-0.5 text-[0.5rem] text-white/30">Chance from the current minute to full time</p></div><span className="rounded-full bg-cyan-300/10 px-2 py-1 text-[0.44rem] font-black text-cyan-200">CONFIRMED XI</span></div>
+
+      {suggestedProps.length>=2?<div className="mt-3 rounded-2xl bg-black/25 p-3"><p className="text-[0.48rem] font-black uppercase text-white/30">Suggested in-play player slip</p><div className="mt-2 space-y-1.5">{suggestedProps.map(prop=><div key={"slip|"+prop.player+"|"+prop.market} className="flex items-center justify-between gap-3"><div><p className="text-xs font-black">{prop.player} · {prop.market==="card"?"to be carded":prop.market==="foul1"?"1+ foul":prop.market==="fouled1"?"1+ foul drawn":prop.market==="shot1"?"1+ shot":"1+ SOT"}</p><p className="text-[0.46rem] text-white/25">{prop.team} · Grade {prop.confidence}</p></div><p className="font-mono text-sm font-black">{percent(prop.probability)}</p></div>)}</div><p className="mt-2 text-[0.46rem] leading-relaxed text-white/25">Model shortlist only — check that each live market is still offered before adding it to a builder.</p></div>:null}
+
+      <div className="mt-3 space-y-3">{propGroups.map(group=><div key={group.market}><div className="mb-1.5 flex items-center justify-between"><p className="text-[0.5rem] font-black uppercase text-white/35">{group.title}</p><p className="text-[0.42rem] text-white/20">top {group.picks.length}</p></div><div className="space-y-1.5">{group.picks.map(prop=><div key={prop.player+"|"+prop.market} className="flex items-center justify-between gap-3 rounded-xl bg-white/[0.045] px-3 py-2"><div><p className="text-xs font-black">{prop.player} · {group.selection}</p><p className="mt-0.5 text-[0.46rem] text-white/25">{prop.team} · Grade {prop.confidence}{prop.marketStatus==="available"?" · market seen":prop.marketStatus==="unavailable"?" · market unavailable":" · check live market"}</p></div><div className="text-right"><p className="font-mono text-sm font-black">{percent(prop.probability)}</p><p className="text-[0.4rem] text-white/20">remaining</p></div></div>)}</div></div>)}</div>
+      <p className="mt-3 text-[0.48rem] leading-relaxed text-white/25">These are remaining-match model probabilities, recalculated as time runs down. They do not reuse stale pre-match prices or claim a live bookmaker price where none has been verified.</p>
+    </div>:null}
   </article>
 }
 
