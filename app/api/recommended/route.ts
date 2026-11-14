@@ -31,10 +31,20 @@ type FoulTargetSlip={
   id:string;bookmaker?:string|null;targetFractional:string;legs:SlipLeg[];
   averageLegProbability:number|null;placeable?:boolean;marketStatus?:MarketStatus;usesLivePrices?:boolean
 }
+type ScorecardPlayer={
+  name:string;dbName?:string;team:string;
+  yellowConditionals?:{
+    overall?:{matches:number;yellows:number;rate:number};
+    after1PlusFouls?:{matches:number;yellows:number;rate:number|null};
+    after2PlusFouls?:{matches:number;yellows:number;rate:number|null};
+    after3PlusFouls?:{matches:number;yellows:number;rate:number|null};
+  }
+}
 type Scorecard={
   ok:boolean;lineupsConfirmed?:boolean;eligibleBooks?:string[];
   marketAvailability?:{card:MarketStatus;foul:MarketStatus;fouled:MarketStatus;shot:MarketStatus;sot:MarketStatus};
-  slips?:BetSlip[];previewSlips?:BetSlip[];foulTargetSlips?:FoulTargetSlip[];previewFoulTargetSlips?:FoulTargetSlip[]
+  slips?:BetSlip[];previewSlips?:BetSlip[];foulTargetSlips?:FoulTargetSlip[];previewFoulTargetSlips?:FoulTargetSlip[];
+  players?:ScorecardPlayer[]
 }
 type Recommendation={
   id:string;fixture:Fixture;slip:BetSlip|FoulTargetSlip;confirmed:boolean;kind:"standard"|"foul";
@@ -104,6 +114,79 @@ async function officialLineupForFixture(f:Fixture):Promise<OfficialLineup>{
     }catch{}
   }
   return {confirmed:false,starters:new Set()}
+}
+
+type LivePlayerStat={
+  player:string;team:string;foulsCommitted:number;foulsDrawn:number;shots:number;shotsOnTarget:number;
+  yellowCards:number;redCards:number
+}
+function espnStat(row:any,name:string){
+  const found=(row?.stats??[]).find((s:any)=>String(s?.name??"")===name)
+  const value=Number(found?.value??found?.displayValue??0)
+  return Number.isFinite(value)?value:0
+}
+async function livePlayerStatsForFixture(f:Fixture){
+  const preferred=String(f.id??"").includes(":")?String(f.id).split(":")[0]:null
+  const slugs=[
+    ...(preferred?[preferred]:[]),
+    ...(f.competition==="International"?ESPN_INTL_SLUGS:[ESPN_LEAGUE_SLUGS[f.competition]].filter(Boolean) as string[]),
+  ].filter((v,i,a)=>Boolean(v)&&a.indexOf(v)===i) as string[]
+  const date=fixtureDate(f).replaceAll("-","")
+  for(const slug of slugs){
+    try{
+      let eventId=preferred===slug&&String(f.id).includes(":")?String(f.id).split(":").slice(1).join(":"):""
+      if(!eventId){
+        const scoreboard=await fetch("https://site.api.espn.com/apis/site/v2/sports/soccer/"+slug+"/scoreboard?dates="+date+"&limit=300",{cache:"no-store",signal:AbortSignal.timeout(4500),headers:{accept:"application/json"}})
+        if(!scoreboard.ok)continue
+        const data=await scoreboard.json()
+        const event=(data?.events??[]).find((e:any)=>{
+          const comps=e?.competitions?.[0]?.competitors??[]
+          const h=comps.find((x:any)=>x.homeAway==="home")
+          const a=comps.find((x:any)=>x.homeAway==="away")
+          return sameTeamName(String(h?.team?.displayName??""),f.home.name)&&sameTeamName(String(a?.team?.displayName??""),f.away.name)
+        })
+        eventId=String(event?.id??"")
+      }
+      if(!eventId)continue
+      const summaryRes=await fetch("https://site.api.espn.com/apis/site/v2/sports/soccer/"+slug+"/summary?event="+eventId,{cache:"no-store",signal:AbortSignal.timeout(5000),headers:{accept:"application/json"}})
+      if(!summaryRes.ok)continue
+      const summary=await summaryRes.json()
+      const map=new Map<string,LivePlayerStat>()
+      for(const section of summary?.rosters??[]){
+        const team=String(section?.team?.displayName??section?.team?.name??"")
+        for(const row of section?.roster??[]){
+          const player=String(row?.athlete?.displayName??row?.athlete?.fullName??"").trim()
+          if(!player)continue
+          map.set(normName(player),{
+            player,team,
+            foulsCommitted:espnStat(row,"foulsCommitted"),
+            foulsDrawn:espnStat(row,"foulsSuffered"),
+            shots:espnStat(row,"totalShots"),
+            shotsOnTarget:espnStat(row,"shotsOnTarget"),
+            yellowCards:espnStat(row,"yellowCards"),
+            redCards:espnStat(row,"redCards"),
+          })
+        }
+      }
+      // Card events are also read from the event stream because roster totals can lag briefly.
+      for(const event of summary?.keyEvents??[]){
+        const type=String(event?.type?.type??event?.type?.text??"").toLowerCase()
+        const isYellow=type.includes("yellow")
+        const isRed=type.includes("red")
+        if(!isYellow&&!isRed)continue
+        for(const p of event?.participants??[]){
+          const name=String(p?.athlete?.displayName??p?.athlete?.fullName??"").trim()
+          if(!name)continue
+          const key=normName(name),current=map.get(key)
+          if(!current)continue
+          if(isYellow)current.yellowCards=Math.max(1,current.yellowCards)
+          if(isRed)current.redCards=Math.max(1,current.redCards)
+        }
+      }
+      if(map.size)return {source:"ESPN-live",players:map}
+    }catch{}
+  }
+  return {source:null,players:new Map<string,LivePlayerStat>()}
 }
 function filterSlipToOfficialStarters<T extends BetSlip|FoulTargetSlip>(slip:T,lineup:OfficialLineup):T|null{
   if(!lineup.confirmed)return slip
@@ -318,7 +401,7 @@ function remainingEventProbability(fullMatchProbability:number,elapsed:number){
   const lambda=-Math.log(1-p)
   return Math.max(.001,Math.min(.99,1-Math.exp(-lambda*remaining)))
 }
-function buildLivePlayerProps(scorecard:Scorecard|null,elapsed:number){
+function buildLivePlayerProps(scorecard:Scorecard|null,elapsed:number,liveStats:Map<string,LivePlayerStat>){
   if(!scorecard?.ok||!scorecard.lineupsConfirmed)return []
   const candidates:any[]=[]
   const seen=new Set<string>()
@@ -329,17 +412,47 @@ function buildLivePlayerProps(scorecard:Scorecard|null,elapsed:number){
       const key=normName(leg.player)+"|"+market
       if(seen.has(key))continue
       seen.add(key)
-      const probability=remainingEventProbability(Number(leg.probability??0),elapsed)
+      const stat=liveStats.get(normName(leg.player))
+      if(market==="card"&&stat&&(stat.yellowCards>0||stat.redCards>0))continue
+
+      let currentCount=0
+      let nextLabel=leg.label
+      if(stat){
+        if(market==="foul1"){currentCount=stat.foulsCommitted;nextLabel=String(currentCount+1)+"+ fouls committed"}
+        else if(market==="fouled1"){currentCount=stat.foulsDrawn;nextLabel=String(currentCount+1)+"+ fouls drawn"}
+        else if(market==="shot1"){currentCount=stat.shots;nextLabel=String(currentCount+1)+"+ shots"}
+        else if(market==="sot1"){currentCount=stat.shotsOnTarget;nextLabel=String(currentCount+1)+"+ shots on target"}
+      }
+
+      let probability=remainingEventProbability(Number(leg.probability??0),elapsed)
+      let pressureNote=""
+      if(market==="card"&&stat&&stat.foulsCommitted>0){
+        const player=(scorecard.players??[]).find(p=>normName(p.name)===normName(leg.player)||normName(String(p.dbName??""))===normName(leg.player))
+        const cond=stat.foulsCommitted>=3?player?.yellowConditionals?.after3PlusFouls
+          :stat.foulsCommitted>=2?player?.yellowConditionals?.after2PlusFouls
+          :player?.yellowConditionals?.after1PlusFouls
+        const overall=player?.yellowConditionals?.overall
+        if(cond?.rate!=null&&Number(overall?.rate)>0&&Number(cond.matches??0)>=4){
+          const multiplier=Math.max(.75,Math.min(1.8,Number(cond.rate)/Number(overall!.rate)))
+          probability=Math.max(.001,Math.min(.99,probability*multiplier))
+          pressureNote=" Live foul pressure adjusted from the player's historical card-after-foul profile."
+        }
+      }
+
       const marketGroup=market==="card"?"card":market==="foul1"?"foul":market==="fouled1"?"fouled":market==="shot1"?"shot":"sot"
       const status=(scorecard.marketAvailability as any)?.[marketGroup]??"unknown"
       candidates.push({
-        player:leg.player,team:leg.team,market,label:leg.label,
+        player:leg.player,team:leg.team,market,label:nextLabel,
         probability:Math.round(probability*1000)/1000,
         fullMatchProbability:Math.round(Number(leg.probability??0)*1000)/1000,
         fairOdds:Math.round((1/Math.max(.01,probability))*100)/100,
         confidence:leg.confidence,marketStatus:status,
         bookmakerOdds:null,bookmakerName:null,
-        reason:"Remaining-match estimate from the confirmed-XI player model, scaled to the time left.",
+        currentCount,liveStatsAvailable:Boolean(stat),
+        currentFouls:stat?.foulsCommitted??null,currentFouled:stat?.foulsDrawn??null,
+        currentShots:stat?.shots??null,currentSot:stat?.shotsOnTarget??null,
+        currentYellowCards:stat?.yellowCards??null,currentRedCards:stat?.redCards??null,
+        reason:"Remaining-match estimate from the confirmed-XI player model, updated from live match event counts."+pressureNote,
       })
     }
   }
@@ -511,10 +624,11 @@ export async function GET(request:Request){
       liveMatches=await Promise.all(liveFixtures.map(async f=>{
         const model=byId.get(String(f.id))??byTeams.get(normName(f.home.name)+"|"+normName(f.away.name))
         const elapsed=Math.max(0,Math.min(96,Number(model?.elapsed??f.elapsed??0)))
-        let scorecard=await scorecardFor(f,refresh)
+        const [liveStatData,primaryScorecard]=await Promise.all([livePlayerStatsForFixture(f),scorecardFor(f,refresh)])
+        let scorecard=primaryScorecard
         if(!scorecard?.ok)scorecard=await fallbackScorecard(f)
-        const livePlayerProps=buildLivePlayerProps(scorecard,elapsed)
-        if(model)return {...model,livePlayerProps}
+        const livePlayerProps=buildLivePlayerProps(scorecard,elapsed,liveStatData.players)
+        if(model)return {...model,livePlayerProps,livePlayerStatsSource:liveStatData.source}
         const home=Number(f.score?.home),away=Number(f.score?.away)
         const hasScore=Number.isFinite(home)&&Number.isFinite(away)
         const bttsSettled=Boolean(hasScore&&home>0&&away>0)
@@ -522,13 +636,14 @@ export async function GET(request:Request){
           id:String(f.id),competition:f.competition,kickoff:f.kickoff,status:f.status??"live",
           inPlay:true,elapsed:f.elapsed??null,score:hasScore?{home,away}:null,
           home:f.home.name,away:f.away.name,probabilities:null,winnerPick:null,bttsPick:null,bttsSettled,
-          livePlayerProps,
+          livePlayerProps,livePlayerStatsSource:liveStatData.source,
           reasons:["Live score available. The live win-probability model is not currently available for this competition."],
         }
       }))
     }catch{
       liveMatches=await Promise.all(liveFixtures.map(async f=>{
-        let scorecard=await scorecardFor(f,refresh)
+        const [liveStatData,primaryScorecard]=await Promise.all([livePlayerStatsForFixture(f),scorecardFor(f,refresh)])
+        let scorecard=primaryScorecard
         if(!scorecard?.ok)scorecard=await fallbackScorecard(f)
         const elapsed=Math.max(0,Math.min(96,Number(f.elapsed??0)))
         return {
@@ -537,7 +652,8 @@ export async function GET(request:Request){
           score:f.score??null,home:f.home.name,away:f.away.name,
           probabilities:null,winnerPick:null,bttsPick:null,
           bttsSettled:Boolean((f.score?.home??0)>0&&(f.score?.away??0)>0),
-          livePlayerProps:buildLivePlayerProps(scorecard,elapsed),
+          livePlayerProps:buildLivePlayerProps(scorecard,elapsed,liveStatData.players),
+          livePlayerStatsSource:liveStatData.source,
           reasons:["Live score available while the live probability refresh is temporarily unavailable."],
         }
       }))
@@ -637,7 +753,7 @@ export async function GET(request:Request){
         cache:"Recommended scans today only and is served from one server endpoint with a five-minute shared-cache target; manual refresh bypasses the normal scan cadence.",
         tracking:"Recommendations are saved before kickoff and graded later from imported player-match data. Model-only recommendations remain visible when bookmaker verification is missing; only verified same-bookmaker markets are marked placeable.",
         targetOdds:"Select a match, then 5/1 through 50/1 same-game targets search the strongest recommended legs for that fixture only. Exact individual same-bookmaker prices are preferred as a reference, but the final Bet Builder quote can differ because of correlation.",
-        liveRecommended:"Matches remain on Recommended after kick-off. Live rows use the current score and minute with recalculated match-result and unsettled BTTS probabilities. Confirmed-XI card, foul, fouled, shot and SOT models are converted into remaining-match probabilities as the clock runs down; stale pre-match bookmaker prices are never relabelled as live prices.",
+        liveRecommended:"Matches remain on Recommended after kick-off. Live rows use the current score and minute plus current player event counts. Confirmed-XI card, foul, fouled, shot and SOT models become next-threshold remaining-match probabilities; already-carded players are removed from the card market, and stale pre-match bookmaker prices are never relabelled as live prices.",
         liveFeedback:liveTopSample>=50
           ? "Live top-pick calibration is active. Current 30-day reliability multiplier: "+liveReliabilityFactor.toFixed(3)
           : "Live top-pick calibration activates after 50 graded top-pick legs.",
