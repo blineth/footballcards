@@ -14,6 +14,8 @@ const PREFERRED_UK_BOOKMAKERS = ["Bet365","Sky Bet","William Hill","Paddy Power"
 const LEAGUE_IDS: Record<string, string> = {
   "Premier League": "39",
   Championship: "40",
+  "League One": "41",
+  "League Two": "42",
 }
 
 function norm(value: string | null | undefined) {
@@ -99,6 +101,7 @@ async function attachMovement(input:{date:string;home:string;away:string;competi
 
 type MarketAvailabilityState = "available" | "unavailable" | "unknown"
 type MarketAvailability = Record<"card"|"foul"|"fouled"|"shot"|"sot", MarketAvailabilityState>
+type BookmakerAvailability = Record<string,MarketAvailability>
 
 function isPlayerPropSelection(selection:{market?:string;label?:string;kind:string}) {
   const market = norm(selection.market)
@@ -133,6 +136,17 @@ function marketAvailability(selections:Array<{market?:string;label?:string;kind:
     shot:state("shot"),
     sot:state("sot"),
   }
+}
+function bookmakerAvailability(
+  selections:Array<{market?:string;label?:string;kind:string;bookmaker?:string|null}>,
+  verifiedBooks:string[],
+):BookmakerAvailability{
+  const result:BookmakerAvailability={}
+  for(const book of PREFERRED_UK_BOOKMAKERS){
+    const verified=verifiedBooks.includes(book)
+    result[book]=marketAvailability(selections.filter(s=>s.bookmaker===book),verified)
+  }
+  return result
 }
 
 async function cachedSnapshot(input:{date:string;home:string;away:string;competition:string}) {
@@ -183,6 +197,7 @@ async function cachedSnapshot(input:{date:string;home:string;away:string;competi
       cached:true,
       maxUsableAgeSeconds:10800,
       marketAvailability:marketAvailability(selections,true),
+      bookmakerAvailability:bookmakerAvailability(selections,cachedBooks),
     }
   } catch {
     return null
@@ -288,13 +303,16 @@ async function fromUkOdds(input: { date: string; home: string; away: string; key
 }
 async function fromApiFootball(input: { date: string; home: string; away: string; competition: string; key: string }) {
   const league = LEAGUE_IDS[input.competition]
-  if (!league) return null
-  const fixtures = await apiFootball("/fixtures", {
+  if (!league && input.competition !== "International") return null
+  const fixtureParams:Record<string,string> = {
     date: input.date,
-    league,
-    season: seasonFor(input.date),
     timezone: "Europe/London",
-  }, input.key)
+  }
+  if(league){
+    fixtureParams.league=league
+    fixtureParams.season=seasonFor(input.date)
+  }
+  const fixtures = await apiFootball("/fixtures", fixtureParams, input.key)
   const fixture = fixtures.find((row: any) => teamMatch(row?.teams?.home?.name, input.home) && teamMatch(row?.teams?.away?.name, input.away))
   if (!fixture?.fixture?.id) return null
 
@@ -331,7 +349,7 @@ async function fromApiFootball(input: { date: string; home: string; away: string
     connected: true,
     bookmaker: books.size === 1 ? [...books][0] : "Best of preferred UK books",
     bookmakers:[...books].sort(),
-    source: "API-Football UK bookmaker feed",
+    source: "API-Football preferred UK bookmaker feed",
     capturedAt: null,
     fixtureId: String(fixture.fixture.id),
     selections,
@@ -356,7 +374,7 @@ export async function GET(request: Request) {
 
     // API-Football remains the free bookmaker-data fallback where the free plan supports the league.
     const apiKey = process.env.API_FOOTBALL_KEY
-    if (apiKey && LEAGUE_IDS[competition]) {
+    if (apiKey && (LEAGUE_IDS[competition] || competition==="International")) {
       try {
         const fallback = await fromApiFootball({ date, home, away, competition, key: apiKey })
         if (fallback) {
@@ -376,6 +394,7 @@ export async function GET(request: Request) {
             cached:false,
             maxUsableAgeSeconds:10800,
             marketAvailability:marketAvailability(selections,true),
+            bookmakerAvailability:bookmakerAvailability(selections,fallback.bookmakers??[]),
           })
         }
       } catch (error) {
@@ -385,16 +404,17 @@ export async function GET(request: Request) {
 
     // No paid odds dependency is required. The prediction engine still works from calibrated fair odds.
     return NextResponse.json({
-      connected:Boolean(apiKey && LEAGUE_IDS[competition]),
+      connected:Boolean(apiKey && (LEAGUE_IDS[competition] || competition==="International")),
       bookmaker:"Preferred UK books",
       bookmakers:[...PREFERRED_UK_BOOKMAKERS],
-      source:apiKey && LEAGUE_IDS[competition] ? "API-Football free tier" : null,
+      source:apiKey && (LEAGUE_IDS[competition] || competition==="International") ? "API-Football free tier" : null,
       selections:[],
       priceAvailable:false,
       freeTier:true,
       cached:false,
       maxUsableAgeSeconds:10800,
       marketAvailability:marketAvailability([],false),
+      bookmakerAvailability:bookmakerAvailability([],[]),
       note:"No free bookmaker player-prop snapshot is available for this fixture. Model probabilities and fair odds remain available.",
     })
   } catch (error) {
@@ -407,6 +427,7 @@ export async function GET(request: Request) {
       priceAvailable:false,
       freeTier:true,
       marketAvailability:marketAvailability([],false),
+      bookmakerAvailability:bookmakerAvailability([],[]),
     })
   }
 }
