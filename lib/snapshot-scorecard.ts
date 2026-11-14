@@ -359,7 +359,6 @@ export async function buildSnapshotScorecard(input:{
   const before=snapshot.rows.filter(row=>row.match_date<input.date)
   const scored=players.map(p=>{
     const history=before.filter(row=>row.player_name===p.player_name).sort((a,b)=>a.match_date.localeCompare(b.match_date))
-    if(history.length<3)return null
     const recent=history.slice(-5)
     const goalHits=history.filter(row=>row.goals>=1).length
     const foulHits=history.filter(row=>row.fouls_committed>=1).length
