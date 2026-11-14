@@ -88,14 +88,20 @@ export async function GET(request:Request){
         for(const row of section?.roster??[]){
           const name=String(row?.athlete?.displayName??row?.athlete?.fullName??"").trim(),pid=String(row?.athlete?.id??"")
           if(!name||!team||!opponent||!date)continue
+          const minutes=mins.get(pid)??(row?.starter===true?90:0)
+          const foulsCommitted=stat(row,"foulsCommitted"),foulsDrawn=stat(row,"foulsSuffered")
+          const shots=stat(row,"totalShots"),shotsOnTarget=stat(row,"shotsOnTarget")
+          const yellowCards=stat(row,"yellowCards"),redCards=stat(row,"redCards")
+          const goals=stat(row,"totalGoals"),assists=stat(row,"goalAssists")
+          const appeared=row?.starter===true||minutes>0||foulsCommitted>0||foulsDrawn>0||shots>0||shotsOnTarget>0||yellowCards>0||redCards>0||goals>0||assists>0
+          if(!appeared)continue
           rows.push({
             playerName:name,team,opponent,matchDate:date,competition:"International",venue:team===home?"Home":"Away",
             position:row?.position?.abbreviation??row?.position?.displayName??row?.athlete?.position?.abbreviation??null,
-            starter:row?.starter===true,minutes:mins.get(pid)??(row?.starter===true?90:0),
-            foulsCommitted:stat(row,"foulsCommitted"),foulsDrawn:stat(row,"foulsSuffered"),
-            shots:stat(row,"totalShots"),shotsOnTarget:stat(row,"shotsOnTarget"),
-            yellowCard:stat(row,"yellowCards")>0,redCard:stat(row,"redCards")>0,
-            goals:stat(row,"totalGoals"),assists:stat(row,"goalAssists"),externalPlayerId:pid||null,
+            starter:row?.starter===true,minutes,
+            foulsCommitted,foulsDrawn,shots,shotsOnTarget,
+            yellowCard:yellowCards>0,redCard:redCards>0,
+            goals,assists,externalPlayerId:pid||null,
           })
         }
       }
