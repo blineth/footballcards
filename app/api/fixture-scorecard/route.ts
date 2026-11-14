@@ -264,21 +264,18 @@ function bestLeg(players: ScorePlayer[], market: MarketKey, used = new Set<strin
   return players
     .map(player => marketLeg(player, market))
     .filter(leg => !used.has(norm(leg.player)) && leg.confidence !== "D")
+    .filter(leg => leg.expectedValue == null || leg.expectedValue >= -0.08)
     .sort((a, b) => legRank(b) - legRank(a))[0] ?? null
 }
 function makeSlip(id: string, title: string, risk: string, legs: SlipLeg[], note: string) {
-  const priced = legs.filter(leg => leg.bookmakerOdds != null)
-  const combinedOdds = priced.length === legs.length && legs.length
-    ? Math.round(legs.reduce((p, leg) => p * Number(leg.bookmakerOdds), 1) * 100) / 100
-    : null
   return {
     id,
     title,
     risk,
     legs,
-    combinedOdds,
+    combinedOdds: null,
     averageLegProbability: legs.length ? Math.round((legs.reduce((s, leg) => s + leg.probability, 0) / legs.length) * 1000) / 1000 : null,
-    note,
+    note: note + " Same-match Bet Builder legs are not multiplied into a fake combined price; an explicit bookmaker combo price is required.",
   }
 }
 function buildSlips(players: ScorePlayer[]) {
@@ -293,7 +290,7 @@ function buildSlips(players: ScorePlayer[]) {
     }
   }
 
-  const cardLegs = players.map(player => marketLeg(player, "card")).filter(leg => leg.confidence !== "D").sort((a, b) => legRank(b) - legRank(a))
+  const cardLegs = players.map(player => marketLeg(player, "card")).filter(leg => leg.confidence !== "D").filter(leg => leg.expectedValue == null || leg.expectedValue >= -0.08).sort((a, b) => legRank(b) - legRank(a))
   const twoCard = cardLegs.slice(0, 2)
   const threeCard = cardLegs.slice(0, 3)
 
@@ -306,6 +303,7 @@ function buildSlips(players: ScorePlayer[]) {
 
   const pressurePool = players.flatMap(player => [marketLeg(player, "foul2"), marketLeg(player, "sot1"), marketLeg(player, "shot2")])
     .filter(leg => leg.confidence !== "D")
+    .filter(leg => leg.expectedValue == null || leg.expectedValue >= -0.08)
     .sort((a, b) => legRank(b) - legRank(a))
   const mixed: SlipLeg[] = []
   const mixedPlayers = new Set<string>()
