@@ -174,16 +174,23 @@ def main():
             samples.append(row)
             if hp>=.43 or ap>=.40:
                 p=hp if hp>=ap else ap;hit=row["homeWin"] if hp>=ap else row["awayWin"]
-                day_candidates.append({"kind":"win","model":p,"hit":hit,"score":(p-.34)/.45})
+                day_candidates.append({"fixture":key,"kind":"win","model":p,"hit":hit,"score":(p-.34)/.45})
             if bp>=.55 or bp<=.45:
                 p=bp if bp>=.55 else 1-bp;hit=row["btts"] if bp>=.55 else not row["btts"]
-                day_candidates.append({"kind":"btts","model":p,"hit":hit,"score":(p-.5)/.34})
+                day_candidates.append({"fixture":key,"kind":"btts","model":p,"hit":hit,"score":(p-.5)/.34})
+        ranked=sorted(day_candidates,key=lambda x:x["score"],reverse=True)
+        unique=[]
+        seen=set()
+        for candidate in ranked:
+            fixture=candidate["fixture"]
+            if fixture in seen:
+                continue
+            seen.add(fixture)
+            unique.append(candidate)
         for n,key in ((5,"fold5"),(7,"fold7"),(10,"fold10")):
-            # Keep only the strongest selection from each fixture. day_candidates
-            # are added in fixture order, so duplicate markets from one fixture
-            # must not create multiple legs in the same accumulator.
-            pool=sorted(day_candidates,key=lambda x:x["score"],reverse=True)[:n]
-            if len(pool)==n:structures[key].append({"model":math.prod(x["model"] for x in pool),"hit":all(x["hit"] for x in pool)})
+            pool=unique[:n]
+            if len(pool)==n:
+                structures[key].append({"model":math.prod(x["model"] for x in pool),"hit":all(x["hit"] for x in pool)})
         for r in day:history[r["competition"]].append(r)
     output={
         "version":"match-acca-walk-forward-v1","source":"data/current-season/h2h.csv",
