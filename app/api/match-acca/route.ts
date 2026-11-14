@@ -180,17 +180,18 @@ function buildSlip(id:string,title:string,subtitle:string,legs:any[],structureKe
   const enough=uniqueByFixture.length>=requiredLegs
   const selected=enough?uniqueByFixture.slice(0,requiredLegs):[]
   const rawAllHit=selected.length?selected.reduce((v,l)=>v*Math.max(.01,l.probability),1):null
+  const containsLive=selected.some(l=>Boolean(l?.prediction?.inPlay))
   const backtest=(matchAccaBacktest as any)?.structures?.[structureKey]
   const sample=Number(backtest?.sample??0)
   const observed=Number(backtest?.hitRate??0)
   const historicalModel=Number(backtest?.avgModel??0)
   const reliability=sample/(sample+25)
   const ratio=historicalModel>0?clamp(observed/historicalModel,.35,1.10):1
-  const adjustedAllHit=rawAllHit==null?null:clamp(rawAllHit*(1-reliability+reliability*ratio),.001,.99)
+  const adjustedAllHit=rawAllHit==null?null:containsLive?clamp(rawAllHit,.001,.99):clamp(rawAllHit*(1-reliability+reliability*ratio),.001,.99)
   const fair=adjustedAllHit==null?null:1/adjustedAllHit
   let book:string|null=null,exact:number|null=null
   for(const b of BOOKS){const prices=selected.map(l=>exactPrice(l.prediction,l.market,b));if(!prices.length||prices.some(x=>x==null))continue;const combined=prices.reduce((v,x)=>v*Number(x),1);if(exact==null||combined>exact){book=b;exact=combined}}
-  return {id,title,subtitle,structureKey,requiredLegs,available:enough,legs:selected.map(l=>({fixtureId:l.prediction.id,competition:l.prediction.competition,kickoff:l.prediction.kickoff,home:l.prediction.home,away:l.prediction.away,market:l.market,label:l.label,probability:pct(l.probability),fairOdds:Math.round((1/Math.max(.05,l.probability))*100)/100,bookmakerOdds:book?exactPrice(l.prediction,l.market,book):null,bookmaker:book,grade:l.grade,reasons:l.reasons})),modelAllHitProbability:rawAllHit==null?null:pct(rawAllHit),adjustedAllHitProbability:adjustedAllHit==null?null:pct(adjustedAllHit),historicalStructureSample:sample,historicalStructureHitRate:sample?observed:null,fairCombinedOdds:fair==null?null:Math.round(fair*100)/100,bookmaker:book,exactCombinedOdds:exact==null?null:Math.round(exact*100)/100,exactPriced:Boolean(book&&exact)}
+  return {id,title,subtitle,structureKey,requiredLegs,available:enough,containsLive,legs:selected.map(l=>({fixtureId:l.prediction.id,competition:l.prediction.competition,kickoff:l.prediction.kickoff,home:l.prediction.home,away:l.prediction.away,inPlay:Boolean(l.prediction.inPlay),elapsed:l.prediction.elapsed??null,score:l.prediction.score??null,market:l.market,label:l.label,probability:pct(l.probability),fairOdds:Math.round((1/Math.max(.05,l.probability))*100)/100,bookmakerOdds:book?exactPrice(l.prediction,l.market,book):null,bookmaker:book,grade:l.grade,reasons:l.reasons})),modelAllHitProbability:rawAllHit==null?null:pct(rawAllHit),adjustedAllHitProbability:adjustedAllHit==null?null:pct(adjustedAllHit),historicalStructureSample:containsLive?0:sample,historicalStructureHitRate:containsLive?null:(sample?observed:null),fairCombinedOdds:fair==null?null:Math.round(fair*100)/100,bookmaker:book,exactCombinedOdds:exact==null?null:Math.round(exact*100)/100,exactPriced:Boolean(book&&exact),combinedProbabilityNote:containsLive?"Contains live legs: combined probability uses the current live model product and is not pre-match structure-calibrated.":"Pre-match combined probability is adjusted against the historical hit-rate of the same fold size."}
 }
 
 export async function GET(request:Request){
