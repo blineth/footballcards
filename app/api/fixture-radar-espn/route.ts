@@ -120,7 +120,8 @@ export async function GET(request: Request) {
     currentPlayers = [...homeRoster, ...awayRoster]
   }
 
-  const allBaselines = await db.select().from(playerBaselines).where(eq(playerBaselines.season, "2025/26")).orderBy(desc(playerBaselines.minutes))
+  const baselineSeason = competition === "Championship" ? "2026/27" : "2025/26"
+  const allBaselines = await db.select().from(playerBaselines).where(and(eq(playerBaselines.season, baselineSeason), eq(playerBaselines.competition, competition))).orderBy(desc(playerBaselines.minutes))
   const matched: Array<{ player: CurrentPlayer; baseline: (typeof allBaselines)[number] }> = []
   if (currentPlayers.length) {
     for (const current of currentPlayers) {
@@ -153,7 +154,7 @@ export async function GET(request: Request) {
     const h2hYellows = h2h.filter((row) => row.yellowCard === true).length, h2hFouls = h2h.reduce((sum, row) => sum + Number(row.foulsCommitted ?? 0), 0)
     const cards90 = Number(baseline.cardsPer90 ?? 0), fouls90 = Number(baseline.foulsPer90 ?? 0), yellows = Number(baseline.yellowCards ?? 0), minutes = Number(baseline.minutes ?? 0), starts = Number(baseline.starts ?? 0), apps = Number(baseline.appearances ?? 0)
     const score = scoreCandidate({ cards90, yellows, fouls90, minutes, starts, apps, h2hYellows, h2hFouls, confirmed })
-    return { name: player.name, dbName: baseline.playerName, team: player.currentTeam, dbTeam: baseline.team, historicalCompetition: baseline.competition, position: player.position ?? baseline.position, yellows, cards90, fouls90, appearances: apps, starts, minutes, startLikelihood: confirmed ? 1 : startProbability(starts, apps), sampleLabel: sampleLabel(minutes, starts, apps, confirmed), h2hYellows, h2hFouls, score, band: band(score) }
+    return { name: player.name, dbName: baseline.playerName, team: player.currentTeam, dbTeam: baseline.team, historicalCompetition: baseline.competition, baselineSeason, position: player.position ?? baseline.position, yellows, redCards: Number(baseline.redCards ?? 0), goals: Number(baseline.goals ?? 0), assists: Number(baseline.assists ?? 0), shots: Number(baseline.shots ?? 0), shotsOnTarget: Number(baseline.shotsOnTarget ?? 0), cards90, fouls90, fouled90: minutes > 0 ? Math.round(((Number(baseline.foulsDrawn ?? 0) * 90) / minutes) * 100) / 100 : null, shots90: baseline.shotsPer90 == null ? null : Number(baseline.shotsPer90), shotsOnTarget90: baseline.shotsOnTargetPer90 == null ? null : Number(baseline.shotsOnTargetPer90), appearances: apps, starts, minutes, startLikelihood: confirmed ? 1 : startProbability(starts, apps), sampleLabel: sampleLabel(minutes, starts, apps, confirmed), h2hYellows, h2hFouls, score, band: band(score) }
   }).sort((a, b) => b.score - a.score || b.minutes - a.minutes)
 
   const officialName = summary?.gameInfo?.officials?.[0]?.displayName ?? summary?.gameInfo?.officials?.[0]?.fullName ?? null
