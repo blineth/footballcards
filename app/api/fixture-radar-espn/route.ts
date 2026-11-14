@@ -6,11 +6,12 @@ import { NextResponse } from "next/server"
 
 export const dynamic = "force-dynamic"
 
-type Competition = "Premier League" | "Championship"
+type Competition = "Premier League" | "Championship" | "League One" | "International"
 type EspnPlayer = { id?: string; displayName?: string; fullName?: string; position?: { abbreviation?: string; displayName?: string } }
 type CurrentPlayer = { id?: string; name: string; position?: string; currentTeam: string }
 
-const leagueSlug: Record<Competition, string> = { "Premier League": "eng.1", Championship: "eng.2" }
+const leagueSlug: Partial<Record<Competition, string>> = { "Premier League": "eng.1", Championship: "eng.2", "League One": "eng.3" }
+const internationalSlugs = ["uefa.nations", "fifa.friendly", "fifa.world", "fifa.worldq.uefa", "fifa.worldq.conmebol", "fifa.worldq.concacaf", "fifa.worldq.afc", "fifa.worldq.caf"]
 const teamAliases: Record<string, string[]> = {
   Arsenal: ["Arsenal"], "Coventry City": ["Coventry", "Coventry City"], "Hull City": ["Hull", "Hull City"], "Manchester United": ["Man Utd", "Manchester United"], Everton: ["Everton"], "Crystal Palace": ["Crystal Palace"], "Ipswich Town": ["Ipswich", "Ipswich Town"], Sunderland: ["Sunderland"], "Nottingham Forest": ["Nott'm Forest", "Nottingham Forest"], "Leeds United": ["Leeds", "Leeds United"], Brentford: ["Brentford"], "Tottenham Hotspur": ["Spurs", "Tottenham", "Tottenham Hotspur"], "Brighton & Hove Albion": ["Brighton", "Brighton & Hove Albion"], "Aston Villa": ["Aston Villa"], "Manchester City": ["Man City", "Manchester City"], "AFC Bournemouth": ["Bournemouth", "AFC Bournemouth"], "Newcastle United": ["Newcastle", "Newcastle United"], Liverpool: ["Liverpool"], Fulham: ["Fulham"], Chelsea: ["Chelsea"], "Birmingham City": ["Birmingham City", "Birmingham"], "Bristol City": ["Bristol City"], "Lincoln City": ["Lincoln City"], Portsmouth: ["Portsmouth"], Millwall: ["Millwall"], "Norwich City": ["Norwich City", "Norwich"], "Blackburn Rovers": ["Blackburn Rovers", "Blackburn"], Middlesbrough: ["Middlesbrough"], "Derby County": ["Derby County", "Derby"], "Cardiff City": ["Cardiff City", "Cardiff"], "Preston North End": ["Preston North End", "Preston"], "Wolverhampton Wanderers": ["Wolves", "Wolverhampton Wanderers"], "Queens Park Rangers": ["Queens Park Rangers", "QPR"], "Bolton Wanderers": ["Bolton Wanderers", "Bolton"], Southampton: ["Southampton"], "Stoke City": ["Stoke City", "Stoke"], "Swansea City": ["Swansea City"], "Sheffield United": ["Sheffield United", "Sheffield Utd"], "West Ham United": ["West Ham", "West Ham United"], "Charlton Athletic": ["Charlton Athletic", "Charlton"], Wrexham: ["Wrexham"], Watford: ["Watford"], "West Bromwich Albion": ["West Brom", "West Bromwich Albion"], Burnley: ["Burnley"],
 }
@@ -60,12 +61,22 @@ function sampleLabel(minutes: number, starts: number, apps: number, confirmed: b
 }
 
 async function findEvent(league: string, date: string, home: string, away: string) {
-  const data = await espn(`${league}/scoreboard?dates=${date.replaceAll("-", "")}`)
+  const data = await espn(`${league}/scoreboard?dates=${date.replaceAll("-", "")}&limit=300`)
   for (const event of data?.events ?? []) {
     const competitors = event?.competitions?.[0]?.competitors ?? []
     const h = competitors.find((row: any) => row.homeAway === "home")
     const a = competitors.find((row: any) => row.homeAway === "away")
-    if (teamMatch(h?.team?.displayName, home) && teamMatch(a?.team?.displayName, away)) return { event, homeCompetitor: h, awayCompetitor: a }
+    if (teamMatch(h?.team?.displayName, home) && teamMatch(a?.team?.displayName, away)) return { event, homeCompetitor: h, awayCompetitor: a, league }
+  }
+  return null
+}
+async function findEventForCompetition(competition: Competition, date: string, home: string, away: string) {
+  const slugs = competition === "International" ? internationalSlugs : [leagueSlug[competition]].filter(Boolean) as string[]
+  for (const slug of slugs) {
+    try {
+      const found = await findEvent(slug, date, home, away)
+      if (found) return found
+    } catch {}
   }
   return null
 }
@@ -100,19 +111,19 @@ export async function GET(request: Request) {
   const url = new URL(request.url)
   const date = url.searchParams.get("date"), home = url.searchParams.get("home"), away = url.searchParams.get("away")
   const competition = (url.searchParams.get("competition") ?? "Premier League") as Competition
-  if (!date || !home || !away || !(competition in leagueSlug)) return NextResponse.json({ error: "Invalid fixture parameters" }, { status: 400 })
+  if (!date || !home || !away || !["Premier League","Championship","League One","International"].includes(competition)) return NextResponse.json({ error: "Invalid fixture parameters" }, { status: 400 })
   if (!isDatabaseConfigured) return NextResponse.json({ connected: false, lineupsConfirmed: false, candidates: [] })
   await ensureResearchSchema()
 
-  const league = leagueSlug[competition]
   let eventInfo: any = null, summary: any = null
-  try { eventInfo = await findEvent(league, date, home, away) } catch {}
-  if (eventInfo?.event?.id) { try { summary = await espn(`${league}/summary?event=${eventInfo.event.id}`) } catch {} }
+  try { eventInfo = await findEventForCompetition(competition, date, home, away) } catch {}
+  const league = eventInfo?.league ?? leagueSlug[competition] ?? null
+  if (eventInfo?.event?.id && league) { try { summary = await espn(`${league}/summary?event=${eventInfo.event.id}`) } catch {} }
   const official = startersFromSummary(summary, home, away)
   const confirmed = official.confirmed
 
   let currentPlayers: CurrentPlayer[] = official.players
-  if (!confirmed && eventInfo) {
+  if (!confirmed && eventInfo && league) {
     const [homeRoster, awayRoster] = await Promise.all([
       currentRoster(league, eventInfo.homeCompetitor?.team?.id, home),
       currentRoster(league, eventInfo.awayCompetitor?.team?.id, away),
@@ -121,9 +132,14 @@ export async function GET(request: Request) {
   }
 
   const baselineSeason = "2026/27"
-  const [allBaselines, previousBaselines] = await Promise.all([
-    db.select().from(playerBaselines).where(and(eq(playerBaselines.season, baselineSeason), eq(playerBaselines.competition, competition))).orderBy(desc(playerBaselines.minutes)),
+  const [allBaselines, previousBaselines, internationalRows] = await Promise.all([
+    competition === "International"
+      ? db.select().from(playerBaselines).where(eq(playerBaselines.season, baselineSeason)).orderBy(desc(playerBaselines.minutes))
+      : db.select().from(playerBaselines).where(and(eq(playerBaselines.season, baselineSeason), eq(playerBaselines.competition, competition))).orderBy(desc(playerBaselines.minutes)),
     db.select().from(playerBaselines).where(eq(playerBaselines.season, "2025/26")).orderBy(desc(playerBaselines.minutes)),
+    competition === "International"
+      ? db.select().from(playerH2H).where(eq(playerH2H.competition, "International"))
+      : Promise.resolve([]),
   ])
   const matched: Array<{ player: CurrentPlayer; baseline: (typeof allBaselines)[number] }> = []
   if (currentPlayers.length) {
@@ -135,7 +151,7 @@ export async function GET(request: Request) {
       }
       if (best && bestScore >= 80) matched.push({ player: current, baseline: best })
     }
-  } else {
+  } else if (competition !== "International") {
     const homeAliases = teamAliases[home] ?? [home], awayAliases = teamAliases[away] ?? [away], allowed = [...homeAliases, ...awayAliases]
     for (const baseline of allBaselines.filter((row) => allowed.includes(row.team))) matched.push({ player: { name: baseline.playerName, position: baseline.position ?? undefined, currentTeam: homeAliases.includes(baseline.team) ? home : away }, baseline })
   }
@@ -146,7 +162,22 @@ export async function GET(request: Request) {
     const old = unique.get(key)
     if (!old || Number(row.baseline.minutes ?? 0) > Number(old.baseline.minutes ?? 0)) unique.set(key, row)
   }
-  const pool = [...unique.values()]
+  let pool = [...unique.values()]
+  if (competition === "International" && !pool.length) {
+    const relevant = internationalRows.filter((r) => teamMatch(r.team, home) || teamMatch(r.team, away))
+    const namesFromHistory = Array.from(new Set(relevant.map((r) => r.playerName)))
+    for (const name of namesFromHistory) {
+      let best: (typeof allBaselines)[number] | undefined, bestScore = 0
+      for (const baseline of allBaselines) {
+        const score = playerNameScore(name, baseline.playerName)
+        if (score > bestScore) { bestScore = score; best = baseline }
+      }
+      if (best && bestScore >= 80) {
+        const latest = relevant.filter((r) => r.playerName === name).sort((a,b)=>String(b.matchDate).localeCompare(String(a.matchDate)))[0]
+        pool.push({ player: { name, position: latest?.position ?? best.position ?? undefined, currentTeam: String(latest?.team ?? "") }, baseline: best })
+      }
+    }
+  }
   const names = pool.map((row) => row.baseline.playerName)
   const opponentNames = Array.from(new Set([...(teamAliases[home] ?? [home]), ...(teamAliases[away] ?? [away])]))
   const h2hRows = names.length ? await db.select().from(playerH2H).where(and(inArray(playerH2H.playerName, names), inArray(playerH2H.opponent, opponentNames))) : []
