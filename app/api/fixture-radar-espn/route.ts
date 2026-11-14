@@ -245,5 +245,5 @@ export async function GET(request: Request) {
     referee = { name: officialName, yellowsPerGame: row?.yellowsPerGame != null ? Number(row.yellowsPerGame) : null, foulsPerGame: row?.foulsPerGame != null ? Number(row.foulsPerGame) : null, matches: row?.matchesRefereed ?? null, historicalCompetition: row?.competition ?? null }
   }
 
-  return NextResponse.json({ connected: true, source: eventInfo ? "ESPN current squads/lineups + historical database" : "historical database fallback", liveProviderOk: Boolean(eventInfo), eventId: eventInfo?.event?.id ?? null, competition, date, home, away, lineupsConfirmed: confirmed, referee, candidates: ranked.slice(0, 20) })
+  return NextResponse.json({ connected: true, source: eventInfo ? "ESPN current squads/lineups + historical database" : "historical database fallback", liveProviderOk: Boolean(eventInfo), eventId: eventInfo?.event?.id ?? null, competition, date, home, away, lineupsConfirmed: confirmed, referee, candidates: ranked.slice(0, confirmed ? 24 : 50) })
 }
