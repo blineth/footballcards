@@ -741,7 +741,7 @@ function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
   const configs=[
     {id:"safe-3-1",title:"Safe 3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4,minProb:.62,maxLegs:5},
     {id:"balanced-10-1",title:"Balanced 10/1",risk:"Balanced" as const,targetFractional:"10/1",targetDecimal:11,minProb:.48,maxLegs:6},
-    {id:"high-20-1",title:"High Risk 20/1+",risk:"High Risk" as const,targetFractional:"20/1+",targetDecimal:21,minProb:.30,maxLegs:7},
+    {id:"high-20-1",title:"High Risk 20/1+",risk:"High Risk" as const,targetFractional:"20/1+",targetDecimal:21,minProb:.14,maxLegs:9},
   ]
   const marketOrder:MarketKey[]=["goal1","shot1","sot1","foul1","fouled1","card","shot2","sot2","foul2","foul3"]
   const pool=players.flatMap(player=>marketOrder.map(m=>marketLeg(player,m)))
@@ -780,7 +780,8 @@ function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
       }
       states=next.sort((a,b)=>score(a)-score(b)).slice(0,260)
     }
-    const best=states.filter(s=>s.legs.length>=2).sort((a,b)=>{
+    const validStates=states.filter(s=>s.legs.length>=2&&s.product>=config.targetDecimal)
+    const best=validStates.sort((a,b)=>{
       const sa=Math.abs(Math.log(a.product)-Math.log(config.targetDecimal))-(a.quality/Math.max(1,a.legs.length))*.16
       const sb=Math.abs(Math.log(b.product)-Math.log(config.targetDecimal))-(b.quality/Math.max(1,b.legs.length))*.16
       return sa-sb
@@ -788,7 +789,7 @@ function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
     if(!best)return {
       id:config.id,title:config.title,risk:config.risk,targetFractional:config.targetFractional,targetDecimal:config.targetDecimal,
       legs:[],referenceProductOdds:null,averageLegProbability:null,minimumLegProbability:null,modelAllHitProbability:null,
-      exactPriced:false,bookmaker:null,note:"Not enough qualifying player selections for this target."
+      exactPriced:false,bookmaker:null,note:"No qualifying combination actually reaches this odds target yet. The builder will not label a lower-priced slip as this target."
     }
     const books=[...new Set(best.legs.map(l=>l.bookmakerName).filter(Boolean))] as string[]
     const exactPriced=best.legs.every(l=>l.bookmakerOdds!=null)&&books.length===1
