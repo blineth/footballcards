@@ -23,11 +23,13 @@ ROOT = Path(__file__).resolve().parents[1]
 INPUT = ROOT / "data" / "current-season" / "h2h.csv"
 OUTPUT = ROOT / "data" / "model" / "calibration.json"
 
-MARKETS = ("foul1", "foul2", "foul3", "fouled1", "card", "shot1", "shot2", "sot1", "sot2")
+MARKETS = ("foul1", "foul2", "foul3", "foul4", "foul5", "fouled1", "card", "shot1", "shot2", "sot1", "sot2")
 PRIORS = {
     "foul1": 0.70,
     "foul2": 0.38,
     "foul3": 0.17,
+    "foul4": 0.055,
+    "foul5": 0.018,
     "fouled1": 0.62,
     "card": 0.22,
     "shot1": 0.62,
@@ -75,6 +77,10 @@ def hit(market: str, row: dict[str, str]) -> bool:
         return to_int(row, "fouls_committed") >= 2
     if market == "foul3":
         return to_int(row, "fouls_committed") >= 3
+    if market == "foul4":
+        return to_int(row, "fouls_committed") >= 4
+    if market == "foul5":
+        return to_int(row, "fouls_committed") >= 5
     if market == "fouled1":
         return to_int(row, "fouls_drawn") >= 1
     if market == "card":
@@ -126,6 +132,34 @@ def poisson_at_least(lam: float, threshold: int) -> float:
         cumulative += math.exp(-lam) * (lam**k) / math.factorial(k)
     return clamp(1.0 - cumulative)
 
+def negative_binomial_at_least(mean: float, dispersion: float, threshold: int) -> float:
+    if mean <= 0 or dispersion <= 0:
+        return poisson_at_least(mean, threshold)
+    r = dispersion
+    p = r / (r + mean)
+    cumulative = 0.0
+    for k in range(threshold):
+        log_p = (
+            math.lgamma(k + r)
+            - math.lgamma(r)
+            - math.lgamma(k + 1)
+            + r * math.log(p)
+            + k * math.log(1.0 - p)
+        )
+        cumulative += math.exp(log_p)
+    return clamp(1.0 - cumulative)
+
+
+def foul_dispersion(rows: list[dict[str, str]]) -> float:
+    values = [to_int(row, "fouls_committed") for row in rows]
+    if len(values) < 6:
+        return 20.0
+    mean = sum(values) / len(values)
+    variance = sum((v - mean) ** 2 for v in values) / max(1, len(values) - 1)
+    if variance <= mean + 0.05:
+        return 30.0
+    return max(0.6, min(30.0, mean * mean / (variance - mean)))
+
 
 def blend(base: float, other: float | None, weight: float) -> float:
     if other is None or weight <= 0:
@@ -134,11 +168,8 @@ def blend(base: float, other: float | None, weight: float) -> float:
 
 
 def threshold_for_market(market: str) -> int:
-    if market.endswith("3"):
-        return 3
-    if market.endswith("2"):
-        return 2
-    return 1
+    m = re.search(r"([1-9])$", market)
+    return int(m.group(1)) if m else 1
 
 
 def count_key(market: str) -> str | None:
@@ -196,8 +227,13 @@ def raw_probability(history: list[dict[str, str]], market: str, opponent: str) -
         lam = per90(history, key) * expected_minutes / 90.0
         if lam > 0:
             poisson = poisson_at_least(lam, threshold)
-            poisson_weight = 0.42 if len(history) < 5 else 0.28 if len(history) < 10 else 0.16
-            probability = blend(probability, poisson, poisson_weight)
+            count_probability = (
+                max(poisson, negative_binomial_at_least(lam, foul_dispersion(history), threshold))
+                if market.startswith("foul") and not market.startswith("fouled")
+                else poisson
+            )
+            count_weight = 0.42 if len(history) < 5 else 0.28 if len(history) < 10 else 0.18
+            probability = blend(probability, count_probability, count_weight)
 
     if market == "card":
         behaviour = card_behaviour(history)
@@ -412,12 +448,13 @@ def main() -> int:
         comp_output[competition] = market_output
 
     output = {
-        "version": "walk-forward-v2",
+        "version": "walk-forward-v3",
         "source": "data/current-season/h2h.csv",
         "methodology": (
             "Walk-forward only. Each player-match prediction uses only that player's earlier rows. "
             "Minimum 4 earlier appearances and 240 earlier minutes. Five-percentage-point calibration "
-            "bands are monotonically smoothed; competition bands shrink toward global market bands."
+            "bands are monotonically smoothed; competition bands shrink toward global market bands. "
+            "Foul count thresholds use a negative-binomial/Poisson cross-check for over-dispersed player counts."
         ),
         "model": {
             "markets": list(MARKETS),
