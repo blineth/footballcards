@@ -3,15 +3,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { CalendarDays, ChevronDown, ChevronUp, RefreshCw } from "lucide-react"
 
-type Competition = "Premier League" | "Championship"
+type Competition = "Premier League" | "Championship" | "League One" | "International"
 type LiveFixture = {
-  id:string; competition:Competition; kickoff:string; status?:string;
+  id:string; competition:Competition; tournament?:string; kickoff:string; status?:string;
   home:{name:string}; away:{name:string};
   lineupStatus?:"expected"|"confirmed"|"unavailable"
 }
 type FixturesResponse = { connected:boolean; updatedAt:string; date:string; requestedDate?:string; showingNextMatchday?:boolean; leagues:Record<Competition,LiveFixture[]> }
 type Fixture = {
-  id:string; competition:Competition; dateIso:string; day:string; date:string; time:string;
+  id:string; competition:Competition; tournament?:string; dateIso:string; day:string; date:string; time:string;
   home:string; away:string; status?:string; lineupStatus?:string
 }
 type MatchRow = { matchDate:string; opponent?:string|null; minutes?:number|null; goals?:number|null; assists?:number|null; shots?:number|null; shotsOnTarget?:number|null; foulsCommitted?:number|null; foulsDrawn?:number|null; yellowCard?:boolean|null }
@@ -54,7 +54,7 @@ function londonDate(){
 function displayFixture(raw:LiveFixture):Fixture{
   const d=new Date(raw.kickoff)
   return {
-    id:String(raw.id),competition:raw.competition,
+    id:String(raw.id),competition:raw.competition,tournament:raw.tournament,
     dateIso:new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/London",year:"numeric",month:"2-digit",day:"2-digit"}).format(d),
     day:new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/London",weekday:"long"}).format(d),
     date:new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/London",day:"2-digit",month:"short"}).format(d),
@@ -188,10 +188,31 @@ export default function HomePage(){
     }finally{setLoadingPremierBacktest(false)}
   },[])
 
+  const loadLeagueOneDb=useCallback(async()=>{
+    setLoadingLeagueOneDb(true)
+    try{
+      const r=await fetch(`/api/league-one/players?refresh=${Date.now()}`,{cache:"no-store"})
+      const d=await r.json() as ChampionshipPlayersResponse
+      setLeagueOneDb(d)
+    }catch{setLeagueOneDb({connected:false,season:"2026/27",players:[],error:"League One player database unavailable"})}
+    finally{setLoadingLeagueOneDb(false)}
+  },[])
+
+  const loadLeagueOneBacktest=useCallback(async()=>{
+    setLoadingLeagueOneBacktest(true)
+    try{
+      const r=await fetch(`/api/league-one/backtest?refresh=${Date.now()}`,{cache:"no-store"})
+      const d=await r.json() as BacktestResponse
+      setLeagueOneBacktest(d)
+    }catch{setLeagueOneBacktest({ok:false,error:"League One backtest unavailable"})}
+    finally{setLoadingLeagueOneBacktest(false)}
+  },[])
+
   const loadH2h=useCallback(async(f:Fixture)=>{
     setLoadingH2h(x=>({...x,[f.id]:true}))
     try{
-      const r=await fetch(`/api/championship/h2h?${new URLSearchParams({home:f.home,away:f.away,refresh:String(Date.now())})}`,{cache:"no-store"})
+      const base=f.competition==="League One"?"/api/league-one/h2h":"/api/championship/h2h"
+      const r=await fetch(`${base}?${new URLSearchParams({home:f.home,away:f.away,refresh:String(Date.now())})}`,{cache:"no-store"})
       const d=await r.json() as H2HResponse
       setH2h(x=>({...x,[f.id]:d}))
       if(d.ok) await loadResearch([f],Date.now())
@@ -245,7 +266,7 @@ export default function HomePage(){
     const next=!openGroups[key]
     setOpenGroups(x=>({...x,[key]:next}))
     if(group==="sot"&&next&&!sot[f.id]&&!loadingSot[f.id]) void loadSot(f)
-    if(group==="h2h"&&next&&f.competition==="Championship"&&!h2h[f.id]&&!loadingH2h[f.id]) void loadH2h(f)
+    if(group==="h2h"&&next&&(f.competition==="Championship"||f.competition==="League One")&&!h2h[f.id]&&!loadingH2h[f.id]) void loadH2h(f)
   }
 
   return <main className="min-h-screen bg-background pb-24">
@@ -255,7 +276,7 @@ export default function HomePage(){
           <div><h1 className="text-xl font-bold">Match Research</h1><p className="text-sm text-white/70">Cards, SOT, fouls and fouls drawn</p></div>
           <button onClick={()=>void refresh(true)} disabled={loadingFixtures} className="flex shrink-0 items-center gap-2 rounded-xl bg-white px-3 py-2 text-xs font-bold text-slate-950 disabled:opacity-60"><RefreshCw className={`size-4 ${loadingFixtures?"animate-spin":""}`}/> Refresh</button>
         </div>
-        <div className="mt-3 grid grid-cols-2 rounded-xl bg-white/10 p-1">{(["Premier League","Championship"] as Competition[]).map(c=><button key={c} onClick={()=>{setCompetition(c);setOpen(null)}} className={`rounded-lg px-3 py-2 text-xs font-bold ${competition===c?"bg-white text-slate-950":"text-white/75"}`}>{c}</button>)}</div>
+        <div className="mt-3 grid grid-cols-2 gap-1 rounded-xl bg-white/10 p-1">{(["Premier League","Championship","League One","International"] as Competition[]).map(c=><button key={c} onClick={()=>{setCompetition(c);setOpen(null)}} className={`rounded-lg px-3 py-2 text-xs font-bold ${competition===c?"bg-white text-slate-950":"text-white/75"}`}>{c}</button>)}</div>
       </div>
     </header>
 
@@ -285,13 +306,13 @@ export default function HomePage(){
 
         return <section key={f.id} className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
           <button onClick={()=>setOpen(x=>x===f.id?null:f.id)} className="w-full p-4 text-left">
-            <div className="flex items-center justify-between gap-3"><div><p className="text-[0.65rem] font-bold uppercase tracking-wide text-muted-foreground">{f.day} · {f.date} · {f.time}</p><p className="mt-1 font-bold">{f.home} v {f.away}</p><div className="mt-1 flex items-center gap-2"><span className={`rounded-full px-2 py-0.5 text-[0.6rem] font-bold ${confirmed?"bg-emerald-100 text-emerald-800":"bg-secondary text-muted-foreground"}`}>{confirmed?"LINEUPS CONFIRMED":"PRE-LINEUP"}</span><span className="text-xs font-semibold text-yellow-600">{isOpen?"Hide categories":"Open categories"}</span></div></div>{isOpen?<ChevronUp/>:<ChevronDown/>}</div>
+            <div className="flex items-center justify-between gap-3"><div><p className="text-[0.65rem] font-bold uppercase tracking-wide text-muted-foreground">{f.day} · {f.date} · {f.time}</p><p className="mt-1 font-bold">{f.home} v {f.away}</p>{f.tournament?<p className="mt-0.5 text-[0.65rem] text-muted-foreground">{f.tournament}</p>:null}<div className="mt-1 flex items-center gap-2"><span className={`rounded-full px-2 py-0.5 text-[0.6rem] font-bold ${confirmed?"bg-emerald-100 text-emerald-800":"bg-secondary text-muted-foreground"}`}>{confirmed?"LINEUPS CONFIRMED":"PRE-LINEUP"}</span><span className="text-xs font-semibold text-yellow-600">{isOpen?"Hide categories":"Open categories"}</span></div></div>{isOpen?<ChevronUp/>:<ChevronDown/>}</div>
           </button>
 
           {isOpen?<div className="space-y-3 border-t border-border bg-secondary/20 p-3">
             <div className="flex items-center justify-between gap-2"><p className="text-xs text-muted-foreground">{d?.referee?.name?`Ref: ${d.referee.name}${d.referee.yellowsPerGame!=null?` · ${d.referee.yellowsPerGame.toFixed(2)} YC/game`:""}`:"Referee not confirmed"}</p><button onClick={()=>void loadResearch([f],Date.now())} className="flex items-center gap-1.5 rounded-lg border bg-card px-2.5 py-2 text-xs font-bold"><RefreshCw className={`size-4 ${loading[f.id]?"animate-spin":""}`}/> Refresh</button></div>
 
-            {f.competition==="Championship"?<CollapsibleGroup open={Boolean(openGroups[`${f.id}:h2h`])} onToggle={()=>toggleGroup(f,"h2h")} title="2025/26 H2H match research" subtitle="Goals · assists · shots · SOT · fouls · fouls won · cards">
+            {(f.competition==="Championship"||f.competition==="League One")?<CollapsibleGroup open={Boolean(openGroups[`${f.id}:h2h`])} onToggle={()=>toggleGroup(f,"h2h")} title="2025/26 H2H match research" subtitle="Goals · assists · shots · SOT · fouls · fouls won · cards">
               {loadingH2h[f.id]?<div className="p-4 text-center text-xs text-muted-foreground"><RefreshCw className="mx-auto mb-2 size-4 animate-spin"/>Loading last-season H2H player stats…</div>:<H2HPanel data={h2h[f.id]}/>}
             </CollapsibleGroup>:null}
 
