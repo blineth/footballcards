@@ -100,7 +100,7 @@ async function attachMovement(input:{date:string;home:string;away:string;competi
 
 
 type MarketAvailabilityState = "available" | "unavailable" | "unknown"
-type MarketAvailability = Record<"card"|"foul"|"fouled"|"shot"|"sot", MarketAvailabilityState>
+type MarketAvailability = Record<"goal"|"card"|"foul"|"fouled"|"shot"|"sot", MarketAvailabilityState>
 type BookmakerAvailability = Record<string,MarketAvailability>
 
 function isPlayerPropSelection(selection:{market?:string;label?:string;kind:string}) {
@@ -108,6 +108,9 @@ function isPlayerPropSelection(selection:{market?:string;label?:string;kind:stri
   const label = norm(selection.label)
   const text = (market + " " + label).trim()
 
+  if (selection.kind === "goal") {
+    return /\bplayer\b/.test(market) || /\bgoalscorer\b|\bgoal scorer\b|\bto score\b|\banytime scorer\b/.test(text)
+  }
   if (selection.kind === "card") {
     return /\bplayer\b/.test(market) || /\bto be booked\b|\bbooked\b|\bto receive a card\b|\bcarded\b/.test(text)
   }
@@ -130,6 +133,7 @@ function marketAvailability(selections:Array<{market?:string;label?:string;kind:
   const playerSelections = selections.filter(isPlayerPropSelection)
   const state = (kind:string):MarketAvailabilityState => playerSelections.some(s=>s.kind===kind) ? "available" : verified ? "unavailable" : "unknown"
   return {
+    goal:state("goal"),
     card:state("card"),
     foul:state("foul"),
     fouled:state("fouled"),
@@ -218,6 +222,7 @@ function isUkBookmaker(name:string){
 
 function marketKind(name: string) {
   const n = norm(name)
+  if (/anytime.*score|goal\s*scorer|goalscorer|player.*goal|to score/.test(n)) return "goal"
   if (/shot.*target|target.*shot/.test(n)) return "sot"
   if (/fouled|fouls won|fouls drawn/.test(n)) return "fouled"
   if (/foul/.test(n)) return "foul"
