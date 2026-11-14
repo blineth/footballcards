@@ -56,6 +56,62 @@ type TargetOddsGame={
 
 const competitions:Competition[]=["Premier League","Championship","League One","League Two","International"]
 
+const ESPN_INTL_SLUGS=["uefa.nations","fifa.friendly","fifa.world","fifa.worldq.uefa","fifa.worldq.conmebol","fifa.worldq.concacaf","fifa.worldq.afc","fifa.worldq.caf"]
+const ESPN_LEAGUE_SLUGS:Partial<Record<Competition,string>>={
+  "Premier League":"eng.1",Championship:"eng.2","League One":"eng.3","League Two":"eng.4",
+}
+type OfficialLineup={confirmed:boolean;starters:Set<string>}
+function normName(value:string){
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim()
+}
+function sameTeamName(a:string,b:string){
+  const x=normName(a).replace(/\b(afc|fc)\b/g,"").trim(),y=normName(b).replace(/\b(afc|fc)\b/g,"").trim()
+  return Boolean(x&&y&&(x===y||x.includes(y)||y.includes(x)))
+}
+async function officialLineupForFixture(f:Fixture):Promise<OfficialLineup>{
+  const slugs=f.competition==="International"?ESPN_INTL_SLUGS:[ESPN_LEAGUE_SLUGS[f.competition]].filter(Boolean) as string[]
+  const date=fixtureDate(f).replaceAll("-","")
+  for(const slug of slugs){
+    try{
+      const scoreboard=await fetch("https://site.api.espn.com/apis/site/v2/sports/soccer/"+slug+"/scoreboard?dates="+date+"&limit=300",{next:{revalidate:30},signal:AbortSignal.timeout(4500)})
+      if(!scoreboard.ok)continue
+      const data=await scoreboard.json()
+      const event=(data?.events??[]).find((e:any)=>{
+        const comps=e?.competitions?.[0]?.competitors??[]
+        const h=comps.find((x:any)=>x.homeAway==="home")
+        const a=comps.find((x:any)=>x.homeAway==="away")
+        return sameTeamName(String(h?.team?.displayName??""),f.home.name)&&sameTeamName(String(a?.team?.displayName??""),f.away.name)
+      })
+      if(!event?.id)continue
+      const summaryRes=await fetch("https://site.api.espn.com/apis/site/v2/sports/soccer/"+slug+"/summary?event="+event.id,{next:{revalidate:30},signal:AbortSignal.timeout(4500)})
+      if(!summaryRes.ok)continue
+      const summary=await summaryRes.json()
+      const starters=new Set<string>()
+      let homeCount=0,awayCount=0
+      for(const section of summary?.rosters??[]){
+        for(const row of section?.roster??[]){
+          if(row?.starter!==true)continue
+          const name=String(row?.athlete?.displayName??row?.athlete?.fullName??"")
+          if(!name)continue
+          starters.add(normName(name))
+          if(section.homeAway==="home")homeCount++
+          else if(section.homeAway==="away")awayCount++
+        }
+      }
+      return {confirmed:homeCount>=11&&awayCount>=11,starters}
+    }catch{}
+  }
+  return {confirmed:false,starters:new Set()}
+}
+function filterSlipToOfficialStarters<T extends BetSlip|FoulTargetSlip>(slip:T,lineup:OfficialLineup):T|null{
+  if(!lineup.confirmed)return slip
+  const legs=(slip.legs??[]).filter(leg=>lineup.starters.has(normName(leg.player)))
+  if(!legs.length)return null
+  const avg=legs.reduce((s,l)=>s+l.probability,0)/legs.length
+  return {...slip,legs,averageLegProbability:avg} as T
+}
+
+
 function londonDate(offset=0){
   const now=new Date()
   now.setUTCDate(now.getUTCDate()+offset)
@@ -310,10 +366,12 @@ async function fallbackScorecard(f:Fixture):Promise<Scorecard|null>{
       const slips:BetSlip[]=[]
       if(foulLegs.length>=2)slips.push({id:"intl-snapshot-fouls",title:"International foul picks",risk:"model-only",legs:foulLegs,averageLegProbability:foulLegs.reduce((s,l)=>s+l.probability,0)/foulLegs.length,placeable:false,marketAvailability:foulLegs.map(l=>({player:l.player,market:l.market,status:"unknown" as MarketStatus}))})
       if(cardLegs.length>=2)slips.push({id:"intl-snapshot-cards",title:"International card picks",risk:"model-only",legs:cardLegs,averageLegProbability:cardLegs.reduce((s,l)=>s+l.probability,0)/cardLegs.length,placeable:false,marketAvailability:cardLegs.map(l=>({player:l.player,market:l.market,status:"unknown" as MarketStatus}))})
-      return {ok:true,lineupsConfirmed:false,eligibleBooks:[],marketAvailability:{card:"unknown",foul:"unknown",fouled:"unknown",shot:"unknown",sot:"unknown"},previewSlips:slips,previewFoulTargetSlips:[]}
+      return {ok:true,lineupsConfirmed:officialLineup.confirmed,eligibleBooks:[],marketAvailability:{card:"unknown",foul:"unknown",fouled:"unknown",shot:"unknown",sot:"unknown"},slips:officialLineup.confirmed?slips:[],previewSlips:officialLineup.confirmed?[]:slips,foulTargetSlips:[],previewFoulTargetSlips:[]}
     }
 
-    const {players,rows}=await snapshotPlayersForFixture(f.competition,f.home.name,f.away.name)
+    const snapshot=await snapshotPlayersForFixture(f.competition,f.home.name,f.away.name)
+    const players=officialLineup.confirmed?snapshot.players.filter(p=>officialLineup.starters.has(normName(p.player_name))):snapshot.players
+    const rows=snapshot.rows
     const before=rows.filter(r=>r.match_date<fixtureDate(f))
     if(!players.length||!before.length)return null
     const scored=players.map(p=>{
@@ -346,7 +404,7 @@ async function fallbackScorecard(f:Fixture):Promise<Scorecard|null>{
     const slips:BetSlip[]=[]
     if(foulLegs.length>=2)slips.push({id:"snapshot-fouls",title:"Snapshot foul picks",risk:"model-only",legs:foulLegs,averageLegProbability:foulLegs.reduce((s,l)=>s+l.probability,0)/foulLegs.length,placeable:false,marketAvailability:foulLegs.map(l=>({player:l.player,market:l.market,status:"unknown" as MarketStatus}))})
     if(cardLegs.length>=2)slips.push({id:"snapshot-cards",title:"Snapshot card picks",risk:"model-only",legs:cardLegs,averageLegProbability:cardLegs.reduce((s,l)=>s+l.probability,0)/cardLegs.length,placeable:false,marketAvailability:cardLegs.map(l=>({player:l.player,market:l.market,status:"unknown" as MarketStatus}))})
-    return {ok:true,lineupsConfirmed:false,eligibleBooks:[],marketAvailability:{card:"unknown",foul:"unknown",fouled:"unknown",shot:"unknown",sot:"unknown"},previewSlips:slips,previewFoulTargetSlips:[]}
+    return {ok:true,lineupsConfirmed:officialLineup.confirmed,eligibleBooks:[],marketAvailability:{card:"unknown",foul:"unknown",fouled:"unknown",shot:"unknown",sot:"unknown"},slips:officialLineup.confirmed?slips:[],previewSlips:officialLineup.confirmed?[]:slips,foulTargetSlips:[],previewFoulTargetSlips:[]}
   }catch{return null}
 }
 
@@ -390,9 +448,13 @@ export async function GET(request:Request){
         let scorecard=await scorecardFor(fixture,refresh)
         if(!scorecard?.ok)scorecard=await fallbackScorecard(fixture)
         if(!scorecard?.ok)return [] as Recommendation[]
-        const confirmed=Boolean(scorecard.lineupsConfirmed)
-        const standards=confirmed?(scorecard.slips??[]):(scorecard.previewSlips??[])
-        const fouls=confirmed?(scorecard.foulTargetSlips??[]):(scorecard.previewFoulTargetSlips??[])
+        const minutesToKickoff=(new Date(fixture.kickoff).getTime()-Date.now())/60000
+        const officialLineup=minutesToKickoff<=120?await officialLineupForFixture(fixture):{confirmed:false,starters:new Set<string>()}
+        const confirmed=officialLineup.confirmed||Boolean(scorecard.lineupsConfirmed)
+        const rawStandards=confirmed?(scorecard.slips?.length?scorecard.slips:(scorecard.previewSlips??[])):(scorecard.previewSlips??[])
+        const rawFouls=confirmed?(scorecard.foulTargetSlips?.length?scorecard.foulTargetSlips:(scorecard.previewFoulTargetSlips??[])):(scorecard.previewFoulTargetSlips??[])
+        const standards=officialLineup.confirmed?rawStandards.map(s=>filterSlipToOfficialStarters(s,officialLineup)).filter(Boolean) as BetSlip[]:rawStandards
+        const fouls=officialLineup.confirmed?rawFouls.map(s=>filterSlipToOfficialStarters(s,officialLineup)).filter(Boolean) as FoulTargetSlip[]:rawFouls
         const candidates:Recommendation[]=[]
 
         for(const slip of standards){
