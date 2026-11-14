@@ -451,8 +451,11 @@ export async function GET(request:Request){
         const minutesToKickoff=(new Date(fixture.kickoff).getTime()-Date.now())/60000
         const officialLineup=minutesToKickoff<=120?await officialLineupForFixture(fixture):{confirmed:false,starters:new Set<string>()}
         const confirmed=officialLineup.confirmed||Boolean(scorecard.lineupsConfirmed)
-        const rawStandards=confirmed?(scorecard.slips?.length?scorecard.slips:(scorecard.previewSlips??[])):(scorecard.previewSlips??[])
-        const rawFouls=confirmed?(scorecard.foulTargetSlips?.length?scorecard.foulTargetSlips:(scorecard.previewFoulTargetSlips??[])):(scorecard.previewFoulTargetSlips??[])
+        // Recommended is confirmed-XI only. Never promote preview/expected-player
+        // slips into the betting feed.
+        if(!confirmed)return [] as Recommendation[]
+        const rawStandards=scorecard.slips??[]
+        const rawFouls=scorecard.foulTargetSlips??[]
         const standards=officialLineup.confirmed?rawStandards.map(s=>filterSlipToOfficialStarters(s,officialLineup)).filter(Boolean) as BetSlip[]:rawStandards
         const fouls=officialLineup.confirmed?rawFouls.map(s=>filterSlipToOfficialStarters(s,officialLineup)).filter(Boolean) as FoulTargetSlip[]:rawFouls
         const candidates:Recommendation[]=[]
