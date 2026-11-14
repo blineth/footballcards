@@ -20,6 +20,7 @@ type OddSelection = {
   kind: string
   label: string
   odd: number | null
+  bookmaker?: string | null
   previousOdd?: number | null
   movement?: number | null
 }
@@ -54,6 +55,7 @@ type ScoreMarket = {
   previousBookmakerOdds: number | null
   bookmakerMovement: number | null
   bookmakerLabel: string | null
+  bookmakerName: string | null
   impliedProbability: number | null
   edge: number | null
   expectedValue: number | null
@@ -271,20 +273,22 @@ function playerInLabel(selection: OddSelection, player: string) {
   return Boolean(p && (hay.includes(p) || (surname.length >= 4 && hay.includes(surname))))
 }
 function selectionThreshold(selection: OddSelection) {
-  const raw = norm(selection.market + " " + selection.label)
-  const plus = raw.match(/(?:^|\s)([1-9])\s*(?:plus|\+)/)
+  const raw = (selection.market + " " + selection.label).toLowerCase()
+  const normalized = norm(raw)
+
+  const plus = raw.match(/(?:^|\s)([1-9])\s*\+/)
   if (plus) return Number(plus[1])
 
-  const overHalf = raw.match(/\bover\s*([0-8])\s*5\b/)
+  const overHalf = raw.match(/\bover\s*([0-8])(?:\.5|,5)\b/)
   if (overHalf) return Number(overHalf[1]) + 1
 
-  const orMore = raw.match(/\b([1-9])\s*(?:or more|or over|and over|and above)\b/)
+  const orMore = normalized.match(/\b([1-9])\s*(?:or more|or over|and over|and above)\b/)
   if (orMore) return Number(orMore[1])
 
-  const atLeast = raw.match(/\b(?:at least|minimum)\s*([1-9])\b/)
+  const atLeast = normalized.match(/\b(?:at least|minimum)\s*([1-9])\b/)
   if (atLeast) return Number(atLeast[1])
 
-  if (/\bto commit (?:a|one) foul\b|\b1 foul committed\b|\bone foul committed\b/.test(raw)) return 1
+  if (/\bto commit (?:a|one) foul\b|\b1 foul committed\b|\bone foul committed\b/.test(normalized)) return 1
   return null
 }
 function findOdds(selections: OddSelection[], player: string, market: MarketKey) {
@@ -714,6 +718,7 @@ export async function GET(request: Request) {
         previousBookmakerOdds,
         bookmakerMovement,
         bookmakerLabel: odd?.label ?? null,
+        bookmakerName: odd?.bookmaker ?? odds?.bookmaker ?? null,
         impliedProbability: impliedProbability == null ? null : Math.round(impliedProbability * 1000) / 1000,
         edge: edge == null ? null : Math.round(edge * 1000) / 1000,
         expectedValue: expectedValue == null ? null : Math.round(expectedValue * 1000) / 1000,
@@ -776,6 +781,7 @@ export async function GET(request: Request) {
           bookmakerOdds,
           previousBookmakerOdds:selection.previousOdd==null?null:Number(selection.previousOdd),
           bookmakerMovement:selection.movement==null?null:Number(selection.movement),
+          bookmaker:selection.bookmaker ?? odds?.bookmaker ?? "UK bookmaker",
           impliedProbability:Math.round(impliedProbability*1000)/1000,
           probability:Math.round(probability*1000)/1000,
           fairOdds:fairOdds(probability),
