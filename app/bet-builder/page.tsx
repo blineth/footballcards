@@ -181,7 +181,7 @@ function clientRiskBuilders(rows:Selection[]):RiskBuilder[]{
   const configs=[
     {id:"safe-3-1",title:"Safe 3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4,min:.62,max:5},
     {id:"balanced-10-1",title:"Balanced 10/1",risk:"Balanced" as const,targetFractional:"10/1",targetDecimal:11,min:.48,max:6},
-    {id:"high-20-1",title:"High Risk 20/1+",risk:"High Risk" as const,targetFractional:"20/1+",targetDecimal:21,min:.30,max:7},
+    {id:"high-20-1",title:"High Risk 20/1+",risk:"High Risk" as const,targetFractional:"20/1+",targetDecimal:21,min:.14,max:9},
   ]
   return configs.map(cfg=>{
     type State={legs:Selection[];product:number;prob:number;players:Set<string>;quality:number}
@@ -200,8 +200,8 @@ function clientRiskBuilders(rows:Selection[]):RiskBuilder[]{
         return s(a)-s(b)
       }).slice(0,220)
     }
-    const best=states.filter(s=>s.legs.length>=2)[0]
-    if(!best)return {id:cfg.id,title:cfg.title,risk:cfg.risk,targetFractional:cfg.targetFractional,targetDecimal:cfg.targetDecimal,legs:[],referenceProductOdds:null,averageLegProbability:null,minimumLegProbability:null,modelAllHitProbability:null,exactPriced:false,bookmaker:null,note:"Not enough qualifying selections for this target."}
+    const best=states.filter(s=>s.legs.length>=2&&s.product>=cfg.targetDecimal)[0]
+    if(!best)return {id:cfg.id,title:cfg.title,risk:cfg.risk,targetFractional:cfg.targetFractional,targetDecimal:cfg.targetDecimal,legs:[],referenceProductOdds:null,averageLegProbability:null,minimumLegProbability:null,modelAllHitProbability:null,exactPriced:false,bookmaker:null,note:"No qualifying combination actually reaches this target yet. A lower-priced slip will not be labelled as "+cfg.targetFractional+"."}
     const books=[...new Set(best.legs.map(x=>x.bookmakerName).filter(Boolean))] as string[]
     const exactPriced=best.legs.every(x=>x.bookmakerOdds!=null)&&books.length===1
     return {id:cfg.id,title:cfg.title,risk:cfg.risk,targetFractional:cfg.targetFractional,targetDecimal:cfg.targetDecimal,legs:best.legs,referenceProductOdds:Math.round(best.product*100)/100,averageLegProbability:best.legs.reduce((s,x)=>s+x.probability,0)/best.legs.length,minimumLegProbability:Math.min(...best.legs.map(x=>x.probability)),modelAllHitProbability:best.prob,exactPriced,bookmaker:exactPriced?books[0]:null,note:exactPriced?"Exact singles are from one bookmaker; its final Builder price can still change for correlation.":"Uses exact single prices where available and model fair odds otherwise; final bookmaker Builder odds can differ."}
