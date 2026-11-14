@@ -12,6 +12,8 @@ export const revalidate = 0
 
 type MarketKey = "foul1" | "foul2" | "foul3" | "fouled1" | "card" | "shot1" | "shot2" | "sot1" | "sot2"
 type MatchRow = typeof playerH2H.$inferSelect
+type MarketAvailabilityState = "available" | "unavailable" | "unknown"
+type MarketAvailability = Record<"card"|"foul"|"fouled"|"shot"|"sot", MarketAvailabilityState>
 
 type OddSelection = {
   market: string
@@ -227,6 +229,14 @@ function thresholdForMarket(market: MarketKey) {
   if (market.endsWith("3")) return 3
   if (market.endsWith("2")) return 2
   return 1
+}
+
+function availabilityForMarket(availability:MarketAvailability, market:MarketKey):MarketAvailabilityState {
+  if (market === "card") return availability.card
+  if (market.startsWith("fouled")) return availability.fouled
+  if (market.startsWith("foul")) return availability.foul
+  if (market.startsWith("sot")) return availability.sot
+  return availability.shot
 }
 function oddsKind(market: MarketKey) {
   if (market.startsWith("fouled")) return "fouled"
@@ -504,8 +514,22 @@ export async function GET(request: Request) {
   const oddsCapturedAt = odds?.capturedAt ? String(odds.capturedAt) : null
   const capturedMs = oddsCapturedAt ? new Date(oddsCapturedAt).getTime() : Number.NaN
   const oddsAgeSeconds = Number.isFinite(capturedMs) ? Math.max(0, Math.round((Date.now() - capturedMs) / 1000)) : null
-  const oddsFreshness = oddsAgeSeconds == null ? "UNKNOWN" : oddsAgeSeconds < 120 ? "LIVE" : oddsAgeSeconds < 300 ? "SLIGHTLY STALE" : "STALE"
+  const maxUsableAgeSeconds = Math.max(300, Number(odds?.maxUsableAgeSeconds ?? 300))
+  const oddsFreshness = oddsAgeSeconds == null
+    ? "UNKNOWN"
+    : oddsAgeSeconds < 120
+      ? "LIVE"
+      : oddsAgeSeconds < maxUsableAgeSeconds
+        ? (odds?.cached ? "CACHED" : "SLIGHTLY STALE")
+        : "STALE"
   const usableSelections = oddsFreshness === "STALE" ? [] : selections
+  const marketAvailability:MarketAvailability = {
+    card: odds?.marketAvailability?.card ?? "unknown",
+    foul: odds?.marketAvailability?.foul ?? "unknown",
+    fouled: odds?.marketAvailability?.fouled ?? "unknown",
+    shot: odds?.marketAvailability?.shot ?? "unknown",
+    sot: odds?.marketAvailability?.sot ?? "unknown",
+  }
 
   const history = names.length
     ? await db.select().from(playerH2H).where(and(inArray(playerH2H.playerName, names), lt(playerH2H.matchDate, date)))
@@ -662,8 +686,21 @@ export async function GET(request: Request) {
     }
   }).sort((a, b) => b.markets.foul1.probability - a.markets.foul1.probability)
 
-  const slips = confirmed ? buildSlips(players) : []
-  const foulTargetSlips = confirmed ? buildFoulTargetSlips(players) : []
+  const allSlips = confirmed ? buildSlips(players) : []
+  const slips = allSlips.map(slip => ({
+    ...slip,
+    placeable: slip.legs.every(leg => availabilityForMarket(marketAvailability, leg.market) === "available"),
+    marketAvailability: slip.legs.map(leg => ({
+      player: leg.player,
+      market: leg.market,
+      status: availabilityForMarket(marketAvailability, leg.market),
+    })),
+  }))
+  const foulTargetSlips = (confirmed ? buildFoulTargetSlips(players) : []).map(slip => ({
+    ...slip,
+    placeable: slip.legs.length > 0 && marketAvailability.foul === "available",
+    marketStatus: marketAvailability.foul,
+  }))
 
   return NextResponse.json({
     ok: true,
@@ -678,6 +715,8 @@ export async function GET(request: Request) {
     oddsCapturedAt,
     oddsAgeSeconds,
     oddsFreshness,
+    freeTier: odds?.freeTier !== false,
+    marketAvailability,
     priceAvailable: Boolean(odds?.priceAvailable) && oddsFreshness !== "STALE",
     referee: radar?.referee ?? null,
     playerCount: players.length,
@@ -690,7 +729,7 @@ export async function GET(request: Request) {
       cardConditional: "Yellow-card estimates measure each player's booking rate at 0 fouls, exactly 1, exactly 2, 3+, 1+ and 2+ foul states, with sample-size reliability. Match-level data still cannot identify the exact foul that triggered the booking.",
       calibrationWarning: "Displayed probabilities are adjusted through walk-forward calibration built from earlier-match-only predictions across 30 competitions. They remain estimates, not guarantees.",
       slipWarning: "Same-player and same-match legs can be correlated. Combined slip probability is deliberately not calculated by multiplying leg probabilities.",
-      priceFreshness: "Bet365 prices are used only while the captured feed is under five minutes old. Under two minutes is LIVE; two to five minutes is marked slightly stale; older prices are excluded from value calculations.",
+      priceFreshness: "Free-tier bookmaker snapshots are cached to protect API quotas. Fresh snapshots under two minutes are LIVE; recent cached snapshots remain usable for market availability and reference pricing until their free-tier cache window expires.",
     },
     generatedAt: new Date().toISOString(),
   })
