@@ -12,17 +12,23 @@ import { useSearchParams } from "next/navigation"
 import { useMemo } from "react"
 import useSWR from "swr"
 
-type FilterKey = "all" | "premier-league" | "championship"
+type FilterKey = "all" | "premier-league" | "championship" | "league-one" | "league-two" | "international"
 
 const filters: { key: FilterKey; label: string }[] = [
   { key: "all", label: "All" },
   { key: "premier-league", label: "Premier League" },
   { key: "championship", label: "Championship" },
+  { key: "league-one", label: "League One" },
+  { key: "league-two", label: "League Two" },
+  { key: "international", label: "International" },
 ]
 
 const leagueFromFilter: Record<Exclude<FilterKey, "all">, Competition> = {
   "premier-league": "Premier League",
   championship: "Championship",
+  "league-one": "League One",
+  "league-two": "League Two",
+  international: "International",
 }
 
 export function FixturesView() {
@@ -36,7 +42,7 @@ export function FixturesView() {
   })
 
   const shown = useMemo<Competition[]>(() => {
-    if (active === "all") return ["Premier League", "Championship"]
+    if (active === "all") return ["Premier League", "Championship", "League One", "League Two", "International"]
     return [leagueFromFilter[active]]
   }, [active])
 
