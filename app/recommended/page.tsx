@@ -213,16 +213,26 @@ function ValueBoard({rows}:{rows:PropBoardRow[]}){
 }
 
 function PlayerPropsBoard({rows}:{rows:PropBoardRow[]}){
-  const shown=rows.slice(0,18)
+  const[market,setMarket]=useState<"all"|"card"|"foul"|"fouled"|"shot"|"sot">("all")
+  const[sort,setSort]=useState<"projection"|"edge">("projection")
+  const group=(m:string)=>m==="card"?"card":m.startsWith("fouled")?"fouled":m.startsWith("foul")?"foul":m.startsWith("sot")?"sot":m.startsWith("shot")?"shot":"other"
+  const filtered=rows.filter(r=>market==="all"||group(r.leg.market)===market)
+  const shown=[...filtered].sort((a,b)=>sort==="edge"?(b.edge??-999)-(a.edge??-999):b.leg.probability-a.leg.probability).slice(0,24)
+  const filters:[typeof market,string][]=[["all","All"],["card","Cards"],["foul","Fouls"],["fouled","Fouled"],["shot","Shots"],["sot","SOT"]]
   return <section className="space-y-3">
-    <div className="px-1"><div className="flex items-center gap-2 text-cyan-300"><Users className="size-4"/><p className="font-black">Player props board</p></div><p className="mt-1 text-[0.6rem] text-white/35">A Statz-style scan of qualified player markets, ranked by model projection rather than hype.</p></div>
+    <div className="px-1"><div className="flex items-center gap-2 text-cyan-300"><Users className="size-4"/><p className="font-black">Player props board</p></div><p className="mt-1 text-[0.6rem] text-white/35">Scan qualified player markets by projection or exact-price gap. No bookmaker edge is shown when the price has not actually been verified.</p></div>
+    <div className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none]"><div className="flex min-w-max gap-2 pb-1">{filters.map(([id,label])=><button key={id} onClick={()=>setMarket(id)} className={"rounded-full border px-3 py-2 text-[0.58rem] font-black "+(market===id?"border-cyan-300/35 bg-cyan-300 text-cyan-950":"border-white/8 bg-white/[0.04] text-white/45")}>{label}</button>)}</div></div>
+    <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/8 bg-white/[0.025] p-2">
+      <p className="pl-2 text-[0.5rem] font-black uppercase text-white/25">{shown.length} shown</p>
+      <div className="flex gap-1"><button onClick={()=>setSort("projection")} className={"rounded-xl px-3 py-2 text-[0.52rem] font-black "+(sort==="projection"?"bg-white text-[#07120e]":"text-white/35")}>Projection</button><button onClick={()=>setSort("edge")} className={"rounded-xl px-3 py-2 text-[0.52rem] font-black "+(sort==="edge"?"bg-white text-[#07120e]":"text-white/35")}>Price edge</button></div>
+    </div>
     <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]">
       <div className="grid grid-cols-[1fr_auto_auto] gap-3 border-b border-white/8 px-3 py-2 text-[0.46rem] font-black uppercase text-white/25"><span>Player / market</span><span>Projection</span><span>Edge</span></div>
-      <div>{shown.map((row,i)=><div key={row.recId+"|"+row.leg.player+"|"+row.leg.market} className={"grid grid-cols-[1fr_auto_auto] items-center gap-3 px-3 py-3 "+(i?"border-t border-white/[0.055]":"")}>
+      <div>{shown.length?shown.map((row,i)=><div key={row.recId+"|"+row.leg.player+"|"+row.leg.market} className={"grid grid-cols-[1fr_auto_auto] items-center gap-3 px-3 py-3 "+(i?"border-t border-white/[0.055]":"")}>
         <div className="min-w-0"><p className="truncate text-xs font-black">{row.leg.player} · {row.leg.label}</p><p className="mt-0.5 truncate text-[0.46rem] text-white/30">{row.leg.team} · {row.fixture.home.name} v {row.fixture.away.name} · Grade {row.leg.confidence}</p></div>
         <div className="text-right"><p className="font-mono text-sm font-black">{percent(row.leg.probability)}</p><p className="text-[0.4rem] text-white/20">{row.leg.fairOdds?.toFixed(2)??"—"} fair</p></div>
         <div className="min-w-[3.1rem] text-right">{row.edge!=null?<><p className={"font-mono text-xs font-black "+(row.edge>0?"text-emerald-300":"text-rose-300")}>{row.edge>=0?"+":""}{(row.edge*100).toFixed(1)}pp</p><p className="text-[0.38rem] text-white/20">{row.leg.bookmakerOdds?.toFixed(2)}</p></>:<><p className="text-xs font-black text-white/25">—</p><p className="text-[0.38rem] text-white/20">no exact price</p></>}</div>
-      </div>)}</div>
+      </div>):<p className="px-4 py-8 text-center text-sm text-white/35">No qualified props in this market yet.</p>}</div>
     </div>
   </section>
 }
