@@ -1,133 +1,125 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
-import { ArrowLeft, Clock3, RefreshCw, ShieldCheck, Sparkles, TicketCheck } from "lucide-react"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { ArrowLeft, BadgeCheck, CirclePlus, Clock3, RefreshCw, ShieldCheck, Sparkles, Target, Trash2, X } from "lucide-react"
 import { useRouter } from "next/navigation"
 
 type Competition = "Premier League" | "Championship" | "League One" | "League Two" | "International"
 type MarketStatus = "available"|"unavailable"|"unknown"
+type MarketKey = "goal1"|"foul1"|"foul2"|"foul3"|"foul4"|"foul5"|"fouled1"|"card"|"shot1"|"shot2"|"sot1"|"sot2"
+type Category = "popular"|"goals"|"shots"|"sot"|"fouls"|"fouled"|"cards"
 
-type Fixture = {
-  id:string
-  date:string
-  kickoff:string
-  competition:Competition
-  home:string
-  away:string
+type Fixture={id:string;date:string;kickoff:string;competition:Competition;home:string;away:string}
+
+type ScoreMarket={
+  key:MarketKey;label:string;probability:number;fairOdds:number|null;confidence:"A"|"B"|"C"|"D";
+  bookmakerOdds:number|null;bookmakerName:string|null;edge:number|null;expectedValue:number|null;
+  recent5HitRate:number;seasonHitRate:number;h2hHitRate:number|null;reasons:string[]
+}
+type ScorePlayer={
+  name:string;dbName?:string;team:string;position?:string|null;expectedMinutes?:number;
+  markets?:Partial<Record<MarketKey,ScoreMarket>>
+}
+type Selection={
+  id:string;player:string;team:string;market:string;label:string;probability:number;fairOdds:number|null;
+  bookmakerOdds:number|null;bookmakerName?:string|null;edge:number|null;confidence:"A"|"B"|"C"|"D";reason:string
+}
+type RiskBuilder={
+  id:string;title:string;risk:"Safe"|"Balanced"|"High Risk";targetFractional:string;targetDecimal:number;
+  legs:Selection[];referenceProductOdds:number|null;averageLegProbability:number|null;minimumLegProbability:number|null;
+  modelAllHitProbability:number|null;exactPriced:boolean;bookmaker:string|null;note:string
+}
+type FallbackSlip={id:string;title:string;risk:string;legs:Selection[];averageLegProbability:number|null;note?:string}
+type Scorecard={
+  ok:boolean;lineupsConfirmed?:boolean;snapshotFallback?:boolean;fallbackReason?:string|null;
+  oddsFreshness?:"LIVE"|"SLIGHTLY STALE"|"CACHED"|"STALE"|"UNKNOWN";players?:ScorePlayer[];
+  slips?:FallbackSlip[];riskBuilders?:RiskBuilder[];eligibleBooks?:string[];
+  marketAvailability?:Record<string,MarketStatus>;bookmakerAvailability?:Record<string,Record<string,MarketStatus>>;
+  referee?:{name?:string;yellowsPerGame?:number|null}|null;error?:string
 }
 
-type SlipLeg = {
-  player:string
-  team:string
-  market:string
-  label:string
-  probability:number
-  fairOdds:number|null
-  bookmakerOdds:number|null
-  bookmakerName?:string|null
-  previousBookmakerOdds?:number|null
-  bookmakerMovement?:number|null
-  edge:number|null
-  expectedValue?:number|null
-  confidence:"A"|"B"|"C"|"D"
-  reason:string
-}
+const categories:{id:Category;label:string;markets:MarketKey[]}[]=[
+  {id:"popular",label:"Most likely",markets:["goal1","shot1","sot1","foul1","fouled1","card"]},
+  {id:"goals",label:"Goals",markets:["goal1"]},
+  {id:"shots",label:"Shots",markets:["shot1","shot2"]},
+  {id:"sot",label:"SOT",markets:["sot1","sot2"]},
+  {id:"fouls",label:"Fouls",markets:["foul1","foul2","foul3","foul4","foul5"]},
+  {id:"fouled",label:"Fouled",markets:["fouled1"]},
+  {id:"cards",label:"Cards",markets:["card"]},
+]
 
-type BetSlip = {
-  id:string
-  title:string
-  risk:string
-  legs:SlipLeg[]
-  averageLegProbability:number|null
-  note:string
-  placeable?:boolean
-  marketAvailability?:Array<{player:string;market:string;status:MarketStatus}>
-}
-
-type FoulTargetSlip = {
-  id:string
-  bookmaker?:string|null
-  targetFractional:string
-  targetDecimal:number
-  legs:SlipLeg[]
-  referenceProductOdds:number|null
-  averageLegProbability:number|null
-  minimumLegProbability:number|null
-  note:string
-  placeable?:boolean
-  marketStatus?:MarketStatus
-}
-
-type ExactFoulOffer = {
-  player:string
-  team:string
-  position?:string|null
-  threshold:number
-  label:string
-  bookmakerMarket:string
-  bookmakerLabel:string
-  bookmakerOdds:number
-  bookmaker:string
-  probability:number
-  fairOdds:number|null
-  edge:number
-  expectedValue:number
-  confidence:"A"|"B"|"C"|"D"
-  priceSource?:"exact"|"estimated"
-}
-
-type Scorecard = {
-  ok:boolean
-  lineupsConfirmed?:boolean
-  snapshotFallback?:boolean
-  fallbackReason?:string|null
-  bookmaker?:string|null
-  oddsFreshness?:"LIVE"|"SLIGHTLY STALE"|"CACHED"|"STALE"|"UNKNOWN"
-  playerCount?:number
-  referee?:{name?:string;yellowsPerGame?:number|null}|null
-  marketAvailability?:{card:MarketStatus;foul:MarketStatus;fouled:MarketStatus;shot:MarketStatus;sot:MarketStatus}
-  bookmakerAvailability?:Record<string,{card:MarketStatus;foul:MarketStatus;fouled:MarketStatus;shot:MarketStatus;sot:MarketStatus}>
-  eligibleBooks?:string[]
-  slips?:BetSlip[]
-  exactFoulOffers?:ExactFoulOffer[]
-  estimatedFoulOffers?:ExactFoulOffer[]
-  foulTargetSlips?:FoulTargetSlip[]
-  error?:string
-}
-
-function percent(v:number|null|undefined){return v==null?"—":Math.round(Number(v)*100)+"%"}
-function edgeText(v:number|null|undefined){return v==null?"—":(Number(v)>=0?"+":"")+(Number(v)*100).toFixed(1)+"pp"}
-function scorecardUrl(f:Fixture){
-  return "/api/fixture-scorecard?"+new URLSearchParams({
-    date:f.date,
-    home:f.home,
-    away:f.away,
-    competition:f.competition,
-    refresh:String(Date.now()),
-  })
-}
+function percent(v:number|null|undefined,digits=0){return v==null?"—":(Number(v)*100).toFixed(digits)+"%"}
 function parseFixture():Fixture|null{
   if(typeof window==="undefined")return null
   const p=new URLSearchParams(window.location.search)
-  const id=p.get("id")??""
-  const date=p.get("date")??""
-  const kickoff=p.get("kickoff")??""
-  const competition=(p.get("competition")??"") as Competition
-  const home=p.get("home")??""
-  const away=p.get("away")??""
-  if(!id||!date||!competition||!home||!away)return null
-  return {id,date,kickoff,competition,home,away}
+  const id=p.get("id")??"",date=p.get("date")??"",kickoff=p.get("kickoff")??""
+  const competition=(p.get("competition")??"") as Competition,home=p.get("home")??"",away=p.get("away")??""
+  return id&&date&&competition&&home&&away?{id,date,kickoff,competition,home,away}:null
 }
-function time(kickoff:string){
-  if(!kickoff)return ""
-  return new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/London",weekday:"short",day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit",hour12:false}).format(new Date(kickoff))
+function scorecardUrl(f:Fixture){return "/api/fixture-scorecard?"+new URLSearchParams({date:f.date,home:f.home,away:f.away,competition:f.competition,refresh:String(Date.now())})}
+function time(kickoff:string){return kickoff?new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/London",weekday:"short",day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit",hour12:false}).format(new Date(kickoff)):""}
+function keyOf(s:Pick<Selection,"player"|"market"|"label">){return [s.player,s.market,s.label].join("|").toLowerCase()}
+function referenceOdd(s:Selection){return Number(s.bookmakerOdds??s.fairOdds??(s.probability>0?1/s.probability:0))}
+function categoryForMarket(m:string):Category{
+  if(m.startsWith("goal"))return "goals"
+  if(m.startsWith("sot"))return "sot"
+  if(m.startsWith("shot"))return "shots"
+  if(m.startsWith("fouled"))return "fouled"
+  if(m.startsWith("foul"))return "fouls"
+  return "cards"
 }
-function slipWhy(slip:BetSlip){
-  if(slip.id==="main-safe")return "The model's strongest simple angles in this match, favouring high calibrated hit rates and avoiding too much exposure to one player."
-  if(slip.id==="two-cards")return "The two strongest booking candidates after card history, foul volume, repeated-foul booking behaviour, direct matchup and referee context."
-  if(slip.id==="three-cards")return "A higher-return card version using the next strongest booking candidate as well."
-  if(slip.id==="yellow-foul")return "Built around players whose booking rate rises when their foul involvement increases."
-  return "A volume-led mix of fouls, shots and shots on target from the confirmed XI."
+
+function selectionsFrom(data:Scorecard|null){
+  const out:Selection[]=[]
+  const seen=new Set<string>()
+  for(const p of data?.players??[]){
+    for(const m of Object.values(p.markets??{})){
+      if(!m||m.confidence==="D")continue
+      const row:Selection={id:"",player:p.name,team:p.team,market:m.key,label:m.label,probability:m.probability,fairOdds:m.fairOdds,bookmakerOdds:m.bookmakerOdds,bookmakerName:m.bookmakerName,edge:m.edge,confidence:m.confidence,reason:m.reasons?.[0]??"Player history and current matchup model"}
+      row.id=keyOf(row)
+      if(seen.has(row.id))continue
+      seen.add(row.id);out.push(row)
+    }
+  }
+  if(!out.length){
+    for(const slip of data?.slips??[])for(const leg of slip.legs??[]){
+      const row:Selection={...leg,id:keyOf(leg)}
+      if(seen.has(row.id))continue
+      seen.add(row.id);out.push(row)
+    }
+  }
+  return out
+}
+
+function clientRiskBuilders(rows:Selection[]):RiskBuilder[]{
+  const configs=[
+    {id:"safe-3-1",title:"Safe 3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4,min:.62,max:5},
+    {id:"balanced-10-1",title:"Balanced 10/1",risk:"Balanced" as const,targetFractional:"10/1",targetDecimal:11,min:.48,max:6},
+    {id:"high-20-1",title:"High Risk 20/1+",risk:"High Risk" as const,targetFractional:"20/1+",targetDecimal:21,min:.30,max:7},
+  ]
+  return configs.map(cfg=>{
+    type State={legs:Selection[];product:number;prob:number;players:Set<string>;quality:number}
+    const pool=[...rows].filter(r=>r.probability>=cfg.min&&r.confidence!=="D").sort((a,b)=>b.probability-a.probability).slice(0,42)
+    let states:State[]=[{legs:[],product:1,prob:1,players:new Set(),quality:0}]
+    for(const leg of pool){
+      const next=[...states]
+      for(const state of states){
+        if(state.legs.length>=cfg.max||state.players.has(leg.player.toLowerCase()))continue
+        const odd=referenceOdd(leg);if(!(odd>1))continue
+        const product=state.product*odd;if(product>cfg.targetDecimal*1.8&&state.legs.length>=1)continue
+        next.push({legs:[...state.legs,leg],product,prob:state.prob*leg.probability,players:new Set([...state.players,leg.player.toLowerCase()]),quality:state.quality+leg.probability+Math.max(0,leg.edge??0)*.2})
+      }
+      states=next.sort((a,b)=>{
+        const s=(x:State)=>Math.abs(Math.log(Math.max(1.01,x.product))-Math.log(cfg.targetDecimal))-(x.quality/Math.max(1,x.legs.length))*.2+(x.product<cfg.targetDecimal*.8?.5:0)
+        return s(a)-s(b)
+      }).slice(0,220)
+    }
+    const best=states.filter(s=>s.legs.length>=2)[0]
+    if(!best)return {id:cfg.id,title:cfg.title,risk:cfg.risk,targetFractional:cfg.targetFractional,targetDecimal:cfg.targetDecimal,legs:[],referenceProductOdds:null,averageLegProbability:null,minimumLegProbability:null,modelAllHitProbability:null,exactPriced:false,bookmaker:null,note:"Not enough qualifying selections for this target."}
+    const books=[...new Set(best.legs.map(x=>x.bookmakerName).filter(Boolean))] as string[]
+    const exactPriced=best.legs.every(x=>x.bookmakerOdds!=null)&&books.length===1
+    return {id:cfg.id,title:cfg.title,risk:cfg.risk,targetFractional:cfg.targetFractional,targetDecimal:cfg.targetDecimal,legs:best.legs,referenceProductOdds:Math.round(best.product*100)/100,averageLegProbability:best.legs.reduce((s,x)=>s+x.probability,0)/best.legs.length,minimumLegProbability:Math.min(...best.legs.map(x=>x.probability)),modelAllHitProbability:best.prob,exactPriced,bookmaker:exactPriced?books[0]:null,note:exactPriced?"Exact singles are from one bookmaker; its final Builder price can still change for correlation.":"Uses exact single prices where available and model fair odds otherwise; final bookmaker Builder odds can differ."}
+  })
 }
 
 export default function BetBuilderPage(){
@@ -135,144 +127,106 @@ export default function BetBuilderPage(){
   const[fixture,setFixture]=useState<Fixture|null>(null)
   const[data,setData]=useState<Scorecard|null>(null)
   const[loading,setLoading]=useState(true)
+  const[category,setCategory]=useState<Category>("popular")
+  const[selected,setSelected]=useState<Record<string,Selection>>({})
+  const[trayOpen,setTrayOpen]=useState(false)
 
   useEffect(()=>{setFixture(parseFixture())},[])
-
-  const load=useCallback(async(f:Fixture)=>{
-    setLoading(true)
-    try{
-      const r=await fetch(scorecardUrl(f),{cache:"no-store"})
-      const payload=await r.json().catch(()=>({ok:false,error:"Unable to load the player scorecard."}))
-      setData(payload as Scorecard)
-    }finally{
-      setLoading(false)
-    }
-  },[])
-
+  const load=useCallback(async(f:Fixture)=>{setLoading(true);try{const r=await fetch(scorecardUrl(f),{cache:"no-store"});setData(await r.json().catch(()=>({ok:false,error:"Unable to load match model."})))}finally{setLoading(false)}},[])
   useEffect(()=>{if(fixture)void load(fixture)},[fixture,load])
   useEffect(()=>{if(!fixture)return;const t=window.setInterval(()=>void load(fixture),60000);return()=>window.clearInterval(t)},[fixture,load])
 
-  if(!fixture){
-    return <main className="min-h-screen bg-[#07120e] px-4 py-10 text-white"><div className="mx-auto max-w-xl rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center"><p className="font-black">Choose a game from Matches</p><p className="mt-2 text-sm text-white/40">Bet slips are now created directly from the match card so you never have to select the fixture twice.</p><button onClick={()=>router.push("/")} className="mt-5 rounded-xl bg-emerald-400 px-4 py-2.5 text-sm font-black text-emerald-950">Back to Matches</button></div></main>
-  }
+  const allRows=useMemo(()=>selectionsFrom(data),[data])
+  const visible=useMemo(()=>{
+    const allowed=new Set(categories.find(x=>x.id===category)?.markets??[])
+    const rows=category==="popular"?allRows.filter(x=>allowed.has(x.market as MarketKey)):allRows.filter(x=>allowed.has(x.market as MarketKey))
+    const bestByPlayerMarket=new Map<string,Selection>()
+    for(const row of rows.sort((a,b)=>b.probability-a.probability)){
+      const family=categoryForMarket(row.market)
+      const k=category==="popular"?row.player.toLowerCase()+"|"+family:row.id
+      if(!bestByPlayerMarket.has(k))bestByPlayerMarket.set(k,row)
+    }
+    return [...bestByPlayerMarket.values()].sort((a,b)=>b.probability-a.probability)
+  },[allRows,category])
+  const serverBuilders=(data?.riskBuilders??[]).filter(x=>x.legs?.length)
+  const builders=serverBuilders.length?serverBuilders:clientRiskBuilders(allRows)
+  const selectedRows=Object.values(selected)
+  const referenceProduct=selectedRows.reduce((p,s)=>p*Math.max(1.01,referenceOdd(s)),1)
+  const modelProduct=selectedRows.reduce((p,s)=>p*s.probability,1)
 
-  const card=data?.marketAvailability?.card
-  const foul=data?.marketAvailability?.foul
-  const eligibleBooks=data?.eligibleBooks??[]
-  const eligible=eligibleBooks.length>0
-  const unavailable=(card==="unavailable"||foul==="unavailable")&&eligibleBooks.length===0
-  const verified=Boolean(data?.bookmakerAvailability)&&Object.keys(data?.bookmakerAvailability??{}).length>0
-  const snapshotFallback=Boolean(data?.snapshotFallback)
+  if(!fixture)return <main className="min-h-screen bg-[#07120e] px-4 py-10 text-white"><div className="mx-auto max-w-xl rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center"><p className="font-black">Choose a match first</p><p className="mt-2 text-sm text-white/40">Open a fixture from Matches to build it.</p><button onClick={()=>router.push("/")} className="mt-5 rounded-xl bg-emerald-400 px-4 py-2.5 text-sm font-black text-emerald-950">Matches</button></div></main>
 
-  return <main className="min-h-screen bg-[#07120e] pb-24 text-white">
+  function toggle(row:Selection){setSelected(cur=>{const next={...cur};if(next[row.id])delete next[row.id];else next[row.id]=row;return next})}
+  function useBuild(build:RiskBuilder){const next:Record<string,Selection>={};for(const leg of build.legs){const row={...leg,id:leg.id||keyOf(leg)};next[row.id]=row}setSelected(next);setTrayOpen(true)}
+
+  return <main className="min-h-screen bg-[#07120e] pb-36 text-white">
     <header className="sticky top-0 z-30 border-b border-white/10 bg-[#07120e]/95 backdrop-blur-xl">
       <div className="mx-auto max-w-3xl px-4 pb-4 pt-[max(1rem,env(safe-area-inset-top))]">
         <div className="flex items-center gap-3">
           <button onClick={()=>router.push("/")} className="rounded-xl bg-white/7 p-2.5 text-white/70"><ArrowLeft className="size-4"/></button>
-          <div className="min-w-0 flex-1"><div className="flex items-center gap-2 text-emerald-300"><TicketCheck className="size-4"/><span className="text-[0.6rem] font-black uppercase tracking-[0.15em]">Bet Builder</span></div><h1 className="mt-1 truncate text-xl font-black">{fixture.home} <span className="text-white/25">v</span> {fixture.away}</h1><p className="mt-0.5 text-[0.58rem] text-white/35">{fixture.competition} · {time(fixture.kickoff)}</p></div>
+          <div className="min-w-0 flex-1"><div className="flex items-center gap-2 text-emerald-300"><Target className="size-4"/><span className="text-[0.6rem] font-black uppercase tracking-[0.15em]">Match Builder</span></div><h1 className="mt-1 truncate text-xl font-black">{fixture.home} <span className="text-white/25">v</span> {fixture.away}</h1><p className="mt-0.5 text-[0.58rem] text-white/35">{fixture.competition} · {time(fixture.kickoff)}</p></div>
           <button onClick={()=>void load(fixture)} className="rounded-xl bg-emerald-400 p-2.5 text-emerald-950"><RefreshCw className={"size-4 "+(loading?"animate-spin":"")}/></button>
         </div>
       </div>
     </header>
 
-    <div className="mx-auto max-w-3xl space-y-4 px-4 py-4">
-      {loading&&!data?<section className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center"><RefreshCw className="mx-auto mb-3 size-5 animate-spin text-emerald-300"/><p className="font-black">Checking Bet365 markets and model…</p></section>:null}
+    <div className="mx-auto max-w-3xl space-y-5 px-4 py-4">
+      {loading&&!data?<section className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center"><RefreshCw className="mx-auto mb-3 size-5 animate-spin text-emerald-300"/><p className="font-black">Ranking player markets…</p></section>:null}
+      {data&&!data.ok?<section className="rounded-3xl border border-rose-300/15 bg-rose-400/5 p-5"><p className="font-black">Match model unavailable</p><p className="mt-1 text-sm text-white/40">{data.error}</p></section>:null}
 
-      {data?.ok?<MarketGate data={data}/>:null}
+      {data?.ok&&!data.lineupsConfirmed?<section className="rounded-3xl border border-amber-300/15 bg-amber-300/[0.05] p-6 text-center"><Clock3 className="mx-auto size-6 text-amber-300"/><p className="mt-3 font-black">Waiting for the confirmed XI</p><p className="mx-auto mt-1 max-w-lg text-xs leading-relaxed text-white/40">The model can research this match now, but selectable player bets and the 3/1 · 10/1 · 20/1+ builds stay locked until the official starting lineups are confirmed.</p></section>:null}
 
-      {data?.ok&&!snapshotFallback&&verified&&!eligible?<section className="rounded-3xl border border-rose-300/20 bg-rose-400/10 p-5">
-        <div className="flex items-start gap-3"><ShieldCheck className="mt-0.5 size-5 shrink-0 text-rose-200"/><div><p className="font-black">No bet slip for this match</p><p className="mt-1 text-sm leading-relaxed text-rose-100/75">{unavailable?"Bet365 does not offer both player yellow cards and player fouls for this fixture, so this match is blocked from the betting workflow.":"Both player-card and player-foul markets must be verified before a slip can be created."}</p></div></div>
-      </section>:null}
-
-      {data?.ok&&!snapshotFallback&&!verified?<section className="rounded-3xl border border-amber-300/15 bg-amber-300/5 p-5"><p className="font-black text-amber-100">Market availability not verified</p><p className="mt-1 text-sm text-amber-100/60">This match remains locked until both Bet365 player cards and player fouls are verified as available.</p></section>:null}
-
-      {data?.ok&&!snapshotFallback&&eligible&&!data.lineupsConfirmed?<section className="rounded-3xl border border-amber-300/15 bg-amber-300/5 p-6 text-center"><Clock3 className="mx-auto size-6 text-amber-300"/><p className="mt-3 font-black">Markets are eligible — waiting for confirmed lineups</p><p className="mx-auto mt-1 max-w-lg text-xs leading-relaxed text-white/40">Both player cards and fouls are available together at {eligibleBooks.join(", ")}. Final recommendations will appear automatically when the starting XIs are confirmed.</p></section>:null}
-
-      {data?.ok&&snapshotFallback&&!data.lineupsConfirmed?<section className="rounded-3xl border border-amber-300/15 bg-amber-300/5 p-6 text-center"><Clock3 className="mx-auto size-6 text-amber-300"/><p className="mt-3 font-black">Waiting for confirmed lineups</p><p className="mx-auto mt-1 max-w-lg text-xs leading-relaxed text-white/40">The live research database is unavailable, so the snapshot fallback is armed but will not create any player slip until both official starting XIs are confirmed.</p></section>:null}
-
-      {data?.ok&&snapshotFallback&&data.lineupsConfirmed?<>
-        <section className="rounded-3xl border border-violet-300/15 bg-violet-400/[0.05] p-4"><p className="font-black text-violet-200">Confirmed-XI snapshot fallback</p><p className="mt-1 text-xs leading-relaxed text-white/45">{data.fallbackReason??"Using the checked-in player snapshot because live research data is temporarily unavailable."} These are model-only picks, so verify the bookmaker market and price before placing.</p></section>
-        <section className="space-y-3">
-          <div className="px-1"><p className="font-black">Model-only confirmed XI slips</p><p className="text-[0.6rem] text-white/35">Only confirmed starters are eligible. No provisional or bench players are allowed.</p></div>
-          {(data.slips??[]).map(slip=><StandardSlip key={slip.id} slip={slip}/>)}
-          {!(data.slips??[]).length?<div className="rounded-2xl border border-dashed border-white/10 p-5 text-center text-sm text-white/35">Confirmed lineups are loaded, but the snapshot does not have enough qualifying player history to build a slip.</div>:null}
+      {data?.ok&&data.lineupsConfirmed?<>
+        <section className="rounded-3xl border border-emerald-300/12 bg-gradient-to-br from-emerald-400/[0.09] to-black/25 p-4">
+          <div className="flex items-start justify-between gap-3"><div><div className="flex items-center gap-2 text-emerald-300"><Sparkles className="size-4"/><p className="text-[0.54rem] font-black uppercase tracking-[0.13em]">Model builds</p></div><h2 className="mt-1 text-lg font-black">Pick a risk level</h2><p className="mt-1 text-[0.6rem] leading-relaxed text-white/40">These are built from the highest-probability compatible player selections, not random legs chosen just to force the odds.</p></div><span className="rounded-full bg-emerald-400/10 px-2 py-1 text-[0.46rem] font-black text-emerald-300">XI CONFIRMED</span></div>
+          <div className="mt-4 grid gap-2 sm:grid-cols-3">{builders.map(b=><RiskCard key={b.id} build={b} onUse={()=>useBuild(b)}/>)}</div>
         </section>
-      </>:null}
 
-      {data?.ok&&!snapshotFallback&&eligible&&data.lineupsConfirmed?<>
-        <ExactFoulOffers offers={data.exactFoulOffers??[]}/>
-        <EstimatedFoulOffers offers={data.estimatedFoulOffers??[]}/>
-        <FoulLadder slips={data.foulTargetSlips??[]}/>
         <section className="space-y-3">
-          <div className="px-1"><p className="font-black">Recommended slips</p><p className="text-[0.6rem] text-white/35">Built only from a fixture where both player-card and foul markets are available.</p></div>
-          {(data.slips??[]).map(slip=><StandardSlip key={slip.id} slip={slip}/>)}
-        </section>
-      </>:null}
+          <div className="px-1"><p className="font-black">Build it yourself</p><p className="mt-1 text-[0.6rem] text-white/35">Choose a market exactly like a betting app. Within each one, the most likely selections are first.</p></div>
+          <div className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none]"><div className="flex min-w-max gap-2 pb-1">{categories.map(x=><button key={x.id} onClick={()=>setCategory(x.id)} className={"rounded-full border px-3.5 py-2.5 text-xs font-black "+(category===x.id?"border-emerald-300/30 bg-emerald-300 text-emerald-950":"border-white/8 bg-white/[0.04] text-white/50")}>{x.label}</button>)}</div></div>
 
-      {data&&!data.ok?<section className="rounded-3xl border border-rose-300/20 bg-rose-400/10 p-4 text-sm text-rose-100">{data.error??"Unable to build this match."}</section>:null}
+          <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]">
+            <div className="grid grid-cols-[1fr_auto] gap-3 border-b border-white/8 px-3 py-2"><p className="text-[0.48rem] font-black uppercase text-white/25">Most likely first</p><p className="text-[0.48rem] font-black uppercase text-white/25">{visible.length} options</p></div>
+            <div>{visible.length?visible.map((row,i)=><SelectionRow key={row.id} row={row} selected={Boolean(selected[row.id])} onToggle={()=>toggle(row)} rank={i+1}/>):<p className="px-4 py-8 text-center text-sm text-white/35">No qualifying selections in this market.</p>}</div>
+          </div>
+        </section>
+
+        {data.snapshotFallback?<section className="rounded-2xl border border-violet-300/15 bg-violet-400/[0.04] p-3 text-[0.58rem] leading-relaxed text-white/40">Snapshot fallback is active. Probabilities are still ranked, but live bookmaker prices may be unavailable, so fair odds are shown instead.</section>:null}
+      </>:null}
     </div>
+
+    {selectedRows.length?<BuilderTray rows={selectedRows} referenceProduct={referenceProduct} modelProduct={modelProduct} open={trayOpen} setOpen={setTrayOpen} onRemove={row=>toggle(row)} onClear={()=>setSelected({})}/>:null}
   </main>
 }
 
-function MarketGate({data}:{data:Scorecard}){
-  const card=data.marketAvailability?.card??"unknown"
-  const foul=data.marketAvailability?.foul??"unknown"
-  const chip=(label:string,status:MarketStatus)=>({label,cls:status==="available"?"bg-emerald-400/15 text-emerald-300":status==="unavailable"?"bg-rose-400/15 text-rose-200":"bg-amber-300/10 text-amber-200",text:status==="available"?"Available":status==="unavailable"?"Unavailable":"Not verified"})
-  const c=chip("Player cards",card),f=chip("Player fouls",foul)
-  return <section className="rounded-3xl border border-white/10 bg-white/[0.045] p-4"><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-black">Preferred bookmaker market check</p><p className="mt-1 text-[0.58rem] text-white/35">Bet365 · Sky Bet · William Hill · Paddy Power</p><p className="mt-1 text-[0.52rem] text-white/25">{data.lineupsConfirmed?"Confirmed XI loaded":"Pre-lineup market eligibility"}</p></div><span className="rounded-full bg-white/7 px-2 py-1 text-[0.5rem] font-black text-white/45">{data.oddsFreshness??"UNKNOWN"}</span></div><div className="mt-3 grid grid-cols-2 gap-2">{[c,f].map(x=><div key={x.label} className={"rounded-2xl p-3 "+x.cls}><p className="text-[0.55rem] font-black uppercase opacity-70">{x.label}</p><p className="mt-1 text-sm font-black">{x.text}</p></div>)}</div></section>
-}
-
-function ExactFoulOffers({offers}:{offers:ExactFoulOffer[]}){
-  const top=[...offers].sort((a,b)=>(b.edge-a.edge)||(b.probability-a.probability)).slice(0,30)
-  return <section className="space-y-3">
-    <div className="px-1"><p className="font-black">Exact foul offers</p><p className="text-[0.6rem] text-white/35">Only exact thresholds returned by Bet365, Sky Bet, William Hill or Paddy Power are shown. Our probability and fair odds are calculated against that exact line.</p></div>
-    {top.length?<div className="space-y-2">{top.map((o,i)=><div key={o.player+"|"+o.threshold+"|"+o.bookmaker+"|"+i} className="rounded-2xl border border-white/8 bg-white/[0.04] p-3">
-      <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-sm font-black">{o.player} · {o.label}</p><p className="mt-0.5 text-[0.56rem] text-white/35">{o.team} · {o.bookmaker}</p></div><div className="text-right"><p className="font-mono text-lg font-black">{o.bookmakerOdds.toFixed(2)}</p><p className="text-[0.45rem] uppercase text-white/25">book price</p></div></div>
-      <div className="mt-2 grid grid-cols-3 gap-1.5 text-center"><Metric label="Model" value={percent(o.probability)}/><Metric label="Fair" value={o.fairOdds?.toFixed(2)??"—"}/><Metric label="Edge" value={edgeText(o.edge)} good={o.edge>0}/></div>
-    </div>)}</div>:<div className="rounded-2xl border border-dashed border-white/10 p-5 text-center text-sm text-white/35">No exact player-foul thresholds were returned by the current UK bookmaker feed.</div>}
-  </section>
-}
-
-function EstimatedFoulOffers({offers}:{offers:ExactFoulOffer[]}){
-  const top=[...offers].sort((a,b)=>(b.probability-a.probability)||(b.edge-a.edge)).slice(0,20)
-  if(!top.length)return null
-  return <section className="space-y-3">
-    <div className="px-1"><p className="font-black">Likely bookmaker prices</p><p className="text-[0.6rem] text-white/35">Estimated only when the bookmaker's foul market is verified but that exact threshold price is missing. Anchored to that bookmaker's observed margin on the player's other foul lines.</p></div>
-    <div className="space-y-2">{top.map((o,i)=><div key={o.player+"|"+o.threshold+"|"+o.bookmaker+"|est|"+i} className="rounded-2xl border border-amber-300/10 bg-amber-300/[0.035] p-3">
-      <div className="flex items-start justify-between gap-3"><div><div className="flex items-center gap-2"><p className="text-sm font-black">{o.player} · {o.label}</p><span className="rounded-full bg-amber-300/10 px-2 py-0.5 text-[0.45rem] font-black text-amber-200">ESTIMATED</span></div><p className="mt-0.5 text-[0.56rem] text-white/35">{o.team} · {o.bookmaker}</p></div><div className="text-right"><p className="font-mono text-lg font-black">{o.bookmakerOdds.toFixed(2)}</p><p className="text-[0.45rem] uppercase text-white/25">likely price</p></div></div>
-      <div className="mt-2 grid grid-cols-3 gap-1.5 text-center"><Metric label="Model" value={percent(o.probability)}/><Metric label="Fair" value={o.fairOdds?.toFixed(2)??"—"}/><Metric label="Est. edge" value={edgeText(o.edge)} good={o.edge>0}/></div>
-    </div>)}</div>
-  </section>
-}
-
-function FoulLadder({slips}:{slips:FoulTargetSlip[]}){
-  return <section className="space-y-3"><div className="px-1"><p className="font-black">Foul odds ladder</p><p className="text-[0.6rem] text-white/35">Uses exact preferred-bookmaker foul lines first, with clearly marked estimated thresholds only when the same bookmaker's foul market is verified.</p></div>{slips.map(s=><FoulCard key={s.id} slip={s}/>)}</section>
-}
-
-function FoulCard({slip}:{slip:FoulTargetSlip}){
-  const[open,setOpen]=useState(false)
-  const ready=slip.legs.length>0
-  return <article className="overflow-hidden rounded-3xl border border-emerald-300/15 bg-gradient-to-br from-emerald-500/15 to-black/20">
-    <button onClick={()=>setOpen(x=>!x)} className="w-full p-4 text-left">
-      <div className="flex items-start justify-between gap-3"><div><p className="text-[0.54rem] font-black uppercase tracking-[0.14em] text-emerald-300">FOUL TARGET</p><h3 className="mt-1 text-xl font-black">{slip.targetFractional}</h3>{slip.bookmaker?<p className="mt-1 text-[0.58rem] font-black text-emerald-300">{slip.bookmaker}</p>:null}<p className="mt-1 text-[0.62rem] text-white/45">{ready?slip.legs.length+" exact bookmaker lines selected":"No qualifying combination"}</p></div><div className="text-right"><p className="font-mono text-xl font-black">{slip.referenceProductOdds?.toFixed(2)??"—"}</p><p className="text-[0.44rem] uppercase text-white/25">reference</p></div></div>
-      {ready?<div className="mt-3 flex flex-wrap gap-1.5">{slip.legs.map((l,i)=><span key={l.player+"|"+l.market+"|"+i} className="rounded-full bg-white/7 px-2.5 py-1 text-[0.58rem] font-bold text-white/70">{l.player} · {l.label} · {l.bookmakerName??"book"} · {percent(l.probability)}</span>)}</div>:null}
-    </button>
-    {open&&ready?<div className="border-t border-white/8 bg-black/20 p-4"><div className="space-y-2">{slip.legs.map((l,i)=><Leg key={l.player+"|"+i} leg={l}/>)}</div><p className="mt-3 text-[0.55rem] leading-relaxed text-white/30">{slip.note}</p></div>:null}
+function RiskCard({build,onUse}:{build:RiskBuilder;onUse:()=>void}){
+  const tone=build.risk==="Safe"?"border-emerald-300/18 bg-emerald-400/[0.06]":build.risk==="Balanced"?"border-amber-300/18 bg-amber-300/[0.05]":"border-rose-300/18 bg-rose-400/[0.05]"
+  const accent=build.risk==="Safe"?"text-emerald-300":build.risk==="Balanced"?"text-amber-300":"text-rose-300"
+  return <article className={"rounded-2xl border p-3 "+tone}>
+    <div className="flex items-start justify-between gap-2"><div><p className={"text-[0.48rem] font-black uppercase "+accent}>{build.risk}</p><p className="mt-1 text-base font-black">{build.targetFractional}</p></div><ShieldCheck className={"size-4 "+accent}/></div>
+    {build.legs.length?<><p className="mt-2 text-[0.52rem] text-white/35">{build.legs.length} legs · weakest {percent(build.minimumLegProbability)}</p><div className="mt-2 space-y-1">{build.legs.slice(0,3).map(l=><p key={keyOf(l)} className="truncate text-[0.5rem] text-white/55">{l.player} · {l.label}</p>)}{build.legs.length>3?<p className="text-[0.46rem] text-white/25">+{build.legs.length-3} more</p>:null}</div><button onClick={onUse} className="mt-3 w-full rounded-xl bg-white px-3 py-2 text-[0.58rem] font-black text-[#07120e]">Use this build</button></>:<p className="mt-2 text-[0.54rem] text-white/30">No strong route available yet.</p>}
   </article>
 }
 
-function StandardSlip({slip}:{slip:BetSlip}){
-  const[open,setOpen]=useState(false)
-  return <article className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.045]">
-    <button onClick={()=>setOpen(x=>!x)} className="w-full p-4 text-left"><div className="flex items-start justify-between gap-3"><div><div className="flex items-center gap-2 text-emerald-300"><Sparkles className="size-3.5"/><span className="text-[0.52rem] font-black uppercase">{slip.risk} risk</span></div><h3 className="mt-1 font-black">{slip.title}</h3><p className="mt-1 text-[0.64rem] leading-relaxed text-white/45">{slipWhy(slip)}</p></div><div className="text-right"><p className="font-mono text-xl font-black">{percent(slip.averageLegProbability)}</p><p className="text-[0.42rem] uppercase text-white/25">avg leg</p></div></div></button>
-    {open?<div className="border-t border-white/8 bg-black/20 p-4"><div className="space-y-2">{slip.legs.map((l,i)=><Leg key={l.player+"|"+l.market+"|"+i} leg={l}/>)}</div></div>:null}
-  </article>
+function SelectionRow({row,selected,onToggle,rank}:{row:Selection;selected:boolean;onToggle:()=>void;rank:number}){
+  const exact=row.bookmakerOdds!=null
+  return <button onClick={onToggle} className={"grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 px-3 py-3 text-left transition "+(rank>1?"border-t border-white/[0.055] ":"")+(selected?"bg-emerald-400/[0.08]":"hover:bg-white/[0.025]")}>
+    <span className={"flex size-7 items-center justify-center rounded-full text-[0.56rem] font-black "+(rank<=3?"bg-emerald-400/12 text-emerald-300":"bg-white/5 text-white/30")}>{rank}</span>
+    <div className="min-w-0"><div className="flex items-center gap-1.5"><p className="truncate text-sm font-black">{row.player}</p>{selected?<BadgeCheck className="size-3.5 shrink-0 text-emerald-300"/>:null}</div><p className="mt-0.5 truncate text-[0.54rem] font-bold text-white/55">{row.label}</p><p className="mt-0.5 truncate text-[0.46rem] text-white/25">{row.team} · Grade {row.confidence}{row.edge!=null?" · "+(row.edge>=0?"+":"")+(row.edge*100).toFixed(1)+"pp vs price":""}</p></div>
+    <div className="min-w-[4.5rem] text-right"><p className="font-mono text-base font-black">{percent(row.probability)}</p><p className="text-[0.42rem] text-white/25">{exact?(row.bookmakerOdds!.toFixed(2)+" "+(row.bookmakerName??"book")):((row.fairOdds?.toFixed(2)??"—")+" fair")}</p><span className={"mt-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[0.4rem] font-black "+(selected?"bg-emerald-300 text-emerald-950":"bg-white/6 text-white/30")}>{selected?<X className="size-2.5"/>:<CirclePlus className="size-2.5"/>}{selected?"REMOVE":"ADD"}</span></div>
+  </button>
 }
 
-function Leg({leg}:{leg:SlipLeg}){
-  return <div className="rounded-2xl bg-white/[0.055] p-3"><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-black">{leg.player} · {leg.label}</p><p className="mt-0.5 text-[0.56rem] text-white/35">{leg.team} · Grade {leg.confidence}{leg.bookmakerName?" · "+leg.bookmakerName:""}</p></div><p className="font-mono text-base font-black">{percent(leg.probability)}</p></div><p className="mt-2 text-[0.62rem] leading-relaxed text-white/45">{leg.reason}</p><div className="mt-2 grid grid-cols-3 gap-1.5 text-center"><Metric label="Fair" value={leg.fairOdds?.toFixed(2)??"—"}/><Metric label={leg.bookmakerName??"Book"} value={leg.bookmakerOdds?.toFixed(2)??"—"}/><Metric label="Edge" value={edgeText(leg.edge)} good={Number(leg.edge??0)>0}/></div></div>
-}
-
-function Metric({label,value,good=false}:{label:string;value:string;good?:boolean}){
-  return <div className="rounded-xl bg-black/20 p-2"><p className={"font-mono text-xs font-black "+(good?"text-emerald-300":"")}>{value}</p><p className="mt-0.5 text-[0.42rem] font-black uppercase text-white/25">{label}</p></div>
+function BuilderTray({rows,referenceProduct,modelProduct,open,setOpen,onRemove,onClear}:{rows:Selection[];referenceProduct:number;modelProduct:number;open:boolean;setOpen:(v:boolean)=>void;onRemove:(r:Selection)=>void;onClear:()=>void}){
+  return <div className="fixed inset-x-0 bottom-[4.85rem] z-40 px-3">
+    <div className="mx-auto max-w-3xl overflow-hidden rounded-3xl border border-emerald-300/20 bg-[#0d1d17]/98 shadow-2xl backdrop-blur-xl">
+      {open?<div className="max-h-[46vh] overflow-y-auto border-b border-white/8 p-3">
+        <div className="mb-2 flex items-center justify-between"><p className="text-sm font-black">Your builder</p><button onClick={onClear} className="flex items-center gap-1 text-[0.5rem] font-black text-rose-300"><Trash2 className="size-3"/>CLEAR</button></div>
+        <div className="space-y-1.5">{rows.map(row=><div key={row.id} className="flex items-center justify-between gap-3 rounded-xl bg-white/[0.045] px-3 py-2"><div className="min-w-0"><p className="truncate text-xs font-black">{row.player} · {row.label}</p><p className="text-[0.44rem] text-white/25">{percent(row.probability)} model · {(row.bookmakerOdds??row.fairOdds)?.toFixed(2)??"—"} {row.bookmakerOdds?"book":"fair"}</p></div><button onClick={()=>onRemove(row)} className="rounded-lg bg-white/6 p-1.5 text-white/35"><X className="size-3"/></button></div>)}</div>
+        <p className="mt-2 text-[0.46rem] leading-relaxed text-white/25">Reference odds multiply singles only. Same-game bookmaker Builder pricing can be lower because correlated selections are repriced together.</p>
+      </div>:null}
+      <button onClick={()=>setOpen(!open)} className="flex w-full items-center gap-3 p-3 text-left"><div className="flex size-10 items-center justify-center rounded-2xl bg-emerald-400 text-emerald-950"><Target className="size-5"/></div><div className="min-w-0 flex-1"><p className="text-sm font-black">{rows.length} selection{rows.length===1?"":"s"} in builder</p><p className="text-[0.5rem] text-white/30">Model product {percent(modelProduct,1)} · tap to {open?"collapse":"review"}</p></div><div className="text-right"><p className="font-mono text-lg font-black">{referenceProduct.toFixed(2)}</p><p className="text-[0.4rem] uppercase text-white/25">reference odds</p></div></button>
+    </div>
+  </div>
 }
