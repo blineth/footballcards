@@ -431,7 +431,28 @@ def sync(dataset: str, content: str) -> dict[str, Any]:
     return result
 
 
+def sync_existing_snapshot() -> int:
+    h2h_path = OUT / "h2h.csv"
+    baseline_path = OUT / "player_baselines.csv"
+    if not h2h_path.exists() or not baseline_path.exists():
+        raise RuntimeError("Current-season snapshot is missing; run the full refresh first")
+    h2h_csv = h2h_path.read_text(encoding="utf-8")
+    baseline_csv = baseline_path.read_text(encoding="utf-8")
+    quality_path = OUT / "quality-report.json"
+    quality = json.loads(quality_path.read_text(encoding="utf-8")) if quality_path.exists() else {}
+    quality["neon_sync"] = {
+        "h2h": sync("h2h", h2h_csv),
+        "player_baselines": sync("player_baselines", baseline_csv),
+    }
+    quality_path.write_text(json.dumps(quality, indent=2) + "\n", encoding="utf-8")
+    print(json.dumps(quality["neon_sync"], indent=2), flush=True)
+    return 0
+
+
 def main() -> int:
+    if "--sync-only" in os.sys.argv:
+        return sync_existing_snapshot()
+
     h2h, baselines, reports = build()
     if not h2h or not baselines:
         raise RuntimeError("No current-season data produced")
