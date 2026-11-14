@@ -327,8 +327,19 @@ function calibrateSnapshot(market:"foul1"|"card",raw:number){
 }
 async function fallbackScorecard(f:Fixture):Promise<Scorecard|null>{
   try{
+    const officialLineup=await officialLineupForFixture(f)
+    if(!officialLineup.confirmed){
+      return {
+        ok:true,
+        lineupsConfirmed:false,
+        eligibleBooks:[],
+        marketAvailability:{card:"unknown",foul:"unknown",fouled:"unknown",shot:"unknown",sot:"unknown"},
+        slips:[],previewSlips:[],foulTargetSlips:[],previewFoulTargetSlips:[],
+      }
+    }
     if(f.competition==="International"){
-      const profiles=await internationalPlayersForFixture(f.home.name,f.away.name)
+      const profiles=(await internationalPlayersForFixture(f.home.name,f.away.name))
+        .filter((p:any)=>officialLineup.starters.has(normName(String(p?.name??""))))
       if(!profiles.length)return null
       const scored=profiles.map((p:any)=>{
         const intl=p?.international??{}
@@ -366,11 +377,11 @@ async function fallbackScorecard(f:Fixture):Promise<Scorecard|null>{
       const slips:BetSlip[]=[]
       if(foulLegs.length>=2)slips.push({id:"intl-snapshot-fouls",title:"International foul picks",risk:"model-only",legs:foulLegs,averageLegProbability:foulLegs.reduce((s,l)=>s+l.probability,0)/foulLegs.length,placeable:false,marketAvailability:foulLegs.map(l=>({player:l.player,market:l.market,status:"unknown" as MarketStatus}))})
       if(cardLegs.length>=2)slips.push({id:"intl-snapshot-cards",title:"International card picks",risk:"model-only",legs:cardLegs,averageLegProbability:cardLegs.reduce((s,l)=>s+l.probability,0)/cardLegs.length,placeable:false,marketAvailability:cardLegs.map(l=>({player:l.player,market:l.market,status:"unknown" as MarketStatus}))})
-      return {ok:true,lineupsConfirmed:officialLineup.confirmed,eligibleBooks:[],marketAvailability:{card:"unknown",foul:"unknown",fouled:"unknown",shot:"unknown",sot:"unknown"},slips:officialLineup.confirmed?slips:[],previewSlips:officialLineup.confirmed?[]:slips,foulTargetSlips:[],previewFoulTargetSlips:[]}
+      return {ok:true,lineupsConfirmed:true,eligibleBooks:[],marketAvailability:{card:"unknown",foul:"unknown",fouled:"unknown",shot:"unknown",sot:"unknown"},slips,previewSlips:[],foulTargetSlips:[],previewFoulTargetSlips:[]}
     }
 
     const snapshot=await snapshotPlayersForFixture(f.competition,f.home.name,f.away.name)
-    const players=officialLineup.confirmed?snapshot.players.filter(p=>officialLineup.starters.has(normName(p.player_name))):snapshot.players
+    const players=snapshot.players.filter(p=>officialLineup.starters.has(normName(p.player_name)))
     const rows=snapshot.rows
     const before=rows.filter(r=>r.match_date<fixtureDate(f))
     if(!players.length||!before.length)return null
