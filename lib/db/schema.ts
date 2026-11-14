@@ -113,6 +113,31 @@ export const playerRefereeHistory = pgTable(
   }),
 )
 
+export const oddsSnapshots = pgTable(
+  "odds_snapshots",
+  {
+    id: serial("id").primaryKey(),
+    competition: text("competition").notNull(),
+    fixtureDate: date("fixture_date").notNull(),
+    homeTeam: text("home_team").notNull(),
+    awayTeam: text("away_team").notNull(),
+    bookmaker: text("bookmaker").notNull(),
+    source: text("source"),
+    market: text("market").notNull(),
+    kind: text("kind").notNull(),
+    label: text("label").notNull(),
+    odds: numeric("odds").notNull(),
+    snapshotBucket: timestamp("snapshot_bucket", { withTimezone: true }).notNull(),
+    capturedAt: timestamp("captured_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    uniq: unique().on(t.competition, t.fixtureDate, t.homeTeam, t.awayTeam, t.bookmaker, t.market, t.label, t.snapshotBucket),
+  }),
+)
+
+export type OddsSnapshot = typeof oddsSnapshots.$inferSelect
+
 export type PlayerBaseline = typeof playerBaselines.$inferSelect
 export type PlayerH2H = typeof playerH2H.$inferSelect
 export type Referee = typeof referees.$inferSelect
