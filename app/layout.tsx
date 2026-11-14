@@ -15,10 +15,9 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: "Match Edge | Bet Builder",
+  title: "Match Edge | Football Intelligence",
   description:
-    "Confirmed-lineup football betting research for fouls, cards, shots and shots on target.",
-  generator: "v0.app",
+    "Football intelligence for match predictions, player props, live signals, target-odds builders and transparent model performance.",
   icons: {
     icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
   },
