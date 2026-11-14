@@ -6,11 +6,11 @@ import { NextResponse } from "next/server"
 
 export const dynamic = "force-dynamic"
 
-type Competition = "Premier League" | "Championship" | "League One" | "International"
+type Competition = "Premier League" | "Championship" | "League One" | "League Two" | "International"
 type EspnPlayer = { id?: string; displayName?: string; fullName?: string; position?: { abbreviation?: string; displayName?: string } }
 type CurrentPlayer = { id?: string; name: string; position?: string; currentTeam: string }
 
-const leagueSlug: Partial<Record<Competition, string>> = { "Premier League": "eng.1", Championship: "eng.2", "League One": "eng.3" }
+const leagueSlug: Partial<Record<Competition, string>> = { "Premier League": "eng.1", Championship: "eng.2", "League One": "eng.3", "League Two": "eng.4" }
 const internationalSlugs = ["uefa.nations", "fifa.friendly", "fifa.world", "fifa.worldq.uefa", "fifa.worldq.conmebol", "fifa.worldq.concacaf", "fifa.worldq.afc", "fifa.worldq.caf"]
 const teamAliases: Record<string, string[]> = {
   Arsenal: ["Arsenal"], "Coventry City": ["Coventry", "Coventry City"], "Hull City": ["Hull", "Hull City"], "Manchester United": ["Man Utd", "Manchester United"], Everton: ["Everton"], "Crystal Palace": ["Crystal Palace"], "Ipswich Town": ["Ipswich", "Ipswich Town"], Sunderland: ["Sunderland"], "Nottingham Forest": ["Nott'm Forest", "Nottingham Forest"], "Leeds United": ["Leeds", "Leeds United"], Brentford: ["Brentford"], "Tottenham Hotspur": ["Spurs", "Tottenham", "Tottenham Hotspur"], "Brighton & Hove Albion": ["Brighton", "Brighton & Hove Albion"], "Aston Villa": ["Aston Villa"], "Manchester City": ["Man City", "Manchester City"], "AFC Bournemouth": ["Bournemouth", "AFC Bournemouth"], "Newcastle United": ["Newcastle", "Newcastle United"], Liverpool: ["Liverpool"], Fulham: ["Fulham"], Chelsea: ["Chelsea"], "Birmingham City": ["Birmingham City", "Birmingham"], "Bristol City": ["Bristol City"], "Lincoln City": ["Lincoln City"], Portsmouth: ["Portsmouth"], Millwall: ["Millwall"], "Norwich City": ["Norwich City", "Norwich"], "Blackburn Rovers": ["Blackburn Rovers", "Blackburn"], Middlesbrough: ["Middlesbrough"], "Derby County": ["Derby County", "Derby"], "Cardiff City": ["Cardiff City", "Cardiff"], "Preston North End": ["Preston North End", "Preston"], "Wolverhampton Wanderers": ["Wolves", "Wolverhampton Wanderers"], "Queens Park Rangers": ["Queens Park Rangers", "QPR"], "Bolton Wanderers": ["Bolton Wanderers", "Bolton"], Southampton: ["Southampton"], "Stoke City": ["Stoke City", "Stoke"], "Swansea City": ["Swansea City"], "Sheffield United": ["Sheffield United", "Sheffield Utd"], "West Ham United": ["West Ham", "West Ham United"], "Charlton Athletic": ["Charlton Athletic", "Charlton"], Wrexham: ["Wrexham"], Watford: ["Watford"], "West Bromwich Albion": ["West Brom", "West Bromwich Albion"], Burnley: ["Burnley"],
@@ -111,7 +111,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url)
   const date = url.searchParams.get("date"), home = url.searchParams.get("home"), away = url.searchParams.get("away")
   const competition = (url.searchParams.get("competition") ?? "Premier League") as Competition
-  if (!date || !home || !away || !["Premier League","Championship","League One","International"].includes(competition)) return NextResponse.json({ error: "Invalid fixture parameters" }, { status: 400 })
+  if (!date || !home || !away || !["Premier League","Championship","League One","League Two","International"].includes(competition)) return NextResponse.json({ error: "Invalid fixture parameters" }, { status: 400 })
   if (!isDatabaseConfigured) return NextResponse.json({ connected: false, lineupsConfirmed: false, candidates: [] })
   await ensureResearchSchema()
 
