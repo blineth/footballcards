@@ -9,7 +9,7 @@ type LiveFixture = {
   home:{name:string}; away:{name:string};
   lineupStatus?:"expected"|"confirmed"|"unavailable"
 }
-type FixturesResponse = { connected:boolean; updatedAt:string; date:string; leagues:Record<Competition,LiveFixture[]> }
+type FixturesResponse = { connected:boolean; updatedAt:string; date:string; requestedDate?:string; showingNextMatchday?:boolean; leagues:Record<Competition,LiveFixture[]> }
 type Fixture = {
   id:string; competition:Competition; dateIso:string; day:string; date:string; time:string;
   home:string; away:string; status?:string; lineupStatus?:string
@@ -217,10 +217,11 @@ export default function HomePage(){
     const bust=Date.now()
     setLoadingFixtures(true)
     try{
-      const r=await fetch(`/api/fixtures?date=${encodeURIComponent(selectedDate)}&refresh=${bust}`,{cache:"no-store"})
+      const r=await fetch(`/api/fixtures?${new URLSearchParams({date:selectedDate,competition,nextIfEmpty:selectedDate===londonDate()?"1":"0",refresh:String(bust)})}`,{cache:"no-store"})
       if(!r.ok)throw new Error("fixtures failed")
       const data=await r.json() as FixturesResponse
       setLive(data)
+      if(data.showingNextMatchday&&data.date!==selectedDate)setSelectedDate(data.date)
       const fs=((data.leagues?.[competition]??[]) as LiveFixture[]).map(displayFixture)
       await loadResearch(fs,bust)
       if(open){
