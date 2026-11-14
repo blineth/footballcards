@@ -45,7 +45,10 @@ type LivePlayerProp={
   player:string;team:string;market:"card"|"foul1"|"fouled1"|"shot1"|"sot1";label:string;
   probability:number;fullMatchProbability:number;fairOdds:number;
   confidence:"A"|"B"|"C"|"D";marketStatus:"available"|"unavailable"|"unknown";
-  bookmakerOdds?:number|null;bookmakerName?:string|null;reason?:string
+  bookmakerOdds?:number|null;bookmakerName?:string|null;reason?:string;
+  currentCount?:number;liveStatsAvailable?:boolean;
+  currentFouls?:number|null;currentFouled?:number|null;currentShots?:number|null;currentSot?:number|null;
+  currentYellowCards?:number|null;currentRedCards?:number|null
 }
 type LiveMatch={
   id:string;competition:string;kickoff:string;status?:string;inPlay?:boolean;elapsed?:number|null;
@@ -54,6 +57,7 @@ type LiveMatch={
   winnerPick?:{side:string;team:string;loser:string;probability:number;grade:string}|null;
   bttsPick?:{selection:string;probability:number;grade:string}|null;bttsSettled?:boolean;
   livePlayerProps?:LivePlayerProp[];
+  livePlayerStatsSource?:string|null;
   reasons?:string[]
 }
 type Response={
@@ -199,11 +203,11 @@ function LiveMatchCard({match}:{match:LiveMatch}){
     </div>
 
     {playerProps.length?<div className="mt-3 rounded-2xl border border-cyan-300/15 bg-cyan-400/[0.045] p-3">
-      <div className="flex items-start justify-between gap-3"><div><p className="text-[0.52rem] font-black uppercase tracking-[0.12em] text-cyan-300">Live player props</p><p className="mt-0.5 text-[0.5rem] text-white/30">Chance from the current minute to full time</p></div><span className="rounded-full bg-cyan-300/10 px-2 py-1 text-[0.44rem] font-black text-cyan-200">CONFIRMED XI</span></div>
+      <div className="flex items-start justify-between gap-3"><div><p className="text-[0.52rem] font-black uppercase tracking-[0.12em] text-cyan-300">Live player props</p><p className="mt-0.5 text-[0.5rem] text-white/30">Chance from the current minute to full time{match.livePlayerStatsSource?" · live event counts on":""}</p></div><span className="rounded-full bg-cyan-300/10 px-2 py-1 text-[0.44rem] font-black text-cyan-200">CONFIRMED XI</span></div>
 
       {suggestedProps.length>=2?<div className="mt-3 rounded-2xl bg-black/25 p-3"><p className="text-[0.48rem] font-black uppercase text-white/30">Suggested in-play player slip</p><div className="mt-2 space-y-1.5">{suggestedProps.map(prop=><div key={"slip|"+prop.player+"|"+prop.market} className="flex items-center justify-between gap-3"><div><p className="text-xs font-black">{prop.player} · {prop.market==="card"?"to be carded":prop.market==="foul1"?"1+ foul":prop.market==="fouled1"?"1+ foul drawn":prop.market==="shot1"?"1+ shot":"1+ SOT"}</p><p className="text-[0.46rem] text-white/25">{prop.team} · Grade {prop.confidence}</p></div><p className="font-mono text-sm font-black">{percent(prop.probability)}</p></div>)}</div><p className="mt-2 text-[0.46rem] leading-relaxed text-white/25">Model shortlist only — check that each live market is still offered before adding it to a builder.</p></div>:null}
 
-      <div className="mt-3 space-y-3">{propGroups.map(group=><div key={group.market}><div className="mb-1.5 flex items-center justify-between"><p className="text-[0.5rem] font-black uppercase text-white/35">{group.title}</p><p className="text-[0.42rem] text-white/20">top {group.picks.length}</p></div><div className="space-y-1.5">{group.picks.map(prop=><div key={prop.player+"|"+prop.market} className="flex items-center justify-between gap-3 rounded-xl bg-white/[0.045] px-3 py-2"><div><p className="text-xs font-black">{prop.player} · {group.selection}</p><p className="mt-0.5 text-[0.46rem] text-white/25">{prop.team} · Grade {prop.confidence}{prop.marketStatus==="available"?" · market seen":prop.marketStatus==="unavailable"?" · market unavailable":" · check live market"}</p></div><div className="text-right"><p className="font-mono text-sm font-black">{percent(prop.probability)}</p><p className="text-[0.4rem] text-white/20">remaining</p></div></div>)}</div></div>)}</div>
+      <div className="mt-3 space-y-3">{propGroups.map(group=><div key={group.market}><div className="mb-1.5 flex items-center justify-between"><p className="text-[0.5rem] font-black uppercase text-white/35">{group.title}</p><p className="text-[0.42rem] text-white/20">top {group.picks.length}</p></div><div className="space-y-1.5">{group.picks.map(prop=><div key={prop.player+"|"+prop.market} className="flex items-center justify-between gap-3 rounded-xl bg-white/[0.045] px-3 py-2"><div><p className="text-xs font-black">{prop.player} · {group.selection}</p><p className="mt-0.5 text-[0.46rem] text-white/25">{prop.team} · Grade {prop.confidence}{prop.liveStatsAvailable?" · live count "+String(prop.currentCount??0):""}{prop.marketStatus==="available"?" · market seen":prop.marketStatus==="unavailable"?" · market unavailable":" · check live market"}</p></div><div className="text-right"><p className="font-mono text-sm font-black">{percent(prop.probability)}</p><p className="text-[0.4rem] text-white/20">remaining</p></div></div>)}</div></div>)}</div>
       <p className="mt-3 text-[0.48rem] leading-relaxed text-white/25">These are remaining-match model probabilities, recalculated as time runs down. They do not reuse stale pre-match prices or claim a live bookmaker price where none has been verified.</p>
     </div>:null}
   </article>
