@@ -80,7 +80,11 @@ export default function RecommendedPage(){
   },[])
 
   useEffect(()=>{void refresh(false)},[refresh])
-  useEffect(()=>{const t=window.setInterval(()=>void refresh(false),120000);return()=>window.clearInterval(t)},[refresh])
+  useEffect(()=>{
+    const live=(data?.liveMatches?.length??0)>0
+    const t=window.setInterval(()=>void refresh(false),live?30000:300000)
+    return()=>window.clearInterval(t)
+  },[refresh,data?.liveMatches?.length])
   useEffect(()=>{
     const games=data?.targetOddsGames??[]
     if(!games.length){setSelectedTargetFixtureId(null);return}
@@ -145,6 +149,10 @@ function LiveNowSection({matches}:{matches:LiveMatch[]}){
 function LiveMatchCard({match}:{match:LiveMatch}){
   const score=match.score
   const probs=match.probabilities
+  const liveLegs=[
+    match.winnerPick?{label:match.winnerPick.team+" to win",probability:match.winnerPick.probability,grade:match.winnerPick.grade}:null,
+    !match.bttsSettled&&match.bttsPick?{label:"BTTS "+(match.bttsPick.selection==="yes"?"Yes":"No"),probability:match.bttsPick.probability,grade:match.bttsPick.grade}:null,
+  ].filter(Boolean) as Array<{label:string;probability:number;grade:string}>
   return <article className="rounded-3xl border border-rose-300/15 bg-rose-400/[0.045] p-4">
     <div className="flex items-start justify-between gap-3">
       <div>
@@ -159,6 +167,12 @@ function LiveMatchCard({match}:{match:LiveMatch}){
     {match.bttsSettled?<p className="mt-2 rounded-xl bg-white/[0.04] px-3 py-2 text-center text-[0.56rem] font-black text-white/35">BTTS already landed — removed from live betting picks</p>:match.bttsPick?<div className="mt-2 rounded-xl bg-black/20 px-3 py-2"><p className="text-[0.5rem] font-black uppercase text-white/25">Live BTTS read</p><p className="mt-1 text-sm font-black">BTTS {match.bttsPick.selection==="yes"?"Yes":"No"} · {percent(match.bttsPick.probability)} · Grade {match.bttsPick.grade}</p></div>:null}
 
     {match.winnerPick?<div className="mt-2 rounded-xl bg-black/20 px-3 py-2"><p className="text-[0.5rem] font-black uppercase text-white/25">Current model lean</p><p className="mt-1 text-sm font-black">{match.winnerPick.team} to win · Grade {match.winnerPick.grade}</p></div>:null}
+
+    <div className="mt-3 rounded-2xl border border-violet-300/15 bg-violet-400/[0.05] p-3">
+      <div className="flex items-center justify-between gap-3"><p className="text-[0.52rem] font-black uppercase tracking-[0.12em] text-violet-300">In-play bet slip</p><p className="text-[0.46rem] text-white/25">refreshes every 30s</p></div>
+      {liveLegs.length?<div className="mt-2 space-y-2">{liveLegs.map((leg,i)=><div key={leg.label+"|"+i} className="flex items-center justify-between gap-3 rounded-xl bg-black/20 px-3 py-2"><div><p className="text-sm font-black">{leg.label}</p><p className="text-[0.48rem] text-white/30">Grade {leg.grade} · current live model</p></div><p className="font-mono text-base font-black">{percent(leg.probability)}</p></div>)}</div>:<p className="mt-2 text-[0.58rem] leading-relaxed text-white/40">No live selection currently clears the model threshold. The match stays visible and will be reassessed on the next refresh.</p>}
+      <p className="mt-2 text-[0.5rem] leading-relaxed text-white/25">Live bookmaker prices are not reused from pre-match odds. Check the current price in your bookmaker before placing anything.</p>
+    </div>
   </article>
 }
 
