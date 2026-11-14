@@ -311,6 +311,45 @@ async function scorecardFor(f:Fixture,refresh:boolean){
   }catch{return null}
 }
 
+const LIVE_PROP_MARKETS=["card","foul1","fouled1","shot1","sot1"] as const
+function remainingEventProbability(fullMatchProbability:number,elapsed:number){
+  const p=Math.max(.001,Math.min(.995,Number(fullMatchProbability)||0))
+  const remaining=Math.max(.03,Math.min(1,(96-Math.max(0,Math.min(96,elapsed)))/96))
+  const lambda=-Math.log(1-p)
+  return Math.max(.001,Math.min(.99,1-Math.exp(-lambda*remaining)))
+}
+function buildLivePlayerProps(scorecard:Scorecard|null,elapsed:number){
+  if(!scorecard?.ok||!scorecard.lineupsConfirmed)return []
+  const candidates:any[]=[]
+  const seen=new Set<string>()
+  for(const slip of scorecard.slips??[]){
+    for(const leg of slip.legs??[]){
+      const market=String(leg.market)
+      if(!(LIVE_PROP_MARKETS as readonly string[]).includes(market)||leg.confidence==="D")continue
+      const key=normName(leg.player)+"|"+market
+      if(seen.has(key))continue
+      seen.add(key)
+      const probability=remainingEventProbability(Number(leg.probability??0),elapsed)
+      const marketGroup=market==="card"?"card":market==="foul1"?"foul":market==="fouled1"?"fouled":market==="shot1"?"shot":"sot"
+      const status=(scorecard.marketAvailability as any)?.[marketGroup]??"unknown"
+      candidates.push({
+        player:leg.player,team:leg.team,market,label:leg.label,
+        probability:Math.round(probability*1000)/1000,
+        fullMatchProbability:Math.round(Number(leg.probability??0)*1000)/1000,
+        fairOdds:Math.round((1/Math.max(.01,probability))*100)/100,
+        confidence:leg.confidence,marketStatus:status,
+        bookmakerOdds:null,bookmakerName:null,
+        reason:"Remaining-match estimate from the confirmed-XI player model, scaled to the time left.",
+      })
+    }
+  }
+  const out:any[]=[]
+  for(const market of LIVE_PROP_MARKETS){
+    out.push(...candidates.filter(x=>x.market===market).sort((a,b)=>b.probability-a.probability).slice(0,3))
+  }
+  return out
+}
+
 
 let lastGoodRecommended:any=null
 let lastGoodAt=0
@@ -469,9 +508,13 @@ export async function GET(request:Request){
       const livePredictions=(liveData?.predictions??[]).filter((p:any)=>p?.inPlay)
       const byId=new Map<string,any>(livePredictions.map((p:any)=>[String(p.id),p]))
       const byTeams=new Map<string,any>(livePredictions.map((p:any)=>[normName(String(p.home??""))+"|"+normName(String(p.away??"")),p]))
-      liveMatches=liveFixtures.map(f=>{
+      liveMatches=await Promise.all(liveFixtures.map(async f=>{
         const model=byId.get(String(f.id))??byTeams.get(normName(f.home.name)+"|"+normName(f.away.name))
-        if(model)return model
+        const elapsed=Math.max(0,Math.min(96,Number(model?.elapsed??f.elapsed??0)))
+        let scorecard=await scorecardFor(f,refresh)
+        if(!scorecard?.ok)scorecard=await fallbackScorecard(f)
+        const livePlayerProps=buildLivePlayerProps(scorecard,elapsed)
+        if(model)return {...model,livePlayerProps}
         const home=Number(f.score?.home),away=Number(f.score?.away)
         const hasScore=Number.isFinite(home)&&Number.isFinite(away)
         const bttsSettled=Boolean(hasScore&&home>0&&away>0)
@@ -479,17 +522,24 @@ export async function GET(request:Request){
           id:String(f.id),competition:f.competition,kickoff:f.kickoff,status:f.status??"live",
           inPlay:true,elapsed:f.elapsed??null,score:hasScore?{home,away}:null,
           home:f.home.name,away:f.away.name,probabilities:null,winnerPick:null,bttsPick:null,bttsSettled,
+          livePlayerProps,
           reasons:["Live score available. The live win-probability model is not currently available for this competition."],
         }
-      })
+      }))
     }catch{
-      liveMatches=liveFixtures.map(f=>({
-        id:String(f.id),competition:f.competition,kickoff:f.kickoff,status:f.status??"live",
-        inPlay:true,elapsed:f.elapsed??null,
-        score:f.score??null,home:f.home.name,away:f.away.name,
-        probabilities:null,winnerPick:null,bttsPick:null,
-        bttsSettled:Boolean((f.score?.home??0)>0&&(f.score?.away??0)>0),
-        reasons:["Live score available while the live probability refresh is temporarily unavailable."],
+      liveMatches=await Promise.all(liveFixtures.map(async f=>{
+        let scorecard=await scorecardFor(f,refresh)
+        if(!scorecard?.ok)scorecard=await fallbackScorecard(f)
+        const elapsed=Math.max(0,Math.min(96,Number(f.elapsed??0)))
+        return {
+          id:String(f.id),competition:f.competition,kickoff:f.kickoff,status:f.status??"live",
+          inPlay:true,elapsed:f.elapsed??null,
+          score:f.score??null,home:f.home.name,away:f.away.name,
+          probabilities:null,winnerPick:null,bttsPick:null,
+          bttsSettled:Boolean((f.score?.home??0)>0&&(f.score?.away??0)>0),
+          livePlayerProps:buildLivePlayerProps(scorecard,elapsed),
+          reasons:["Live score available while the live probability refresh is temporarily unavailable."],
+        }
       }))
     }
 
@@ -587,7 +637,7 @@ export async function GET(request:Request){
         cache:"Recommended scans today only and is served from one server endpoint with a five-minute shared-cache target; manual refresh bypasses the normal scan cadence.",
         tracking:"Recommendations are saved before kickoff and graded later from imported player-match data. Model-only recommendations remain visible when bookmaker verification is missing; only verified same-bookmaker markets are marked placeable.",
         targetOdds:"Select a match, then 5/1 through 50/1 same-game targets search the strongest recommended legs for that fixture only. Exact individual same-bookmaker prices are preferred as a reference, but the final Bet Builder quote can differ because of correlation.",
-        liveRecommended:"Matches remain on Recommended after kick-off. Live rows use the current score and minute with recalculated match-result and unsettled BTTS probabilities; pre-match player-prop prices are not relabelled as live prices.",
+        liveRecommended:"Matches remain on Recommended after kick-off. Live rows use the current score and minute with recalculated match-result and unsettled BTTS probabilities. Confirmed-XI card, foul, fouled, shot and SOT models are converted into remaining-match probabilities as the clock runs down; stale pre-match bookmaker prices are never relabelled as live prices.",
         liveFeedback:liveTopSample>=50
           ? "Live top-pick calibration is active. Current 30-day reliability multiplier: "+liveReliabilityFactor.toFixed(3)
           : "Live top-pick calibration activates after 50 graded top-pick legs.",
