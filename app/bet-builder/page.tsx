@@ -1,30 +1,21 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
-import { CalendarDays, ChevronDown, Clock3, RefreshCw, Sparkles } from "lucide-react"
+import { useCallback, useEffect, useState } from "react"
+import { ArrowLeft, Clock3, RefreshCw, ShieldCheck, Sparkles, TicketCheck } from "lucide-react"
+import { useRouter } from "next/navigation"
 
 type Competition = "Premier League" | "Championship" | "League One" | "League Two" | "International"
+type MarketStatus = "available"|"unavailable"|"unknown"
+
 type Fixture = {
   id:string
-  competition:Competition
-  tournament?:string
-  kickoff:string
-  status?:string
-  home:{name:string;crest?:string}
-  away:{name:string;crest?:string}
-  lineupStatus?:"expected"|"confirmed"|"unavailable"
-}
-type FixturesResponse = {
-  connected:boolean
   date:string
-  showingNextMatchday?:boolean
-  leagues:Record<Competition,Fixture[]>
+  kickoff:string
+  competition:Competition
+  home:string
+  away:string
 }
-type Radar = {
-  lineupsConfirmed?:boolean
-  referee?:{name:string;yellowsPerGame?:number|null}|null
-}
-type MarketStatus = "available"|"unavailable"|"unknown"
+
 type SlipLeg = {
   player:string
   team:string
@@ -33,13 +24,14 @@ type SlipLeg = {
   probability:number
   fairOdds:number|null
   bookmakerOdds:number|null
-  previousBookmakerOdds:number|null
-  bookmakerMovement:number|null
+  previousBookmakerOdds?:number|null
+  bookmakerMovement?:number|null
   edge:number|null
-  expectedValue:number|null
+  expectedValue?:number|null
   confidence:"A"|"B"|"C"|"D"
   reason:string
 }
+
 type BetSlip = {
   id:string
   title:string
@@ -50,6 +42,7 @@ type BetSlip = {
   placeable?:boolean
   marketAvailability?:Array<{player:string;market:string;status:MarketStatus}>
 }
+
 type FoulTargetSlip = {
   id:string
   targetFractional:string
@@ -58,277 +51,163 @@ type FoulTargetSlip = {
   referenceProductOdds:number|null
   averageLegProbability:number|null
   minimumLegProbability:number|null
-  pricedLegs:number
-  usesLivePrices:boolean
-  withinTargetRange:boolean
   note:string
   placeable?:boolean
   marketStatus?:MarketStatus
 }
+
 type Scorecard = {
   ok:boolean
   lineupsConfirmed?:boolean
   bookmaker?:string|null
-  oddsSource?:string|null
   oddsFreshness?:"LIVE"|"SLIGHTLY STALE"|"CACHED"|"STALE"|"UNKNOWN"
-  oddsCapturedAt?:string|null
-  priceAvailable?:boolean
   playerCount?:number
+  referee?:{name?:string;yellowsPerGame?:number|null}|null
   marketAvailability?:{card:MarketStatus;foul:MarketStatus;fouled:MarketStatus;shot:MarketStatus;sot:MarketStatus}
   slips?:BetSlip[]
   foulTargetSlips?:FoulTargetSlip[]
   error?:string
 }
 
-const competitions:Competition[]=["Premier League","Championship","League One","League Two","International"]
-
-function londonDate(){
-  const parts=new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/London",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date())
-  const v=(t:string)=>parts.find(p=>p.type===t)?.value??""
-  return v("year")+"-"+v("month")+"-"+v("day")
-}
-function fixtureDate(f:Fixture){
-  return new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/London",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(f.kickoff))
-}
-function time(f:Fixture){
-  return new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/London",hour:"2-digit",minute:"2-digit",hour12:false}).format(new Date(f.kickoff))
-}
 function percent(v:number|null|undefined){return v==null?"—":Math.round(Number(v)*100)+"%"}
-function edge(v:number|null|undefined){return v==null?"—":(Number(v)>=0?"+":"")+(Number(v)*100).toFixed(1)+"pp"}
-function likelihood(v:number|null|undefined){
-  const p=Number(v??0)
-  if(p>=.76)return "Very strong"
-  if(p>=.67)return "Strong"
-  if(p>=.58)return "Good"
-  return "Higher risk"
+function edgeText(v:number|null|undefined){return v==null?"—":(Number(v)>=0?"+":"")+(Number(v)*100).toFixed(1)+"pp"}
+function scorecardUrl(f:Fixture){
+  return "/api/fixture-scorecard?"+new URLSearchParams({
+    date:f.date,
+    home:f.home,
+    away:f.away,
+    competition:f.competition,
+    refresh:String(Date.now()),
+  })
 }
-function scorecardUrl(f:Fixture,bust=0){
-  return "/api/fixture-scorecard?"+new URLSearchParams({date:fixtureDate(f),home:f.home.name,away:f.away.name,competition:f.competition,refresh:String(bust)})
+function parseFixture():Fixture|null{
+  if(typeof window==="undefined")return null
+  const p=new URLSearchParams(window.location.search)
+  const id=p.get("id")??""
+  const date=p.get("date")??""
+  const kickoff=p.get("kickoff")??""
+  const competition=(p.get("competition")??"") as Competition
+  const home=p.get("home")??""
+  const away=p.get("away")??""
+  if(!id||!date||!competition||!home||!away)return null
+  return {id,date,kickoff,competition,home,away}
 }
-function radarUrl(f:Fixture,bust=0){
-  return "/api/fixture-radar?"+new URLSearchParams({date:fixtureDate(f),home:f.home.name,away:f.away.name,competition:f.competition,refresh:String(bust)})
-}
-function marketStatusLabel(status:MarketStatus|undefined,label:string){
-  if(status==="available") return {text:label+" available",cls:"bg-emerald-400/15 text-emerald-300"}
-  if(status==="unavailable") return {text:label+" unavailable",cls:"bg-rose-400/15 text-rose-200"}
-  return {text:label+" not verified",cls:"bg-amber-300/10 text-amber-200"}
+function time(kickoff:string){
+  if(!kickoff)return ""
+  return new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/London",weekday:"short",day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit",hour12:false}).format(new Date(kickoff))
 }
 function slipWhy(slip:BetSlip){
-  if(slip.id==="main-safe") return "The model's strongest simple markets in this game, prioritising high calibrated hit rates and avoiding too much exposure to one player."
-  if(slip.id==="two-cards") return "The two strongest booking candidates after card history, foul volume, repeated-foul booking behaviour, direct matchup and referee context are combined."
-  if(slip.id==="three-cards") return "A higher-return version of the card angle, adding the next strongest booking candidate while keeping the same evidence rules."
-  if(slip.id==="yellow-foul") return "Built around players whose booking rate rises when their foul count increases, so the card and foul evidence reinforce one another."
-  return "A volume-led mix of fouls, shots and shots on target, favouring repeatable involvement over rare outcomes."
+  if(slip.id==="main-safe")return "The model's strongest simple angles in this match, favouring high calibrated hit rates and avoiding too much exposure to one player."
+  if(slip.id==="two-cards")return "The two strongest booking candidates after card history, foul volume, repeated-foul booking behaviour, direct matchup and referee context."
+  if(slip.id==="three-cards")return "A higher-return card version using the next strongest booking candidate as well."
+  if(slip.id==="yellow-foul")return "Built around players whose booking rate rises when their foul involvement increases."
+  return "A volume-led mix of fouls, shots and shots on target from the confirmed XI."
 }
 
 export default function BetBuilderPage(){
-  const[date,setDate]=useState(londonDate)
-  const[competition,setCompetition]=useState<Competition>("Premier League")
-  const[fixtures,setFixtures]=useState<Fixture[]>([])
-  const[selectedId,setSelectedId]=useState("")
-  const[radar,setRadar]=useState<Radar|null>(null)
-  const[scorecard,setScorecard]=useState<Scorecard|null>(null)
-  const[loadingFixtures,setLoadingFixtures]=useState(false)
-  const[loadingMatch,setLoadingMatch]=useState(false)
+  const router=useRouter()
+  const[fixture,setFixture]=useState<Fixture|null>(null)
+  const[data,setData]=useState<Scorecard|null>(null)
+  const[loading,setLoading]=useState(true)
 
-  const selected=useMemo(()=>fixtures.find(f=>f.id===selectedId)??null,[fixtures,selectedId])
+  useEffect(()=>{setFixture(parseFixture())},[])
 
-  const loadFixtures=useCallback(async()=>{
-    setLoadingFixtures(true)
+  const load=useCallback(async(f:Fixture)=>{
+    setLoading(true)
     try{
-      const r=await fetch("/api/fixtures?"+new URLSearchParams({
-        date,
-        competition,
-        nextIfEmpty:"0",
-        refresh:String(Date.now()),
-      }),{cache:"no-store"})
-      if(!r.ok) throw new Error("fixtures")
-      const data=await r.json() as FixturesResponse
-      const fs=data.leagues?.[competition]??[]
-      setFixtures(fs)
-      setSelectedId(current=>fs.some(f=>f.id===current)?current:"")
-      setRadar(null)
-      setScorecard(null)
-    }catch{
-      setFixtures([])
+      const r=await fetch(scorecardUrl(f),{cache:"no-store"})
+      setData(r.ok?await r.json() as Scorecard:null)
     }finally{
-      setLoadingFixtures(false)
-    }
-  },[date,competition])
-
-  const loadMatch=useCallback(async(f:Fixture)=>{
-    setLoadingMatch(true)
-    const bust=Date.now()
-    try{
-      const rr=await fetch(radarUrl(f,bust),{cache:"no-store"})
-      const rd=rr.ok?await rr.json() as Radar:null
-      setRadar(rd)
-      const sr=await fetch(scorecardUrl(f,bust),{cache:"no-store"})
-      setScorecard(sr.ok?await sr.json() as Scorecard:null)
-    }finally{
-      setLoadingMatch(false)
+      setLoading(false)
     }
   },[])
 
-  useEffect(()=>{void loadFixtures()},[loadFixtures])
-  useEffect(()=>{if(selected)void loadMatch(selected)},[selected,loadMatch])
-  useEffect(()=>{
-    const t=window.setInterval(()=>{if(selected)void loadMatch(selected)},60000)
-    return()=>window.clearInterval(t)
-  },[selected,loadMatch])
+  useEffect(()=>{if(fixture)void load(fixture)},[fixture,load])
+  useEffect(()=>{if(!fixture)return;const t=window.setInterval(()=>void load(fixture),60000);return()=>window.clearInterval(t)},[fixture,load])
 
-  const confirmed=Boolean(radar?.lineupsConfirmed||selected?.lineupStatus==="confirmed")
+  if(!fixture){
+    return <main className="min-h-screen bg-[#07120e] px-4 py-10 text-white"><div className="mx-auto max-w-xl rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center"><p className="font-black">Choose a game from Matches</p><p className="mt-2 text-sm text-white/40">Bet slips are now created directly from the match card so you never have to select the fixture twice.</p><button onClick={()=>router.push("/")} className="mt-5 rounded-xl bg-emerald-400 px-4 py-2.5 text-sm font-black text-emerald-950">Back to Matches</button></div></main>
+  }
+
+  const card=data?.marketAvailability?.card
+  const foul=data?.marketAvailability?.foul
+  const eligible=card==="available"&&foul==="available"
+  const unavailable=card==="unavailable"||foul==="unavailable"
+  const verified=card!=null&&foul!=null
 
   return <main className="min-h-screen bg-[#07120e] pb-24 text-white">
     <header className="sticky top-0 z-30 border-b border-white/10 bg-[#07120e]/95 backdrop-blur-xl">
       <div className="mx-auto max-w-3xl px-4 pb-4 pt-[max(1rem,env(safe-area-inset-top))]">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2 text-emerald-300"><Sparkles className="size-4"/><span className="text-[0.62rem] font-black uppercase tracking-[0.16em]">Match Edge</span></div>
-            <h1 className="mt-1 text-2xl font-black">Bet Builder</h1>
-            <p className="mt-1 text-xs text-white/45">Pick one game. Only that match appears here.</p>
-          </div>
-          <button onClick={()=>selected?void loadMatch(selected):void loadFixtures()} className="rounded-xl bg-emerald-400 p-2.5 text-emerald-950"><RefreshCw className={"size-4 "+((loadingFixtures||loadingMatch)?"animate-spin":"")}/></button>
+        <div className="flex items-center gap-3">
+          <button onClick={()=>router.push("/")} className="rounded-xl bg-white/7 p-2.5 text-white/70"><ArrowLeft className="size-4"/></button>
+          <div className="min-w-0 flex-1"><div className="flex items-center gap-2 text-emerald-300"><TicketCheck className="size-4"/><span className="text-[0.6rem] font-black uppercase tracking-[0.15em]">Bet Builder</span></div><h1 className="mt-1 truncate text-xl font-black">{fixture.home} <span className="text-white/25">v</span> {fixture.away}</h1><p className="mt-0.5 text-[0.58rem] text-white/35">{fixture.competition} · {time(fixture.kickoff)}</p></div>
+          <button onClick={()=>void load(fixture)} className="rounded-xl bg-emerald-400 p-2.5 text-emerald-950"><RefreshCw className={"size-4 "+(loading?"animate-spin":"")}/></button>
         </div>
       </div>
     </header>
 
     <div className="mx-auto max-w-3xl space-y-4 px-4 py-4">
-      <section className="rounded-3xl border border-white/10 bg-white/[0.055] p-4">
-        <p className="text-[0.6rem] font-black uppercase tracking-[0.15em] text-white/35">Select game</p>
-        <div className="mt-3 grid gap-2 sm:grid-cols-2">
-          <label className="rounded-2xl border border-white/10 bg-black/20 p-3">
-            <span className="mb-1.5 flex items-center gap-1.5 text-[0.56rem] font-black uppercase text-white/35"><CalendarDays className="size-3"/>Date</span>
-            <input type="date" value={date} onChange={e=>{setDate(e.target.value);setSelectedId("")}} className="w-full bg-transparent text-sm font-black outline-none [color-scheme:dark]"/>
-          </label>
-          <label className="relative rounded-2xl border border-white/10 bg-black/20 p-3">
-            <span className="mb-1.5 block text-[0.56rem] font-black uppercase text-white/35">Competition</span>
-            <select value={competition} onChange={e=>{setCompetition(e.target.value as Competition);setSelectedId("")}} className="w-full appearance-none bg-transparent pr-6 text-sm font-black outline-none">
-              {competitions.map(c=><option key={c} value={c} className="bg-[#07120e]">{c}</option>)}
-            </select>
-            <ChevronDown className="pointer-events-none absolute bottom-3.5 right-3 size-4 text-white/35"/>
-          </label>
-        </div>
-        <label className="relative mt-2 block rounded-2xl border border-white/10 bg-black/20 p-3">
-          <span className="mb-1.5 block text-[0.56rem] font-black uppercase text-white/35">Match</span>
-          <select value={selectedId} onChange={e=>setSelectedId(e.target.value)} disabled={loadingFixtures} className="w-full appearance-none bg-transparent pr-7 text-sm font-black outline-none">
-            <option value="" className="bg-[#07120e]">{loadingFixtures?"Loading…":fixtures.length?"Choose a match":"No fixtures found"}</option>
-            {fixtures.map(f=><option key={f.id} value={f.id} className="bg-[#07120e]">{time(f)} · {f.home.name} v {f.away.name}</option>)}
-          </select>
-          <ChevronDown className="pointer-events-none absolute bottom-3.5 right-3 size-4 text-white/35"/>
-        </label>
-      </section>
+      {loading&&!data?<section className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center"><RefreshCw className="mx-auto mb-3 size-5 animate-spin text-emerald-300"/><p className="font-black">Checking Bet365 markets and model…</p></section>:null}
 
-      {!selected?<Empty/>:null}
-      {selected?<MatchHeader fixture={selected} radar={radar} confirmed={confirmed}/>:null}
+      {data?.ok?<MarketGate data={data}/>:null}
 
-      {selected&&scorecard?.ok?<OddsStatus data={scorecard}/>:null}
-
-      {selected&&!confirmed?<section className="rounded-3xl border border-amber-300/15 bg-amber-300/5 p-6 text-center">
-        <Clock3 className="mx-auto size-6 text-amber-300"/>
-        <p className="mt-3 font-black">Waiting for confirmed lineups</p>
-        <p className="mx-auto mt-1 max-w-lg text-xs leading-relaxed text-white/40">Bookmaker market availability is already checked above. Final player recommendations unlock when the starting XIs are confirmed, then re-check automatically every 60 seconds.</p>
+      {data?.ok&&verified&&!eligible?<section className="rounded-3xl border border-rose-300/20 bg-rose-400/10 p-5">
+        <div className="flex items-start gap-3"><ShieldCheck className="mt-0.5 size-5 shrink-0 text-rose-200"/><div><p className="font-black">No bet slip for this match</p><p className="mt-1 text-sm leading-relaxed text-rose-100/75">{unavailable?"Bet365 does not offer both player yellow cards and player fouls for this fixture, so this match is blocked from the betting workflow.":"Both player-card and player-foul markets must be verified before a slip can be created."}</p></div></div>
       </section>:null}
 
-      {selected&&loadingMatch&&!scorecard?<section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 text-center"><RefreshCw className="mx-auto mb-2 size-5 animate-spin text-emerald-300"/><p className="font-black">Checking bookmaker markets…</p></section>:null}
+      {data?.ok&&!verified?<section className="rounded-3xl border border-amber-300/15 bg-amber-300/5 p-5"><p className="font-black text-amber-100">Market availability not verified</p><p className="mt-1 text-sm text-amber-100/60">This match remains locked until both Bet365 player cards and player fouls are verified as available.</p></section>:null}
 
-      {selected&&confirmed&&scorecard?.ok?<>
-        <FoulLadder slips={scorecard.foulTargetSlips??[]}/>
+      {data?.ok&&eligible&&!data.lineupsConfirmed?<section className="rounded-3xl border border-amber-300/15 bg-amber-300/5 p-6 text-center"><Clock3 className="mx-auto size-6 text-amber-300"/><p className="mt-3 font-black">Markets are eligible — waiting for confirmed lineups</p><p className="mx-auto mt-1 max-w-lg text-xs leading-relaxed text-white/40">Both player cards and fouls are available. Final recommendations will appear automatically when the starting XIs are confirmed.</p></section>:null}
+
+      {data?.ok&&eligible&&data.lineupsConfirmed?<>
+        <FoulLadder slips={data.foulTargetSlips??[]}/>
         <section className="space-y-3">
-          <div className="px-1"><p className="font-black">Other model slips</p><p className="text-[0.62rem] text-white/35">Cards, foul/card combinations and shots from the same confirmed XI.</p></div>
-          {(scorecard.slips??[]).map(s=><StandardSlip key={s.id} slip={s}/>)}
+          <div className="px-1"><p className="font-black">Recommended slips</p><p className="text-[0.6rem] text-white/35">Built only from a fixture where both player-card and foul markets are available.</p></div>
+          {(data.slips??[]).map(slip=><StandardSlip key={slip.id} slip={slip}/>)}
         </section>
       </>:null}
 
-      {selected&&confirmed&&scorecard&&!scorecard.ok?<section className="rounded-3xl border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">{scorecard.error??"Unable to build this match."}</section>:null}
+      {data&&!data.ok?<section className="rounded-3xl border border-rose-300/20 bg-rose-400/10 p-4 text-sm text-rose-100">{data.error??"Unable to build this match."}</section>:null}
     </div>
   </main>
 }
 
-function Empty(){
-  return <section className="rounded-3xl border border-dashed border-white/10 bg-white/[0.035] p-8 text-center"><p className="font-black">Choose a match above</p><p className="mt-1 text-sm text-white/35">You will only see recommendations for the game you select.</p></section>
-}
-
-function MatchHeader({fixture,radar,confirmed}:{fixture:Fixture;radar:Radar|null;confirmed:boolean}){
-  return <section className="rounded-3xl border border-white/10 bg-[#0d1d17] p-4">
-    <div className="flex items-center justify-between gap-3">
-      <div><p className="text-[0.6rem] font-black uppercase tracking-[0.12em] text-white/35">{fixture.tournament??fixture.competition} · {time(fixture)}</p><h2 className="mt-1 text-lg font-black">{fixture.home.name} <span className="text-white/25">v</span> {fixture.away.name}</h2><p className="mt-1 text-[0.62rem] text-white/35">{radar?.referee?.name?"Ref: "+radar.referee.name+(radar.referee.yellowsPerGame!=null?" · "+radar.referee.yellowsPerGame.toFixed(1)+" cards/game":""):"Referee not confirmed"}</p></div>
-      <span className={"shrink-0 rounded-full px-2.5 py-1 text-[0.56rem] font-black "+(confirmed?"bg-emerald-400 text-emerald-950":"bg-white/8 text-white/45")}>{confirmed?"XI CONFIRMED":"WAITING FOR XI"}</span>
-    </div>
-  </section>
-}
-
-function OddsStatus({data}:{data:Scorecard}){
-  const freshness=data.oddsFreshness??"UNKNOWN"
-  const cls=freshness==="LIVE"?"bg-emerald-400 text-emerald-950":freshness==="CACHED"?"bg-sky-300 text-sky-950":freshness==="SLIGHTLY STALE"?"bg-amber-300 text-amber-950":freshness==="STALE"?"bg-rose-300 text-rose-950":"bg-white/10 text-white/50"
-  const card=marketStatusLabel(data.marketAvailability?.card,"Cards")
-  const foul=marketStatusLabel(data.marketAvailability?.foul,"Fouls")
-  const sot=marketStatusLabel(data.marketAvailability?.sot,"SOT")
-  const cardBlocked=data.marketAvailability?.card==="unavailable"
-  const foulBlocked=data.marketAvailability?.foul==="unavailable"
-  const blockMessage=cardBlocked&&foulBlocked
-    ?"Bet365 does not currently offer player fouls or player cards for this fixture. Foul/card builders are disabled."
-    :cardBlocked
-      ?"Bet365 does not currently offer player cards for this fixture. Card-based builders are disabled."
-      :foulBlocked
-        ?"Bet365 does not currently offer player fouls for this fixture. Foul-based builders are disabled."
-        :null
-  return <section className="rounded-2xl border border-white/8 bg-white/[0.035] p-3">
-    <div className="flex items-center justify-between gap-3"><div><p className="text-xs font-black">{data.lineupsConfirmed?"Confirmed-lineup model ready":"Bookmaker market check"}</p><p className="mt-0.5 text-[0.58rem] text-white/35">{data.lineupsConfirmed?(data.playerCount??0)+" player profiles analysed":"Markets checked as soon as the fixture is selected"}</p></div><span className={"rounded-full px-2 py-1 text-[0.54rem] font-black "+cls}>{data.bookmaker??"BET365"} {freshness}</span></div>
-    <div className="mt-2 flex flex-wrap gap-1.5"><span className={"rounded-full px-2 py-1 text-[0.5rem] font-black "+card.cls}>{card.text}</span><span className={"rounded-full px-2 py-1 text-[0.5rem] font-black "+foul.cls}>{foul.text}</span><span className={"rounded-full px-2 py-1 text-[0.5rem] font-black "+sot.cls}>{sot.text}</span></div>
-    {blockMessage?<p className="mt-2 rounded-xl bg-rose-400/10 px-3 py-2 text-[0.62rem] font-bold leading-relaxed text-rose-100">{blockMessage}</p>:null}
-  </section>
+function MarketGate({data}:{data:Scorecard}){
+  const card=data.marketAvailability?.card??"unknown"
+  const foul=data.marketAvailability?.foul??"unknown"
+  const chip=(label:string,status:MarketStatus)=>({label,cls:status==="available"?"bg-emerald-400/15 text-emerald-300":status==="unavailable"?"bg-rose-400/15 text-rose-200":"bg-amber-300/10 text-amber-200",text:status==="available"?"Available":status==="unavailable"?"Unavailable":"Not verified"})
+  const c=chip("Player cards",card),f=chip("Player fouls",foul)
+  return <section className="rounded-3xl border border-white/10 bg-white/[0.045] p-4"><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-black">Bet365 market check</p><p className="mt-1 text-[0.58rem] text-white/35">{data.lineupsConfirmed?"Confirmed XI loaded":"Pre-lineup market eligibility"}</p></div><span className="rounded-full bg-white/7 px-2 py-1 text-[0.5rem] font-black text-white/45">{data.oddsFreshness??"UNKNOWN"}</span></div><div className="mt-3 grid grid-cols-2 gap-2">{[c,f].map(x=><div key={x.label} className={"rounded-2xl p-3 "+x.cls}><p className="text-[0.55rem] font-black uppercase opacity-70">{x.label}</p><p className="mt-1 text-sm font-black">{x.text}</p></div>)}</div></section>
 }
 
 function FoulLadder({slips}:{slips:FoulTargetSlip[]}){
-  return <section className="space-y-3">
-    <div className="px-1"><p className="font-black">Foul odds ladder</p><p className="text-[0.62rem] text-white/35">1+ foul selections built toward the return you want, within Bet365's 12-selection / six-players-per-team Bet Builder limits.</p></div>
-    {slips.map(s=><FoulTargetCard key={s.id} slip={s}/>)}
-  </section>
+  return <section className="space-y-3"><div className="px-1"><p className="font-black">Foul odds ladder</p><p className="text-[0.6rem] text-white/35">High-probability 1+ foul players grouped toward roughly 3/1, 10/1, 20/1, 50/1 and 100/1 targets.</p></div>{slips.map(s=><FoulCard key={s.id} slip={s}/>)}</section>
 }
 
-function FoulTargetCard({slip}:{slip:FoulTargetSlip}){
+function FoulCard({slip}:{slip:FoulTargetSlip}){
   const[open,setOpen]=useState(false)
   const ready=slip.legs.length>0
-  const marketNote=slip.marketStatus==="unavailable"?"Foul market unavailable at this bookmaker":slip.marketStatus==="unknown"?"Foul market not verified on the free bookmaker feed":null
-  return <article className={"overflow-hidden rounded-3xl border "+(ready?"border-emerald-400/15 bg-gradient-to-br from-emerald-500/15 to-black/20":"border-white/8 bg-white/[0.03]")}>
+  return <article className="overflow-hidden rounded-3xl border border-emerald-300/15 bg-gradient-to-br from-emerald-500/15 to-black/20">
     <button onClick={()=>setOpen(x=>!x)} className="w-full p-4 text-left">
-      <div className="flex items-start justify-between gap-3">
-        <div><p className="text-[0.56rem] font-black uppercase tracking-[0.14em] text-emerald-300">TARGET RETURN</p><h3 className="mt-1 text-xl font-black">{slip.targetFractional}</h3><p className="mt-1 text-[0.64rem] text-white/45">{ready?slip.legs.length+" players · "+likelihood(slip.averageLegProbability)+" average leg strength":"No qualifying combination"}</p></div>
-        <div className="text-right"><p className="font-mono text-xl font-black">{slip.referenceProductOdds?.toFixed(2)??"—"}</p><p className="text-[0.46rem] font-black uppercase text-white/30">reference product</p></div>
-      </div>
-      {ready?<div className="mt-3 flex flex-wrap gap-1.5">{slip.legs.map(leg=><span key={leg.player} className="rounded-full bg-white/7 px-2.5 py-1 text-[0.6rem] font-bold text-white/70">{leg.player} 1+ foul · {percent(leg.probability)}</span>)}</div>:null}
-      <div className="mt-3 rounded-2xl bg-black/20 p-3 text-[0.67rem] leading-relaxed text-white/55">
-        {ready?"Why: the model keeps adding the strongest calibrated 1+ foul candidates until it gets near this odds target, while protecting the Bet365 player/team limits.":"The model would have to use weaker foul legs than the current threshold to chase this price, so it leaves the target blank instead."}
-      </div>
-      {marketNote?<p className={"mt-2 rounded-xl px-3 py-2 text-[0.6rem] "+(slip.marketStatus==="unavailable"?"bg-rose-400/10 text-rose-100":"bg-amber-300/10 text-amber-100")}>{marketNote}</p>:null}
+      <div className="flex items-start justify-between gap-3"><div><p className="text-[0.54rem] font-black uppercase tracking-[0.14em] text-emerald-300">FOUL TARGET</p><h3 className="mt-1 text-xl font-black">{slip.targetFractional}</h3><p className="mt-1 text-[0.62rem] text-white/45">{ready?slip.legs.length+" players selected":"No qualifying combination"}</p></div><div className="text-right"><p className="font-mono text-xl font-black">{slip.referenceProductOdds?.toFixed(2)??"—"}</p><p className="text-[0.44rem] uppercase text-white/25">reference</p></div></div>
+      {ready?<div className="mt-3 flex flex-wrap gap-1.5">{slip.legs.map(l=><span key={l.player} className="rounded-full bg-white/7 px-2.5 py-1 text-[0.58rem] font-bold text-white/70">{l.player} 1+ · {percent(l.probability)}</span>)}</div>:null}
     </button>
-    {open&&ready?<div className="border-t border-white/8 bg-black/20 p-4">
-      <div className="space-y-2">{slip.legs.map(leg=><Leg key={leg.player+"|"+leg.market} leg={leg}/>)}</div>
-      <p className="mt-3 text-[0.56rem] leading-relaxed text-white/30">{slip.note}</p>
-    </div>:null}
+    {open&&ready?<div className="border-t border-white/8 bg-black/20 p-4"><div className="space-y-2">{slip.legs.map((l,i)=><Leg key={l.player+"|"+i} leg={l}/>)}</div><p className="mt-3 text-[0.55rem] leading-relaxed text-white/30">{slip.note}</p></div>:null}
   </article>
 }
 
 function StandardSlip({slip}:{slip:BetSlip}){
   const[open,setOpen]=useState(false)
-  const unavailable=slip.marketAvailability?.filter(x=>x.status==="unavailable")??[]
-  const unknown=slip.marketAvailability?.filter(x=>x.status==="unknown")??[]
   return <article className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.045]">
-    <button onClick={()=>setOpen(x=>!x)} className="w-full p-4 text-left">
-      <div className="flex items-start justify-between gap-3"><div><p className="text-[0.55rem] font-black uppercase text-white/35">{slip.risk} risk · {slip.legs.length} legs</p><h3 className="mt-1 font-black">{slip.title}</h3><p className="mt-1 text-[0.65rem] leading-relaxed text-white/50">{slipWhy(slip)}</p>{unavailable.length?<p className="mt-2 rounded-lg bg-rose-400/10 px-2.5 py-1.5 text-[0.58rem] text-rose-100">Bookmaker market unavailable: {Array.from(new Set(unavailable.map(x=>x.market))).join(", ")}</p>:unknown.length?<p className="mt-2 rounded-lg bg-amber-300/10 px-2.5 py-1.5 text-[0.58rem] text-amber-100">Market availability not verified on the free feed</p>:<p className="mt-2 text-[0.55rem] font-black text-emerald-300">Markets verified available</p>}</div><div className="text-right"><p className="font-mono text-xl font-black">{percent(slip.averageLegProbability)}</p><p className="text-[0.45rem] uppercase text-white/30">avg leg</p></div></div>
-    </button>
-    {open?<div className="border-t border-white/8 bg-black/20 p-4"><div className="space-y-2">{slip.legs.map((leg,i)=><Leg key={leg.player+"|"+leg.market+"|"+i} leg={leg}/>)}</div></div>:null}
+    <button onClick={()=>setOpen(x=>!x)} className="w-full p-4 text-left"><div className="flex items-start justify-between gap-3"><div><div className="flex items-center gap-2 text-emerald-300"><Sparkles className="size-3.5"/><span className="text-[0.52rem] font-black uppercase">{slip.risk} risk</span></div><h3 className="mt-1 font-black">{slip.title}</h3><p className="mt-1 text-[0.64rem] leading-relaxed text-white/45">{slipWhy(slip)}</p></div><div className="text-right"><p className="font-mono text-xl font-black">{percent(slip.averageLegProbability)}</p><p className="text-[0.42rem] uppercase text-white/25">avg leg</p></div></div></button>
+    {open?<div className="border-t border-white/8 bg-black/20 p-4"><div className="space-y-2">{slip.legs.map((l,i)=><Leg key={l.player+"|"+l.market+"|"+i} leg={l}/>)}</div></div>:null}
   </article>
 }
 
 function Leg({leg}:{leg:SlipLeg}){
-  return <div className="rounded-2xl bg-white/[0.055] p-3">
-    <div className="flex items-center justify-between gap-3"><div className="min-w-0"><p className="truncate text-sm font-black">{leg.player} · {leg.label}</p><p className="mt-0.5 text-[0.58rem] text-white/35">{leg.team} · Grade {leg.confidence}</p></div><p className="font-mono text-base font-black">{percent(leg.probability)}</p></div>
-    <p className="mt-2 text-[0.64rem] leading-relaxed text-white/50">{leg.reason||"Strong historical and recent profile."}</p>
-    <div className="mt-2 grid grid-cols-3 gap-1.5 text-center"><Metric label="Fair" value={leg.fairOdds?.toFixed(2)??"—"}/><Metric label="Bet365" value={leg.bookmakerOdds?.toFixed(2)??"—"}/><Metric label="Edge" value={edge(leg.edge)} good={Number(leg.edge??0)>0}/></div>
-  </div>
+  return <div className="rounded-2xl bg-white/[0.055] p-3"><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-black">{leg.player} · {leg.label}</p><p className="mt-0.5 text-[0.56rem] text-white/35">{leg.team} · Grade {leg.confidence}</p></div><p className="font-mono text-base font-black">{percent(leg.probability)}</p></div><p className="mt-2 text-[0.62rem] leading-relaxed text-white/45">{leg.reason}</p><div className="mt-2 grid grid-cols-3 gap-1.5 text-center"><Metric label="Fair" value={leg.fairOdds?.toFixed(2)??"—"}/><Metric label="Bet365" value={leg.bookmakerOdds?.toFixed(2)??"—"}/><Metric label="Edge" value={edgeText(leg.edge)} good={Number(leg.edge??0)>0}/></div></div>
 }
+
 function Metric({label,value,good=false}:{label:string;value:string;good?:boolean}){
   return <div className="rounded-xl bg-black/20 p-2"><p className={"font-mono text-xs font-black "+(good?"text-emerald-300":"")}>{value}</p><p className="mt-0.5 text-[0.42rem] font-black uppercase text-white/25">{label}</p></div>
 }
