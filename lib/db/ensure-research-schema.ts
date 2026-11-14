@@ -51,6 +51,52 @@ export function ensureResearchSchema() {
     `)
 
     await pool.query(`
+      CREATE TABLE IF NOT EXISTS recommendation_snapshots (
+        id serial PRIMARY KEY,
+        recommendation_key text NOT NULL,
+        fixture_id text NOT NULL,
+        competition text NOT NULL,
+        fixture_date date NOT NULL,
+        kickoff timestamptz NOT NULL,
+        home_team text NOT NULL,
+        away_team text NOT NULL,
+        slip_id text NOT NULL,
+        slip_title text NOT NULL,
+        recommendation_rank integer,
+        is_top_pick boolean NOT NULL DEFAULT false,
+        bookmaker text,
+        player_name text NOT NULL,
+        db_player_name text,
+        player_team text,
+        opponent_team text,
+        market text NOT NULL,
+        threshold integer,
+        label text NOT NULL,
+        model_probability numeric NOT NULL,
+        fair_odds numeric,
+        bookmaker_odds numeric,
+        edge numeric,
+        price_source text,
+        confidence text,
+        lineup_confirmed boolean NOT NULL DEFAULT false,
+        placeable boolean NOT NULL DEFAULT false,
+        outcome boolean,
+        result_value integer,
+        graded_at timestamptz,
+        captured_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now()
+      )
+    `)
+    await pool.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS recommendation_snapshots_unique
+      ON recommendation_snapshots (recommendation_key, player_name, market, COALESCE(bookmaker, ''))
+    `)
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS recommendation_snapshots_ungraded_idx
+      ON recommendation_snapshots (fixture_date, graded_at)
+    `)
+
+    await pool.query(`
       UPDATE player_referee_history
       SET competition = COALESCE(competition, 'Premier League'),
           season = COALESCE(season, '2025/26')
