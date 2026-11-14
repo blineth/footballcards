@@ -22,7 +22,16 @@ type ScorePlayer={
 }
 type Selection={
   id:string;player:string;team:string;market:string;label:string;probability:number;fairOdds:number|null;
-  bookmakerOdds:number|null;bookmakerName?:string|null;edge:number|null;confidence:"A"|"B"|"C"|"D";reason:string
+  bookmakerOdds:number|null;bookmakerName?:string|null;edge:number|null;confidence:"A"|"B"|"C"|"D";reason:string;
+  currentCount?:number|null;liveAdjusted?:boolean
+}
+type LivePlayerStat={
+  player:string;team:string;minutes:number|null;foulsCommitted:number;foulsDrawn:number;shots:number;shotsOnTarget:number;
+  goals:number;yellowCards:number;redCards:number;subbedOff:boolean
+}
+type LiveData={
+  ok:boolean;source:string|null;status:"scheduled"|"live"|"halftime"|"finished"|"unknown";elapsed:number;
+  score:{home:number|null;away:number|null};players:LivePlayerStat[];updatedAt:string
 }
 type RiskBuilder={
   id:string;title:string;risk:"Safe"|"Balanced"|"High Risk";targetFractional:string;targetDecimal:number;
@@ -60,6 +69,82 @@ function scorecardUrl(f:Fixture){return "/api/fixture-scorecard?"+new URLSearchP
 function time(kickoff:string){return kickoff?new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/London",weekday:"short",day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit",hour12:false}).format(new Date(kickoff)):""}
 function keyOf(s:Pick<Selection,"player"|"market"|"label">){return [s.player,s.market,s.label].join("|").toLowerCase()}
 function referenceOdd(s:Selection){return Number(s.bookmakerOdds??s.fairOdds??(s.probability>0?1/s.probability:0))}
+function liveUrl(f:Fixture){return "/api/live-player-stats?"+new URLSearchParams({date:f.date,home:f.home,away:f.away,competition:f.competition})}
+function normPlayer(v:string){return v.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim()}
+function thresholdForMarket(m:string){
+  if(m==="card"||m.startsWith("goal"))return 1
+  const hit=m.match(/(\d+)$/);return hit?Number(hit[1]):1
+}
+function countForMarket(stat:LivePlayerStat,m:string){
+  if(m.startsWith("goal"))return stat.goals
+  if(m==="card")return stat.yellowCards+stat.redCards
+  if(m.startsWith("fouled"))return stat.foulsDrawn
+  if(m.startsWith("foul"))return stat.foulsCommitted
+  if(m.startsWith("sot"))return stat.shotsOnTarget
+  if(m.startsWith("shot"))return stat.shots
+  return 0
+}
+function familyOneMarket(m:string){
+  if(m.startsWith("goal"))return "goal1"
+  if(m==="card")return "card"
+  if(m.startsWith("fouled"))return "fouled1"
+  if(m.startsWith("foul"))return "foul1"
+  if(m.startsWith("sot"))return "sot1"
+  if(m.startsWith("shot"))return "shot1"
+  return m
+}
+function poissonAtLeast(lambda:number,threshold:number){
+  if(!(lambda>0))return 0
+  let term=Math.exp(-lambda),sum=term
+  for(let k=1;k<threshold;k++){term*=lambda/k;sum+=term}
+  return Math.max(.001,Math.min(.99,1-sum))
+}
+function remainingOneProbability(full:number,elapsed:number){
+  const p=Math.max(.001,Math.min(.995,full))
+  const remaining=Math.max(.03,Math.min(1,(96-Math.max(0,Math.min(96,elapsed)))/96))
+  const lambda=-Math.log(1-p)
+  return Math.max(.001,Math.min(.99,1-Math.exp(-lambda*remaining)))
+}
+function applyLive(rows:Selection[],live:LiveData|null){
+  if(!live||!(live.status==="live"||live.status==="halftime")||!live.players?.length)return rows
+  const stats=new Map(live.players.map(p=>[normPlayer(p.player),p]))
+  const oneProb=new Map<string,number>()
+  for(const row of rows){
+    if(row.market!==familyOneMarket(row.market))continue
+    oneProb.set(normPlayer(row.player)+"|"+familyOneMarket(row.market),row.probability)
+  }
+  const remaining=Math.max(.03,Math.min(1,(96-Math.max(0,Math.min(96,live.elapsed)))/96))
+  const adjusted:Selection[]=[]
+  for(const row of rows){
+    const stat=stats.get(normPlayer(row.player))
+    if(!stat){adjusted.push(row);continue}
+    if(stat.subbedOff)continue
+    const current=countForMarket(stat,row.market)
+    const threshold=thresholdForMarket(row.market)
+    if(current>=threshold)continue
+    const base=oneProb.get(normPlayer(row.player)+"|"+familyOneMarket(row.market))??row.probability
+    const need=Math.max(1,threshold-current)
+    let probability:number
+    if(row.market==="card"||row.market.startsWith("goal")){
+      probability=remainingOneProbability(base,live.elapsed)
+    }else{
+      const lambdaFull=-Math.log(1-Math.max(.001,Math.min(.995,base)))
+      probability=poissonAtLeast(lambdaFull*remaining,need)
+    }
+    adjusted.push({
+      ...row,
+      probability,
+      fairOdds:probability>0?Math.round((1/probability)*100)/100:null,
+      bookmakerOdds:null,
+      bookmakerName:null,
+      edge:null,
+      currentCount:current,
+      liveAdjusted:true,
+      reason:`Live: ${current} already recorded; ${Math.round(probability*100)}% model chance of reaching ${row.label} from ${live.elapsed}'`,
+    })
+  }
+  return adjusted
+}
 function categoryForMarket(m:string):Category{
   if(m.startsWith("goal"))return "goals"
   if(m.startsWith("sot"))return "sot"
@@ -126,6 +211,7 @@ export default function BetBuilderPage(){
   const router=useRouter()
   const[fixture,setFixture]=useState<Fixture|null>(null)
   const[data,setData]=useState<Scorecard|null>(null)
+  const[live,setLive]=useState<LiveData|null>(null)
   const[loading,setLoading]=useState(true)
   const[category,setCategory]=useState<Category>("popular")
   const[selected,setSelected]=useState<Record<string,Selection>>({})
@@ -135,8 +221,16 @@ export default function BetBuilderPage(){
   const load=useCallback(async(f:Fixture)=>{setLoading(true);try{const r=await fetch(scorecardUrl(f),{cache:"no-store"});setData(await r.json().catch(()=>({ok:false,error:"Unable to load match model."})))}finally{setLoading(false)}},[])
   useEffect(()=>{if(fixture)void load(fixture)},[fixture,load])
   useEffect(()=>{if(!fixture)return;const t=window.setInterval(()=>void load(fixture),60000);return()=>window.clearInterval(t)},[fixture,load])
+  const loadLive=useCallback(async(f:Fixture)=>{
+    const kickoff=new Date(f.kickoff).getTime()
+    const now=Date.now()
+    if(Number.isFinite(kickoff)&&(now<kickoff-10*60*1000||now>kickoff+4*60*60*1000))return
+    try{const r=await fetch(liveUrl(f),{cache:"no-store"});if(r.ok)setLive(await r.json())}catch{}
+  },[])
+  useEffect(()=>{if(!fixture)return;void loadLive(fixture);const t=window.setInterval(()=>void loadLive(fixture),30000);return()=>window.clearInterval(t)},[fixture,loadLive])
 
-  const allRows=useMemo(()=>selectionsFrom(data),[data])
+  const preMatchRows=useMemo(()=>selectionsFrom(data),[data])
+  const allRows=useMemo(()=>applyLive(preMatchRows,live),[preMatchRows,live])
   const visible=useMemo(()=>{
     const allowed=new Set(categories.find(x=>x.id===category)?.markets??[])
     const rows=category==="popular"?allRows.filter(x=>allowed.has(x.market as MarketKey)):allRows.filter(x=>allowed.has(x.market as MarketKey))
@@ -149,7 +243,22 @@ export default function BetBuilderPage(){
     return [...bestByPlayerMarket.values()].sort((a,b)=>b.probability-a.probability)
   },[allRows,category])
   const serverBuilders=(data?.riskBuilders??[]).filter(x=>x.legs?.length)
-  const builders=serverBuilders.length?serverBuilders:clientRiskBuilders(allRows)
+  const inPlay=live?.status==="live"||live?.status==="halftime"
+  const builders=inPlay?clientRiskBuilders(allRows):(serverBuilders.length?serverBuilders:clientRiskBuilders(allRows))
+  useEffect(()=>{
+    if(!inPlay)return
+    const valid=new Set(allRows.map(r=>r.id))
+    setSelected(cur=>{
+      const next:Record<string,Selection>={}
+      let changed=false
+      for(const [k,v] of Object.entries(cur)){
+        const fresh=allRows.find(r=>r.id===k)
+        if(fresh&&valid.has(k))next[k]=fresh
+        else changed=true
+      }
+      return changed?next:cur
+    })
+  },[inPlay,allRows])
   const selectedRows=Object.values(selected)
   const referenceProduct=selectedRows.reduce((p,s)=>p*Math.max(1.01,referenceOdd(s)),1)
   const modelProduct=selectedRows.reduce((p,s)=>p*s.probability,1)
@@ -164,7 +273,7 @@ export default function BetBuilderPage(){
       <div className="mx-auto max-w-3xl px-4 pb-4 pt-[max(1rem,env(safe-area-inset-top))]">
         <div className="flex items-center gap-3">
           <button onClick={()=>router.push("/")} className="rounded-xl bg-white/7 p-2.5 text-white/70"><ArrowLeft className="size-4"/></button>
-          <div className="min-w-0 flex-1"><div className="flex items-center gap-2 text-emerald-300"><Target className="size-4"/><span className="text-[0.6rem] font-black uppercase tracking-[0.15em]">Match Builder</span></div><h1 className="mt-1 truncate text-xl font-black">{fixture.home} <span className="text-white/25">v</span> {fixture.away}</h1><p className="mt-0.5 text-[0.58rem] text-white/35">{fixture.competition} · {time(fixture.kickoff)}</p></div>
+          <div className="min-w-0 flex-1"><div className="flex items-center gap-2 text-emerald-300"><Target className="size-4"/><span className="text-[0.6rem] font-black uppercase tracking-[0.15em]">Match Builder</span></div><h1 className="mt-1 truncate text-xl font-black">{fixture.home} <span className="text-white/25">v</span> {fixture.away}</h1><p className="mt-0.5 text-[0.58rem] text-white/35">{inPlay&&live?<span className="font-black text-rose-300">LIVE {live.elapsed}' · {live.score.home??"-"}-{live.score.away??"-"} · </span>:null}{fixture.competition} · {time(fixture.kickoff)}</p></div>
           <button onClick={()=>void load(fixture)} className="rounded-xl bg-emerald-400 p-2.5 text-emerald-950"><RefreshCw className={"size-4 "+(loading?"animate-spin":"")}/></button>
         </div>
       </div>
@@ -176,9 +285,11 @@ export default function BetBuilderPage(){
 
       {data?.ok&&!data.lineupsConfirmed?<section className="rounded-3xl border border-amber-300/15 bg-amber-300/[0.05] p-6 text-center"><Clock3 className="mx-auto size-6 text-amber-300"/><p className="mt-3 font-black">Waiting for the confirmed XI</p><p className="mx-auto mt-1 max-w-lg text-xs leading-relaxed text-white/40">The model can research this match now, but selectable player bets and the 3/1 · 10/1 · 20/1+ builds stay locked until the official starting lineups are confirmed.</p></section>:null}
 
+      {inPlay&&live?<section className="rounded-3xl border border-rose-300/15 bg-rose-400/[0.055] p-4"><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-black text-rose-200">Live recommendations adapting</p><p className="mt-1 text-[0.58rem] leading-relaxed text-white/40">Settled thresholds are removed automatically. If a player commits their first foul, 1+ disappears and the next available foul line moves up the ranking.</p></div><span className="shrink-0 rounded-full bg-rose-300 px-2 py-1 text-[0.45rem] font-black text-rose-950">{live.elapsed}'</span></div><p className="mt-2 text-[0.46rem] text-white/25">{live.source??"Live feed"} · refreshes every 30 seconds</p></section>:null}
+
       {data?.ok&&data.lineupsConfirmed?<>
         <section className="rounded-3xl border border-emerald-300/12 bg-gradient-to-br from-emerald-400/[0.09] to-black/25 p-4">
-          <div className="flex items-start justify-between gap-3"><div><div className="flex items-center gap-2 text-emerald-300"><Sparkles className="size-4"/><p className="text-[0.54rem] font-black uppercase tracking-[0.13em]">Model builds</p></div><h2 className="mt-1 text-lg font-black">Pick a risk level</h2><p className="mt-1 text-[0.6rem] leading-relaxed text-white/40">These are built from the highest-probability compatible player selections, not random legs chosen just to force the odds.</p></div><span className="rounded-full bg-emerald-400/10 px-2 py-1 text-[0.46rem] font-black text-emerald-300">XI CONFIRMED</span></div>
+          <div className="flex items-start justify-between gap-3"><div><div className="flex items-center gap-2 text-emerald-300"><Sparkles className="size-4"/><p className="text-[0.54rem] font-black uppercase tracking-[0.13em]">Model builds</p></div><h2 className="mt-1 text-lg font-black">Pick a risk level</h2><p className="mt-1 text-[0.6rem] leading-relaxed text-white/40">{inPlay?"Rebuilt from the remaining live markets after removing anything that has already landed.":"These are built from the highest-probability compatible player selections, not random legs chosen just to force the odds."}</p></div><span className="rounded-full bg-emerald-400/10 px-2 py-1 text-[0.46rem] font-black text-emerald-300">XI CONFIRMED</span></div>
           <div className="mt-4 grid gap-2 sm:grid-cols-3">{builders.map(b=><RiskCard key={b.id} build={b} onUse={()=>useBuild(b)}/>)}</div>
         </section>
 
@@ -213,8 +324,8 @@ function SelectionRow({row,selected,onToggle,rank}:{row:Selection;selected:boole
   const exact=row.bookmakerOdds!=null
   return <button onClick={onToggle} className={"grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 px-3 py-3 text-left transition "+(rank>1?"border-t border-white/[0.055] ":"")+(selected?"bg-emerald-400/[0.08]":"hover:bg-white/[0.025]")}>
     <span className={"flex size-7 items-center justify-center rounded-full text-[0.56rem] font-black "+(rank<=3?"bg-emerald-400/12 text-emerald-300":"bg-white/5 text-white/30")}>{rank}</span>
-    <div className="min-w-0"><div className="flex items-center gap-1.5"><p className="truncate text-sm font-black">{row.player}</p>{selected?<BadgeCheck className="size-3.5 shrink-0 text-emerald-300"/>:null}</div><p className="mt-0.5 truncate text-[0.54rem] font-bold text-white/55">{row.label}</p><p className="mt-0.5 truncate text-[0.46rem] text-white/25">{row.team} · Grade {row.confidence}{row.edge!=null?" · "+(row.edge>=0?"+":"")+(row.edge*100).toFixed(1)+"pp vs price":""}</p></div>
-    <div className="min-w-[4.5rem] text-right"><p className="font-mono text-base font-black">{percent(row.probability)}</p><p className="text-[0.42rem] text-white/25">{exact?(row.bookmakerOdds!.toFixed(2)+" "+(row.bookmakerName??"book")):((row.fairOdds?.toFixed(2)??"—")+" fair")}</p><span className={"mt-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[0.4rem] font-black "+(selected?"bg-emerald-300 text-emerald-950":"bg-white/6 text-white/30")}>{selected?<X className="size-2.5"/>:<CirclePlus className="size-2.5"/>}{selected?"REMOVE":"ADD"}</span></div>
+    <div className="min-w-0"><div className="flex items-center gap-1.5"><p className="truncate text-sm font-black">{row.player}</p>{selected?<BadgeCheck className="size-3.5 shrink-0 text-emerald-300"/>:null}</div><p className="mt-0.5 truncate text-[0.54rem] font-bold text-white/55">{row.label}</p><p className="mt-0.5 truncate text-[0.46rem] text-white/25">{row.team} · Grade {row.confidence}{row.liveAdjusted?" · live count "+(row.currentCount??0):row.edge!=null?" · "+(row.edge>=0?"+":"")+(row.edge*100).toFixed(1)+"pp vs price":""}</p></div>
+    <div className="min-w-[4.5rem] text-right"><p className="font-mono text-base font-black">{percent(row.probability)}</p><p className="text-[0.42rem] text-white/25">{exact?(row.bookmakerOdds!.toFixed(2)+" "+(row.bookmakerName??"book")):((row.fairOdds?.toFixed(2)??"—")+(row.liveAdjusted?" live fair":" fair"))}</p><span className={"mt-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[0.4rem] font-black "+(selected?"bg-emerald-300 text-emerald-950":"bg-white/6 text-white/30")}>{selected?<X className="size-2.5"/>:<CirclePlus className="size-2.5"/>}{selected?"REMOVE":"ADD"}</span></div>
   </button>
 }
 
