@@ -109,6 +109,7 @@ type ScorePlayer = {
 
 type SlipLeg = {
   player: string
+  dbPlayerName?: string | null
   team: string
   market: SlipMarketKey
   label: string
@@ -502,6 +503,7 @@ function marketLeg(player: ScorePlayer, market: MarketKey): SlipLeg {
   const m = player.markets[market]
   return {
     player: player.name,
+    dbPlayerName: player.dbName,
     team: player.team,
     market,
     label: m.label,
@@ -557,6 +559,7 @@ function buildFoulTargetSlips(players: ScorePlayer[]): FoulTargetSlip[] {
   const pool:SlipLeg[] = players.flatMap(player =>
     player.likelyFoulLines.map(line => ({
       player:player.name,
+      dbPlayerName:player.dbName,
       team:player.team,
       market:(("foul"+line.threshold) as SlipMarketKey),
       label:line.label,
