@@ -7,9 +7,9 @@ import recommendationBacktest from "@/data/model/recommendation-backtest.json"
 export const dynamic="force-dynamic"
 export const revalidate=300
 
-type Competition="Premier League"|"Championship"|"League One"|"International"
+type Competition="Premier League"|"Championship"|"League One"|"League Two"|"International"
 type Fixture={
-  id:string;competition:Competition;tournament?:string;kickoff:string;
+  id:string;competition:Competition;tournament?:string;kickoff:string;status?:string;
   home:{name:string};away:{name:string};lineupStatus?:"expected"|"confirmed"|"unavailable"
 }
 type MarketStatus="available"|"unavailable"|"unknown"
@@ -37,7 +37,7 @@ type Recommendation={
   rank:number;placeable:boolean;blockedReason:string|null;recommendationReliability:number|null
 }
 
-const competitions:Competition[]=["Premier League","Championship","League One","International"]
+const competitions:Competition[]=["Premier League","Championship","League One","League Two","International"]
 
 function londonDate(offset=0){
   const now=new Date()
@@ -70,8 +70,9 @@ function rankSlip(slip:BetSlip|FoulTargetSlip,confirmed:boolean,placeable:boolea
   const min=Math.min(...legs.map(l=>l.probability))
   const grade=legs.filter(l=>l.confidence==="A"||l.confidence==="B").length/legs.length
   const reliability=recommendationReliability(avgProbability(slip),liveFactor)
-  const exactRatio=legs.filter(l=>l.priceSource!=="estimated").length/legs.length
-  return geo*.40+min*.20+reliability*.16+grade*.08+exactRatio*.04+(confirmed?.08:0)+(placeable?.04:0)-Math.max(0,legs.length-5)*.006
+  const exactRatio=legs.filter(l=>l.bookmakerOdds!=null&&l.priceSource!=="estimated").length/legs.length
+  const coreRatio=legs.filter(l=>l.market==="card"||l.market.startsWith("foul")).length/legs.length
+  return geo*.38+min*.19+reliability*.16+grade*.08+coreRatio*.07+exactRatio*.04+(confirmed?.05:0)+(placeable?.03:0)-Math.max(0,legs.length-5)*.006
 }
 function blockedReason(scorecard:Scorecard,slip:BetSlip|FoulTargetSlip,kind:"standard"|"foul"){
   if(kind==="foul"){
@@ -125,40 +126,52 @@ export async function GET(request:Request){
     }
 
     const upcoming=[...fixtureMap.values()]
-      .filter(f=>new Date(f.kickoff).getTime()>Date.now()-2*60*60*1000)
+      .filter(f=>{
+        const status=String(f.status??"").toLowerCase()
+        const blocked=["postponed","cancelled","canceled","finished","halftime","in progress","live"]
+        return new Date(f.kickoff).getTime()>Date.now()&&!blocked.includes(status)
+      })
       .sort((a,b)=>a.kickoff.localeCompare(b.kickoff))
       .slice(0,maxFixtures)
 
     const rows=await Promise.all(upcoming.map(async fixture=>{
       try{
         const scorecard=await scorecardFor(fixture,refresh)
-        if(!scorecard?.ok||(scorecard.eligibleBooks?.length??0)===0)return [] as Recommendation[]
+        if(!scorecard?.ok)return [] as Recommendation[]
         const confirmed=Boolean(scorecard.lineupsConfirmed)
         const standards=confirmed?(scorecard.slips??[]):(scorecard.previewSlips??[])
         const fouls=confirmed?(scorecard.foulTargetSlips??[]):(scorecard.previewFoulTargetSlips??[])
         const candidates:Recommendation[]=[]
 
         for(const slip of standards){
-          if(!slip.legs?.length||!slip.bookmaker)continue
-          const blocked=blockedReason(scorecard,slip,"standard")
-          const placeable=Boolean(slip.placeable)&&!blocked
+          if(!slip.legs?.length)continue
+          const verified=(scorecard.eligibleBooks?.length??0)>0
+          const blocked=verified
+            ? blockedReason(scorecard,slip,"standard")
+            : "Bookmaker player markets are not verified yet — model-only recommendation"
+          const placeable=verified&&Boolean(slip.placeable)&&!blocked
+          const displaySlip=verified?slip:{...slip,bookmaker:null}
           candidates.push({
-            id:fixture.id+"|"+slip.id,fixture,slip,confirmed,kind:"standard",
-            rank:rankSlip(slip,confirmed,placeable,liveReliabilityFactor),placeable,blockedReason:blocked,
-            recommendationReliability:recommendationReliability(avgProbability(slip),liveReliabilityFactor),
+            id:fixture.id+"|"+slip.id,fixture,slip:displaySlip,confirmed,kind:"standard",
+            rank:rankSlip(displaySlip,confirmed,placeable,liveReliabilityFactor),placeable,blockedReason:blocked,
+            recommendationReliability:recommendationReliability(avgProbability(displaySlip),liveReliabilityFactor),
           })
         }
 
         const preferredFoul=fouls
-          .filter(s=>s.bookmaker&&s.legs?.length)
+          .filter(s=>s.legs?.length)
           .sort((a,b)=>rankSlip(b,confirmed,Boolean(b.placeable),liveReliabilityFactor)-rankSlip(a,confirmed,Boolean(a.placeable),liveReliabilityFactor))[0]
         if(preferredFoul?.legs?.length){
-          const blocked=blockedReason(scorecard,preferredFoul,"foul")
-          const placeable=Boolean(preferredFoul.placeable)&&!blocked
+          const verified=(scorecard.eligibleBooks?.length??0)>0
+          const blocked=verified
+            ? blockedReason(scorecard,preferredFoul,"foul")
+            : "Bookmaker foul market is not verified yet — model-only recommendation"
+          const placeable=verified&&Boolean(preferredFoul.placeable)&&!blocked
+          const displayFoul=verified?preferredFoul:{...preferredFoul,bookmaker:null}
           candidates.push({
-            id:fixture.id+"|"+preferredFoul.id,fixture,slip:preferredFoul,confirmed,kind:"foul",
-            rank:rankSlip(preferredFoul,confirmed,placeable,liveReliabilityFactor),placeable,blockedReason:blocked,
-            recommendationReliability:recommendationReliability(avgProbability(preferredFoul),liveReliabilityFactor),
+            id:fixture.id+"|"+preferredFoul.id,fixture,slip:displayFoul,confirmed,kind:"foul",
+            rank:rankSlip(displayFoul,confirmed,placeable,liveReliabilityFactor),placeable,blockedReason:blocked,
+            recommendationReliability:recommendationReliability(avgProbability(displayFoul),liveReliabilityFactor),
           })
         }
         return candidates
@@ -190,7 +203,7 @@ export async function GET(request:Request){
       methodology:{
         recommendationCalibration:"Final ranking uses a second walk-forward calibration layer built from historical recommendations that survived the selection process.",
         cache:"Recommended is served from one server endpoint with a five-minute shared-cache target; manual refresh bypasses the normal scan cadence.",
-        tracking:"Recommendations are saved before kickoff and graded later from imported player-match data. Exact and estimated bookmaker prices remain distinguishable.",
+        tracking:"Recommendations are saved before kickoff and graded later from imported player-match data. Model-only recommendations remain visible when bookmaker verification is missing; only verified same-bookmaker markets are marked placeable.",
         liveFeedback:liveTopSample>=50
           ? "Live top-pick calibration is active. Current 30-day reliability multiplier: "+liveReliabilityFactor.toFixed(3)
           : "Live top-pick calibration activates after 50 graded top-pick legs.",
