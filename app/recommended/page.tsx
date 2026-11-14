@@ -41,9 +41,17 @@ type TargetOddsGame={
   fixture:Fixture
   targets:TargetOddsSlip[]
 }
+type LiveMatch={
+  id:string;competition:string;kickoff:string;status?:string;inPlay?:boolean;elapsed?:number|null;
+  score?:{home:number;away:number}|null;home:string;away:string;
+  probabilities?:{homeWin:number;draw:number;awayWin:number;bttsYes:number;bttsNo:number}|null;
+  winnerPick?:{side:string;team:string;loser:string;probability:number;grade:string}|null;
+  bttsPick?:{selection:string;probability:number;grade:string}|null;bttsSettled?:boolean;
+  reasons?:string[]
+}
 type Response={
   ok:boolean;updatedAt?:string;fixturesScanned?:number;recommendations?:Recommendation[];
-  targetOddsGames?:TargetOddsGame[];tracking?:Tracking;error?:string;staleFallback?:boolean;warning?:string
+  liveMatches?:LiveMatch[];targetOddsGames?:TargetOddsGame[];tracking?:Tracking;error?:string;staleFallback?:boolean;warning?:string
 }
 
 function percent(v:number|null|undefined){return v==null?"—":Math.round(v*100)+"%"}
@@ -81,6 +89,7 @@ export default function RecommendedPage(){
     }
   },[data,selectedTargetFixtureId])
 
+  const liveMatches=data?.liveMatches??[]
   const recommendations=data?.recommendations??[]
   const best=recommendations[0]??null
   const alternatives=useMemo(()=>recommendations.slice(1),[recommendations])
@@ -109,6 +118,7 @@ export default function RecommendedPage(){
     <div className="mx-auto max-w-3xl space-y-4 px-4 py-4">
       {data?.staleFallback?<div className="rounded-2xl border border-amber-300/15 bg-amber-300/[0.06] px-4 py-3 text-xs text-amber-100">{data.warning??"Showing the last successful cached recommendations."}</div>:null}
       {tracking?.available?<TrackingCard tracking={tracking}/>:null}
+      {liveMatches.length?<LiveNowSection matches={liveMatches}/>:null}
       {targetGames.length?<TargetOddsSection games={targetGames} selectedId={selectedTargetGame?.fixture.id??null} onSelect={setSelectedTargetFixtureId}/>:null}
 
       {loading&&!best?<div className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center"><RefreshCw className="mx-auto mb-3 size-5 animate-spin text-violet-300"/><p className="font-black">Scanning upcoming matches…</p></div>:null}
@@ -123,6 +133,33 @@ export default function RecommendedPage(){
       </section>:null}
     </div>
   </main>
+}
+
+function LiveNowSection({matches}:{matches:LiveMatch[]}){
+  return <section className="space-y-3">
+    <div className="px-1"><p className="font-black">Live now</p><p className="text-[0.6rem] text-white/35">Matches stay on Recommended after kick-off. Win chances refresh from the current score and match time; settled BTTS markets are hidden.</p></div>
+    <div className="space-y-3">{matches.map(match=><LiveMatchCard key={match.id} match={match}/>)}</div>
+  </section>
+}
+
+function LiveMatchCard({match}:{match:LiveMatch}){
+  const score=match.score
+  const probs=match.probabilities
+  return <article className="rounded-3xl border border-rose-300/15 bg-rose-400/[0.045] p-4">
+    <div className="flex items-start justify-between gap-3">
+      <div>
+        <div className="flex items-center gap-2"><span className="rounded-full bg-rose-300 px-2 py-1 text-[0.48rem] font-black text-rose-950">LIVE {match.elapsed??"?"}'</span><span className="text-[0.5rem] font-black uppercase text-white/30">{match.competition}</span></div>
+        <h3 className="mt-2 text-lg font-black">{match.home} <span className="text-white/25">{score?score.home:"—"}–{score?score.away:"—"}</span> {match.away}</h3>
+      </div>
+      {match.winnerPick?<div className="text-right"><p className="font-mono text-xl font-black">{percent(match.winnerPick.probability)}</p><p className="text-[0.42rem] uppercase text-white/25">{match.winnerPick.team} live win</p></div>:null}
+    </div>
+
+    {probs?<div className="mt-3 grid grid-cols-3 gap-2"><Stat label={match.home+" win"} value={percent(probs.homeWin)}/><Stat label="Draw" value={percent(probs.draw)}/><Stat label={match.away+" win"} value={percent(probs.awayWin)}/></div>:<p className="mt-3 rounded-xl bg-black/20 px-3 py-2 text-[0.58rem] text-white/40">Live score is available, but refreshed win probabilities are not available for this competition yet.</p>}
+
+    {match.bttsSettled?<p className="mt-2 rounded-xl bg-white/[0.04] px-3 py-2 text-center text-[0.56rem] font-black text-white/35">BTTS already landed — removed from live betting picks</p>:match.bttsPick?<div className="mt-2 rounded-xl bg-black/20 px-3 py-2"><p className="text-[0.5rem] font-black uppercase text-white/25">Live BTTS read</p><p className="mt-1 text-sm font-black">BTTS {match.bttsPick.selection==="yes"?"Yes":"No"} · {percent(match.bttsPick.probability)} · Grade {match.bttsPick.grade}</p></div>:null}
+
+    {match.winnerPick?<div className="mt-2 rounded-xl bg-black/20 px-3 py-2"><p className="text-[0.5rem] font-black uppercase text-white/25">Current model lean</p><p className="mt-1 text-sm font-black">{match.winnerPick.team} to win · Grade {match.winnerPick.grade}</p></div>:null}
+  </article>
 }
 
 function TargetOddsSection({games,selectedId,onSelect}:{games:TargetOddsGame[];selectedId:string|null;onSelect:(id:string)=>void}){
