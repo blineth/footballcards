@@ -40,7 +40,8 @@ type RiskBuilder={
 }
 type FallbackSlip={id:string;title:string;risk:string;legs:Selection[];averageLegProbability:number|null;note?:string}
 type Scorecard={
-  ok:boolean;lineupsConfirmed?:boolean;snapshotFallback?:boolean;fallbackReason?:string|null;
+  ok:boolean;lineupsConfirmed?:boolean;lineupMode?:"confirmed"|"predicted"|"squad";lineupSource?:string|null;predictedLineups?:any;
+  snapshotFallback?:boolean;fallbackReason?:string|null;
   oddsFreshness?:"LIVE"|"SLIGHTLY STALE"|"CACHED"|"STALE"|"UNKNOWN";players?:ScorePlayer[];
   slips?:FallbackSlip[];riskBuilders?:RiskBuilder[];eligibleBooks?:string[];
   marketAvailability?:Record<string,MarketStatus>;bookmakerAvailability?:Record<string,Record<string,MarketStatus>>;
@@ -246,22 +247,23 @@ export default function BetBuilderPage(){
   const inPlay=live?.status==="live"||live?.status==="halftime"
   const builders=inPlay?clientRiskBuilders(allRows):(serverBuilders.length?serverBuilders:clientRiskBuilders(allRows))
   useEffect(()=>{
-    if(!inPlay)return
-    const valid=new Set(allRows.map(r=>r.id))
+    const valid=new Map(allRows.map(r=>[r.id,r]))
     setSelected(cur=>{
+      if(!Object.keys(cur).length)return cur
       const next:Record<string,Selection>={}
       let changed=false
       for(const [k,v] of Object.entries(cur)){
-        const fresh=allRows.find(r=>r.id===k)
-        if(fresh&&valid.has(k))next[k]=fresh
+        const fresh=valid.get(k)
+        if(fresh){next[k]=fresh;if(fresh!==v)changed=true}
         else changed=true
       }
       return changed?next:cur
     })
-  },[inPlay,allRows])
+  },[allRows,data?.lineupMode])
   const selectedRows=Object.values(selected)
   const referenceProduct=selectedRows.reduce((p,s)=>p*Math.max(1.01,referenceOdd(s)),1)
   const modelProduct=selectedRows.reduce((p,s)=>p*s.probability,1)
+  const customRisk=modelProduct>=.25?"Safe":modelProduct>=.09?"Balanced":"Risky"
 
   if(!fixture)return <main className="min-h-screen bg-[#07120e] px-4 py-10 text-white"><div className="mx-auto max-w-xl rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center"><p className="font-black">Choose a match first</p><p className="mt-2 text-sm text-white/40">Open a fixture from Matches to build it.</p><button onClick={()=>router.push("/")} className="mt-5 rounded-xl bg-emerald-400 px-4 py-2.5 text-sm font-black text-emerald-950">Matches</button></div></main>
 
@@ -283,18 +285,18 @@ export default function BetBuilderPage(){
       {loading&&!data?<section className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center"><RefreshCw className="mx-auto mb-3 size-5 animate-spin text-emerald-300"/><p className="font-black">Ranking player markets…</p></section>:null}
       {data&&!data.ok?<section className="rounded-3xl border border-rose-300/15 bg-rose-400/5 p-5"><p className="font-black">Match model unavailable</p><p className="mt-1 text-sm text-white/40">{data.error}</p></section>:null}
 
-      {data?.ok&&!data.lineupsConfirmed?<section className="rounded-3xl border border-amber-300/15 bg-amber-300/[0.05] p-6 text-center"><Clock3 className="mx-auto size-6 text-amber-300"/><p className="mt-3 font-black">Waiting for the confirmed XI</p><p className="mx-auto mt-1 max-w-lg text-xs leading-relaxed text-white/40">The model can research this match now, but selectable player bets and the 3/1 · 10/1 · 20/1+ builds stay locked until the official starting lineups are confirmed.</p></section>:null}
+      {data?.ok&&data.lineupMode==="predicted"?<section className="rounded-3xl border border-amber-300/15 bg-amber-300/[0.05] p-4"><div className="flex items-start gap-3"><Clock3 className="mt-0.5 size-5 shrink-0 text-amber-300"/><div><p className="font-black text-amber-100">Predicted XI active</p><p className="mt-1 text-[0.6rem] leading-relaxed text-white/40">{data.lineupSource??"Probable starters based on recent selection history and minutes."} As soon as the official XI arrives, anyone benched is removed and all probabilities/slips are rebuilt automatically.</p></div></div></section>:data?.ok&&data.lineupMode==="squad"?<section className="rounded-3xl border border-amber-300/15 bg-amber-300/[0.05] p-6 text-center"><Clock3 className="mx-auto size-6 text-amber-300"/><p className="mt-3 font-black">No reliable XI yet</p><p className="mx-auto mt-1 max-w-lg text-xs leading-relaxed text-white/40">The match is still available, but player recommendations need a probable or confirmed starting XI.</p></section>:null}
 
       {inPlay&&live?<section className="rounded-3xl border border-rose-300/15 bg-rose-400/[0.055] p-4"><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-black text-rose-200">Live recommendations adapting</p><p className="mt-1 text-[0.58rem] leading-relaxed text-white/40">Settled thresholds are removed automatically. If a player commits their first foul, 1+ disappears and the next available foul line moves up the ranking.</p></div><span className="shrink-0 rounded-full bg-rose-300 px-2 py-1 text-[0.45rem] font-black text-rose-950">{live.elapsed}'</span></div><p className="mt-2 text-[0.46rem] text-white/25">{live.source??"Live feed"} · refreshes every 30 seconds</p></section>:null}
 
-      {data?.ok&&data.lineupsConfirmed?<>
+      {data?.ok&&(data.lineupMode==="confirmed"||data.lineupMode==="predicted"||data.lineupsConfirmed)?<>
         <section className="rounded-3xl border border-emerald-300/12 bg-gradient-to-br from-emerald-400/[0.09] to-black/25 p-4">
-          <div className="flex items-start justify-between gap-3"><div><div className="flex items-center gap-2 text-emerald-300"><Sparkles className="size-4"/><p className="text-[0.54rem] font-black uppercase tracking-[0.13em]">Model builds</p></div><h2 className="mt-1 text-lg font-black">Pick a risk level</h2><p className="mt-1 text-[0.6rem] leading-relaxed text-white/40">{inPlay?"Rebuilt from the remaining live markets after removing anything that has already landed.":"These are built from the highest-probability compatible player selections, not random legs chosen just to force the odds."}</p></div><span className="rounded-full bg-emerald-400/10 px-2 py-1 text-[0.46rem] font-black text-emerald-300">XI CONFIRMED</span></div>
+          <div className="flex items-start justify-between gap-3"><div><div className="flex items-center gap-2 text-emerald-300"><Sparkles className="size-4"/><p className="text-[0.54rem] font-black uppercase tracking-[0.13em]">3 suggested slips</p></div><h2 className="mt-1 text-lg font-black">Choose one or build your own</h2><p className="mt-1 text-[0.6rem] leading-relaxed text-white/40">{inPlay?"These are rebuilt from the remaining live markets after anything already landed is removed.":"Safe aims around 3/1, Balanced around 10/1 and Risky 20/1+. The model picks the strongest route to each target."}</p></div><span className={"rounded-full px-2 py-1 text-[0.46rem] font-black "+(data.lineupMode==="confirmed"?"bg-emerald-400/10 text-emerald-300":"bg-amber-300/10 text-amber-200")}>{data.lineupMode==="confirmed"?"XI CONFIRMED":"PREDICTED XI"}</span></div>
           <div className="mt-4 grid gap-2 sm:grid-cols-3">{builders.map(b=><RiskCard key={b.id} build={b} onUse={()=>useBuild(b)}/>)}</div>
         </section>
 
         <section className="space-y-3">
-          <div className="px-1"><p className="font-black">Build it yourself</p><p className="mt-1 text-[0.6rem] text-white/35">Choose a market exactly like a betting app. Within each one, the most likely selections are first.</p></div>
+          <div className="px-1"><p className="font-black">Add your own selections</p><p className="mt-1 text-[0.6rem] text-white/35">Choose the market, then tap the player line you want. The strongest probabilities are shown first and your slip updates at the bottom.</p></div>
           <div className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none]"><div className="flex min-w-max gap-2 pb-1">{categories.map(x=><button key={x.id} onClick={()=>setCategory(x.id)} className={"rounded-full border px-3.5 py-2.5 text-xs font-black "+(category===x.id?"border-emerald-300/30 bg-emerald-300 text-emerald-950":"border-white/8 bg-white/[0.04] text-white/50")}>{x.label}</button>)}</div></div>
 
           <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]">
@@ -307,7 +309,7 @@ export default function BetBuilderPage(){
       </>:null}
     </div>
 
-    {selectedRows.length?<BuilderTray rows={selectedRows} referenceProduct={referenceProduct} modelProduct={modelProduct} open={trayOpen} setOpen={setTrayOpen} onRemove={row=>toggle(row)} onClear={()=>setSelected({})}/>:null}
+    {selectedRows.length?<BuilderTray rows={selectedRows} referenceProduct={referenceProduct} modelProduct={modelProduct} risk={customRisk} open={trayOpen} setOpen={setTrayOpen} onRemove={row=>toggle(row)} onClear={()=>setSelected({})}/>:null}
   </main>
 }
 
@@ -315,10 +317,11 @@ function RiskCard({build,onUse}:{build:RiskBuilder;onUse:()=>void}){
   const tone=build.risk==="Safe"?"border-emerald-300/18 bg-emerald-400/[0.06]":build.risk==="Balanced"?"border-amber-300/18 bg-amber-300/[0.05]":"border-rose-300/18 bg-rose-400/[0.05]"
   const accent=build.risk==="Safe"?"text-emerald-300":build.risk==="Balanced"?"text-amber-300":"text-rose-300"
   return <article className={"rounded-2xl border p-3 "+tone}>
-    <div className="flex items-start justify-between gap-2"><div><p className={"text-[0.48rem] font-black uppercase "+accent}>{build.risk}</p><p className="mt-1 text-base font-black">{build.targetFractional}</p></div><ShieldCheck className={"size-4 "+accent}/></div>
-    {build.legs.length?<><p className="mt-2 text-[0.52rem] text-white/35">{build.legs.length} legs · weakest {percent(build.minimumLegProbability)}</p><div className="mt-2 space-y-1">{build.legs.slice(0,3).map(l=><p key={keyOf(l)} className="truncate text-[0.5rem] text-white/55">{l.player} · {l.label}</p>)}{build.legs.length>3?<p className="text-[0.46rem] text-white/25">+{build.legs.length-3} more</p>:null}</div><button onClick={onUse} className="mt-3 w-full rounded-xl bg-white px-3 py-2 text-[0.58rem] font-black text-[#07120e]">Use this build</button></>:<p className="mt-2 text-[0.54rem] text-white/30">No strong route available yet.</p>}
+    <div className="flex items-start justify-between gap-2"><div><p className={"text-[0.5rem] font-black uppercase "+accent}>{build.risk}</p><p className="mt-1 text-lg font-black">{build.targetFractional}</p></div><ShieldCheck className={"size-4 "+accent}/></div>
+    {build.legs.length?<><div className="mt-2 grid grid-cols-2 gap-1.5"><MiniStat label="Model chance" value={percent(build.modelAllHitProbability,1)}/><MiniStat label="Predicted odds" value={build.referenceProductOdds?.toFixed(2)??"—"}/></div><div className="mt-2 space-y-1">{build.legs.slice(0,4).map(l=><p key={keyOf(l)} className="truncate text-[0.5rem] text-white/60">{l.player} · {l.label}</p>)}{build.legs.length>4?<p className="text-[0.46rem] text-white/25">+{build.legs.length-4} more</p>:null}</div><button onClick={onUse} className="mt-3 w-full rounded-xl bg-white px-3 py-2 text-[0.58rem] font-black text-[#07120e]">Add this slip</button></>:<p className="mt-2 text-[0.54rem] text-white/30">No strong route available yet.</p>}
   </article>
 }
+function MiniStat({label,value}:{label:string;value:string}){return <div className="rounded-xl bg-black/20 px-2 py-1.5"><p className="font-mono text-xs font-black">{value}</p><p className="text-[0.4rem] uppercase text-white/25">{label}</p></div>}
 
 function SelectionRow({row,selected,onToggle,rank}:{row:Selection;selected:boolean;onToggle:()=>void;rank:number}){
   const exact=row.bookmakerOdds!=null
@@ -329,7 +332,7 @@ function SelectionRow({row,selected,onToggle,rank}:{row:Selection;selected:boole
   </button>
 }
 
-function BuilderTray({rows,referenceProduct,modelProduct,open,setOpen,onRemove,onClear}:{rows:Selection[];referenceProduct:number;modelProduct:number;open:boolean;setOpen:(v:boolean)=>void;onRemove:(r:Selection)=>void;onClear:()=>void}){
+function BuilderTray({rows,referenceProduct,modelProduct,risk,open,setOpen,onRemove,onClear}:{rows:Selection[];referenceProduct:number;modelProduct:number;risk:"Safe"|"Balanced"|"Risky";open:boolean;setOpen:(v:boolean)=>void;onRemove:(r:Selection)=>void;onClear:()=>void}){
   return <div className="fixed inset-x-0 bottom-[4.85rem] z-40 px-3">
     <div className="mx-auto max-w-3xl overflow-hidden rounded-3xl border border-emerald-300/20 bg-[#0d1d17]/98 shadow-2xl backdrop-blur-xl">
       {open?<div className="max-h-[46vh] overflow-y-auto border-b border-white/8 p-3">
@@ -337,7 +340,7 @@ function BuilderTray({rows,referenceProduct,modelProduct,open,setOpen,onRemove,o
         <div className="space-y-1.5">{rows.map(row=><div key={row.id} className="flex items-center justify-between gap-3 rounded-xl bg-white/[0.045] px-3 py-2"><div className="min-w-0"><p className="truncate text-xs font-black">{row.player} · {row.label}</p><p className="text-[0.44rem] text-white/25">{percent(row.probability)} model · {(row.bookmakerOdds??row.fairOdds)?.toFixed(2)??"—"} {row.bookmakerOdds?"book":"fair"}</p></div><button onClick={()=>onRemove(row)} className="rounded-lg bg-white/6 p-1.5 text-white/35"><X className="size-3"/></button></div>)}</div>
         <p className="mt-2 text-[0.46rem] leading-relaxed text-white/25">Reference odds multiply singles only. Same-game bookmaker Builder pricing can be lower because correlated selections are repriced together.</p>
       </div>:null}
-      <button onClick={()=>setOpen(!open)} className="flex w-full items-center gap-3 p-3 text-left"><div className="flex size-10 items-center justify-center rounded-2xl bg-emerald-400 text-emerald-950"><Target className="size-5"/></div><div className="min-w-0 flex-1"><p className="text-sm font-black">{rows.length} selection{rows.length===1?"":"s"} in builder</p><p className="text-[0.5rem] text-white/30">Model product {percent(modelProduct,1)} · tap to {open?"collapse":"review"}</p></div><div className="text-right"><p className="font-mono text-lg font-black">{referenceProduct.toFixed(2)}</p><p className="text-[0.4rem] uppercase text-white/25">reference odds</p></div></button>
+      <button onClick={()=>setOpen(!open)} className="grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 p-3 text-left"><div className="flex size-10 items-center justify-center rounded-2xl bg-emerald-400 text-emerald-950"><Target className="size-5"/></div><div className="min-w-0"><div className="flex items-center gap-2"><p className="text-sm font-black">{rows.length} selection{rows.length===1?"":"s"}</p><span className={"rounded-full px-1.5 py-0.5 text-[0.42rem] font-black "+(risk==="Safe"?"bg-emerald-300/15 text-emerald-300":risk==="Balanced"?"bg-amber-300/15 text-amber-200":"bg-rose-300/15 text-rose-200")}>{risk.toUpperCase()}</span></div><p className="mt-0.5 text-[0.5rem] text-white/35">Model chance {percent(modelProduct,1)} · tap to {open?"collapse":"review"}</p></div><div className="text-right"><p className="font-mono text-lg font-black">{referenceProduct.toFixed(2)}</p><p className="text-[0.4rem] uppercase text-white/25">predicted odds</p></div></button>
     </div>
   </div>
 }
