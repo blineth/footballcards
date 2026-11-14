@@ -137,7 +137,7 @@ export async function POST(request: Request) {
         await db.delete(playerBaselines).where(and(eq(playerBaselines.season, "2026/27"), inArray(playerBaselines.competition, competitions)))
       }
       if (body.dataset === "h2h") {
-        await db.delete(playerH2H).where(and(gte(playerH2H.matchDate, "2026-08-01"), inArray(playerH2H.competition, competitions)))
+        await db.delete(playerH2H).where(and(gte(playerH2H.matchDate, "2026-07-01"), inArray(playerH2H.competition, competitions)))
       }
     }
 
