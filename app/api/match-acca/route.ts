@@ -9,9 +9,9 @@ import { snapshotRowsForCompetition } from "@/lib/current-season-snapshot"
 export const dynamic="force-dynamic"
 export const revalidate=900
 
-const COMPETITIONS=["Premier League","Championship","League One","League Two"] as const
+const COMPETITIONS=["Premier League","Championship","League One","League Two","International"] as const
 type Competition=typeof COMPETITIONS[number]
-const LEAGUE_IDS:Record<Competition,string>={
+const LEAGUE_IDS:Partial<Record<Competition,string>>={
   "Premier League":"39",Championship:"40","League One":"41","League Two":"42",
 }
 const BOOKS=["Bet365","Sky Bet","William Hill","Paddy Power"] as const
@@ -167,8 +167,8 @@ function inPlayProbabilities(input:{
 function grade(certainty:number,reliability:number){const s=certainty*.72+reliability*.28;return s>=.72?"A":s>=.60?"B":s>=.49?"C":"D"}
 function preferredBook(name:string){const n=norm(name);if(n.includes("bet365"))return "Bet365";if(n.includes("sky bet")||n.includes("skybet"))return "Sky Bet";if(n.includes("william hill"))return "William Hill";if(n.includes("paddy power"))return "Paddy Power";return null}
 async function oddsRows(competition:Competition,date:string){
-  const key=process.env.API_FOOTBALL_KEY;if(!key)return []
-  try{const u=new URL("https://v3.football.api-sports.io/odds");u.searchParams.set("league",LEAGUE_IDS[competition]);u.searchParams.set("season",String(seasonYear(date)));u.searchParams.set("date",date);u.searchParams.set("timezone","Europe/London")
+  const key=process.env.API_FOOTBALL_KEY,leagueId=LEAGUE_IDS[competition];if(!key||!leagueId)return []
+  try{const u=new URL("https://v3.football.api-sports.io/odds");u.searchParams.set("league",leagueId);u.searchParams.set("season",String(seasonYear(date)));u.searchParams.set("date",date);u.searchParams.set("timezone","Europe/London")
     const r=await fetch(u,{headers:{"x-apisports-key":key},next:{revalidate:900},signal:AbortSignal.timeout(10000)});if(!r.ok)return[];const j=await r.json();return Array.isArray(j?.response)?j.response:[]
   }catch{return[]}
 }
@@ -232,27 +232,33 @@ export async function GET(request:Request){
     for(const competition of COMPETITIONS){const pack=packs.get(competition)!,tbl=table(pack.season)
       for(const f of fixtureData?.leagues?.[competition]??[]){const home=canonical(String(f.home?.name??""),tbl.teams),away=canonical(String(f.away?.name??""),tbl.teams),hm=metrics(home,pack.season,tbl.positions,tbl.teams.length||24,"home"),am=metrics(away,pack.season,tbl.positions,tbl.teams.length||24,"away"),hh=h2h(home,away,pack.history),wp=resultProb(hm,am,hh),bp=bttsProb(hm,am,hh)
         const rawHome=wp.home,rawAway=wp.away,rawBtts=bp
-        const calibratedHome=calibrateMarket("homeWin",rawHome)
-        const calibratedAway=calibrateMarket("awayWin",rawAway)
+        const useCalibration=competition!=="International"
+        const calibratedHome=useCalibration?calibrateMarket("homeWin",rawHome):rawHome
+        const calibratedAway=useCalibration?calibrateMarket("awayWin",rawAway):rawAway
         const resultScale=calibratedHome+calibratedAway
         const drawBase=clamp(wp.draw,.12,.45)
         const sideBudget=1-drawBase
         const homeP=resultScale>0?calibratedHome/resultScale*sideBudget:rawHome
         const awayP=resultScale>0?calibratedAway/resultScale*sideBudget:rawAway
         const drawP=1-homeP-awayP
-        const calibratedBttsYes=calibrateMarket("bttsYes",rawBtts)
-        const calibratedBttsNo=calibrateMarket("bttsNo",1-rawBtts)
+        const calibratedBttsYes=useCalibration?calibrateMarket("bttsYes",rawBtts):rawBtts
+        const calibratedBttsNo=useCalibration?calibrateMarket("bttsNo",1-rawBtts):1-rawBtts
         const bttsScale=calibratedBttsYes+calibratedBttsNo
         const bttsYes=bttsScale>0?calibratedBttsYes/bttsScale:rawBtts
         const bttsNo=1-bttsYes
         const status=String(f.status??"scheduled").toLowerCase()
         if(["postponed","cancelled","canceled","abandoned","suspended"].includes(status))continue
-        const live=status==="live"||status==="halftime"
-        const finished=status==="finished"
         const scoreHome=Number(f?.score?.home)
         const scoreAway=Number(f?.score?.away)
         const hasScore=Number.isFinite(scoreHome)&&Number.isFinite(scoreAway)
-        const elapsed=status==="halftime"?45:Math.max(0,Math.min(96,Number(f?.elapsed??0)))
+        const kickoffMs=new Date(String(f.kickoff)).getTime()
+        const minutesSinceKickoff=Number.isFinite(kickoffMs)?Math.floor((Date.now()-kickoffMs)/60000):0
+        const explicitFinished=["finished","ft","full time","after extra time","aet"].includes(status)
+        const explicitLive=["live","halftime","in progress","1h","2h","et","extra time"].includes(status)
+        const inferredLive=hasScore&&!explicitFinished&&Number.isFinite(kickoffMs)&&minutesSinceKickoff>=0&&minutesSinceKickoff<=180
+        const live=explicitLive||inferredLive
+        const finished=explicitFinished
+        const elapsed=status==="halftime"?45:Math.max(0,Math.min(96,Number.isFinite(Number(f?.elapsed))?Number(f?.elapsed):minutesSinceKickoff))
         const inPlay=live&&hasScore
         const liveModel=inPlay||finished&&hasScore
           ? inPlayProbabilities({minute:finished?96:elapsed,homeScore:scoreHome,awayScore:scoreAway,home:hm,away:am,preHome:homeP,preDraw:drawP,preAway:awayP,preBtts:bttsYes,finished})
@@ -268,7 +274,9 @@ export async function GET(request:Request){
         const bpick=bttsSettled?null:currentBttsYes>=.56?"yes":currentBttsNo>=.56?"no":null
         const bprob=bpick==="yes"?currentBttsYes:bpick==="no"?currentBttsNo:Math.max(currentBttsYes,currentBttsNo)
         const rel=wp.reliability
-        const reasons=[ordinal(hm.position)+" vs "+ordinal(am.position)+" in "+competition,String(f.home.name)+" home win "+Math.round(hm.venueWinRate*100)+"% · "+String(f.away.name)+" away win "+Math.round(am.venueWinRate*100)+"%","Form "+String(f.home.name)+" "+hm.recentForm+" · "+String(f.away.name)+" "+am.recentForm]
+        const reasons=competition==="International"&&hm.played===0&&am.played===0
+          ? ["International live model is using neutral pre-match priors plus the current score, match minute and remaining-time goal model."]
+          : [ordinal(hm.position)+" vs "+ordinal(am.position)+" in "+competition,String(f.home.name)+" home win "+Math.round(hm.venueWinRate*100)+"% · "+String(f.away.name)+" away win "+Math.round(am.venueWinRate*100)+"%","Form "+String(f.home.name)+" "+hm.recentForm+" · "+String(f.away.name)+" "+am.recentForm]
         if(hh.matches>=2)reasons.push("H2H "+String(f.home.name)+" "+hh.homeWins+"W · "+hh.draws+"D · "+String(f.away.name)+" "+hh.awayWins+"W · BTTS "+Math.round(hh.bttsRate*100)+"%")
         if(inPlay){
           const state=scoreHome===scoreAway?"level":scoreHome>scoreAway?String(f.home.name)+" leading":String(f.away.name)+" leading"
@@ -286,7 +294,7 @@ export async function GET(request:Request){
       buildSlip("fold-5","5-Fold Acca","Five strongest selections from five different matches.",mixed,"fold5",5),
       buildSlip("fold-7","7-Fold Acca","Seven strongest selections from seven different matches.",mixed,"fold7",7),
       buildSlip("fold-10","10-Fold Acca","Ten strongest selections from ten different matches.",mixed,"fold10",10)
-    ],cached:false,staleFallback:false,methodology:{resultModel:"League position, PPG, recent five-match form, streaks, home/away PPG and win rate, goal difference and recent H2H with sample shrinkage, followed by walk-forward calibration.",bttsModel:"Home/away BTTS, scoring and conceding rates, overall BTTS and H2H BTTS. Once both teams have already scored in-play, BTTS is treated as settled and removed from betting recommendations.",pricing:"Each fold uses one selection per fixture. Exact combined odds are shown only when one preferred bookmaker prices every leg. Model fair combined odds are adjusted using the historical hit-rate of the same fold size rather than naive probability multiplication alone.",inPlay:"Live matches are recalculated from the current score, match minute, remaining-time goal rates and the calibrated pre-match strength. Pre-match bookmaker prices are never reused as if they were live prices.",fallback:"Team history uses the live database when available and automatically falls back to the checked-in daily current-season snapshot if database quota or connectivity fails.",caution:"Model estimates, not guarantees. Team news, red cards, injuries and other in-play events can materially change outcomes."}}
+    ],cached:false,staleFallback:false,methodology:{resultModel:"Premier League through League Two use league position, PPG, recent five-match form, streaks, home/away PPG and win rate, goal difference and recent H2H with sample shrinkage, followed by walk-forward calibration. Internationals use available international history when present and otherwise shrink heavily toward neutral priors before the live score/time model takes over.",bttsModel:"Home/away BTTS, scoring and conceding rates, overall BTTS and H2H BTTS. Once both teams have already scored in-play, BTTS is treated as settled and removed from betting recommendations.",pricing:"Each fold uses one selection per fixture. Exact combined odds are shown only when one preferred bookmaker prices every leg. Model fair combined odds are adjusted using the historical hit-rate of the same fold size rather than naive probability multiplication alone.",inPlay:"Live matches are recalculated from the current score, match minute, remaining-time goal rates and the calibrated pre-match strength. Pre-match bookmaker prices are never reused as if they were live prices.",fallback:"Team history uses the live database when available and automatically falls back to the checked-in daily current-season snapshot if database quota or connectivity fails.",caution:"Model estimates, not guarantees. Team news, red cards, injuries and other in-play events can materially change outcomes."}}
     responseCache.set(date,{at:Date.now(),payload})
     return NextResponse.json(payload,{headers:{"Cache-Control":activePredictions.some(p=>p.inPlay)?"public, s-maxage=20, stale-while-revalidate=120":"public, s-maxage=300, stale-while-revalidate=1800"}})
   }catch(error){
