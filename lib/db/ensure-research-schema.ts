@@ -27,6 +27,28 @@ export function ensureResearchSchema() {
     await pool.query(`ALTER TABLE player_baselines ADD COLUMN IF NOT EXISTS shots_on_target_per_90 numeric`)
     await pool.query(`ALTER TABLE player_referee_history ADD COLUMN IF NOT EXISTS competition text`)
     await pool.query(`ALTER TABLE player_referee_history ADD COLUMN IF NOT EXISTS season text`)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS odds_snapshots (
+        id serial PRIMARY KEY,
+        competition text NOT NULL,
+        fixture_date date NOT NULL,
+        home_team text NOT NULL,
+        away_team text NOT NULL,
+        bookmaker text NOT NULL,
+        source text,
+        market text NOT NULL,
+        kind text NOT NULL,
+        label text NOT NULL,
+        odds numeric NOT NULL,
+        snapshot_bucket timestamptz NOT NULL,
+        captured_at timestamptz NOT NULL DEFAULT now(),
+        created_at timestamptz NOT NULL DEFAULT now()
+      )
+    `)
+    await pool.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS odds_snapshots_market_bucket_unique
+      ON odds_snapshots (competition, fixture_date, home_team, away_team, bookmaker, market, label, snapshot_bucket)
+    `)
 
     await pool.query(`
       UPDATE player_referee_history
