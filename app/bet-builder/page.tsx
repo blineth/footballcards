@@ -79,6 +79,8 @@ type ExactFoulOffer = {
 type Scorecard = {
   ok:boolean
   lineupsConfirmed?:boolean
+  snapshotFallback?:boolean
+  fallbackReason?:string|null
   bookmaker?:string|null
   oddsFreshness?:"LIVE"|"SLIGHTLY STALE"|"CACHED"|"STALE"|"UNKNOWN"
   playerCount?:number
@@ -160,6 +162,7 @@ export default function BetBuilderPage(){
   const eligible=eligibleBooks.length>0
   const unavailable=(card==="unavailable"||foul==="unavailable")&&eligibleBooks.length===0
   const verified=Boolean(data?.bookmakerAvailability)&&Object.keys(data?.bookmakerAvailability??{}).length>0
+  const snapshotFallback=Boolean(data?.snapshotFallback)
 
   return <main className="min-h-screen bg-[#07120e] pb-24 text-white">
     <header className="sticky top-0 z-30 border-b border-white/10 bg-[#07120e]/95 backdrop-blur-xl">
@@ -177,15 +180,26 @@ export default function BetBuilderPage(){
 
       {data?.ok?<MarketGate data={data}/>:null}
 
-      {data?.ok&&verified&&!eligible?<section className="rounded-3xl border border-rose-300/20 bg-rose-400/10 p-5">
+      {data?.ok&&!snapshotFallback&&verified&&!eligible?<section className="rounded-3xl border border-rose-300/20 bg-rose-400/10 p-5">
         <div className="flex items-start gap-3"><ShieldCheck className="mt-0.5 size-5 shrink-0 text-rose-200"/><div><p className="font-black">No bet slip for this match</p><p className="mt-1 text-sm leading-relaxed text-rose-100/75">{unavailable?"Bet365 does not offer both player yellow cards and player fouls for this fixture, so this match is blocked from the betting workflow.":"Both player-card and player-foul markets must be verified before a slip can be created."}</p></div></div>
       </section>:null}
 
-      {data?.ok&&!verified?<section className="rounded-3xl border border-amber-300/15 bg-amber-300/5 p-5"><p className="font-black text-amber-100">Market availability not verified</p><p className="mt-1 text-sm text-amber-100/60">This match remains locked until both Bet365 player cards and player fouls are verified as available.</p></section>:null}
+      {data?.ok&&!snapshotFallback&&!verified?<section className="rounded-3xl border border-amber-300/15 bg-amber-300/5 p-5"><p className="font-black text-amber-100">Market availability not verified</p><p className="mt-1 text-sm text-amber-100/60">This match remains locked until both Bet365 player cards and player fouls are verified as available.</p></section>:null}
 
-      {data?.ok&&eligible&&!data.lineupsConfirmed?<section className="rounded-3xl border border-amber-300/15 bg-amber-300/5 p-6 text-center"><Clock3 className="mx-auto size-6 text-amber-300"/><p className="mt-3 font-black">Markets are eligible — waiting for confirmed lineups</p><p className="mx-auto mt-1 max-w-lg text-xs leading-relaxed text-white/40">Both player cards and fouls are available together at {eligibleBooks.join(", ")}. Final recommendations will appear automatically when the starting XIs are confirmed.</p></section>:null}
+      {data?.ok&&!snapshotFallback&&eligible&&!data.lineupsConfirmed?<section className="rounded-3xl border border-amber-300/15 bg-amber-300/5 p-6 text-center"><Clock3 className="mx-auto size-6 text-amber-300"/><p className="mt-3 font-black">Markets are eligible — waiting for confirmed lineups</p><p className="mx-auto mt-1 max-w-lg text-xs leading-relaxed text-white/40">Both player cards and fouls are available together at {eligibleBooks.join(", ")}. Final recommendations will appear automatically when the starting XIs are confirmed.</p></section>:null}
 
-      {data?.ok&&eligible&&data.lineupsConfirmed?<>
+      {data?.ok&&snapshotFallback&&!data.lineupsConfirmed?<section className="rounded-3xl border border-amber-300/15 bg-amber-300/5 p-6 text-center"><Clock3 className="mx-auto size-6 text-amber-300"/><p className="mt-3 font-black">Waiting for confirmed lineups</p><p className="mx-auto mt-1 max-w-lg text-xs leading-relaxed text-white/40">The live research database is unavailable, so the snapshot fallback is armed but will not create any player slip until both official starting XIs are confirmed.</p></section>:null}
+
+      {data?.ok&&snapshotFallback&&data.lineupsConfirmed?<>
+        <section className="rounded-3xl border border-violet-300/15 bg-violet-400/[0.05] p-4"><p className="font-black text-violet-200">Confirmed-XI snapshot fallback</p><p className="mt-1 text-xs leading-relaxed text-white/45">{data.fallbackReason??"Using the checked-in player snapshot because live research data is temporarily unavailable."} These are model-only picks, so verify the bookmaker market and price before placing.</p></section>
+        <section className="space-y-3">
+          <div className="px-1"><p className="font-black">Model-only confirmed XI slips</p><p className="text-[0.6rem] text-white/35">Only confirmed starters are eligible. No provisional or bench players are allowed.</p></div>
+          {(data.slips??[]).map(slip=><StandardSlip key={slip.id} slip={slip}/>)}
+          {!(data.slips??[]).length?<div className="rounded-2xl border border-dashed border-white/10 p-5 text-center text-sm text-white/35">Confirmed lineups are loaded, but the snapshot does not have enough qualifying player history to build a slip.</div>:null}
+        </section>
+      </>:null}
+
+      {data?.ok&&!snapshotFallback&&eligible&&data.lineupsConfirmed?<>
         <ExactFoulOffers offers={data.exactFoulOffers??[]}/>
         <EstimatedFoulOffers offers={data.estimatedFoulOffers??[]}/>
         <FoulLadder slips={data.foulTargetSlips??[]}/>
