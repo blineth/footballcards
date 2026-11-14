@@ -85,7 +85,15 @@ function metrics(team:string,all:MatchRow[],positions:Map<string,number>,teamCou
 function h2h(home:string,away:string,history:MatchRow[]){
   const rows=history.filter(m=>same(m.team,home)&&same(m.opponent,away)).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,6)
   const hw=rows.filter(m=>m.result==="W").length,d=rows.filter(m=>m.result==="D").length,aw=rows.filter(m=>m.result==="L").length
-  return {matches:rows.length,homeWins:hw,draws:d,awayWins:aw,homeWinRate:rows.length?hw/rows.length:.5,bttsRate:rows.length?rows.filter(m=>m.btts).length/rows.length:.5}
+  return {
+    matches:rows.length,
+    homeWins:hw,
+    draws:d,
+    awayWins:aw,
+    homeWinRate:rows.length?hw/rows.length:.5,
+    bttsRate:rows.length?rows.filter(m=>m.btts).length/rows.length:.5,
+    recent:rows.map(m=>({date:m.date,home,away,homeGoals:m.gf,awayGoals:m.ga,result:m.result,btts:m.btts}))
+  }
 }
 function strength(m:Metrics){const pos=m.teams>1?1-(m.position-1)/(m.teams-1):.5;const gd=m.played?m.gd/m.played:0;const gdScore=1/(1+Math.exp(-gd*1.25));return pos*.25+(m.ppg/3)*.22+(m.recentPPG/3)*.22+(m.venuePPG/3)*.16+gdScore*.10+m.winRate*.05}
 function resultProb(home:Metrics,away:Metrics,h:any){
