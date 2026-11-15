@@ -493,7 +493,11 @@ async function fromOddsApiIo(input:{date:string;home:string;away:string;competit
   ].join(",")
   const payload=await oddsApiIo("/odds",{eventId:id,bookmakers:"Bet365",markets:requestedMarkets},input.key)
   const selections=flattenOddsApiIo(payload)
-  const availableBets=flattenGeneralOddsApiIo(payload,input.home,input.away)
+  const rawAvailableBets=flattenGeneralOddsApiIo(payload,input.home,input.away)
+  const availableBets=[...new Map(rawAvailableBets.map(b=>[
+    [b.kind,b.label].join("|").toLowerCase(),b
+  ])).values()]
+    .sort((a,b)=>(b.probability??0)-(a.probability??0)||a.odd-b.odd)
   const books=[...new Set([...selections.map(s=>s.bookmaker),...availableBets.map(s=>s.bookmaker)].filter(Boolean))] as string[]
   if(!selections.length&&!availableBets.length)return null
   const updatedTimes=Object.values(payload?.bookmakers??{}).flatMap((markets:any)=>Array.isArray(markets)?markets.map((m:any)=>String(m?.updatedAt??"")).filter(Boolean):[])
