@@ -197,67 +197,105 @@ function snapshotSelections(players:any[]){
 function buildSnapshotRiskBuilders(players:any[]){
   const rows=snapshotSelections(players)
   const configs=[
-    {id:"safe-3-1",title:"Safe 3/1",risk:"Safe",targetFractional:"3/1",targetDecimal:4,minProb:.60,maxLegs:5},
-    {id:"balanced-10-1",title:"Balanced 10/1",risk:"Balanced",targetFractional:"10/1",targetDecimal:11,minProb:.34,maxLegs:7},
-    {id:"high-20-1",title:"High Risk 20/1+",risk:"High Risk",targetFractional:"20/1+",targetDecimal:21,minProb:.14,maxLegs:9},
+    {id:"safe-3-1",title:"Safe 3/1",risk:"Safe",targetFractional:"3/1",targetDecimal:4,minProb:.42,maxLegs:5,minFamilies:2,maxPerFamily:2},
+    {id:"balanced-10-1",title:"Balanced 10/1",risk:"Balanced",targetFractional:"10/1",targetDecimal:11,minProb:.16,maxLegs:6,minFamilies:3,maxPerFamily:2},
+    {id:"high-20-1",title:"High Risk 20/1+",risk:"High Risk",targetFractional:"20/1+",targetDecimal:21,minProb:.10,maxLegs:7,minFamilies:3,maxPerFamily:2},
   ]
+  const family=(market:string)=>market.startsWith("goal")?"goal":market.startsWith("assist")?"assist":market.startsWith("fouled")?"fouled":market.startsWith("foul")?"foul":market.startsWith("sot")?"sot":market.startsWith("shot")?"shot":"card"
+  const floor=(market:string)=>{
+    if(market==="card")return {green:.20,amber:.14}
+    if(market==="goal1")return {green:.32,amber:.18}
+    if(market==="assist1")return {green:.24,amber:.14}
+    if(market==="shot1")return {green:.72,amber:.48}
+    if(market==="sot1")return {green:.42,amber:.25}
+    if(market==="foul1")return {green:.68,amber:.48}
+    if(market==="fouled1")return {green:.62,amber:.42}
+    return {green:.30,amber:.15}
+  }
+  const percentile=(values:number[],value:number)=>{
+    if(values.length<=1)return .5
+    const below=values.filter(v=>v<value).length
+    const equal=values.filter(v=>v===value).length
+    return Math.max(0,Math.min(1,(below+equal*.5)/values.length))
+  }
+  const peers=new Map<string,number[]>()
+  for(const row of rows){
+    const arr=peers.get(row.market)??[]
+    arr.push(row.probability);peers.set(row.market,arr)
+  }
+  const signal=(row:any)=>{
+    const f=floor(row.market)
+    const rel=Math.max(-.5,Math.min(1.5,(row.probability-f.amber)/Math.max(.04,f.green-f.amber)))
+    const pct=percentile(peers.get(row.market)??[],row.probability)
+    const confidence=row.confidence==="A"?.08:row.confidence==="B"?.05:row.confidence==="C"?.02:0
+    return pct*.55+Math.max(0,rel)*.25+row.probability*.12+confidence
+  }
+  const preferred=new Map<string,{family:string;signal:number}>()
+  for(const player of players){
+    const options=rows.filter(r=>String(r.player).toLowerCase()===String(player.name).toLowerCase()&&r.confidence!=="D")
+      .map(r=>({family:family(r.market),signal:signal(r)})).sort((a,b)=>b.signal-a.signal)
+    if(options[0])preferred.set(String(player.name).toLowerCase(),options[0])
+  }
+  const candidates=rows
+    .filter(r=>r.confidence!=="D"&&r.fairOdds>1)
+    .map(r=>({row:r,family:family(r.market),signal:preferred.get(String(r.player).toLowerCase())?.signal??0,preferredFamily:preferred.get(String(r.player).toLowerCase())?.family}))
+    .filter(x=>x.family===x.preferredFamily)
+    .sort((a,b)=>(b.signal-a.signal)||(b.row.probability-a.row.probability))
+
   return configs.map(cfg=>{
-    type State={legs:any[];product:number;prob:number;players:Set<string>;quality:number}
-    const pool=[...rows]
-      .filter(r=>r.probability>=cfg.minProb&&r.fairOdds>1)
-      .sort((a,b)=>(b.probability-a.probability)||((b.fairOdds??0)-(a.fairOdds??0)))
-      .slice(0,70)
-    let states:State[]=[{legs:[],product:1,prob:1,players:new Set(),quality:0}]
-    for(const leg of pool){
+    type State={legs:any[];product:number;prob:number;players:Set<string>;quality:number;families:Record<string,number>}
+    let states:State[]=[{legs:[],product:1,prob:1,players:new Set(),quality:0,families:{}}]
+    for(const option of candidates.filter(x=>x.row.probability>=cfg.minProb||x.signal>=.88)){
+      const leg=option.row
       const next=[...states]
       for(const state of states){
-        if(state.legs.length>=cfg.maxLegs||state.players.has(String(leg.player).toLowerCase()))continue
+        const pkey=String(leg.player).toLowerCase()
+        if(state.legs.length>=cfg.maxLegs||state.players.has(pkey))continue
+        const count=state.families[option.family]??0
+        if(count>=cfg.maxPerFamily)continue
         const odd=Number(leg.fairOdds)
         if(!(odd>1))continue
         const product=state.product*odd
         if(product>cfg.targetDecimal*1.45&&state.legs.length>=1)continue
         next.push({
-          legs:[...state.legs,leg],
-          product,
-          prob:state.prob*leg.probability,
-          players:new Set([...state.players,String(leg.player).toLowerCase()]),
-          quality:state.quality+leg.probability,
+          legs:[...state.legs,leg],product,prob:state.prob*leg.probability,
+          players:new Set([...state.players,pkey]),
+          quality:state.quality+option.signal+leg.probability*.25,
+          families:{...state.families,[option.family]:count+1},
         })
       }
       states=next.sort((a,b)=>{
         const score=(x:State)=>{
-          const targetGap=Math.abs(Math.log(Math.max(1.01,x.product))-Math.log(cfg.targetDecimal))
-          const below=x.product<cfg.targetDecimal?0.8:0
+          if(!x.legs.length)return 999
+          const gap=Math.abs(Math.log(Math.max(1.01,x.product))-Math.log(cfg.targetDecimal))
+          const diversity=Object.keys(x.families).length
           const avg=x.quality/Math.max(1,x.legs.length)
-          return targetGap+below-avg*.18
+          return gap*2+(x.product<cfg.targetDecimal?.7:0)-avg*.28-diversity*.07+x.legs.length*.025
         }
         return score(a)-score(b)
-      }).slice(0,500)
+      }).slice(0,650)
     }
-    const valid=states.filter(s=>s.legs.length>=2&&s.product>=cfg.targetDecimal)
+    const best=states.filter(s=>s.legs.length>=2&&s.product>=cfg.targetDecimal&&Object.keys(s.families).length>=cfg.minFamilies)
       .sort((a,b)=>{
-        const gapA=a.product-cfg.targetDecimal,gapB=b.product-cfg.targetDecimal
-        if(Math.abs(gapA-gapB)>.08)return gapA-gapB
+        const da=Math.abs(Math.log(a.product)-Math.log(cfg.targetDecimal))
+        const db=Math.abs(Math.log(b.product)-Math.log(cfg.targetDecimal))
+        if(Math.abs(da-db)>.015)return da-db
+        if(a.legs.length!==b.legs.length)return a.legs.length-b.legs.length
         return b.prob-a.prob
-      })
-    const best=valid[0]
-    if(!best){
-      return {
-        id:cfg.id,title:cfg.title,risk:cfg.risk,targetFractional:cfg.targetFractional,targetDecimal:cfg.targetDecimal,
-        legs:[],referenceProductOdds:null,averageLegProbability:null,minimumLegProbability:null,modelAllHitProbability:null,
-        exactPriced:false,bookmaker:null,note:"No qualifying combination reaches "+cfg.targetFractional+" yet.",
-      }
+      })[0]
+    if(!best)return {
+      id:cfg.id,title:cfg.title,risk:cfg.risk,targetFractional:cfg.targetFractional,targetDecimal:cfg.targetDecimal,
+      legs:[],referenceProductOdds:null,averageLegProbability:null,minimumLegProbability:null,modelAllHitProbability:null,
+      exactPriced:false,bookmaker:null,note:"No strong, market-diverse combination reaches "+cfg.targetFractional+" yet.",
     }
+    const families=[...new Set(best.legs.map(l=>family(l.market)))]
     return {
       id:cfg.id,title:cfg.title,risk:cfg.risk,targetFractional:cfg.targetFractional,targetDecimal:cfg.targetDecimal,
-      legs:best.legs,
-      referenceProductOdds:Math.round(best.product*100)/100,
+      legs:best.legs,referenceProductOdds:Math.round(best.product*100)/100,
       averageLegProbability:best.legs.reduce((s,l)=>s+l.probability,0)/best.legs.length,
       minimumLegProbability:Math.min(...best.legs.map(l=>l.probability)),
-      modelAllHitProbability:best.prob,
-      exactPriced:false,
-      bookmaker:null,
-      note:"Snapshot model fair-odds build. It is only labelled "+cfg.targetFractional+" when the calculated product actually reaches "+cfg.targetDecimal.toFixed(2)+" decimal.",
+      modelAllHitProbability:best.prob,exactPriced:false,bookmaker:null,
+      note:"Snapshot fair-odds build from each player's strongest market family with market variety ("+families.join(", ")+"). It is only labelled "+cfg.targetFractional+" when the calculated product reaches "+cfg.targetDecimal.toFixed(2)+" decimal.",
     }
   })
 }
