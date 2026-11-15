@@ -979,7 +979,9 @@ function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
     const candidates=config.risk==="Safe"?safeCandidates:preferredCandidates
     type State={legs:SlipLeg[];product:number;quality:number;prob:number;conservative:number;players:Set<string>;families:Record<string,number>}
     let states:State[]=[{legs:[],product:1,quality:0,prob:1,conservative:1,players:new Set(),families:{}}]
-    for(const option of candidates.filter(x=>x.leg.probability>=config.minProb||x.signal>=.82)){
+    for(const option of candidates.filter(x=>config.risk==="Safe"
+      ? safetyLegProbability(x.leg)>=.60
+      : (x.leg.probability>=config.minProb||x.signal>=.82))){
       const next=[...states]
       for(const state of states){
         if(state.legs.length>=config.maxLegs)continue
@@ -1059,7 +1061,7 @@ function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
       verifiedBet365LegPrices,
       exactBet365BuilderPrice:false,
       pricingBasis:"bet365_singles_product" as const,
-      note:"Every displayed leg price is a verified Bet365 price. Safe searches all priced player lines and chooses the highest conservative all-hit probability that reaches the target — it can prefer several very likely fouls/shots over one speculative scorer or defender shot. Large model-vs-Bet365 disagreements are capped in the safety score. Bet365 can still reprice correlated legs inside Bet Builder, so the singles product is not labelled as the final Builder quote."
+      note:"Every displayed leg price is a verified Bet365 price. Safe only admits legs with at least 60% consensus safety, then chooses the combination with the highest conservative all-hit probability that still reaches the target. It can prefer several very likely fouls/shots over one speculative scorer or defender shot. Large model-vs-Bet365 disagreements are capped. Bet365 can still reprice correlated legs inside Bet Builder, so the singles product is not labelled as the final Builder quote."
     }
   })
 }
