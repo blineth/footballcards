@@ -43,8 +43,8 @@ function espnStatus(event:any):LivePayload["status"]{
   const state=String(event?.status?.type?.state??"").toLowerCase()
   const name=String(event?.status?.type?.name??event?.status?.type?.description??"").toLowerCase()
   if(state==="post"||name.includes("final")||name.includes("full time"))return "finished"
-  if(name.includes("half"))return "halftime"
-  if(state==="in"||name.includes("progress")||name.includes("live"))return "live"
+  if(name==="ht"||name.includes("halftime")||name.includes("half time"))return "halftime"
+  if(state==="in"||name.includes("progress")||name.includes("live")||name.includes("first half")||name.includes("second half"))return "live"
   if(state==="pre")return "scheduled"
   return "unknown"
 }
