@@ -8,6 +8,7 @@ import { GET as oddsGET } from "../bet-builder-odds/route"
 import calibrationSnapshot from "@/data/model/calibration.json"
 import { buildSnapshotScorecard } from "@/lib/snapshot-scorecard"
 import { getMatchStakes, type MatchStakesContext } from "@/lib/match-stakes"
+import { getSetPieceContext, type SetPieceContext, type SetPieceRole } from "@/lib/set-piece-roles"
 
 export const dynamic = "force-dynamic"
 export const revalidate = 0
@@ -119,6 +120,14 @@ type ScorePlayer = {
     matchScore:number
     category:string
     reason:string
+  }
+  setPieceContext?: {
+    penaltiesOrder:number|null
+    directFreeKicksOrder:number|null
+    cornersOrder:number|null
+    confidence:string
+    source:string
+    evidence:string[]
   }
   cardContext?: {
     rolePrior:number
@@ -493,6 +502,60 @@ function refreshMarketValue(row:any,probability:number){
   row.edge=bookP==null?row.edge:Math.round((row.probability-Number(bookP))*1000)/1000
   row.expectedValue=row.bookmakerOdds==null?row.expectedValue:Math.round((row.probability*Number(row.bookmakerOdds)-1)*1000)/1000
 }
+function setPieceRoleFor(context:SetPieceContext|null|undefined,player:string,team:string){
+  if(!context?.available)return null
+  const pn=norm(player),tn=norm(team)
+  return context.roles.find(role=>{
+    const rn=norm(role.player),rt=norm(role.team)
+    const nameOk=pn&&rn&&(pn===rn||pn.includes(rn)||rn.includes(pn)||pn.split(" ").at(-1)===rn.split(" ").at(-1))
+    const teamOk=!tn||!rt||tn===rt||tn.includes(rt)||rt.includes(tn)
+    return Boolean(nameOk&&teamOk)
+  })??null
+}
+function setPieceMarketDelta(role:SetPieceRole|null|undefined,market:string){
+  if(!role)return 0
+  const conf=role.confidence==="high"?1:role.confidence==="medium"?.72:.46
+  const orderWeight=(order:number|null)=>order===1?1:order===2?.55:order===3?.28:0
+  const pen=orderWeight(role.penaltiesOrder)*conf
+  const fk=orderWeight(role.directFreeKicksOrder)*conf
+  const corner=orderWeight(role.cornersOrder)*conf
+  if(market==="goal1")return pen*.18+fk*.045
+  if(market==="shot1")return pen*.045+fk*.095
+  if(market==="shot2")return pen*.035+fk*.075
+  if(market==="sot1")return pen*.075+fk*.065
+  if(market==="sot2")return pen*.045+fk*.04
+  if(market==="assist1")return corner*.14+fk*.055
+  return 0
+}
+function setPieceReason(role:SetPieceRole|null|undefined,market:string){
+  if(!role||setPieceMarketDelta(role,market)<.025)return null
+  const bits:string[]=[]
+  if(role.penaltiesOrder)bits.push(role.penaltiesOrder===1?"first-choice penalty taker":"penalty priority "+role.penaltiesOrder)
+  if(role.directFreeKicksOrder)bits.push(role.directFreeKicksOrder===1?"first-choice direct free-kick taker":"direct free-kick priority "+role.directFreeKicksOrder)
+  if(role.cornersOrder)bits.push(role.cornersOrder===1?"first-choice corner/indirect set-piece taker":"corner/indirect set-piece priority "+role.cornersOrder)
+  return bits.length?"Set pieces: "+bits.join(" · "):null
+}
+function applySetPiecesToFallbackPlayers(players:any[],context:SetPieceContext){
+  for(const player of players){
+    const role=setPieceRoleFor(context,String(player?.name??""),String(player?.team??""))
+    if(!role)continue
+    player.setPieceContext={
+      penaltiesOrder:role.penaltiesOrder,directFreeKicksOrder:role.directFreeKicksOrder,cornersOrder:role.cornersOrder,
+      confidence:role.confidence,source:role.source,evidence:role.evidence,
+    }
+    for(const [market,row] of Object.entries(player?.markets??{}) as Array<[string,any]>){
+      const delta=setPieceMarketDelta(role,market)
+      if(delta<=0||!row)continue
+      refreshMarketValue(row,logitAdjust(Number(row.probability??0),delta))
+      const reason=setPieceReason(role,market)
+      if(reason){
+        const reasons=Array.isArray(row.reasons)?row.reasons.filter((x:any)=>!String(x).startsWith("Set pieces:")):[]
+        row.reasons=[reason,...reasons].slice(0,3)
+      }
+    }
+  }
+  return players
+}
 function applyStakesToFallbackPlayers(players:any[],stakes:MatchStakesContext){
   for(const player of players){
     const team=String(player?.team??"")
@@ -774,6 +837,7 @@ function marketReasons(input: {
   clubYellows?:number
   clubCardRate?:number|null
   stakesReason?:string|null
+  setPieceReason?:string|null
 }) {
   const reasons: string[] = []
   if(input.market==="card"&&input.h2hN>=2&&Number(input.h2hCards??0)===0){
@@ -791,6 +855,9 @@ function marketReasons(input: {
   }
   if(input.market==="card"&&Number(input.sameMatchupCards??0)>0){
     reasons.push("Booked with the same likely direct matchup on the pitch before")
+  }
+  if(input.setPieceReason&&["goal1","assist1","shot1","shot2","sot1","sot2"].includes(input.market)){
+    reasons.push(input.setPieceReason)
   }
   if(input.stakesReason&&(input.market==="card"||(input.market.startsWith("foul")&&!input.market.startsWith("fouled")))){
     reasons.push(input.stakesReason)
@@ -1138,16 +1205,16 @@ function buildRiskBuilders(players:ScorePlayer[],scope:"all"|"discipline"="all")
     const edge=Math.max(0,Number(leg.edge??0))*.20
     return pct*.55+Math.max(0,rel)*.25+leg.probability*.12+confidence+edge
   }
-  const confidenceReliability=(leg:SlipLeg)=>leg.confidence==="A"?1:leg.confidence==="B"?.96:leg.confidence==="C"?.88:.74
+  const confidenceReliability=(leg:SlipLeg)=>leg.confidence==="A"?1:leg.confidence==="B"?.99:leg.confidence==="C"?.965:.90
   const marketReliability=(leg:SlipLeg)=>{
     const f=family(leg.market)
     if(f==="foul")return .995
     if(f==="fouled")return .992
     if(f==="shot")return .99
     if(f==="sot")return .975
-    if(f==="card")return .95
-    if(f==="goal")return .95
-    if(f==="assist")return .93
+    if(f==="card")return .90
+    if(f==="goal")return .90
+    if(f==="assist")return .86
     return .97
   }
   const safetyLegProbability=(leg:SlipLeg)=>{
@@ -1178,7 +1245,7 @@ function buildRiskBuilders(players:ScorePlayer[],scope:"all"|"discipline"="all")
     let concentrationPenalty=1
     for(const [f,count] of Object.entries(counts)){
       if(count<=1)continue
-      const perExtra=f==="foul"||f==="fouled"?.992:f==="shot"?.988:.98
+      const perExtra=f==="foul"||f==="fouled"?.997:f==="shot"?.995:.985
       concentrationPenalty*=Math.pow(perExtra,count-1)
     }
     return Math.max(0,Math.min(.99,conservative*concentrationPenalty))
@@ -1336,7 +1403,7 @@ function buildRiskBuilders(players:ScorePlayer[],scope:"all"|"discipline"="all")
       note:scope==="discipline"
         ?"This slip searches only verified Bet365 yellow-card, foul-committed and foul-drawn markets. It may use up to Bet365's 12-selection limit, with no more than six players from either team, and chooses the combination with the highest conservative all-hit probability that reaches the target. Cards are not forced in when higher-probability foul legs are safer."
         :config.risk==="Safe"
-          ?"Every verified Bet365 player market is searched. Safe chooses the highest conservative all-hit probability that reaches the target; several short-priced fouls/shots can beat a speculative two-leg route."
+          ?"Every verified Bet365 player market is searched. Safe chooses the highest uncertainty-adjusted all-hit probability that reaches the target. Longer low-threshold foul/shot routes are not penalised simply for using more legs, while goals, assists and cards carry an explicit high-variance reliability penalty."
           :"Every verified Bet365 player market is searched across goals, assists, cards, fouls, fouls drawn, shots and SOT. The model chooses the combination with the highest conservative all-hit probability that reaches the target; market type and leg count do not get preference. Bet365 can reprice correlated legs inside Bet Builder, so this is not labelled as the final Builder quote."
     }
   })
@@ -1369,6 +1436,14 @@ async function buildVerifiedBet365SnapshotFallback(input:{request:Request;date:s
     )
   )
   const names=fallbackPlayers.map(p=>String(p?.name??"")).filter(Boolean)
+  const fallbackPlayersByTeam:Record<string,string[]>={}
+  for(const player of fallbackPlayers){
+    const team=String(player?.team??"")
+    const name=String(player?.name??"")
+    if(team&&name){fallbackPlayersByTeam[team]=fallbackPlayersByTeam[team]??[];fallbackPlayersByTeam[team].push(name)}
+  }
+  const setPieceContext=await getSetPieceContext({date:input.date,competition:input.competition,home:input.home,away:input.away,playersByTeam:fallbackPlayersByTeam})
+  fallbackPlayers=applySetPiecesToFallbackPlayers(fallbackPlayers,setPieceContext)
   for(const player of fallbackPlayers){
     for(const [marketKey,marketRow] of Object.entries(player?.markets??{}) as Array<[MarketKey,any]>){
       const odd=findOdds(usable,String(player?.name??""),marketKey,names)
@@ -1409,6 +1484,7 @@ async function buildVerifiedBet365SnapshotFallback(input:{request:Request;date:s
     playerEligibilitySource:fallback?.lineupsConfirmed===true?"official-starting-xi-and-bet365-player-board":"bet365-player-board",
     bet365ListedPlayerCount:fallbackPlayers.length,
     matchStakes,
+    setPieceContext,
     players:fallbackPlayers,
     playerCount:fallbackPlayers.length,
     riskBuilders:buildRiskBuilders(fallbackPlayers as ScorePlayer[]),
@@ -1520,6 +1596,15 @@ export async function GET(request: Request) {
   candidates=candidates.filter(isBet365ListedCandidate)
 
   const names = Array.from(new Set(candidates.map(c => String(c.dbName ?? c.name ?? "")).filter(Boolean))) as string[]
+  const playersByTeam:Record<string,string[]>={}
+  for(const candidate of candidates){
+    const team=String(candidate?.team??"")
+    const name=String(candidate?.name??candidate?.dbName??"")
+    if(!team||!name)continue
+    playersByTeam[team]=playersByTeam[team]??[]
+    if(!playersByTeam[team].some(x=>norm(x)===norm(name)))playersByTeam[team].push(name)
+  }
+  const setPieceContext=await getSetPieceContext({date,competition,home,away,playersByTeam})
 
   const marketAvailability:MarketAvailability = {
     goal: odds?.marketAvailability?.goal ?? "unknown",
@@ -1845,6 +1930,9 @@ export async function GET(request: Request) {
         : calibrated.probability
       const stakesDelta=stakesMarketDelta(matchStakes,String(candidate.team??""),market)
       if(stakesDelta>0)probability=logitAdjust(probability,stakesDelta)
+      const playerSetPieceRole=setPieceRoleFor(setPieceContext,String(candidate.name??candidate.dbName??""),String(candidate.team??""))
+      const setPieceDelta=setPieceMarketDelta(playerSetPieceRole,market)
+      if(setPieceDelta>0)probability=logitAdjust(probability,setPieceDelta)
 
       const odd = findOdds(usableSelections, candidate.name, market, candidates.map(x=>String(x.name??"")))
       const bookmakerOdds = odd?.odd == null ? null : Number(odd.odd)
@@ -1913,6 +2001,7 @@ export async function GET(request: Request) {
           clubYellows,
           clubCardRate,
           stakesReason:stakesReason(matchStakes,String(candidate.team??""),market),
+          setPieceReason:setPieceReason(playerSetPieceRole,market),
         }),
       }
     }
@@ -2028,6 +2117,7 @@ export async function GET(request: Request) {
       expectedMinutes,
       matchup: candidate?.likelyMatchup ? { name: candidate.likelyMatchup.name, role: candidate.likelyMatchup.role ?? null, fouled90: matchupFouled90, type:candidate.likelyMatchup.type ?? null, seasonFouled90:candidate.likelyMatchup.seasonFouled90 ?? null, recentFouled90:candidate.likelyMatchup.recentFouled90 ?? null } : null,
       stakesContext:(()=>{const t=stakesForTeam(matchStakes,String(candidate.team??""));return t?{teamScore:t.score,matchScore:matchStakes.matchScore,category:t.category,reason:t.reason}:undefined})(),
+      setPieceContext:(()=>{const role=setPieceRoleFor(setPieceContext,String(candidate.name??candidate.dbName??""),String(candidate.team??""));return role?{penaltiesOrder:role.penaltiesOrder,directFreeKicksOrder:role.directFreeKicksOrder,cornersOrder:role.cornersOrder,confidence:role.confidence,source:role.source,evidence:role.evidence}:undefined})(),
       cardContext:{
         rolePrior:Math.round(rolePrior*1000)/1000,
         clubMatches,
@@ -2119,6 +2209,7 @@ export async function GET(request: Request) {
     priceAvailable: Boolean(odds?.priceAvailable) && oddsFreshness !== "STALE",
     referee: radar?.referee ?? null,
     matchStakes,
+    setPieceContext,
     countryH2HContext:countryH2HContext ? {
       matches:countryH2HContext.matches,
       playerSamples:countryH2HContext.playerSamples,
@@ -2152,6 +2243,7 @@ export async function GET(request: Request) {
     previewFoulTargetSlips,
     methodology: {
       stakesModel:"Cards and fouls include a bounded competition-pressure modifier based on current league/group position, distance to promotion/qualification/relegation boundaries, season stage and knockout status. Match stakes reinforce player-specific booking/foul evidence; they never create a card pick on their own.",
+      setPieceModel:"Current set-piece responsibility is a bounded contextual input: first/second penalty takers can raise goal, shot and SOT estimates; direct free-kick takers can raise shot/SOT/goal estimates; corner and indirect-free-kick takers can raise assist estimates. Premier League roles use current FPL priority fields; other competitions use recent ESPN set-piece-event evidence and receive no boost when a current role cannot be verified.",
       version: "scorecard-v2-calibrated",
       description: "Player-level pre-match probabilities use only match rows dated before the target fixture. Before official teams are released, Bet365's available player-prop board is the hard eligibility gate; predicted-XI/current-squad data is used only to rank and model players that Bet365 is actually offering. Once official lineups arrive, the player pool is rebuilt from the confirmed starters and Bet365 is rechecked for the markets and prices available on those starters. For international fixtures, senior international appearances from Euro 2024 onward are the primary player sample for minutes, shots, SOT, fouls, fouls drawn, goals, assists and cards; club form only stabilises thin national-team samples. Domestic fixtures use club history. All probabilities also incorporate recency, opponent H2H, expected minutes, matchup pressure, count-rate checks, referee/card context and walk-forward calibration. H2H is lineup-aware: previous meetings receive more weight when more of today's predicted/confirmed opponents also played, and the strongest extra weight is reserved for a returning likely direct matchup.",
       cardConditional: "Yellow-card estimates measure each player's booking rate at 0 fouls, exactly 1, exactly 2, 3+, 1+ and 2+ foul states, with sample-size reliability. Match-level data still cannot identify the exact foul that triggered the booking.",
