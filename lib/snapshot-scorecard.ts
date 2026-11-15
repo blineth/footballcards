@@ -33,10 +33,18 @@ function reliability(minutes:number,full:number){
 function blendedRate(input:{
   international:any;current:any;previous:any;key:string;prior:number;cap:number
 }){
+  // International fixtures must model the player in their national-team role.
+  // Club form is only a stabiliser when the senior-international sample is small.
+  const intlMinutes=Number(input.international?.minutes??0)
+  const intlMatches=Number(input.international?.matches??0)
+  const intlReliability=Math.max(
+    reliability(intlMinutes,720),
+    Math.min(1,intlMatches/8),
+  )
   const sources=[
-    {row:input.international,weight:.25*reliability(Number(input.international?.minutes??0),900)},
-    {row:input.current,weight:.60*reliability(Number(input.current?.minutes??0),1800)},
-    {row:input.previous,weight:.15*reliability(Number(input.previous?.minutes??0),1800)},
+    {row:input.international,weight:.85*intlReliability},
+    {row:input.current,weight:.12*(1-.45*intlReliability)*reliability(Number(input.current?.minutes??0),1800)},
+    {row:input.previous,weight:.03*(1-.60*intlReliability)*reliability(Number(input.previous?.minutes??0),1800)},
   ]
   let weighted=0,total=0
   for(const source of sources){
@@ -45,8 +53,8 @@ function blendedRate(input:{
     weighted+=Math.min(input.cap,value)*source.weight
     total+=source.weight
   }
-  const priorWeight=Math.max(.15,1-Math.min(.85,total))
-  return (weighted+input.prior*priorWeight)/(total+priorWeight)
+  const priorWeight=Math.max(.08,.32*(1-intlReliability))
+  return total>0?(weighted+input.prior*priorWeight)/(total+priorWeight):input.prior
 }
 function calibrateSnapshot(market:"goal1"|"assist1"|"foul1"|"fouled1"|"card"|"shot1"|"sot1",raw:number){
   const source=(calibrationSnapshot as any)?.global?.[market]
@@ -509,42 +517,53 @@ export async function buildSnapshotScorecard(input:{
       const intl=p?.international??{}
       const current=p?.domesticCurrent??null
       const previous=p?.domesticPrevious??null
-      const appearances=Number(current?.appearances??0)+Number(intl?.matches??0)
-      const starts=Number(current?.starts??0)+Number(intl?.starts??0)
-      const expectedMinutes=Math.max(45,Math.min(90,appearances>0?60+30*(starts/appearances):65))
+      const intlMatches=Number(intl?.matches??0)
+      const intlStarts=Number(intl?.starts??0)
+      const intlMinutes=Number(intl?.minutes??0)
+      const clubAppearances=Number(current?.appearances??0)
+      const clubStarts=Number(current?.starts??0)
+      const intlStartRate=intlMatches>0?intlStarts/intlMatches:0
+      const intlMinutesPerCap=intlMatches>0?intlMinutes/intlMatches:0
+      const clubStartRate=clubAppearances>0?clubStarts/clubAppearances:0
+      const expectedMinutes=intlMatches>=2
+        ? Math.max(40,Math.min(90,intlMinutesPerCap*.65+(55+35*intlStartRate)*.35))
+        : Math.max(45,Math.min(90,55+35*clubStartRate))
       const foulRate=blendedRate({international:intl,current,previous,key:"fouls90",prior:1.2,cap:4.5})
       const fouledRate=blendedRate({international:intl,current,previous,key:"fouled90",prior:1.15,cap:4.5})
       const shotsRate=blendedRate({international:intl,current,previous,key:"shots90",prior:1.45,cap:5.5})
       const sotRate=blendedRate({international:intl,current,previous,key:"shotsOnTarget90",prior:.48,cap:2.2})
       const cardRate=blendedRate({international:intl,current,previous,key:"cards90",prior:.20,cap:1.0})
-      const goalRate=(()=>{
-        const rows=[intl,current,previous].filter(Boolean)
+      const internationalRate=(key:"goals"|"assists",cap:number,prior:number)=>{
+        const directKey=key==="goals"?"goals90":"assists90"
+        const intlDirect=Number(intl?.[directKey])
+        const intlRate=Number.isFinite(intlDirect)&&intlDirect>=0
+          ? intlDirect
+          : (intlMinutes>0?(Number(intl?.[key]??0)*90)/intlMinutes:NaN)
+        const currentMinutes=Number(current?.minutes??0)
+        const currentDirect=Number(current?.[directKey])
+        const currentRate=Number.isFinite(currentDirect)&&currentDirect>=0
+          ? currentDirect
+          : (currentMinutes>0?(Number(current?.[key]??0)*90)/currentMinutes:NaN)
+        const previousMinutes=Number(previous?.minutes??0)
+        const previousDirect=Number(previous?.[directKey])
+        const previousRate=Number.isFinite(previousDirect)&&previousDirect>=0
+          ? previousDirect
+          : (previousMinutes>0?(Number(previous?.[key]??0)*90)/previousMinutes:NaN)
+        const intlRel=Math.max(reliability(intlMinutes,720),Math.min(1,intlMatches/8))
         let weighted=0,total=0
-        for(const row of rows){
-          const minutes=Number(row?.minutes??0)
-          const direct=Number(row?.goals90)
-          const rate=Number.isFinite(direct)&&direct>=0?direct:(minutes>0?(Number(row?.goals??0)*90)/minutes:NaN)
-          if(!Number.isFinite(rate))continue
-          const w=Math.min(1,minutes/1200)
-          weighted+=Math.min(2.5,rate)*w
-          total+=w
+        const add=(rate:number,weight:number)=>{
+          if(!Number.isFinite(rate)||rate<0||weight<=0)return
+          weighted+=Math.min(cap,rate)*weight
+          total+=weight
         }
-        return total>0?weighted/total:.22
-      })()
-      const assistRate=(()=>{
-        const rows=[intl,current,previous].filter(Boolean)
-        let weighted=0,total=0
-        for(const row of rows){
-          const minutes=Number(row?.minutes??0)
-          const direct=Number(row?.assists90)
-          const rate=Number.isFinite(direct)&&direct>=0?direct:(minutes>0?(Number(row?.assists??0)*90)/minutes:NaN)
-          if(!Number.isFinite(rate))continue
-          const w=Math.min(1,minutes/1200)
-          weighted+=Math.min(1.8,rate)*w
-          total+=w
-        }
-        return total>0?weighted/total:.14
-      })()
+        add(intlRate,.85*intlRel)
+        add(currentRate,.12*(1-.45*intlRel)*reliability(currentMinutes,1800))
+        add(previousRate,.03*(1-.60*intlRel)*reliability(previousMinutes,1800))
+        const priorWeight=Math.max(.08,.32*(1-intlRel))
+        return total>0?(weighted+prior*priorWeight)/(total+priorWeight):prior
+      }
+      const goalRate=internationalRate("goals",2.5,.22)
+      const assistRate=internationalRate("assists",1.8,.14)
       const minutesScale=expectedMinutes/90
       const goal=calibrateSnapshot("goal1",1-Math.exp(-goalRate*minutesScale))
       const assist=calibrateSnapshot("assist1",1-Math.exp(-assistRate*minutesScale))
@@ -553,34 +572,37 @@ export async function buildSnapshotScorecard(input:{
       const shot=calibrateSnapshot("shot1",1-Math.exp(-shotsRate*minutesScale))
       const sot=calibrateSnapshot("sot1",1-Math.exp(-sotRate*minutesScale))
       const card=calibrateSnapshot("card",1-Math.exp(-cardRate*minutesScale))
-      const confidence:"A"|"B"|"C"|"D"=appearances>=12&&expectedMinutes>=65?"B":appearances>=6?"C":"D"
-      return {p,goal,assist,foul,fouled,shot,sot,card,confidence}
+      const confidence:"A"|"B"|"C"|"D"=
+        intlMatches>=12&&intlMinutes>=720?"A":
+        intlMatches>=7&&intlMinutes>=360?"B":
+        intlMatches>=3&&intlMinutes>=120?"C":"D"
+      return {p,goal,assist,foul,fouled,shot,sot,card,confidence,intlMatches,intlMinutes}
     })
 
     const foulLegs=[...scored].filter((x:any)=>x.confidence!=="D").sort((a:any,b:any)=>b.foul-a.foul).slice(0,4).map((x:any)=>leg({
       player:String(x.p.name),team:String(x.p.nationalTeam),market:"foul1",label:"1+ foul committed",
       probability:x.foul,confidence:x.confidence,
-      reason:"Snapshot lineup model: blended current domestic and international foul rate.",
+      reason:"Snapshot lineup model: international-first senior national-team foul rate.",
     }))
     const fouledLegs=[...scored].filter((x:any)=>x.confidence!=="D").sort((a:any,b:any)=>b.fouled-a.fouled).slice(0,3).map((x:any)=>leg({
       player:String(x.p.name),team:String(x.p.nationalTeam),market:"fouled1",label:"1+ foul drawn",
       probability:x.fouled,confidence:x.confidence,
-      reason:"Snapshot lineup model: blended current domestic and international fouls-drawn rate.",
+      reason:"Snapshot lineup model: international-first senior national-team fouls-drawn rate.",
     }))
     const shotLegs=[...scored].filter((x:any)=>x.confidence!=="D").sort((a:any,b:any)=>b.shot-a.shot).slice(0,4).map((x:any)=>leg({
       player:String(x.p.name),team:String(x.p.nationalTeam),market:"shot1",label:"1+ shot",
       probability:x.shot,confidence:x.confidence,
-      reason:"Snapshot lineup model: blended current domestic and international shot rate.",
+      reason:"Snapshot lineup model: international-first senior national-team shot rate.",
     }))
     const sotLegs=[...scored].filter((x:any)=>x.confidence!=="D").sort((a:any,b:any)=>b.sot-a.sot).slice(0,3).map((x:any)=>leg({
       player:String(x.p.name),team:String(x.p.nationalTeam),market:"sot1",label:"1+ shot on target",
       probability:x.sot,confidence:x.confidence,
-      reason:"Snapshot lineup model: blended current domestic and international shot-on-target rate.",
+      reason:"Snapshot lineup model: international-first senior national-team shot-on-target rate.",
     }))
     const cardLegs=[...scored].filter((x:any)=>x.confidence!=="D").sort((a:any,b:any)=>b.card-a.card).slice(0,3).map((x:any)=>leg({
       player:String(x.p.name),team:String(x.p.nationalTeam),market:"card",label:"Yellow card",
       probability:x.card,confidence:x.confidence,
-      reason:"Snapshot lineup model: blended domestic, international and prior-season booking rate.",
+      reason:"Snapshot lineup model: international-first senior national-team with club fallback booking rate.",
     }))
 
     const slips:any[]=[]
@@ -596,19 +618,19 @@ export async function buildSnapshotScorecard(input:{
       lineupStatus:official.confirmed?"confirmed":"predicted",
       lineupConfidence:official.confirmed?"official":"snapshot-predicted",
       markets:{
-        goal1:marketRow({key:"goal1",label:"Anytime goalscorer",probability:x.goal,confidence:x.confidence,reason:"Snapshot model: blended current domestic and international scoring rate."}),
-        assist1:marketRow({key:"assist1",label:"1+ assist",probability:x.assist,confidence:x.confidence,reason:"Snapshot model: blended current domestic and international assist rate."}),
-        foul1:marketRow({key:"foul1",label:"1+ foul committed",probability:x.foul,confidence:x.confidence,reason:"Snapshot model: blended current domestic and international foul rate."}),
-        foul2:marketRow({key:"foul2",label:"2+ fouls committed",probability:poissonAtLeastFromOne(x.foul,2),confidence:x.confidence,reason:"Snapshot count model derived from blended foul rate."}),
-        foul3:marketRow({key:"foul3",label:"3+ fouls committed",probability:poissonAtLeastFromOne(x.foul,3),confidence:x.confidence,reason:"Snapshot count model derived from blended foul rate."}),
-        foul4:marketRow({key:"foul4",label:"4+ fouls committed",probability:poissonAtLeastFromOne(x.foul,4),confidence:x.confidence,reason:"Snapshot count model derived from blended foul rate."}),
-        foul5:marketRow({key:"foul5",label:"5+ fouls committed",probability:poissonAtLeastFromOne(x.foul,5),confidence:x.confidence,reason:"Snapshot count model derived from blended foul rate."}),
-        fouled1:marketRow({key:"fouled1",label:"1+ foul drawn",probability:x.fouled,confidence:x.confidence,reason:"Snapshot model: blended current domestic and international fouls-drawn rate."}),
-        shot1:marketRow({key:"shot1",label:"1+ shot",probability:x.shot,confidence:x.confidence,reason:"Snapshot model: blended current domestic and international shot rate."}),
-        shot2:marketRow({key:"shot2",label:"2+ shots",probability:poissonAtLeastFromOne(x.shot,2),confidence:x.confidence,reason:"Snapshot count model derived from blended shot rate."}),
-        sot1:marketRow({key:"sot1",label:"1+ shot on target",probability:x.sot,confidence:x.confidence,reason:"Snapshot model: blended current domestic and international shot-on-target rate."}),
-        sot2:marketRow({key:"sot2",label:"2+ shots on target",probability:poissonAtLeastFromOne(x.sot,2),confidence:x.confidence,reason:"Snapshot count model derived from blended shots-on-target rate."}),
-        card:marketRow({key:"card",label:"Yellow card",probability:x.card,confidence:x.confidence,reason:"Snapshot model: blended domestic, international and prior-season booking rate."}),
+        goal1:marketRow({key:"goal1",label:"Anytime goalscorer",probability:x.goal,confidence:x.confidence,reason:"Snapshot model: international-first senior national-team scoring rate."}),
+        assist1:marketRow({key:"assist1",label:"1+ assist",probability:x.assist,confidence:x.confidence,reason:"Snapshot model: international-first senior national-team assist rate."}),
+        foul1:marketRow({key:"foul1",label:"1+ foul committed",probability:x.foul,confidence:x.confidence,reason:"Snapshot model: international-first senior national-team foul rate."}),
+        foul2:marketRow({key:"foul2",label:"2+ fouls committed",probability:poissonAtLeastFromOne(x.foul,2),confidence:x.confidence,reason:"Snapshot count model derived from international-first foul rate."}),
+        foul3:marketRow({key:"foul3",label:"3+ fouls committed",probability:poissonAtLeastFromOne(x.foul,3),confidence:x.confidence,reason:"Snapshot count model derived from international-first foul rate."}),
+        foul4:marketRow({key:"foul4",label:"4+ fouls committed",probability:poissonAtLeastFromOne(x.foul,4),confidence:x.confidence,reason:"Snapshot count model derived from international-first foul rate."}),
+        foul5:marketRow({key:"foul5",label:"5+ fouls committed",probability:poissonAtLeastFromOne(x.foul,5),confidence:x.confidence,reason:"Snapshot count model derived from international-first foul rate."}),
+        fouled1:marketRow({key:"fouled1",label:"1+ foul drawn",probability:x.fouled,confidence:x.confidence,reason:"Snapshot model: international-first senior national-team fouls-drawn rate."}),
+        shot1:marketRow({key:"shot1",label:"1+ shot",probability:x.shot,confidence:x.confidence,reason:"Snapshot model: international-first senior national-team shot rate."}),
+        shot2:marketRow({key:"shot2",label:"2+ shots",probability:poissonAtLeastFromOne(x.shot,2),confidence:x.confidence,reason:"Snapshot count model derived from international-first shot rate."}),
+        sot1:marketRow({key:"sot1",label:"1+ shot on target",probability:x.sot,confidence:x.confidence,reason:"Snapshot model: international-first senior national-team shot-on-target rate."}),
+        sot2:marketRow({key:"sot2",label:"2+ shots on target",probability:poissonAtLeastFromOne(x.sot,2),confidence:x.confidence,reason:"Snapshot count model derived from international-first shots-on-target rate."}),
+        card:marketRow({key:"card",label:"Yellow card",probability:x.card,confidence:x.confidence,reason:"Snapshot model: international-first senior national-team with club fallback booking rate."}),
       },
     }))
     return {
