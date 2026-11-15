@@ -11,11 +11,11 @@ import { buildSnapshotScorecard } from "@/lib/snapshot-scorecard"
 export const dynamic = "force-dynamic"
 export const revalidate = 0
 
-type MarketKey = "goal1" | "foul1" | "foul2" | "foul3" | "foul4" | "foul5" | "fouled1" | "card" | "shot1" | "shot2" | "sot1" | "sot2"
+type MarketKey = "goal1" | "assist1" | "foul1" | "foul2" | "foul3" | "foul4" | "foul5" | "fouled1" | "card" | "shot1" | "shot2" | "sot1" | "sot2"
 type SlipMarketKey = MarketKey | `foul${number}`
 type MatchRow = typeof playerH2H.$inferSelect
 type MarketAvailabilityState = "available" | "unavailable" | "unknown"
-type MarketAvailability = Record<"goal"|"card"|"foul"|"fouled"|"shot"|"sot", MarketAvailabilityState>
+type MarketAvailability = Record<"goal"|"assist"|"card"|"foul"|"fouled"|"shot"|"sot", MarketAvailabilityState>
 type BookmakerAvailability = Record<string,MarketAvailability>
 
 type OddSelection = {
@@ -161,6 +161,7 @@ type FoulTargetSlip = {
 
 const MARKET_LABELS: Record<MarketKey, string> = {
   goal1: "Anytime goalscorer",
+  assist1: "1+ assist",
   foul1: "1+ foul committed",
   foul2: "2+ fouls committed",
   foul3: "3+ fouls committed",
@@ -176,6 +177,7 @@ const MARKET_LABELS: Record<MarketKey, string> = {
 
 const PRIOR: Record<MarketKey, number> = {
   goal1: 0.24,
+  assist1: 0.16,
   foul1: 0.70,
   foul2: 0.38,
   foul3: 0.17,
@@ -208,6 +210,7 @@ function starterRows(rows: MatchRow[]) {
 }
 function hit(market: MarketKey, row: MatchRow) {
   if (market === "goal1") return Number(row.goals ?? 0) >= 1
+  if (market === "assist1") return Number(row.assists ?? 0) >= 1
   if (market === "foul1") return Number(row.foulsCommitted ?? 0) >= 1
   if (market === "foul2") return Number(row.foulsCommitted ?? 0) >= 2
   if (market === "foul3") return Number(row.foulsCommitted ?? 0) >= 3
@@ -406,6 +409,7 @@ function thresholdForMarket(market: MarketKey) {
 
 function availabilityForMarket(availability:MarketAvailability, market:SlipMarketKey):MarketAvailabilityState {
   if (market.startsWith("goal")) return availability.goal
+  if (market.startsWith("assist")) return availability.assist
   if (market === "card") return availability.card
   if (market.startsWith("fouled")) return availability.fouled
   if (market.startsWith("foul")) return availability.foul
@@ -414,6 +418,7 @@ function availabilityForMarket(availability:MarketAvailability, market:SlipMarke
 }
 function oddsKind(market: SlipMarketKey) {
   if (market.startsWith("goal")) return "goal"
+  if (market.startsWith("assist")) return "assist"
   if (market.startsWith("fouled")) return "fouled"
   if (market.startsWith("foul")) return "foul"
   if (market === "card") return "card"
@@ -964,6 +969,7 @@ export async function GET(request: Request) {
   const usableSelections = oddsFreshness === "STALE" ? [] : selections
   const marketAvailability:MarketAvailability = {
     goal: odds?.marketAvailability?.goal ?? "unknown",
+    assist: odds?.marketAvailability?.assist ?? "unknown",
     card: odds?.marketAvailability?.card ?? "unknown",
     foul: odds?.marketAvailability?.foul ?? "unknown",
     fouled: odds?.marketAvailability?.fouled ?? "unknown",
@@ -1073,8 +1079,11 @@ export async function GET(request: Request) {
       const threshold = thresholdForMarket(market)
       const minutesScale = expectedMinutes / 90
       const historicGoal90 = sampleMinutes>0 ? (rows.reduce((sum,row)=>sum+Number(row.goals??0),0)*90)/sampleMinutes : 0
+      const historicAssist90 = sampleMinutes>0 ? (rows.reduce((sum,row)=>sum+Number(row.assists??0),0)*90)/sampleMinutes : 0
       const per90 = market.startsWith("goal")
         ? historicGoal90
+        : market.startsWith("assist")
+          ? historicAssist90
         : market.startsWith("sot")
           ? Number(candidate.shotsOnTarget90 ?? 0)
           : market.startsWith("shot")
