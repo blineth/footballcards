@@ -1460,13 +1460,15 @@ export async function GET(request: Request) {
   const players: ScorePlayer[] = candidates.map(candidate => {
     const allRows = history.filter(row => row.playerName === candidate.dbName && played(row))
     const internationalRows = competition==="International"
-      ? allRows.filter(row=>row.competition==="International"&&String(row.matchDate??"")>="2024-06-01")
+      ? allRows.filter(row=>row.competition==="International"&&String(row.matchDate??"")>="2026-01-01")
       : []
     // National-team role first. Club rows only rescue a genuinely tiny international sample.
     const primaryRows = competition==="International"&&internationalRows.length>=2 ? internationalRows : allRows
     const rows = recommendationsAllowed ? starterRows(primaryRows) : primaryRows
     const opponent = teamMatch(candidate.team, home) ? away : home
-    const h2hRows = rows.filter(row => teamMatch(row.opponent, opponent))
+    const h2hRows = competition==="International"
+      ? allRows.filter(row=>row.competition==="International"&&teamMatch(row.opponent,opponent))
+      : rows.filter(row => teamMatch(row.opponent, opponent))
     const recent5Rows = [...rows].sort((a, b) => String(a.matchDate).localeCompare(String(b.matchDate))).slice(-5)
     const sampleMinutes = rows.reduce((sum, row) => sum + Number(row.minutes ?? 0), 0)
     const intlStarts=internationalRows.filter(row=>row.starter===true).length
