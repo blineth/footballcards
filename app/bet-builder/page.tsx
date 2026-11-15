@@ -44,7 +44,8 @@ type LiveData={
 type LiveOddSelection={kind:string;label:string;odd:number|null;bookmaker?:string|null}
 type LiveOddsData={
   connected?:boolean;bookmaker?:string|null;source?:string|null;capturedAt?:string|null;
-  priceAvailable?:boolean;liveVerified?:boolean;selections?:LiveOddSelection[];note?:string|null
+  priceAvailable?:boolean;liveVerified?:boolean;selections?:LiveOddSelection[];note?:string|null;
+  marketAvailability?:Record<string,MarketStatus>;bookmakerAvailability?:Record<string,Record<string,MarketStatus>>
 }
 type H2HMeeting={
   date:string;competition?:string|null;home:string;away:string;homeGoals:number;awayGoals:number;
@@ -261,6 +262,26 @@ function applyLive(rows:Selection[],live:LiveData|null,scorecard:Scorecard|null=
     })
   }
   return adjusted
+}
+function marketKindForAvailability(m:string){
+  if(m.startsWith("goal"))return "goal"
+  if(m.startsWith("assist"))return "assist"
+  if(m.startsWith("fouled"))return "fouled"
+  if(m.startsWith("foul"))return "foul"
+  if(m==="card")return "card"
+  if(m.startsWith("sot"))return "sot"
+  if(m.startsWith("shot"))return "shot"
+  return ""
+}
+function marketLabel(kind:string){
+  if(kind==="goal")return "Goalscorer"
+  if(kind==="assist")return "Assists"
+  if(kind==="card")return "Player cards"
+  if(kind==="foul")return "Player fouls committed"
+  if(kind==="fouled")return "Player fouled"
+  if(kind==="shot")return "Player shots"
+  if(kind==="sot")return "Player shots on target"
+  return kind
 }
 function liveKindForMarket(m:string){
   if(m.startsWith("goal"))return "goal"
@@ -605,6 +626,14 @@ export default function BetBuilderPage(){
   const disciplineServerBuilders=(data?.foulCardBuilders??[]).filter(x=>x.legs?.length&&x.verifiedBet365LegPrices===true)
   const disciplineRows=allRows.filter(r=>r.market==="card"||r.market.startsWith("foul")||r.market.startsWith("fouled"))
   const inPlay=live?.status==="live"||live?.status==="halftime"
+  const activeMarketAvailability=inPlay?(liveOdds?.marketAvailability??{}):(data?.marketAvailability??{})
+  const bet365MarketStatus=(market:string):MarketStatus=>{
+    const kind=marketKindForAvailability(market)
+    return kind?(activeMarketAvailability?.[kind]??"unknown"):"unknown"
+  }
+  const marketKinds=["goal","assist","card","foul","fouled","shot","sot"]
+  const unavailableBet365Markets=marketKinds.filter(kind=>activeMarketAvailability?.[kind]==="unavailable")
+  const availableBet365Markets=marketKinds.filter(kind=>activeMarketAvailability?.[kind]==="available")
   const allBuilders=inPlay?clientRiskBuilders(allRows,true):(serverBuilders.length?serverBuilders:clientRiskBuilders(allRows))
   const disciplineBuilders=inPlay?clientRiskBuilders(disciplineRows,true):(disciplineServerBuilders.length?disciplineServerBuilders:clientRiskBuilders(disciplineRows))
   const builders=builderMode==="discipline"?disciplineBuilders:allBuilders
@@ -632,6 +661,7 @@ export default function BetBuilderPage(){
   if(!fixture)return <main className="min-h-screen bg-[#07120e] px-4 py-10 text-white"><div className="mx-auto max-w-xl rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center"><p className="font-black">Choose a match first</p><p className="mt-2 text-sm text-white/40">Open a fixture from Matches to build it.</p><button onClick={()=>router.push("/")} className="mt-5 rounded-xl bg-emerald-400 px-4 py-2.5 text-sm font-black text-emerald-950">Matches</button></div></main>
 
   function toggle(row:Selection){
+    if(inPlay&&(bet365MarketStatus(row.market)!=="available"||verifiedBet365Odd(row)==null))return
     setSelected(cur=>{
       const next={...cur}
       if(next[row.id]){delete next[row.id];return next}
@@ -685,6 +715,12 @@ export default function BetBuilderPage(){
 
       {inPlay&&live?<section className="rounded-3xl border border-rose-300/15 bg-rose-400/[0.055] p-4"><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-black text-rose-200">Live recommendations adapting</p><p className="mt-1 text-[0.58rem] leading-relaxed text-white/40">Settled thresholds are removed automatically. If a player commits their first foul, 1+ disappears and the next available foul line moves up the ranking.</p></div><span className="shrink-0 rounded-full bg-rose-300 px-2 py-1 text-[0.45rem] font-black text-rose-950">{live.elapsed}'</span></div><p className="mt-2 text-[0.46rem] text-white/25">{live.source??"Live feed"} · refreshes every 30 seconds</p></section>:null}
 
+      {inPlay?<section className="rounded-2xl border border-white/10 bg-white/[0.035] p-3">
+        <div className="flex items-start justify-between gap-3"><div><p className="text-[0.52rem] font-black uppercase tracking-wide text-white/55">Bet365 live market availability</p><p className="mt-1 text-[0.5rem] leading-relaxed text-white/30">Only markets returned by the verified Bet365 live feed can be added to a bet or used in 3/1, 10/1 and 20/1 target slips.</p></div><span className="rounded-full bg-white/6 px-2 py-1 text-[0.42rem] font-black text-white/35">LIVE</span></div>
+        {availableBet365Markets.length?<div className="mt-2"><p className="text-[0.42rem] font-black uppercase text-emerald-300/80">Available</p><div className="mt-1 flex flex-wrap gap-1.5">{availableBet365Markets.map(kind=><span key={kind} className="rounded-full bg-emerald-300/10 px-2 py-1 text-[0.42rem] font-black text-emerald-200">{marketLabel(kind)}</span>)}</div></div>:null}
+        {unavailableBet365Markets.length?<div className="mt-2"><p className="text-[0.42rem] font-black uppercase text-rose-300/80">Not available in verified Bet365 feed</p><div className="mt-1 flex flex-wrap gap-1.5">{unavailableBet365Markets.map(kind=><span key={kind} className="rounded-full bg-rose-300/10 px-2 py-1 text-[0.42rem] font-black text-rose-200">{marketLabel(kind)}</span>)}</div></div>:null}
+      </section>:null}
+
       {data?.ok&&(data.lineupMode==="confirmed"||data.lineupMode==="predicted"||data.lineupsConfirmed)?<>
         <section className={"rounded-2xl border px-3 py-2.5 "+(liveBet365?"border-emerald-300/25 bg-emerald-400/[0.07]":verifiedBet365?"border-cyan-300/20 bg-cyan-300/[0.05]":"border-white/8 bg-white/[0.025]")}>
           <div className="flex items-center justify-between gap-3"><div><p className={"text-[0.52rem] font-black uppercase tracking-wide "+(liveBet365?"text-emerald-300":verifiedBet365?"text-cyan-200":"text-white/35")}>{liveBet365?"CONFIRMED LIVE BET365 ODDS":inPlay?"WAITING FOR LIVE BET365 PRICES":verifiedBet365?"VERIFIED BET365 ODDS":"NO VERIFIED BET365 PRICES"}</p><p className="mt-0.5 text-[0.5rem] text-white/30">{liveBet365?"Prices are from the current Odds-API.io Bet365 live feed and are rechecked every 15 seconds.":inPlay?(liveOdds?.note??"Live model probabilities remain visible, but 3/1, 10/1 and 20/1 target cards require fresh verified Bet365 live prices."):verifiedBet365?"Bet365 prices are verified but not inside the live freshness window.":"Model probabilities remain available, but target odds are not shown without Bet365 pricing."}</p></div>{data.oddsFreshness?<span className="rounded-full bg-white/6 px-2 py-1 font-mono text-[0.42rem] font-black text-white/35">{data.oddsFreshness}</span>:null}</div>
@@ -696,12 +732,12 @@ export default function BetBuilderPage(){
         </section>
 
         <section className="space-y-3">
-          <div className="px-1"><p className="font-black">Add your own selections</p><p className="mt-1 text-[0.6rem] text-white/35">Choose the market, then tap the player line you want. The strongest probabilities are shown first and your slip updates at the bottom.</p></div>
+          <div className="px-1"><p className="font-black">Add your own selections</p><p className="mt-1 text-[0.6rem] text-white/35">{inPlay?"Model probabilities are shown for analysis, but you can only add a player line when that exact market has a fresh verified Bet365 live price.":"Choose the market, then tap the player line you want. The strongest probabilities are shown first and your slip updates at the bottom."}</p></div>
           <div className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none]"><div className="flex min-w-max gap-2 pb-1">{categories.map(x=><button key={x.id} onClick={()=>setCategory(x.id)} className={"rounded-full border px-3.5 py-2.5 text-xs font-black "+(category===x.id?"border-emerald-300/30 bg-emerald-300 text-emerald-950":"border-white/8 bg-white/[0.04] text-white/50")}>{x.label}</button>)}</div></div>
 
           <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]">
             <div className="border-b border-white/8 px-3 py-2"><div className="flex items-center justify-between gap-3"><p className="text-[0.48rem] font-black uppercase text-white/25">Most likely first</p><p className="text-[0.48rem] font-black uppercase text-white/25">{visible.length} options</p></div><div className="mt-1.5 flex gap-2 text-[0.4rem] font-black uppercase"><span className="text-emerald-300">● High</span><span className="text-amber-200">● Average</span><span className="text-rose-200/80">● Low</span><span className="text-white/20">relative to this market</span></div></div>
-            <div>{visible.length?visible.map((row,i)=><SelectionRow key={row.id} row={row} selected={Boolean(selected[row.id])} onToggle={()=>toggle(row)} rank={i+1} traffic={trafficFor(row,allRows)} bestAction={category==="popular"} liveBet365={liveBet365}/>):<p className="px-4 py-8 text-center text-sm text-white/35">No qualifying selections in this market.</p>}</div>
+            <div>{visible.length?visible.map((row,i)=><SelectionRow key={row.id} row={row} selected={Boolean(selected[row.id])} onToggle={()=>toggle(row)} rank={i+1} traffic={trafficFor(row,allRows)} bestAction={category==="popular"} liveBet365={liveBet365} marketStatus={bet365MarketStatus(row.market)} inPlay={inPlay}/>):<p className="px-4 py-8 text-center text-sm text-white/35">No qualifying selections in this market.</p>}</div>
           </div>
         </section>
 
@@ -856,15 +892,16 @@ function TrackBetModal({draft,onClose,onSaved}:{draft:TrackDraft;onClose:()=>voi
 
 function MiniStat({label,value}:{label:string;value:string}){return <div className="rounded-xl bg-black/20 px-2 py-1.5"><p className="font-mono text-xs font-black">{value}</p><p className="text-[0.4rem] uppercase text-white/25">{label}</p></div>}
 
-function SelectionRow({row,selected,onToggle,rank,traffic,bestAction=false,liveBet365=false}:{row:Selection;selected:boolean;onToggle:()=>void;rank:number;traffic:Traffic;bestAction?:boolean;liveBet365?:boolean}){
+function SelectionRow({row,selected,onToggle,rank,traffic,bestAction=false,liveBet365=false,marketStatus="unknown",inPlay=false}:{row:Selection;selected:boolean;onToggle:()=>void;rank:number;traffic:Traffic;bestAction?:boolean;liveBet365?:boolean;marketStatus?:MarketStatus;inPlay?:boolean}){
   const exact=row.bookmakerOdds!=null
+  const actionable=!inPlay||(marketStatus==="available"&&exact)
   const trafficText=traffic==="high"?"HIGH":traffic==="average"?"AVERAGE":"LOW"
   const trafficClass=traffic==="high"?"bg-emerald-300/15 text-emerald-200 border-emerald-300/20":traffic==="average"?"bg-amber-300/12 text-amber-100 border-amber-300/20":"bg-rose-300/10 text-rose-100/75 border-rose-300/15"
   const probabilityClass=traffic==="high"?"text-emerald-200":traffic==="average"?"text-amber-100":"text-rose-100/80"
-  return <button onClick={onToggle} className={"grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 px-3 py-3 text-left transition "+(rank>1?"border-t border-white/[0.055] ":"")+(selected?"bg-emerald-400/[0.08]":"hover:bg-white/[0.025]")}>
+  return <button disabled={!actionable} onClick={actionable?onToggle:undefined} className={"grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 px-3 py-3 text-left transition "+(rank>1?"border-t border-white/[0.055] ":"")+(selected?"bg-emerald-400/[0.08]":actionable?"hover:bg-white/[0.025]":"opacity-55 cursor-not-allowed")}>
     <span className={"flex size-7 items-center justify-center rounded-full text-[0.56rem] font-black "+(traffic==="high"?"bg-emerald-400/12 text-emerald-300":traffic==="average"?"bg-amber-300/10 text-amber-200":"bg-rose-300/8 text-rose-200/65")}>{rank}</span>
     <div className="min-w-0"><div className="flex items-center gap-1.5"><p className="truncate text-sm font-black">{row.player}</p>{bestAction?<span className="rounded-full bg-cyan-300/10 px-1.5 py-0.5 text-[0.36rem] font-black text-cyan-200">BEST ACTION</span>:null}{selected?<BadgeCheck className="size-3.5 shrink-0 text-emerald-300"/>:null}</div><p className="mt-0.5 truncate text-[0.54rem] font-bold text-white/55">{row.label}</p><p className="mt-0.5 truncate text-[0.46rem] text-white/25">{row.team} · Grade {row.confidence}{row.liveAdjusted?" · live count "+(row.currentCount??0):row.edge!=null?" · "+(row.edge>=0?"+":"")+(row.edge*100).toFixed(1)+"pp vs price":""}</p></div>
-    <div className="min-w-[5rem] text-right"><div className="mb-1 flex justify-end"><span className={"rounded-full border px-1.5 py-0.5 text-[0.38rem] font-black "+trafficClass}>{trafficText}</span></div><p className={"font-mono text-base font-black "+probabilityClass}>{percent(row.probability)}</p><p className={"text-[0.42rem] font-black "+(exact?"text-emerald-200/70":"text-white/20")}>{exact?(row.bookmakerOdds!.toFixed(3)+" · "+(liveBet365?"LIVE BET365":"VERIFIED BET365")):"NO VERIFIED BET365 PRICE"}</p><span className={"mt-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[0.4rem] font-black "+(selected?"bg-emerald-300 text-emerald-950":"bg-white/6 text-white/30")}>{selected?<X className="size-2.5"/>:<CirclePlus className="size-2.5"/>}{selected?"REMOVE":"ADD"}</span></div>
+    <div className="min-w-[5rem] text-right"><div className="mb-1 flex justify-end"><span className={"rounded-full border px-1.5 py-0.5 text-[0.38rem] font-black "+trafficClass}>{trafficText}</span></div><p className={"font-mono text-base font-black "+probabilityClass}>{percent(row.probability)}</p><p className={"text-[0.42rem] font-black "+(exact?"text-emerald-200/70":marketStatus==="unavailable"?"text-rose-200/70":"text-white/20")}>{exact?(row.bookmakerOdds!.toFixed(3)+" · "+(liveBet365?"LIVE BET365":"VERIFIED BET365")):marketStatus==="unavailable"?"NOT OFFERED IN VERIFIED BET365 FEED":"NO VERIFIED BET365 PRICE"}</p>{actionable?<span className={"mt-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[0.4rem] font-black "+(selected?"bg-emerald-300 text-emerald-950":"bg-white/6 text-white/30")}>{selected?<X className="size-2.5"/>:<CirclePlus className="size-2.5"/>}{selected?"REMOVE":"ADD"}</span>:<span className="mt-1 inline-flex rounded-full bg-rose-300/10 px-1.5 py-0.5 text-[0.4rem] font-black text-rose-200">MODEL ONLY</span>}</div>
   </button>
 }
 
