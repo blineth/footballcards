@@ -86,6 +86,7 @@ type ScoreMarket = {
   h2hMatches: number
   h2hLineupOverlap: number | null
   sameMatchupMeetings: number
+  recommendationScore?: number
   reasons: string[]
 }
 
@@ -111,6 +112,13 @@ type ScorePlayer = {
     sameMatchupMeetings:number
     sameMatchupCards:number
     sameMatchupFouls:number
+  }
+  cardContext?: {
+    rolePrior:number
+    clubMatches:number
+    clubYellows:number
+    clubCardRate:number|null
+    clubCompetitions:string[]
   }
   yellowConditionals: {
     overall: { matches: number; yellows: number; rate: number }
@@ -309,6 +317,58 @@ function empiricalProbability(rows: MatchRow[], market: MarketKey) {
   const five = betaSmoothed(recent5.filter(row => hit(market, row)).length, recent5.length, ten, 4)
   return clamp(all * 0.48 + ten * 0.27 + five * 0.25)
 }
+function cardRolePrior(position:string|null|undefined){
+  const p=norm(position)
+  const compact=p.replace(/\s+/g,"")
+  if(p.includes("goal")||compact==="gk"||compact==="g")return 0.055
+  if(compact.includes("cdm")||compact==="dm"||p.includes("defensive mid"))return 0.22
+  if(p.includes("back")||p.includes("def")||compact.startsWith("cd")||["cb","lb","rb","lwb","rwb"].includes(compact))return 0.20
+  if(compact==="cm"||p.includes("central mid")||p==="midfielder")return 0.17
+  if(compact.startsWith("am")||["lm","rm","lw","rw","lf","rf"].includes(compact)||p.includes("attacking mid")||p.includes("wing"))return 0.125
+  if(compact==="f"||compact.startsWith("st")||compact.startsWith("cf")||p.includes("forward")||p.includes("striker"))return 0.095
+  return 0.15
+}
+function cardEmpiricalProbability(rows:MatchRow[],prior:number){
+  const ordered=[...rows].sort((a,b)=>String(a.matchDate).localeCompare(String(b.matchDate)))
+  if(!ordered.length)return prior
+  const recent5=ordered.slice(-5)
+  const recent10=ordered.slice(-10)
+  const all=betaSmoothed(ordered.filter(r=>r.yellowCard===true).length,ordered.length,prior,9)
+  const ten=betaSmoothed(recent10.filter(r=>r.yellowCard===true).length,recent10.length,all,7)
+  const five=betaSmoothed(recent5.filter(r=>r.yellowCard===true).length,recent5.length,ten,5)
+  return clamp(all*.56+ten*.28+five*.16)
+}
+function cardRecommendationScore(input:{
+  probability:number
+  recent5:number
+  season:number
+  h2hN:number
+  h2hCards:number
+  conditional2:{matches:number;yellows:number;rate:number|null}
+  foulPer90:number
+  clubMatches:number
+  clubCardRate:number|null
+}){
+  let score=input.probability
+  if(input.h2hN>=2){
+    const rel=Math.min(1,input.h2hN/4)
+    const rate=input.h2hCards/input.h2hN
+    score+=(rate-.14)*.18*rel
+  }
+  if(input.recent5>=.40)score+=.035
+  else if(input.recent5===0)score-=.012
+  if(input.season>=.28)score+=.03
+  else if(input.season===0)score-=.008
+  if(input.conditional2.matches>=3&&Number(input.conditional2.rate??0)>=.45)score+=.035
+  if(input.foulPer90>=1.8)score+=.02
+  else if(input.foulPer90<.8)score-=.012
+  if(input.clubMatches>=6&&input.clubCardRate!=null){
+    if(input.clubCardRate>=.20)score+=.025
+    else if(input.clubCardRate<=.08)score-=.02
+  }
+  return clamp(score,0.01,0.99)
+}
+
 function poissonAtLeast(lambda: number, threshold: number) {
   if (!(lambda > 0)) return 0
   let cumulative = 0
@@ -600,6 +660,12 @@ function marketReasons(input: {
   countryH2H?: { matches:number; playerSamples:number; cardRate:number|null; foulsPerPlayer:number|null } | null
 }) {
   const reasons: string[] = []
+  if(input.market==="card"&&input.h2hN>=2&&Number(input.h2hCards??0)===0){
+    reasons.push("No bookings in "+input.h2hN+" previous meetings")
+  }
+  if(input.market==="card"&&Number(input.clubMatches??0)>=5){
+    reasons.push("Current club season: "+Number(input.clubYellows??0)+"/"+Number(input.clubMatches??0)+" booked")
+  }
   if(input.market==="card"&&Number(input.h2hCards??0)>0){
     const overlap=input.h2hLineupOverlap==null?"":" · "+Math.round(Number(input.h2hLineupOverlap)*100)+"% current-opponent lineup overlap"
     reasons.push("Booked in "+input.h2hCards+"/"+input.h2hN+" previous meetings"+overlap)
@@ -814,7 +880,11 @@ function buildSlips(players: ScorePlayer[]) {
     }
   }
 
-  const cardLegs = players.map(player => marketLeg(player, "card")).filter(leg => leg.confidence !== "D").filter(leg => leg.expectedValue == null || leg.expectedValue >= -0.08).sort((a, b) => legRank(b) - legRank(a))
+  const cardLegs = players.map(player => ({leg:marketLeg(player, "card"),score:Number(player.markets.card.recommendationScore??player.markets.card.probability)}))
+    .filter(x => x.leg.confidence !== "D")
+    .filter(x => x.leg.expectedValue == null || x.leg.expectedValue >= -0.08)
+    .sort((a,b)=>b.score-a.score||legRank(b.leg)-legRank(a.leg))
+    .map(x=>x.leg)
   const twoCard = cardLegs.slice(0, 2)
   const threeCard = cardLegs.slice(0, 3)
 
@@ -1424,6 +1494,21 @@ export async function GET(request: Request) {
       targetDate:date,
     })
 
+    const rolePrior=cardRolePrior(candidate.position)
+    const domesticCurrent=candidate?.domesticCurrent??null
+    const domesticCompetition=norm(String(domesticCurrent?.competition??""))
+    const currentClubRows=allRows.filter(row=>
+      row.competition!=="International" &&
+      rowDate(row)>="2026-08-01" &&
+      (!domesticCompetition||norm(String(row.competition??""))!==domesticCompetition)
+    )
+    const clubMatches=Number(domesticCurrent?.appearances??0)+currentClubRows.length
+    const clubYellows=Number(domesticCurrent?.yellowCards??0)+currentClubRows.filter(row=>row.yellowCard===true).length
+    const clubCardRate=clubMatches>0?clubYellows/clubMatches:null
+    const clubCompetitions=[...new Set([
+      String(domesticCurrent?.competition??""),
+      ...currentClubRows.map(row=>String(row.competition??"")),
+    ].filter(Boolean))]
     const yellowOverall = rows.filter(row => row.yellowCard === true).length
     const cond0 = conditionalExact(rows, fouls => fouls === 0)
     const condExact1 = conditionalExact(rows, fouls => fouls === 1)
@@ -1438,7 +1523,9 @@ export async function GET(request: Request) {
     const keys = Object.keys(MARKET_LABELS) as MarketKey[]
 
     for (const market of keys) {
-      let probability = empiricalProbability(rows, market)
+      let probability = market==="card"
+        ? cardEmpiricalProbability(rows,rolePrior)
+        : empiricalProbability(rows, market)
       const recent5HitRate = hitRate(recent5Rows, market)
       const seasonHitRate = hitRate(rows, market)
       const h2hHitRate = h2hRows.length ? hitRate(h2hRows, market) : null
@@ -1510,7 +1597,17 @@ export async function GET(request: Request) {
         probability = logitAdjust(probability, (matchupFouls90 - 1.35) * 0.12)
       }
       if (market === "card") {
-        const overallRate = rows.length ? yellowOverall / rows.length : PRIOR.card
+        const overallRate = rows.length ? yellowOverall / rows.length : rolePrior
+        if(clubMatches>=3&&clubCardRate!=null){
+          const clubSmoothed=betaSmoothed(clubYellows,clubMatches,rolePrior,8)
+          const clubWeight=.08+.14*Math.min(1,clubMatches/12)
+          probability=blend(probability,clubSmoothed,clubWeight)
+        }
+        if(h2hRows.length>=2&&h2hContext.cards===0){
+          const reliability=Math.min(1,h2hRows.length/4)
+          const overlapWeight=.78+.45*(h2hContext.averageLineupOverlap??0)
+          probability=logitAdjust(probability,-.16*reliability*overlapWeight)
+        }
         if(h2hRows.length>=2&&Number(h2hHitRate??0)>=0.66){
           const repeatReliability=Math.min(1,h2hRows.length/4)
           probability=logitAdjust(probability,0.16*repeatReliability)
@@ -1543,6 +1640,11 @@ export async function GET(request: Request) {
           const cardMatchupWeight=directMatchup ? 0.10 : 0.055
           probability = logitAdjust(probability, (matchupFouled90 - 1.35) * cardMatchupWeight)
         }
+        const playerFouls90=rowPer90("foulsCommitted")
+        if(playerFouls90>0){
+          if(playerFouls90>=1.8)probability=logitAdjust(probability,Math.min(.12,(playerFouls90-1.8)*.08))
+          else if(playerFouls90<.8)probability=logitAdjust(probability,-Math.min(.10,(.8-playerFouls90)*.10))
+        }
         const refYellows = Number(radar?.referee?.yellowsPerGame ?? 0)
         if (refYellows > 0) probability = logitAdjust(probability, (refYellows - 4.2) * 0.055)
         if(countryH2HContext&&countryH2HContext.matches>=2&&countryH2HContext.playerSamples>=12){
@@ -1554,7 +1656,9 @@ export async function GET(request: Request) {
 
       const rawProbability = probability
       const calibrated = calibrationFor(competition, market, rawProbability)
-      probability = calibrated.probability
+      probability = market==="card"
+        ? blend(rawProbability,calibrated.probability,.45)
+        : calibrated.probability
 
       const odd = findOdds(usableSelections, candidate.name, market, candidates.map(x=>String(x.name??"")))
       const bookmakerOdds = odd?.odd == null ? null : Number(odd.odd)
@@ -1565,6 +1669,20 @@ export async function GET(request: Request) {
       const bookmakerConsensus = bookmakerNoVigProbability??impliedProbability
       const edge = bookmakerConsensus == null ? null : probability - bookmakerConsensus
       const expectedValue = bookmakerOdds == null ? null : probability * bookmakerOdds - 1
+
+      const recommendationScore=market==="card"
+        ? cardRecommendationScore({
+            probability,
+            recent5:recent5HitRate,
+            season:seasonHitRate,
+            h2hN:h2hRows.length,
+            h2hCards:h2hContext.cards,
+            conditional2:cond2,
+            foulPer90:rowPer90("foulsCommitted"),
+            clubMatches,
+            clubCardRate,
+          })
+        : probability
 
       markets[market] = {
         key: market,
@@ -1605,6 +1723,9 @@ export async function GET(request: Request) {
           matchupFouled90,
           conditional2: cond2,
           countryH2H:countryH2HContext,
+          clubMatches,
+          clubYellows,
+          clubCardRate,
         }),
       }
     }
@@ -1716,6 +1837,13 @@ export async function GET(request: Request) {
       sampleMinutes,
       expectedMinutes,
       matchup: candidate?.likelyMatchup ? { name: candidate.likelyMatchup.name, role: candidate.likelyMatchup.role ?? null, fouled90: matchupFouled90, type:candidate.likelyMatchup.type ?? null, seasonFouled90:candidate.likelyMatchup.seasonFouled90 ?? null, recentFouled90:candidate.likelyMatchup.recentFouled90 ?? null } : null,
+      cardContext:{
+        rolePrior:Math.round(rolePrior*1000)/1000,
+        clubMatches,
+        clubYellows,
+        clubCardRate:clubCardRate==null?null:Math.round(clubCardRate*1000)/1000,
+        clubCompetitions,
+      },
       h2hContext:{
         matches:h2hRows.length,
         cards:h2hContext.cards,
