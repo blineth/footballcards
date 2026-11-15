@@ -1356,7 +1356,7 @@ function buildRiskBuilders(players:ScorePlayer[],scope:"all"|"discipline"="all")
         state.product>=config.targetDecimal&&
         (!requireBothTeams||Object.keys(state.teamCounts).filter(k=>state.teamCounts[k]>0).length>=2)
       )
-      const candidateBest=valid.sort((a,b)=>{
+      const rankStates=(rows:State[])=>rows.sort((a,b)=>{
         if(Math.abs(a.conservative-b.conservative)>.0005)return b.conservative-a.conservative
         const weakA=Math.min(...a.legs.map(l=>safetyLegProbability(l)))
         const weakB=Math.min(...b.legs.map(l=>safetyLegProbability(l)))
@@ -1364,8 +1364,27 @@ function buildRiskBuilders(players:ScorePlayer[],scope:"all"|"discipline"="all")
         const da=Math.abs(Math.log(a.product)-Math.log(config.targetDecimal))
         const db=Math.abs(Math.log(b.product)-Math.log(config.targetDecimal))
         if(Math.abs(da-db)>.015)return da-db
-        return a.legs.length-b.legs.length
+        return b.legs.length-a.legs.length
       })[0]
+      const bestOverall=valid.length?rankStates([...valid]):undefined
+      const lowVariance=scope==="all"
+        ?valid.filter(state=>state.legs.every(leg=>{
+          const f=family(leg.market)
+          return f==="foul"||f==="fouled"||f==="shot"||f==="sot"
+        }))
+        :[]
+      const bestLowVariance=lowVariance.length?rankStates([...lowVariance]):undefined
+      let candidateBest=bestOverall
+      if(bestOverall&&bestLowVariance){
+        const hasHighVariance=bestOverall.legs.some(leg=>{
+          const f=family(leg.market)
+          return f==="goal"||f==="assist"||f==="card"
+        })
+        const requiredMargin=config.risk==="Safe"?1.18:config.risk==="Balanced"?1.10:1.05
+        if(hasHighVariance&&bestOverall.conservative<bestLowVariance.conservative*requiredMargin){
+          candidateBest=bestLowVariance
+        }
+      }
 
       if(candidateBest){
         best=candidateBest
@@ -1403,7 +1422,7 @@ function buildRiskBuilders(players:ScorePlayer[],scope:"all"|"discipline"="all")
       note:scope==="discipline"
         ?"This slip searches only verified Bet365 yellow-card, foul-committed and foul-drawn markets. It may use up to Bet365's 12-selection limit, with no more than six players from either team, and chooses the combination with the highest conservative all-hit probability that reaches the target. Cards are not forced in when higher-probability foul legs are safer."
         :config.risk==="Safe"
-          ?"Every verified Bet365 player market is searched. Safe chooses the highest uncertainty-adjusted all-hit probability that reaches the target. Longer low-threshold foul/shot routes are not penalised simply for using more legs, while goals, assists and cards carry an explicit high-variance reliability penalty."
+          ?"Every verified Bet365 player market is searched. Safe prefers the best low-variance foul/fouled/shot/SOT route whenever a scorer/card/assist route is not at least 18% better on the uncertainty-adjusted safety estimate. Longer low-threshold routes are not penalised simply for using more legs."
           :"Every verified Bet365 player market is searched across goals, assists, cards, fouls, fouls drawn, shots and SOT. The model chooses the combination with the highest conservative all-hit probability that reaches the target; market type and leg count do not get preference. Bet365 can reprice correlated legs inside Bet Builder, so this is not labelled as the final Builder quote."
     }
   })
