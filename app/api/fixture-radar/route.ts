@@ -149,17 +149,14 @@ function applyLineupMode(data:any,date:string,home:string,away:string,competitio
     data.candidates=data.candidates.map((c:any)=>({...c,predictedStarter:false}))
     return data
   }
+  // Before the official XI is confirmed, keep modelling from a probable XI.
+  // For internationals without a published current squad, the upstream candidate
+  // pool is restricted to players with recent senior international appearances.
+  // A verified current squad, when available, narrows this pool further; the
+  // official starting XI always replaces the prediction immediately.
   if(competition==="International"&&data?.squadVerified!==true){
-    data.lineupMode="squad"
-    data.lineupSource="Waiting for verified current senior matchday squad"
-    data.predictedLineups=null
-    // Accuracy over coverage: never turn a broad/stale national-team player pool
-    // into a betting XI. Once ESPN exposes the current matchday squad this route
-    // will immediately resume predicted-XI modelling; confirmed starters remain
-    // the final authority.
-    data.candidates=[]
-    data.recommendationsBlockedReason="Current senior matchday squad is not verified yet"
-    return data
+    data.predictedLineupEligibility="recent-senior-international-history"
+    data.recommendationsBlockedReason=null
   }
   const curated=getPredictedFixture(date,home,away)
   const curatedHome=curated ? Object.entries(curated.teams).find(([name])=>teamMatch(name,home))?.[1] : null
