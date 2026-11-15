@@ -956,7 +956,7 @@ export default function BetBuilderPage(){
   const[liveOdds,setLiveOdds]=useState<LiveOddsData|null>(null)
   const[loading,setLoading]=useState(true)
   const[baselineRetry,setBaselineRetry]=useState(0)
-  const[category,setCategory]=useState<Category>("popular")
+  const[category,setCategory]=useState<Category>("fouls")
   const[selected,setSelected]=useState<Record<string,Selection>>({})
   const[trayOpen,setTrayOpen]=useState(false)
   const[h2hOpen,setH2hOpen]=useState(false)
@@ -1367,17 +1367,14 @@ export default function BetBuilderPage(){
               :"Not enough qualifying markets reach this target yet."}</p></div>}</div>}
         </section>
 
-        {builderMode!=="discipline"?<section className="space-y-3">
-          <div className="px-1"><p className="font-black">Add your own selections</p><p className="mt-1 text-[0.6rem] text-white/35">{inPlay?"Model probabilities are shown for analysis, but you can only add a player line when that exact market has a fresh verified Bet365 live price.":"Choose the market, then tap the player line you want. The strongest probabilities are shown first and your slip updates at the bottom."}</p></div>
-          <div className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none]"><div className="flex min-w-max gap-2 pb-1">{categories.map(x=><button key={x.id} onClick={()=>setCategory(x.id)} className={"rounded-full border px-3.5 py-2.5 text-xs font-black "+(category===x.id?"border-emerald-300/30 bg-emerald-300 text-emerald-950":"border-white/8 bg-white/[0.04] text-white/50")}>{x.label}</button>)}</div></div>
+        <section className="space-y-3">
+          <div className="px-1"><p className="font-black">{inPlay?"Live likelihood":"Player likelihood"}</p><p className="mt-1 text-[0.6rem] text-white/35">{inPlay?"What is most likely to happen from the current minute onward, using the live match state plus each player's history. Already-hit thresholds are removed automatically.":"Ranked player-event probabilities from the model. Bet365 prices are shown only as price context where we have them."}</p></div>
+          <div className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none]"><div className="flex min-w-max gap-2 pb-1">{categories.filter(x=>x.id!=="popular").map(x=><button key={x.id} onClick={()=>setCategory(x.id)} className={"rounded-full border px-3.5 py-2.5 text-xs font-black "+(category===x.id?"border-emerald-300/30 bg-emerald-300 text-emerald-950":"border-white/8 bg-white/[0.04] text-white/50")}>{x.label}</button>)}</div></div>
 
-          <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]">
-            <div className="border-b border-white/8 px-3 py-2"><div className="flex items-center justify-between gap-3"><p className="text-[0.48rem] font-black uppercase text-white/25">Most likely first</p><p className="text-[0.48rem] font-black uppercase text-white/25">{visible.length} options</p></div><div className="mt-1.5 flex gap-2 text-[0.4rem] font-black uppercase"><span className="text-emerald-300">● High</span><span className="text-amber-200">● Average</span><span className="text-rose-200/80">● Low</span><span className="text-white/20">relative to this market</span></div></div>
-            <div>{visible.length?visible.map((row,i)=><SelectionRow key={row.id} row={row} selected={Boolean(selected[row.id])} onToggle={()=>toggle(row)} rank={i+1} traffic={trafficFor(row,allRows)} bestAction={category==="popular"} liveBet365={liveBet365} marketStatus={bet365MarketStatus(row.market)} inPlay={inPlay} fixture={fixture}/>):<p className="px-4 py-8 text-center text-sm text-white/35">No qualifying selections in this market.</p>}</div>
-          </div>
-        </section>:null}
+          <LikelihoodBoard rows={visible} allRows={allRows} category={category==="popular"?"fouls":category} fixture={fixture} inPlay={inPlay}/>
+        </section>
 
-        {data.snapshotFallback?<section className="rounded-2xl border border-violet-300/15 bg-violet-400/[0.04] p-3 text-[0.58rem] leading-relaxed text-white/40">Snapshot fallback is active. Probabilities are still ranked, but no price is displayed unless a verified Bet365 price is available.</section>:null}
+        {data.snapshotFallback?<section className="rounded-2xl border border-violet-300/15 bg-violet-400/[0.04] p-3 text-[0.58rem] leading-relaxed text-white/40">Snapshot fallback is active. Probabilities are still ranked; Bet365 prices are shown as live or reference prices where captured.</section>:null}
       </>:null}
     </div>
 
@@ -1558,6 +1555,43 @@ function TrackBetModal({draft,fixture,onClose,onSaved}:{draft:TrackDraft;fixture
 }
 
 function MiniStat({label,value}:{label:string;value:string}){return <div className="rounded-xl bg-black/20 px-2 py-1.5"><p className="font-mono text-xs font-black">{value}</p><p className="text-[0.4rem] uppercase text-white/25">{label}</p></div>}
+
+function LikelihoodBoard({rows,allRows,category,fixture,inPlay}:{rows:Selection[];allRows:Selection[];category:Category;fixture:Fixture;inPlay:boolean}){
+  const label=categories.find(x=>x.id===category)?.label??"Likelihood"
+  const ranked=[...rows].sort((a,b)=>b.probability-a.probability).slice(0,10)
+  const evidence=(row:Selection)=>{
+    if(!inPlay)return row.reason
+    if(row.market==="card")return `Fouls committed ${Number(row.liveFoulsCommitted??0)} · fouled ${Number(row.liveFoulsDrawn??0)}`
+    if(row.market.startsWith("fouled"))return `Fouled ${Number(row.liveFoulsDrawn??0)} times already`
+    if(row.market.startsWith("foul"))return `Fouls committed ${Number(row.liveFoulsCommitted??0)} already`
+    if(row.market.startsWith("sot"))return `Shots ${Number(row.liveShots??0)} · SOT ${Number(row.liveShotsOnTarget??0)}`
+    if(row.market.startsWith("shot"))return `Shots ${Number(row.liveShots??0)} · SOT ${Number(row.liveShotsOnTarget??0)}`
+    return row.currentCount!=null?`Live count ${row.currentCount}`:row.reason
+  }
+  return <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]">
+    <div className="border-b border-white/8 px-3 py-3">
+      <div className="flex items-center justify-between gap-3"><div><p className="text-sm font-black">{label} likelihood</p><p className="mt-1 text-[0.5rem] text-white/30">{inPlay?"Remaining-match probability · most likely first":"Model probability · most likely first"}</p></div><span className="rounded-full bg-white/6 px-2 py-1 text-[0.42rem] font-black text-white/35">{ranked.length} PLAYERS</span></div>
+    </div>
+    {ranked.length?ranked.map((row,i)=>{
+      const price=displayedBet365Odd(row)
+      const traffic=trafficFor(row,allRows)
+      const tone=traffic==="high"?"text-emerald-200":traffic==="average"?"text-amber-100":"text-rose-100/80"
+      return <div key={row.id} className={"grid grid-cols-[auto_1fr_auto] items-center gap-3 px-3 py-3 "+(i?"border-t border-white/[0.055]":"")}>
+        <span className={"flex size-8 items-center justify-center rounded-full font-mono text-xs font-black "+(i===0?"bg-emerald-300 text-emerald-950":"bg-white/6 text-white/45")}>{i+1}</span>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-1.5"><p className="truncate text-sm font-black">{row.player}</p><TeamBadge team={row.team} fixture={fixture}/></div>
+          <p className="mt-0.5 truncate text-[0.54rem] font-bold text-white/55">{row.label}</p>
+          <p className="mt-0.5 truncate text-[0.46rem] text-white/25">{evidence(row)}</p>
+        </div>
+        <div className="min-w-[5.8rem] text-right">
+          <p className={"font-mono text-lg font-black "+tone}>{percent(row.probability)}</p>
+          <p className="text-[0.4rem] font-black uppercase text-white/25">{inPlay?"remaining chance":"model chance"}</p>
+          {price?<p className={"mt-1 font-mono text-[0.48rem] font-black "+(price.state==="live"?"text-emerald-200":"text-amber-200/80")}>B365 {price.odd.toFixed(2)}{price.state==="reference"?" ref":""}</p>:null}
+        </div>
+      </div>
+    }):<p className="px-4 py-8 text-center text-sm text-white/35">No remaining player events in this market right now.</p>}
+  </div>
+}
 
 function SelectionRow({row,selected,onToggle,rank,traffic,bestAction=false,liveBet365=false,marketStatus="unknown",inPlay=false,fixture}:{row:Selection;selected:boolean;onToggle:()=>void;rank:number;traffic:Traffic;bestAction?:boolean;liveBet365?:boolean;marketStatus?:MarketStatus;inPlay?:boolean;fixture:Fixture}){
   const shownPrice=displayedBet365Odd(row)
