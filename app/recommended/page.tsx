@@ -205,7 +205,7 @@ export default function RecommendedPage(){
   const refresh=useCallback(async(force=false)=>{
     setLoading(true)
     const controller=new AbortController()
-    const timeout=window.setTimeout(()=>controller.abort(),force?25000:12000)
+    const timeout=window.setTimeout(()=>controller.abort(),force?30000:20000)
     try{
       const url="/api/recommended?mode=multi"+(force?"&refresh=1":"")
       const r=await fetch(url,{cache:"no-store",signal:controller.signal})
