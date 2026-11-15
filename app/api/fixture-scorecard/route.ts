@@ -612,7 +612,14 @@ function marketReasons(input: {
 }
 
 function marketLeg(player: ScorePlayer, market: MarketKey): SlipLeg {
-  const m = player.markets[market]
+  const m = player.markets?.[market]
+  if(!m){
+    return {
+      player:player.name,dbPlayerName:player.dbName,team:player.team,market,label:MARKET_LABELS[market],
+      probability:0,fairOdds:null,bookmakerOdds:null,bookmakerName:null,previousBookmakerOdds:null,
+      bookmakerMovement:null,edge:null,expectedValue:null,confidence:"D",reason:"Market unavailable",priceSource:null,
+    }
+  }
   return {
     player: player.name,
     dbPlayerName: player.dbName,
@@ -629,7 +636,7 @@ function marketLeg(player: ScorePlayer, market: MarketKey): SlipLeg {
     expectedValue: m.expectedValue,
     confidence: m.confidence,
     reason: m.reasons[0] ?? "",
-    priceSource: m.bookmakerOdds!=null ? "exact" : null,
+    priceSource: m.bookmakerOdds!=null && m.bookmakerName==="Bet365" ? "exact" : null,
   }
 }
 function legRank(leg: SlipLeg) {
@@ -1108,7 +1115,42 @@ export async function GET(request: Request) {
       history = await db.select().from(playerH2H).where(and(inArray(playerH2H.playerName, names), lt(playerH2H.matchDate, date)))
     } catch (error) {
       try {
-        return NextResponse.json(await buildSnapshotScorecard({date,home,away,competition:competition as any}))
+        const fallback:any=await buildSnapshotScorecard({date,home,away,competition:competition as any})
+        const fallbackPlayers:Array<any>=Array.isArray(fallback?.players)?fallback.players:[]
+        const fallbackNames=fallbackPlayers.map(p=>String(p?.name??"")).filter(Boolean)
+        for(const player of fallbackPlayers){
+          for(const [marketKey,marketRow] of Object.entries(player?.markets??{}) as Array<[MarketKey,any]>){
+            const odd=findOdds(usableSelections,String(player?.name??""),marketKey,fallbackNames)
+            if(!odd||odd.bookmaker!=="Bet365"||odd.odd==null||Number(odd.odd)<=1)continue
+            const price=Number(odd.odd)
+            const probability=Number(marketRow?.probability??0)
+            marketRow.bookmakerOdds=price
+            marketRow.bookmakerName="Bet365"
+            marketRow.previousBookmakerOdds=odd.previousOdd==null?null:Number(odd.previousOdd)
+            marketRow.bookmakerMovement=odd.movement==null?null:Number(odd.movement)
+            marketRow.bookmakerLabel=odd.label??null
+            marketRow.impliedProbability=price>0?Math.round((1/price)*1000)/1000:null
+            marketRow.edge=price>0?Math.round((probability-1/price)*1000)/1000:null
+            marketRow.expectedValue=price>0?Math.round((probability*price-1)*1000)/1000:null
+          }
+        }
+        const verifiedRiskBuilders=buildRiskBuilders(fallbackPlayers as ScorePlayer[])
+        return NextResponse.json({
+          ...fallback,
+          bookmaker:odds?.bookmaker==="Bet365"?"Bet365":null,
+          oddsSource:odds?.source??null,
+          oddsCapturedAt,
+          oddsAgeSeconds,
+          oddsFreshness,
+          freeTier:odds?.freeTier!==false,
+          marketAvailability,
+          bookmakerAvailability,
+          eligibleBooks,
+          priceAvailable:Boolean(odds?.priceAvailable)&&oddsFreshness!=="STALE",
+          players:fallbackPlayers,
+          riskBuilders:verifiedRiskBuilders,
+          fallbackReason:"Live history database is temporarily unavailable; snapshot probabilities are being combined with verified Bet365 prices.",
+        })
       } catch {
         return NextResponse.json({
           ok:false,
