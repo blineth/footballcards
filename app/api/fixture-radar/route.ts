@@ -12,7 +12,7 @@ const PREMIER_LEAGUE_SEASON_START = "2026-08-21"
 const CHAMPIONSHIP_SEASON_START = "2026-08-01"
 const LEAGUE_ONE_SEASON_START = "2026-08-01"
 const LEAGUE_TWO_SEASON_START = "2026-08-01"
-const INTERNATIONAL_FORM_START = "2024-06-01"
+const INTERNATIONAL_FORM_START = "2026-01-01"
 
 function norm(value: string | null | undefined) {
   return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\b(afc|fc)\b/g, "").replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ")
