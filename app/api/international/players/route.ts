@@ -1,11 +1,26 @@
 import { NextResponse } from "next/server"
-import { desc, eq } from "drizzle-orm"
+import { desc, eq, inArray } from "drizzle-orm"
 import { db, isDatabaseConfigured } from "@/lib/db"
 import { ensureResearchSchema } from "@/lib/db/ensure-research-schema"
 import { playerBaselines, playerH2H } from "@/lib/db/schema"
 
 export const dynamic = "force-dynamic"
 export const revalidate = 0
+
+const INTERNATIONAL_COMPETITIONS=[
+  "International",
+  "UEFA European Championship",
+  "UEFA European Championship Qualifying",
+  "UEFA Nations League",
+  "FIFA World Cup",
+  "FIFA World Cup Qualifying - UEFA",
+  "FIFA World Cup Qualifying - CONMEBOL",
+  "FIFA World Cup Qualifying - CONCACAF",
+  "FIFA World Cup Qualifying - AFC",
+  "FIFA World Cup Qualifying - CAF",
+  "FIFA World Cup Qualifying - OFC",
+  "International Friendly",
+]
 
 function norm(value: unknown) {
   return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()
@@ -111,7 +126,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url)
   const teamFilter = norm(url.searchParams.get("team"))
   const [internationalRows, currentBaselines, previousBaselines] = await Promise.all([
-    db.select().from(playerH2H).where(eq(playerH2H.competition, "International")).orderBy(desc(playerH2H.matchDate)),
+    db.select().from(playerH2H).where(inArray(playerH2H.competition, INTERNATIONAL_COMPETITIONS)).orderBy(desc(playerH2H.matchDate)),
     db.select().from(playerBaselines).where(eq(playerBaselines.season, "2026/27")).orderBy(desc(playerBaselines.minutes)),
     db.select().from(playerBaselines).where(eq(playerBaselines.season, "2025/26")).orderBy(desc(playerBaselines.minutes)),
   ])
