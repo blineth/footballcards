@@ -512,7 +512,7 @@ type MultiMatchLeg={
   player:string;team:string;market:string;label:string;probability:number;
   bookmakerOdds:number;bookmaker:"Bet365";confidence:SlipLeg["confidence"]
 }
-type MultiMatchRiskTier="safe"|"balanced"|"risky"
+type MultiMatchRiskTier=string
 type MultiMatchGameBuilder={
   fixtureId:string;competition:Competition;kickoff:string;home:string;away:string;homeCrest?:string|null;awayCrest?:string|null;
   riskTier:MultiMatchRiskTier;targetFractional:string;targetDecimal:number;referenceOdds:number;modelAllHitProbability:number;
@@ -745,7 +745,6 @@ function buildMultiGameBoards(scans:FixtureScan[]):MultiGameBoard[]{
 function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
   const eligible=scans.filter(x=>x.scorecard?.ok&&usablePlayerPropCoverage(x.scorecard.marketAvailability))
   const family=(market:string)=>market.startsWith("goal")?"goal":market.startsWith("assist")?"assist":market.startsWith("fouled")?"fouled":market.startsWith("foul")?"foul":market.startsWith("sot")?"sot":market.startsWith("shot")?"shot":"card"
-  const baseMarket=(market:string)=>market==="foul1"||market==="fouled1"||market==="shot1"||market==="sot1"
   const confidenceReliability=(leg:SlipLeg)=>leg.confidence==="A"?1:leg.confidence==="B"?.99:leg.confidence==="C"?.965:.90
   const marketReliability=(leg:SlipLeg)=>{
     const f=family(leg.market)
@@ -781,207 +780,125 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
     return Math.max(0,Math.min(.99,conservative*concentration))
   }
 
-  const tierConfigs:Array<{
-    id:MultiMatchRiskTier;title:string;description:string;targetFractional:string;targetDecimal:number;
-    minLeg:number;maxFactor:number;allowHighVariance:boolean;forceBestCard:boolean;maxHighVariance:number
-  }>=[
-    {
-      id:"safe",title:"Safe",targetFractional:"3/1",targetDecimal:4,minLeg:.32,maxFactor:1.45,
-      allowHighVariance:true,forceBestCard:false,maxHighVariance:1,
-      description:"All verified player props are eligible. The route is still probability-first, so repeated 1+ fouls/fouled/shots/SOT are preferred and at most one higher-variance scorer, assist or card can enter only when it materially improves the whole-slip chance.",
-    },
-    {
-      id:"balanced",title:"Balanced",targetFractional:"5/1",targetDecimal:6,minLeg:.25,maxFactor:1.42,
-      allowHighVariance:true,forceBestCard:false,maxHighVariance:2,
-      description:"All verified player props are eligible, but the engine still favours the safest combination. Scorers, assists and cards are only used when they beat safer repeated-event alternatives on the conservative safety score.",
-    },
-    {
-      id:"risky",title:"Risky",targetFractional:"10/1",targetDecimal:11,minLeg:.15,maxFactor:1.38,
-      allowHighVariance:true,forceBestCard:false,maxHighVariance:3,
-      description:"All verified player props are eligible. Higher target odds allow more scorer/assist/card exposure, but only where the evidence-adjusted route is safer than simply stacking weaker low-frequency selections.",
-    },
-  ]
+  const tierConfigs=[
+    {id:"most-likely",title:"Most Likely",targetFractional:"Best",targetDecimal:0},
+    {id:"5-1",title:"5/1",targetFractional:"5/1",targetDecimal:6},
+    {id:"10-1",title:"10/1",targetFractional:"10/1",targetDecimal:11},
+    {id:"15-1",title:"15/1",targetFractional:"15/1",targetDecimal:16},
+    {id:"20-1",title:"20/1",targetFractional:"20/1",targetDecimal:21},
+    {id:"25-1",title:"25/1",targetFractional:"25/1",targetDecimal:26},
+    {id:"30-1",title:"30/1",targetFractional:"30/1",targetDecimal:31},
+    {id:"40-1",title:"40/1",targetFractional:"40/1",targetDecimal:41},
+    {id:"50-1",title:"50/1",targetFractional:"50/1",targetDecimal:51},
+    {id:"75-1",title:"75/1",targetFractional:"75/1",targetDecimal:76},
+    {id:"100-1",title:"100/1",targetFractional:"100/1",targetDecimal:101},
+  ] as const
 
-  function buildTierForMatch(scan:FixtureScan,config:(typeof tierConfigs)[number]):MultiMatchGameBuilder|null{
-    const scorecard=scan.scorecard
-    if(!scorecard)return null
-    let candidates=directPlayerCandidates(scorecard)
-      .filter(leg=>leg.bookmakerName==="Bet365"&&leg.bookmakerOdds!=null&&Number(leg.bookmakerOdds)>1)
-      .filter(leg=>safetyLegProbability(leg)>=config.minLeg)
-      .sort((a,b)=>(safetyLegProbability(b)*marketStabilityFactor(b))-(safetyLegProbability(a)*marketStabilityFactor(a))||safetyLegProbability(b)-safetyLegProbability(a)||b.probability-a.probability||Number(a.bookmakerOdds)-Number(b.bookmakerOdds))
-      .slice(0,120)
+  const routesByFixture=new Map<string,Map<string,MultiMatchGameBuilder>>()
+  for(const scan of eligible){
+    const scorecard=scan.scorecard!
+    const bestByPlayer=new Map<string,SlipLeg>()
+    for(const leg of directPlayerCandidates(scorecard)){
+      if(leg.bookmakerName!=="Bet365"||leg.bookmakerOdds==null||Number(leg.bookmakerOdds)<=1||leg.confidence==="D")continue
+      if(safetyLegProbability(leg)<.10)continue
+      const key=normName(leg.player)
+      const current=bestByPlayer.get(key)
+      const score=safetyLegProbability(leg)*marketStabilityFactor(leg)
+      const currentScore=current?safetyLegProbability(current)*marketStabilityFactor(current):-1
+      if(!current||score>currentScore)bestByPlayer.set(key,leg)
+    }
+    const pool=[...bestByPlayer.values()]
+      .sort((a,b)=>{
+        const sa=safetyLegProbability(a)*marketStabilityFactor(a)
+        const sb=safetyLegProbability(b)*marketStabilityFactor(b)
+        if(Math.abs(sa-sb)>.000001)return sb-sa
+        return b.probability-a.probability||Number(a.bookmakerOdds)-Number(b.bookmakerOdds)
+      })
+      .slice(0,12)
 
-    if(!config.allowHighVariance){
-      candidates=candidates.filter(leg=>{
-        const f=family(leg.market)
-        return f==="foul"||f==="fouled"||f==="shot"||f==="sot"
+    const chosen:SlipLeg[]=[]
+    let product=1
+    const byTier=new Map<string,MultiMatchGameBuilder>()
+    const addNext=()=>{
+      const next=pool[chosen.length]
+      if(!next)return false
+      chosen.push(next)
+      product*=Number(next.bookmakerOdds)
+      return true
+    }
+
+    for(const cfg of tierConfigs){
+      if(cfg.id==="most-likely"){
+        while(chosen.length<Math.min(2,pool.length))if(!addNext())break
+      }else{
+        while(product<cfg.targetDecimal&&chosen.length<pool.length)if(!addNext())break
+      }
+      const reached=cfg.id==="most-likely"?chosen.length>=1:product>=cfg.targetDecimal
+      if(!reached)continue
+      const legs=[...chosen]
+      const raw=legs.reduce((v,l)=>v*l.probability,1)
+      const conservative=conservativeJoint(legs)
+      const cardLeg=legs.find(l=>family(l.market)==="card")??null
+      const mapped:MultiMatchLeg[]=legs.map(leg=>({
+        fixtureId:scan.fixture.id,competition:scan.fixture.competition,kickoff:scan.fixture.kickoff,
+        home:scan.fixture.home.name,away:scan.fixture.away.name,
+        player:leg.player,team:leg.team,market:leg.market,label:leg.label,
+        probability:leg.probability,bookmakerOdds:Number(leg.bookmakerOdds),bookmaker:"Bet365",confidence:leg.confidence,
+      }))
+      byTier.set(cfg.id,{
+        fixtureId:scan.fixture.id,competition:scan.fixture.competition,kickoff:scan.fixture.kickoff,
+        home:scan.fixture.home.name,away:scan.fixture.away.name,homeCrest:scan.fixture.home.crest??null,awayCrest:scan.fixture.away.crest??null,
+        riskTier:cfg.id,targetFractional:cfg.targetFractional,targetDecimal:cfg.targetDecimal,
+        referenceOdds:Math.round(product*100)/100,
+        modelAllHitProbability:Math.round(raw*10000)/10000,
+        conservativeAllHitProbability:Math.round(conservative*10000)/10000,
+        includesCard:Boolean(cardLeg),cardPick:cardLeg?cardLeg.player:null,lineupsConfirmed:Boolean(scorecard.lineupsConfirmed),
+        preMatchSnapshot:new Date(scan.fixture.kickoff).getTime()<=Date.now(),legs:mapped,
       })
     }
-
-    const homeKey=normName(scan.fixture.home.name)
-    const awayKey=normName(scan.fixture.away.name)
-    const bothTeamsAvailable=candidates.some(leg=>normName(leg.team)===homeKey)&&candidates.some(leg=>normName(leg.team)===awayKey)
-    if(!bothTeamsAvailable)return null
-
-    const bestCard=config.forceBestCard
-      ?candidates.filter(leg=>family(leg.market)==="card")
-        .sort((a,b)=>safetyLegProbability(b)-safetyLegProbability(a)||b.probability-a.probability||Number(a.bookmakerOdds)-Number(b.bookmakerOdds))[0]??null
-      :null
-
-    type State={
-      legs:SlipLeg[];product:number;raw:number;conservative:number;
-      families:Record<string,number>;teamCounts:Record<string,number>;players:Set<string>;highVarianceCount:number
-    }
-    const initialLegs=bestCard?[bestCard]:[]
-    const initialTeams:Record<string,number>={}
-    const initialFamilies:Record<string,number>={}
-    const initialPlayers=new Set<string>()
-    let initialProduct=1,initialRaw=1
-    if(bestCard){
-      const tk=normName(bestCard.team),pk=normName(bestCard.player)
-      initialTeams[tk]=1;initialFamilies.card=1;initialPlayers.add(pk)
-      initialProduct=Number(bestCard.bookmakerOdds);initialRaw=bestCard.probability
-    }
-    let states:State[]=[{
-      legs:initialLegs,product:initialProduct,raw:initialRaw,
-      conservative:initialLegs.length?conservativeJoint(initialLegs):1,
-      families:initialFamilies,teamCounts:initialTeams,players:initialPlayers,highVarianceCount:bestCard?1:0,
-    }]
-
-    const pool=candidates.filter(leg=>!bestCard||normName(leg.player)!==normName(bestCard.player))
-    const orderedPool=[
-      ...pool.filter(leg=>baseMarket(leg.market)),
-      ...pool.filter(leg=>!baseMarket(leg.market)),
-    ]
-    const maxProduct=config.targetDecimal*config.maxFactor
-
-    for(const option of orderedPool){
-      const next=[...states]
-      for(const state of states){
-        if(state.legs.length>=12)continue
-        const playerKey=normName(option.player)
-        if(state.players.has(playerKey))continue
-        const teamKey=normName(option.team)
-        if((state.teamCounts[teamKey]??0)>=6)continue
-        const fam=family(option.market)
-        const isHigh=fam==="goal"||fam==="assist"||fam==="card"
-        if(fam==="card"&&(state.families.card??0)>=1)continue
-        if(isHigh&&state.highVarianceCount>=config.maxHighVariance)continue
-        const product=state.product*Number(option.bookmakerOdds)
-        if(product>maxProduct)continue
-        const legs=[...state.legs,option]
-        const families={...state.families,[fam]:(state.families[fam]??0)+1}
-        const teamCounts={...state.teamCounts,[teamKey]:(state.teamCounts[teamKey]??0)+1}
-        next.push({
-          legs,product,raw:state.raw*option.probability,conservative:conservativeJoint(legs),
-          families,teamCounts,players:new Set([...state.players,playerKey]),
-          highVarianceCount:state.highVarianceCount+(isHigh?1:0),
-        })
-      }
-
-      const buckets=new Map<string,State[]>()
-      for(const state of next){
-        const oddsBucket=Math.floor(Math.log(Math.max(1,state.product))*120)
-        const key=oddsBucket+"|"+state.legs.length+"|"+(state.teamCounts[homeKey]??0)+"|"+(state.teamCounts[awayKey]??0)+"|"+state.highVarianceCount
-        const rows=buckets.get(key)??[]
-        rows.push(state)
-        rows.sort((a,b)=>{
-          const routeA=routeSelectionSafety(a.legs,a.conservative)
-          const routeB=routeSelectionSafety(b.legs,b.conservative)
-          if(Math.abs(routeA-routeB)>.000001)return routeB-routeA
-          if(Math.abs(a.conservative-b.conservative)>.000001)return b.conservative-a.conservative
-          const weakA=a.legs.length?Math.min(...a.legs.map(safetyLegProbability)):0
-          const weakB=b.legs.length?Math.min(...b.legs.map(safetyLegProbability)):0
-          if(Math.abs(weakA-weakB)>.0001)return weakB-weakA
-          return b.raw-a.raw
-        })
-        buckets.set(key,rows.slice(0,10))
-      }
-      states=[...buckets.values()].flat()
-        .sort((a,b)=>routeSelectionSafety(b.legs,b.conservative)-routeSelectionSafety(a.legs,a.conservative)||b.conservative-a.conservative||b.raw-a.raw)
-        .slice(0,5000)
-    }
-
-    const valid=states.filter(state=>
-      state.legs.length>=2&&
-      state.product>=config.targetDecimal&&
-      state.product<=maxProduct&&
-      (state.teamCounts[homeKey]??0)>0&&
-      (state.teamCounts[awayKey]??0)>0&&
-      (!config.forceBestCard||!bestCard||(state.families.card??0)===1)
-    )
-    if(!valid.length)return null
-
-    const best=valid.sort((a,b)=>{
-      const routeA=routeSelectionSafety(a.legs,a.conservative)
-      const routeB=routeSelectionSafety(b.legs,b.conservative)
-      if(Math.abs(routeA-routeB)>.000001)return routeB-routeA
-      if(Math.abs(a.conservative-b.conservative)>.000001)return b.conservative-a.conservative
-      const weakA=Math.min(...a.legs.map(safetyLegProbability))
-      const weakB=Math.min(...b.legs.map(safetyLegProbability))
-      if(Math.abs(weakA-weakB)>.0001)return weakB-weakA
-      if(Math.abs(a.raw-b.raw)>.000001)return b.raw-a.raw
-      return Math.abs(a.product-config.targetDecimal)-Math.abs(b.product-config.targetDecimal)
-    })[0]
-
-    const legs:MultiMatchLeg[]=best.legs.map(leg=>({
-      fixtureId:scan.fixture.id,competition:scan.fixture.competition,kickoff:scan.fixture.kickoff,
-      home:scan.fixture.home.name,away:scan.fixture.away.name,
-      player:leg.player,team:leg.team,market:leg.market,label:leg.label,
-      probability:leg.probability,bookmakerOdds:Number(leg.bookmakerOdds),bookmaker:"Bet365",confidence:leg.confidence,
-    }))
-    const cardLeg=best.legs.find(leg=>family(leg.market)==="card")??null
-    return {
-      fixtureId:scan.fixture.id,competition:scan.fixture.competition,kickoff:scan.fixture.kickoff,
-      home:scan.fixture.home.name,away:scan.fixture.away.name,homeCrest:scan.fixture.home.crest??null,awayCrest:scan.fixture.away.crest??null,
-      riskTier:config.id,targetFractional:config.targetFractional,targetDecimal:config.targetDecimal,
-      referenceOdds:Math.round(best.product*100)/100,
-      modelAllHitProbability:Math.round(best.raw*10000)/10000,
-      conservativeAllHitProbability:Math.round(best.conservative*10000)/10000,
-      includesCard:Boolean(cardLeg),cardPick:cardLeg?cardLeg.player:null,lineupsConfirmed:Boolean(scan.scorecard?.lineupsConfirmed),
-      preMatchSnapshot:new Date(scan.fixture.kickoff).getTime()<=Date.now(),legs,
-    }
+    routesByFixture.set(scan.fixture.id,byTier)
   }
 
-  const tiers:MultiMatchTier[]=tierConfigs.map(config=>{
-    const built=eligible.map(scan=>buildTierForMatch(scan,config)).filter(Boolean) as MultiMatchGameBuilder[]
-    built.sort((a,b)=>b.conservativeAllHitProbability-a.conservativeAllHitProbability||b.modelAllHitProbability-a.modelAllHitProbability||a.referenceOdds-b.referenceOdds)
+  const tiers:MultiMatchTier[]=tierConfigs.map(cfg=>{
+    const built=eligible
+      .map(scan=>routesByFixture.get(scan.fixture.id)?.get(cfg.id)??null)
+      .filter(Boolean) as MultiMatchGameBuilder[]
+    built.sort((a,b)=>b.conservativeAllHitProbability-a.conservativeAllHitProbability||b.modelAllHitProbability-a.modelAllHitProbability)
     const matchBuilders=built.slice(0,10)
     const legs=matchBuilders.flatMap(x=>x.legs)
     const combined=matchBuilders.length?matchBuilders.reduce((v,x)=>v*x.referenceOdds,1):null
     const allHit=matchBuilders.length?matchBuilders.reduce((v,x)=>v*x.conservativeAllHitProbability,1):null
-    const cardCount=matchBuilders.reduce((sum,b)=>sum+(b.includesCard?1:0),0)
-    const note=config.id==="safe"
-      ?"Safe considers all verified player props, but heavily prefers repeated high-frequency events and permits no more than one scorer/assist/card leg per match."
-      :config.id==="balanced"
-        ?"Balanced considers all verified player props and still prefers extra high-probability 1+ legs whenever their conservative joint chance beats a lower-frequency alternative."
-        :"Risky considers all verified player props. Higher target odds can use more scorer/assist/card legs, but only when the evidence-adjusted route ranks better than the available foul/shot alternatives."
     return {
-      id:config.id,title:config.title,description:config.description,targetFractionalPerMatch:config.targetFractional,targetDecimalPerMatch:config.targetDecimal,
-      available:matchBuilders.length>=2,matchBuilders,legs,
+      id:cfg.id,title:cfg.title,
+      description:cfg.id==="most-likely"
+        ?"The highest-probability two-leg route available in each match. The odds are whatever those safest selections naturally produce."
+        :`The highest-probability route in each match that clears ${cfg.targetFractional}. Every higher tier keeps the safer route below it and adds only the next-best selection.`,
+      targetFractionalPerMatch:cfg.targetFractional,targetDecimalPerMatch:cfg.targetDecimal,
+      available:matchBuilders.length>=1,matchBuilders,legs,
       combinedBet365Odds:combined==null?null:Math.round(combined*100)/100,
       conservativeAllHitProbability:allHit==null?null:Math.round(allHit*10000)/10000,
-      note,
+      note:cfg.id==="most-likely"
+        ?"Start here: this is the strongest estimated win chance from the verified player markets."
+        :`Probability first, odds floor second. This tier only grows the safer route until it clears ${cfg.targetFractional}.`,
     }
   })
 
-  const safe=tiers.find(t=>t.id==="safe")!
+  const first=tiers.find(t=>t.id==="most-likely")??tiers[0]
   return {
-    available:safe.available,
-    targetFractionalPerMatch:safe.targetFractionalPerMatch,
+    available:Boolean(first?.available),
+    targetFractionalPerMatch:first?.targetFractionalPerMatch??"Best",
     maxMatches:10,
     eligibleFixtureCount:eligible.length,
-    matchBuilders:safe.matchBuilders,
-    legs:safe.legs,
-    combinedBet365Odds:safe.combinedBet365Odds,
-    modelAllHitProbability:safe.conservativeAllHitProbability,
-    conservativeAllHitProbability:safe.conservativeAllHitProbability,
+    matchBuilders:first?.matchBuilders??[],
+    legs:first?.legs??[],
+    combinedBet365Odds:first?.combinedBet365Odds??null,
+    modelAllHitProbability:first?.conservativeAllHitProbability??null,
+    conservativeAllHitProbability:first?.conservativeAllHitProbability??null,
     tiers,
-    defaultTier:"safe",
-    note:"Multi-Match has three probability-led target levels: Safe (~3/1), Balanced (~5/1) and Risky (~10/1) per match. All verified Bet365 player props are eligible — goals, assists, cards, fouls, fouls drawn, shots and SOT — while match/team markets such as corners, BTTS, total goals, match winner and double chance are excluded. The engine prefers higher-frequency repeated events when they offer the better whole-slip chance. Once official lineups are confirmed, only those starters are eligible.",
+    defaultTier:"most-likely",
+    note:"Multi-Match now uses a nested probability-first odds ladder: Most Likely, then 5/1 through 100/1. Each higher tier keeps the safer selections below it and only adds the next-highest probability player event. Live games still switch to the separate live intelligence and yellow-card model.",
   }
 }
-
 function buildYellowCardWatchFromScans(scans:FixtureScan[]):YellowCardWatchRow[]{
   const rows:YellowCardWatchRow[]=[]
   const seen=new Set<string>()
