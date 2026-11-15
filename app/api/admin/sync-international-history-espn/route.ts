@@ -17,10 +17,10 @@ type DatasetConfig={
 const DATASETS:Record<string,DatasetConfig>={
   euro:{
     label:"UEFA European Championship",
-    sources:[{slug:"uefa.euro",months:["201606","201607","202106","202107","202406","202407"]}],
+    sources:[{slug:"uefa.euro",months:["202106","202107","202406","202407"]}],
   },
   "euro-qualifiers":{
-    label:"UEFA European Championship qualifying",
+    label:"UEFA European Championship Qualifying",
     sources:[{slug:"uefa.euroq",months:[
       "202303","202306","202309","202310","202311","202403"
     ]}],
@@ -38,7 +38,7 @@ const DATASETS:Record<string,DatasetConfig>={
     sources:[{slug:"fifa.world",months:["202211","202212"]}],
   },
   "world-cup-uefa-qualifiers":{
-    label:"FIFA World Cup UEFA qualifying",
+    label:"FIFA World Cup Qualifying - UEFA",
     sources:[{slug:"fifa.worldq.uefa",months:[
       "202503","202506","202509","202510","202511","202603"
     ]}],
@@ -150,7 +150,7 @@ export async function GET(request:Request){
           const appeared=row?.starter===true||minutes>0||foulsCommitted>0||foulsDrawn>0||shots>0||shotsOnTarget>0||yellowCards>0||redCards>0||goals>0||assists>0
           if(!appeared)continue
           rows.push({
-            playerName:name,team,opponent,matchDate:date,competition:"International",
+            playerName:name,team,opponent,matchDate:date,competition:config.label,
             venue:team===home?"Home":"Away",
             position:row?.position?.abbreviation??row?.position?.displayName??row?.athlete?.position?.abbreviation??null,
             starter:row?.starter===true,minutes,
