@@ -1007,9 +1007,9 @@ export async function GET(request:Request){
   const url=new URL(request.url)
   const refresh=url.searchParams.get("refresh")==="1"
   const multiOnly=url.searchParams.get("mode")==="multi"
-  if(!refresh&&multiOnly&&lastGoodMulti&&Date.now()-lastGoodMultiAt<STALE_CACHE_MS){
+  if(!refresh&&multiOnly&&lastGoodMulti&&Date.now()-lastGoodMultiAt<30*1000){
     return NextResponse.json({...lastGoodMulti,staleFallback:false,servedFrom:"server-multi-cache"},{
-      headers:{"Cache-Control":"public, s-maxage=300, stale-while-revalidate=1800"}
+      headers:{"Cache-Control":"public, s-maxage=15, stale-while-revalidate=30"}
     })
   }
   if(!refresh&&!multiOnly&&lastGoodRecommended&&Date.now()-lastGoodAt<STALE_CACHE_MS){
@@ -1092,7 +1092,7 @@ export async function GET(request:Request){
         liveMatches:[],
         staleFallback:false,
         methodology:{
-          multiMatch:"Fast path: Bet365 coverage is checked first. Full scorecards are built for every fixture with at least two usable verified player-prop families; the final 3/1 builder must contain players from both teams and is rebuilt from official starters as soon as lineups are confirmed.",
+          multiMatch:"Fast path: Bet365 coverage is checked first. Full scorecards are built for every fixture with at least two usable verified player-prop families. Once both official XIs are confirmed, the scorecard is hard-filtered to those 22 starters before Safe, Balanced or Risky candidates are generated; bench players cannot remain eligible. Multi snapshots are kept very short near lineup time so fresh XI data replaces pre-lineup builds quickly.",
         },
       }
       lastGoodMulti=payload
