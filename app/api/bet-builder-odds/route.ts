@@ -823,6 +823,21 @@ export async function GET(request: Request) {
     }
 
     if(liveOnly){
+      // A temporary empty live board must not erase the last Bet365 player board.
+      // Return the last-good snapshot as reference data, but never label those
+      // retained prices as current/live verified.
+      const lastGood=await cachedSnapshot({date,home,away,competition})
+      if(lastGood?.selections?.length){
+        return NextResponse.json({
+          ...lastGood,
+          priceAvailable:false,
+          liveVerified:false,
+          cached:true,
+          lastGoodReference:true,
+          providerStatus:{oddsApiIo:Boolean(oddsApiIoKey)},
+          note:"Bet365 has not returned a fresh live player board on this refresh. Keeping the last captured Bet365 player markets as a reference until a newer successful live refresh replaces them.",
+        })
+      }
       return NextResponse.json({
         connected:Boolean(oddsApiIoKey),
         bookmaker:"Bet365",
