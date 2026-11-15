@@ -337,7 +337,7 @@ function oddsIoPlayerKind(name:string){
   return "other"
 }
 function flattenOddsApiIo(payload:any){
-  const out:Array<{market:string;kind:string;label:string;odd:number|null;bookmaker?:string|null}>=[]
+  const out:Array<{market:string;kind:string;label:string;odd:number|null;underOdd?:number|null;noVigProbability?:number|null;bookmaker?:string|null}>=[]
   const bookmakers=payload?.bookmakers&&typeof payload.bookmakers==="object"?payload.bookmakers:{}
   for(const [rawBook,marketsRaw] of Object.entries(bookmakers)){
     const book=preferredBookmakerName(String(rawBook))
@@ -352,14 +352,20 @@ function flattenOddsApiIo(payload:any){
         const hdp=Number(row?.hdp??row?.line??row?.max)
         const threshold=Number.isFinite(hdp)?Math.floor(hdp)+1:1
         let odd:number|null=null
-        // Count props are normally represented as over/under lines. We only ingest
-        // the positive/over side because Match Edge models hit thresholds.
+        let underOdd:number|null=null
+        // Count props are normally represented as over/under lines. Keep both
+        // sides when available so Match Edge can derive a no-vig Bet365 probability.
         if(["assist","foul","fouled","shot","sot","card"].includes(kind)){
           odd=numericOdd(row?.over,row?.yes,row?.odds,row?.price)
+          underOdd=numericOdd(row?.under,row?.no)
         }else if(kind==="goal"){
           odd=numericOdd(row?.odds,row?.price,row?.yes,row?.over)
+          underOdd=numericOdd(row?.no,row?.under)
         }
         if(odd==null)continue
+        const qOver=1/odd
+        const qUnder=underOdd&&underOdd>1?1/underOdd:0
+        const noVigProbability=qUnder>0?qOver/(qOver+qUnder):null
         const suffix=
           kind==="goal"?"Anytime goalscorer":
           kind==="assist"?threshold+"+ assist"+(threshold===1?"":"s"):
@@ -369,7 +375,7 @@ function flattenOddsApiIo(payload:any){
           kind==="sot"?threshold+"+ shot"+(threshold===1?"":"s")+" on target":
           threshold+"+ shot"+(threshold===1?"":"s")
         const label=(player?player+" · ":"")+suffix
-        out.push({market:marketName,kind,label,odd,bookmaker:book})
+        out.push({market:marketName,kind,label,odd,underOdd,noVigProbability,bookmaker:book})
       }
     }
   }
