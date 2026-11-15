@@ -318,7 +318,7 @@ function MiniPerformance({tracking}:{tracking:Tracking}){
 
 function LiveNowSection({matches}:{matches:LiveMatch[]}){
   return <section className="space-y-3">
-    <div className="px-1"><p className="font-black">Live now</p><p className="text-[0.6rem] text-white/35">Matches stay on Recommended after kick-off. Win chances refresh from the current score and match time; settled BTTS markets are hidden.</p></div>
+    <div className="px-1"><p className="font-black">Live now</p><p className="text-[0.6rem] text-white/35">Matches stay on Recommended after kick-off. This page only recommends BTTS and player props in-play; match-winner and double-chance bets are reserved for the Acca page.</p></div>
     <div className="space-y-3">{matches.map(match=><LiveMatchCard key={match.id} match={match}/>)}</div>
   </section>
 }
@@ -344,7 +344,6 @@ function LiveMatchCard({match}:{match:LiveMatch}){
     if(suggestedProps.length>=4)break
   }
   const liveLegs=[
-    match.winnerPick?{label:match.winnerPick.team+" to win",probability:match.winnerPick.probability,grade:match.winnerPick.grade}:null,
     !match.bttsSettled&&match.bttsPick?{label:"BTTS "+(match.bttsPick.selection==="yes"?"Yes":"No"),probability:match.bttsPick.probability,grade:match.bttsPick.grade}:null,
   ].filter(Boolean) as Array<{label:string;probability:number;grade:string}>
   return <article className="rounded-3xl border border-rose-300/15 bg-rose-400/[0.045] p-4">
@@ -353,14 +352,9 @@ function LiveMatchCard({match}:{match:LiveMatch}){
         <div className="flex items-center gap-2"><span className="rounded-full bg-rose-300 px-2 py-1 text-[0.48rem] font-black text-rose-950">LIVE {match.elapsed??"?"}'</span><span className="text-[0.5rem] font-black uppercase text-white/30">{match.competition}</span></div>
         <h3 className="mt-2 text-lg font-black">{match.home} <span className="text-white/25">{score?score.home:"—"}–{score?score.away:"—"}</span> {match.away}</h3>
       </div>
-      {match.winnerPick?<div className="text-right"><p className="font-mono text-xl font-black">{percent(match.winnerPick.probability)}</p><p className="text-[0.42rem] uppercase text-white/25">{match.winnerPick.team} live win</p></div>:null}
     </div>
 
-    {probs?<div className="mt-3 grid grid-cols-3 gap-2"><Stat label={match.home+" win"} value={percent(probs.homeWin)}/><Stat label="Draw" value={percent(probs.draw)}/><Stat label={match.away+" win"} value={percent(probs.awayWin)}/></div>:<p className="mt-3 rounded-xl bg-black/20 px-3 py-2 text-[0.58rem] text-white/40">Live score is available, but refreshed win probabilities are not available for this competition yet.</p>}
-
     {match.bttsSettled?<p className="mt-2 rounded-xl bg-white/[0.04] px-3 py-2 text-center text-[0.56rem] font-black text-white/35">BTTS already landed — removed from live betting picks</p>:match.bttsPick?<div className="mt-2 rounded-xl bg-black/20 px-3 py-2"><p className="text-[0.5rem] font-black uppercase text-white/25">Live BTTS read</p><p className="mt-1 text-sm font-black">BTTS {match.bttsPick.selection==="yes"?"Yes":"No"} · {percent(match.bttsPick.probability)} · Grade {match.bttsPick.grade}</p></div>:null}
-
-    {match.winnerPick?<div className="mt-2 rounded-xl bg-black/20 px-3 py-2"><p className="text-[0.5rem] font-black uppercase text-white/25">Current model lean</p><p className="mt-1 text-sm font-black">{match.winnerPick.team} to win · Grade {match.winnerPick.grade}</p></div>:null}
 
     <div className="mt-3 rounded-2xl border border-violet-300/15 bg-violet-400/[0.05] p-3">
       <div className="flex items-center justify-between gap-3"><p className="text-[0.52rem] font-black uppercase tracking-[0.12em] text-violet-300">In-play bet slip</p><p className="text-[0.46rem] text-white/25">refreshes every 30s</p></div>
@@ -383,7 +377,7 @@ function TargetOddsSection({games,selectedId,onSelect}:{games:TargetOddsGame[];s
   const selected=games.find(g=>g.fixture.id===selectedId)??games[0]??null
   if(!selected)return null
   return <section className="space-y-3">
-    <div className="px-1"><p className="font-black">Target odds builder</p><p className="text-[0.6rem] text-white/35">Pick the match first, then choose the return you want. Every target below is built from that game only.</p></div>
+    <div className="px-1"><p className="font-black">Target odds builder</p><p className="text-[0.6rem] text-white/35">Pick the match and target return. The engine then finds the highest-probability verified Bet365 player-prop route to reach it — it does not add match winner, double chance, total goals or corners just to inflate the price.</p></div>
     <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
       {games.map(game=><button key={game.fixture.id} onClick={()=>onSelect(game.fixture.id)} className={"min-w-[12rem] shrink-0 rounded-2xl border px-3 py-3 text-left transition "+(game.fixture.id===selected.fixture.id?"border-violet-300/35 bg-violet-400/10":"border-white/8 bg-white/[0.035]")}>
         <p className="text-[0.48rem] font-black uppercase text-white/30">{game.fixture.competition} · {time(game.fixture)}</p>
@@ -396,7 +390,7 @@ function TargetOddsSection({games,selectedId,onSelect}:{games:TargetOddsGame[];s
 }
 
 function TargetOddsCard({slip}:{slip:TargetOddsSlip}){
-  const[open,setOpen]=useState(slip.targetFractional==="5/1")
+  const[open,setOpen]=useState(slip.targetFractional==="3/1")
   if(!slip.available)return <article className="rounded-3xl border border-white/10 bg-white/[0.035] p-4">
     <div className="flex items-center justify-between gap-3"><div><p className="text-[0.5rem] font-black uppercase tracking-[0.14em] text-white/30">Target</p><h3 className="mt-1 text-xl font-black">{slip.targetFractional}</h3></div><span className="rounded-full bg-white/7 px-2.5 py-1 text-[0.48rem] font-black text-white/35">NO STRONG BUILD</span></div>
     <p className="mt-3 text-[0.62rem] leading-relaxed text-white/40">{slip.note}</p>
