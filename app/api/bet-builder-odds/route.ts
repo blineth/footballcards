@@ -11,7 +11,7 @@ const API_BASE = "https://v3.football.api-sports.io"
 const UK_ODDS_BASE = "https://api.ukoddsapi.com"
 const ODDS_API_DEV_BASE = "https://api.oddsapi.dev/v1"
 const ODDS_API_IO_BASE = "https://api.odds-api.io/v3"
-const FREE_ODDS_CACHE_MS = 10 * 60 * 1000
+const FREE_ODDS_CACHE_MS = 3 * 60 * 60 * 1000
 const SNAPSHOT_WRITE_MS = 30 * 60 * 1000
 const snapshotWriteAt = new Map<string,number>()
 const PREFERRED_UK_BOOKMAKERS = ["Bet365","Paddy Power","BetMGM UK","Sky Bet","William Hill"] as const
@@ -227,13 +227,14 @@ async function cachedSnapshot(input:{date:string;home:string;away:string;competi
       connected:true,
       bookmaker:cachedBooks.length===1 ? cachedBooks[0] : "Best of preferred UK books",
       bookmakers:cachedBooks,
-      source:(latest.source ?? "free odds feed")+" · cache",
+      source:(latest.source ?? "verified odds feed")+" · last-good Bet365 cache",
       capturedAt:capturedAt.toISOString(),
       selections,
       priceAvailable:selections.length>0,
       freeTier:true,
       cached:true,
       maxUsableAgeSeconds:10800,
+      snapshotAgeSeconds:Math.max(0,Math.round(ageMs/1000)),
       marketAvailability:marketAvailability(selections,true),
       bookmakerAvailability:bookmakerAvailability(selections,cachedBooks),
     }
