@@ -341,15 +341,48 @@ function weightedH2HContext(input:{
 function betaSmoothed(hits: number, total: number, prior: number, priorStrength = 6) {
   return (hits + prior * priorStrength) / (total + priorStrength)
 }
-function empiricalProbability(rows: MatchRow[], market: MarketKey) {
+function empiricalProbability(rows: MatchRow[], market: MarketKey, priorOverride?:number) {
   const ordered = [...rows].sort((a, b) => String(a.matchDate).localeCompare(String(b.matchDate)))
   const recent5 = ordered.slice(-5)
   const recent10 = ordered.slice(-10)
   const allHits = ordered.filter(row => hit(market, row)).length
-  const all = betaSmoothed(allHits, ordered.length, PRIOR[market], 6)
+  const prior=Number.isFinite(Number(priorOverride))?clamp(Number(priorOverride),.001,.95):PRIOR[market]
+  const all = betaSmoothed(allHits, ordered.length, prior, 6)
   const ten = betaSmoothed(recent10.filter(row => hit(market, row)).length, recent10.length, all, 5)
   const five = betaSmoothed(recent5.filter(row => hit(market, row)).length, recent5.length, ten, 4)
   return clamp(all * 0.48 + ten * 0.27 + five * 0.25)
+}
+function attackingRole(position:string|null|undefined){
+  const p=norm(position),compact=p.replace(/\s+/g,"")
+  if(p.includes("goal")||compact==="gk"||compact==="g")return "gk" as const
+  if(p.includes("back")||p.includes("def")||compact.startsWith("cd")||["cb","lb","rb","lwb","rwb"].includes(compact))return "def" as const
+  if(compact.includes("cdm")||compact==="dm"||p.includes("defensive mid"))return "dm" as const
+  if(compact.startsWith("am")||["lm","rm","lw","rw","lf","rf","ss"].includes(compact)||p.includes("attacking mid")||p.includes("wing"))return "attmid" as const
+  if(compact==="cm"||p.includes("central mid")||p==="midfielder")return "mid" as const
+  if(compact==="f"||compact.startsWith("st")||compact.startsWith("cf")||p.includes("forward")||p.includes("striker"))return "att" as const
+  return "other" as const
+}
+function roleMarketPrior(position:string|null|undefined,market:MarketKey){
+  const role=attackingRole(position)
+  if(market==="goal1"){
+    if(role==="gk")return .004
+    if(role==="def")return .045
+    if(role==="dm")return .065
+    if(role==="mid")return .10
+    if(role==="attmid")return .17
+    if(role==="att")return .27
+    return .12
+  }
+  if(market==="assist1"){
+    if(role==="gk")return .01
+    if(role==="def")return .07
+    if(role==="dm")return .09
+    if(role==="mid")return .13
+    if(role==="attmid")return .18
+    if(role==="att")return .15
+    return .11
+  }
+  return PRIOR[market]
 }
 function cardRolePrior(position:string|null|undefined){
   const p=norm(position)
@@ -1056,7 +1089,7 @@ function buildFoulTargetSlips(players: ScorePlayer[]): FoulTargetSlip[] {
 }
 function buildSlips(players: ScorePlayer[]) {
   const used = new Set<string>()
-  const safeMarkets: MarketKey[] = ["goal1", "foul1", "fouled1", "shot1", "sot1", "card"]
+  const safeMarkets: MarketKey[] = ["foul1", "fouled1", "shot1", "sot1"]
   const safe: SlipLeg[] = []
   for (const market of safeMarkets) {
     const leg = bestLeg(players, market, used)
@@ -1140,7 +1173,7 @@ function buildRiskBuilders(players:ScorePlayer[],scope:"all"|"discipline"="all")
   const baseMarkets:MarketKey[]=["goal1","assist1","shot1","sot1","foul1","fouled1","card"]
   const allPricedMarkets:MarketKey[]=scope==="discipline"
     ?["foul1","foul2","foul3","foul4","foul5","fouled1","card"]
-    :["goal1","assist1","shot1","shot2","sot1","sot2","foul1","foul2","foul3","foul4","foul5","fouled1","card"]
+    :["shot1","shot2","sot1","sot2","foul1","foul2","foul3","foul4","foul5","fouled1"]
   const familyLines:Record<string,MarketKey[]>={
     goal:["goal1"],assist:["assist1"],shot:["shot1","shot2"],sot:["sot1","sot2"],
     foul:["foul1","foul2","foul3","foul4","foul5"],fouled:["fouled1"],card:["card"],
@@ -1811,9 +1844,10 @@ export async function GET(request: Request) {
     const keys = Object.keys(MARKET_LABELS) as MarketKey[]
 
     for (const market of keys) {
+      const marketPrior=roleMarketPrior(candidate.position,market)
       let probability = market==="card"
         ? cardEmpiricalProbability(rows,rolePrior)
-        : empiricalProbability(rows, market)
+        : empiricalProbability(rows, market, marketPrior)
       const recent5HitRate = hitRate(recent5Rows, market)
       const seasonHitRate = hitRate(rows, market)
       const h2hHitRate = h2hRows.length ? hitRate(h2hRows, market) : null
@@ -1960,6 +1994,24 @@ export async function GET(request: Request) {
       const impliedProbability = bookmakerOdds ? 1 / bookmakerOdds : null
       const bookmakerNoVigProbability = odd?.noVigProbability==null?null:clamp(Number(odd.noVigProbability))
       const bookmakerConsensus = bookmakerNoVigProbability??impliedProbability
+      if((market==="goal1"||market==="assist1")&&bookmakerConsensus!=null){
+        const role=attackingRole(candidate.position)
+        const sample=rows.length
+        const anchorWeight=sample<5?.72:sample<8?.58:sample<12?.42:.28
+        probability=blend(probability,bookmakerConsensus,anchorWeight)
+        const firstPenalty=playerSetPieceRole?.penaltiesOrder===1
+        const firstDirectFk=playerSetPieceRole?.directFreeKicksOrder===1
+        let premium=market==="goal1"
+          ? role==="gk"?.005:role==="def"?.02:role==="dm"?.03:role==="mid"?.055:role==="attmid"?.09:role==="att"?.13:.06
+          : role==="gk"?.005:role==="def"?.035:role==="dm"?.045:role==="mid"?.07:role==="attmid"?.10:role==="att"?.08:.06
+        if(market==="goal1"&&firstPenalty)premium+=.07
+        if(market==="goal1"&&firstDirectFk)premium+=.025
+        if(market==="assist1"&&playerSetPieceRole?.cornersOrder===1)premium+=.045
+        // A tiny hot streak is not enough to claim a huge scorer edge over a
+        // liquid bookmaker market. Position and set-piece responsibility define
+        // how far above the market a small sample may move.
+        probability=Math.min(probability,clamp(bookmakerConsensus+premium,.01,.90))
+      }
       const edge = bookmakerConsensus == null ? null : probability - bookmakerConsensus
       const expectedValue = bookmakerOdds == null ? null : probability * bookmakerOdds - 1
 
