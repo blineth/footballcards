@@ -794,6 +794,14 @@ async function fallbackScorecard(f:Fixture):Promise<Scorecard|null>{
 export async function GET(request:Request){
   const url=new URL(request.url)
   const refresh=url.searchParams.get("refresh")==="1"
+  // Pre-match Multi should be instant after the first successful build. Reuse the
+  // last-good server snapshot unless the user explicitly forces a refresh. Live
+  // pages still bypass this through their own live polling paths.
+  if(!refresh&&lastGoodRecommended&&Date.now()-lastGoodAt<STALE_CACHE_MS){
+    return NextResponse.json({...lastGoodRecommended,staleFallback:false,servedFrom:"server-last-good"},{
+      headers:{"Cache-Control":"public, s-maxage=120, stale-while-revalidate=1800"}
+    })
+  }
   const maxFixtures=Math.max(6,Math.min(24,Number(url.searchParams.get("limit")??18)||18))
 
   try{
