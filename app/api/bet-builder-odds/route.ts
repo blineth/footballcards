@@ -265,6 +265,7 @@ const ODDS_API_IO_LEAGUES:Record<string,string>={
   "League Two":"england-league-two",
 }
 const oddsIoEventCache=new Map<string,{expires:number,rows:any[]}>()
+let oddsIoSelectedCache:{expires:number,names:string[]}|null=null
 
 async function oddsApiIo(path:string,params:Record<string,string>,key:string){
   const url=new URL(ODDS_API_IO_BASE+path)
@@ -273,6 +274,16 @@ async function oddsApiIo(path:string,params:Record<string,string>,key:string){
   const response=await fetch(url,{cache:"no-store",signal:AbortSignal.timeout(10000),headers:{accept:"application/json"}})
   if(!response.ok)throw new Error("Odds-API.io "+path+" "+response.status)
   return response.json()
+}
+async function oddsIoSelectedBooks(key:string){
+  if(oddsIoSelectedCache&&oddsIoSelectedCache.expires>Date.now())return oddsIoSelectedCache.names
+  try{
+    const payload=await oddsApiIo("/bookmakers/selected",{},key)
+    const rows=Array.isArray(payload)?payload:Array.isArray(payload?.bookmakers)?payload.bookmakers:Array.isArray(payload?.data)?payload.data:[]
+    const names=rows.map((x:any)=>String(x?.name??x?.bookmaker??x)).filter(Boolean)
+    oddsIoSelectedCache={expires:Date.now()+10*60*1000,names}
+    return names
+  }catch{return []}
 }
 async function oddsIoEvents(input:{date:string;competition:string;key:string}){
   const league=ODDS_API_IO_LEAGUES[input.competition]??""
@@ -307,6 +318,17 @@ function numericOdd(...values:any[]){
   }
   return null
 }
+function oddsIoPlayerKind(name:string){
+  const n=norm(name)
+  if(n==="anytime goalscorer")return "goal"
+  if(n==="player to assist")return "assist"
+  if(n==="player to be booked")return "card"
+  if(n==="player fouls")return "foul"
+  if(n==="player to be fouled")return "fouled"
+  if(n==="player shots")return "shot"
+  if(n==="player shots on target")return "sot"
+  return "other"
+}
 function flattenOddsApiIo(payload:any){
   const out:Array<{market:string;kind:string;label:string;odd:number|null;bookmaker?:string|null}>=[]
   const bookmakers=payload?.bookmakers&&typeof payload.bookmakers==="object"?payload.bookmakers:{}
@@ -316,7 +338,7 @@ function flattenOddsApiIo(payload:any){
     const markets=Array.isArray(marketsRaw)?marketsRaw:[]
     for(const market of markets as any[]){
       const marketName=String(market?.name??"")
-      const kind=marketKind(marketName)
+      const kind=oddsIoPlayerKind(marketName)
       if(kind==="other")continue
       for(const row of Array.isArray(market?.odds)?market.odds:[]){
         const player=String(row?.label??row?.player??row?.name??"").trim()
@@ -354,7 +376,8 @@ async function fromOddsApiIo(input:{date:string;home:string;away:string;competit
   const event=candidates[0]
   const id=String(event?.id??"")
   if(!id)return null
-  const payload=await oddsApiIo("/odds",{eventId:id,bookmakers:"Bet365,Skybet"},input.key)
+  const selectedBookmakers=await oddsIoSelectedBooks(input.key)
+  const payload=await oddsApiIo("/odds",{eventId:id,bookmakers:"Bet365,Skybet",markets:"Anytime Goalscorer,Player To Assist,Player to be Booked,Player Fouls,Player To Be Fouled,Player Shots,Player Shots on Target"},input.key)
   const selections=flattenOddsApiIo(payload)
   const books=[...new Set(selections.map(s=>s.bookmaker).filter(Boolean))] as string[]
   if(!selections.length)return null
@@ -370,6 +393,7 @@ async function fromOddsApiIo(input:{date:string;home:string;away:string;competit
     selections,
     bookmakerUrls:payload?.urls??{},
     provider:"odds-api.io",
+    selectedBookmakers,
   }
 }
 
