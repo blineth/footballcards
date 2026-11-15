@@ -401,6 +401,11 @@ function baseResponse(mode:"confirmed"|"predicted"|"squad"){
     foulTargetSlips:[],
     previewFoulTargetSlips:[],
     previewSlips:[],
+    cacheLayer:{
+      stats:"repository snapshot",
+      persistence:"checked-in durable cache",
+      purpose:"player baselines, historical match stats and model fallback when live/database sources fail",
+    },
     generatedAt:new Date().toISOString(),
   }
 }
