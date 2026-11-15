@@ -36,7 +36,7 @@ type LiveData={
 type H2HMeeting={
   date:string;competition?:string|null;home:string;away:string;homeGoals:number;awayGoals:number;
   scorers:Array<{player:string;team:string;goals:number;assists:number}>;
-  bookings:Array<{player:string;team:string;yellow:boolean;red:boolean}>;
+  bookings:Array<{player:string;team:string;yellow:boolean;red:boolean;minute?:number|null;second?:number|null;clock?:string|null;detail?:string|null}>;
   players:Array<{player:string;team:string;minutes:number;goals:number;assists:number;foulsCommitted:number;foulsDrawn:number;shots:number;shotsOnTarget:number;yellow:boolean;red:boolean}>;
   totals:{home:{yellow:number;red:number;fouls:number;shots:number;sot:number};away:{yellow:number;red:number;fouls:number;shots:number;sot:number}}
 }
@@ -454,19 +454,89 @@ function H2HPanel({data,loading,home,away}:{data:H2HData|null;loading:boolean;ho
 }
 function H2HMeetingCard({meeting:m}:{meeting:H2HMeeting}){
   const[open,setOpen]=useState(false)
+  const[bookingsOpen,setBookingsOpen]=useState(false)
   const fmt=new Intl.DateTimeFormat("en-GB",{day:"2-digit",month:"short",year:"numeric"}).format(new Date(m.date+"T12:00:00Z"))
-  return <article className="overflow-hidden rounded-2xl border border-white/8 bg-black/20">
-    <button onClick={()=>setOpen(v=>!v)} className="w-full p-3 text-left">
-      <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3"><div><p className="font-mono text-[0.5rem] text-white/30">{fmt}</p>{m.competition?<p className="mt-0.5 max-w-24 truncate text-[0.4rem] font-black uppercase text-emerald-300/55">{m.competition}</p>:null}</div><p className="truncate text-xs font-black">{m.home} <span className="text-white/25">v</span> {m.away}</p><p className="font-mono text-lg font-black">{m.homeGoals}-{m.awayGoals}</p></div>
-      <div className="mt-2 grid grid-cols-2 gap-2"><div className="rounded-xl bg-white/[0.04] px-2 py-1.5"><p className="text-[0.44rem] font-black uppercase text-white/25">Scorers</p><p className="mt-1 text-[0.52rem] text-white/55">{m.scorers.length?m.scorers.map(s=>s.player+(s.goals>1?" x"+s.goals:"")).join(", "):"None tracked"}</p></div><div className="rounded-xl bg-white/[0.04] px-2 py-1.5"><p className="text-[0.44rem] font-black uppercase text-white/25">Booked</p><p className="mt-1 text-[0.52rem] text-white/55">{m.bookings.length?m.bookings.map(b=>b.player+(b.red?" 🟥":" 🟨")).join(", "):"None tracked"}</p></div></div>
-      <div className="mt-2 grid grid-cols-2 gap-2"><H2HTeamTotals label={m.home} x={m.totals.home}/><H2HTeamTotals label={m.away} x={m.totals.away}/></div>
-      <p className="mt-2 text-center text-[0.44rem] font-black uppercase text-white/20">{open?"Hide player stats":"Show player fouls / shots / SOT"}</p>
+  const top=(key:"foulsCommitted"|"foulsDrawn"|"shots"|"shotsOnTarget")=>[...m.players].sort((a,b)=>Number(b[key])-Number(a[key]))[0]??null
+  const foulLeader=top("foulsCommitted"),drawnLeader=top("foulsDrawn"),shotLeader=top("shots"),sotLeader=top("shotsOnTarget")
+  return <article className="overflow-hidden rounded-3xl border border-white/10 bg-black/25">
+    <button onClick={()=>setOpen(v=>!v)} className="w-full px-4 py-4 text-left transition hover:bg-white/[0.025]">
+      <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3">
+        <div><p className="font-mono text-[0.58rem] text-white/35">{fmt}</p>{m.competition?<p className="mt-1 max-w-28 truncate text-[0.46rem] font-black uppercase tracking-wide text-emerald-300/65">{m.competition}</p>:null}</div>
+        <div className="min-w-0 text-center"><p className="truncate text-sm font-black">{m.home} <span className="text-white/25">v</span> {m.away}</p><p className="mt-1 text-[0.48rem] font-black uppercase text-white/25">{open?"Hide match detail":"Open match detail"}</p></div>
+        <p className="font-mono text-2xl font-black">{m.homeGoals}-{m.awayGoals}</p>
+      </div>
     </button>
-    {open?<div className="border-t border-white/8 p-2"><div className="grid grid-cols-[1fr_repeat(5,auto)] gap-x-2 px-2 pb-1 text-[0.38rem] font-black uppercase text-white/20"><span>Player</span><span>F</span><span>FD</span><span>SH</span><span>SOT</span><span>YC</span></div>{m.players.map(p=><div key={p.team+"|"+p.player} className="grid grid-cols-[1fr_repeat(5,auto)] items-center gap-x-2 border-t border-white/[0.045] px-2 py-1.5 text-[0.48rem]"><span className="min-w-0 truncate text-white/55">{p.player}<span className="ml-1 text-white/20">{p.team}</span></span><span className="font-mono">{p.foulsCommitted}</span><span className="font-mono">{p.foulsDrawn}</span><span className="font-mono">{p.shots}</span><span className="font-mono">{p.shotsOnTarget}</span><span className="font-mono">{p.yellow?"1":"0"}</span></div>)}</div>:null}
+
+    <div className="border-t border-white/[0.055] px-4 py-3">
+      <div className="grid gap-2 sm:grid-cols-2">
+        <div className="rounded-2xl bg-white/[0.045] p-3"><p className="text-[0.5rem] font-black uppercase tracking-wide text-white/30">Goalscorers</p><p className="mt-1.5 text-xs leading-relaxed text-white/65">{m.scorers.length?m.scorers.map(s=>s.player+(s.goals>1?" ×"+s.goals:"")).join(", "):"No scorer detail available"}</p></div>
+        <button onClick={()=>setBookingsOpen(v=>!v)} className={"rounded-2xl border p-3 text-left transition "+(bookingsOpen?"border-amber-300/25 bg-amber-300/[0.08]":"border-white/6 bg-white/[0.045]")}>
+          <div className="flex items-center justify-between gap-2"><p className="text-[0.5rem] font-black uppercase tracking-wide text-amber-200/80">Yellow / red cards</p><span className="rounded-full bg-amber-300/12 px-2 py-0.5 font-mono text-[0.55rem] font-black text-amber-100">{m.bookings.length}</span></div>
+          <p className="mt-1.5 text-xs text-white/60">{m.bookings.length?m.bookings.slice(0,3).map(b=>b.player).join(", ")+(m.bookings.length>3?" +"+(m.bookings.length-3)+" more":""):"No bookings tracked"}</p>
+          <p className="mt-1 text-[0.45rem] font-black uppercase text-white/25">{bookingsOpen?"Hide booking times":"Tap for booking times"}</p>
+        </button>
+      </div>
+
+      {bookingsOpen?<div className="mt-3 overflow-hidden rounded-2xl border border-amber-300/12 bg-amber-300/[0.035]">
+        <div className="grid grid-cols-[1fr_auto] gap-3 border-b border-white/7 px-3 py-2"><p className="text-[0.5rem] font-black uppercase text-amber-100/70">Booked player</p><p className="text-[0.5rem] font-black uppercase text-amber-100/70">Match clock</p></div>
+        {m.bookings.length?m.bookings.map((b,i)=><div key={b.player+"|"+String(b.clock??b.minute??i)} className={"grid grid-cols-[1fr_auto] items-center gap-3 px-3 py-3 "+(i?"border-t border-white/[0.055]":"")}>
+          <div className="min-w-0"><div className="flex items-center gap-2"><span className="text-base">{b.red?"🟥":"🟨"}</span><p className="truncate text-sm font-black">{b.player}</p></div><p className="mt-0.5 truncate text-[0.52rem] text-white/35">{b.team||"Team unavailable"}{b.detail?" · "+b.detail:""}</p></div>
+          <div className="text-right"><p className="font-mono text-base font-black text-amber-100">{b.clock??(b.minute!=null?String(b.minute)+"'":"—")}</p>{b.second!=null?<p className="text-[0.42rem] text-white/25">second {b.second}</p>:null}</div>
+        </div>):<p className="px-3 py-4 text-xs text-white/35">No booking event detail available from this source.</p>}
+      </div>:null}
+
+      <div className="mt-3 grid grid-cols-2 gap-2"><H2HTeamTotals label={m.home} x={m.totals.home}/><H2HTeamTotals label={m.away} x={m.totals.away}/></div>
+    </div>
+
+    {open?<div className="border-t border-white/8 bg-white/[0.018] p-4">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <H2HLeader label="Most fouls committed" player={foulLeader?.player??"—"} value={foulLeader?String(foulLeader.foulsCommitted):"—"}/>
+        <H2HLeader label="Most fouls drawn" player={drawnLeader?.player??"—"} value={drawnLeader?String(drawnLeader.foulsDrawn):"—"}/>
+        <H2HLeader label="Most shots" player={shotLeader?.player??"—"} value={shotLeader?String(shotLeader.shots):"—"}/>
+        <H2HLeader label="Most shots on target" player={sotLeader?.player??"—"} value={sotLeader?String(sotLeader.shotsOnTarget):"—"}/>
+      </div>
+
+      <div className="mt-4">
+        <div className="mb-2 flex items-end justify-between gap-3"><div><p className="text-sm font-black">Player match stats</p><p className="mt-0.5 text-[0.52rem] text-white/30">Scroll sideways to see every stat.</p></div><span className="text-[0.46rem] font-black uppercase text-white/20">{m.players.length} players</span></div>
+        <div className="overflow-x-auto rounded-2xl border border-white/8 [scrollbar-width:thin]">
+          <table className="min-w-[920px] w-full border-collapse text-left">
+            <thead className="bg-[#101d18]">
+              <tr className="text-[0.5rem] font-black uppercase tracking-wide text-white/35">
+                <th className="sticky left-0 z-10 min-w-[180px] bg-[#101d18] px-3 py-3">Player</th>
+                <th className="px-3 py-3 text-center">Fouls committed</th>
+                <th className="px-3 py-3 text-center">Fouls drawn</th>
+                <th className="px-3 py-3 text-center">Shots</th>
+                <th className="px-3 py-3 text-center">Shots on target</th>
+                <th className="px-3 py-3 text-center">Goals</th>
+                <th className="px-3 py-3 text-center">Assists</th>
+                <th className="px-3 py-3 text-center">Cards</th>
+              </tr>
+            </thead>
+            <tbody>{m.players.map((p,i)=><tr key={p.team+"|"+p.player} className={i?"border-t border-white/[0.055]":""}>
+              <td className="sticky left-0 z-[5] bg-[#0b1712] px-3 py-3.5"><p className="text-xs font-black text-white/80">{p.player}</p><p className="mt-0.5 text-[0.48rem] text-white/30">{p.team}</p></td>
+              <H2HStatCell value={p.foulsCommitted} emphasis={p.foulsCommitted>0?"amber":"none"}/>
+              <H2HStatCell value={p.foulsDrawn} emphasis={p.foulsDrawn>0?"cyan":"none"}/>
+              <H2HStatCell value={p.shots} emphasis={p.shots>0?"white":"none"}/>
+              <H2HStatCell value={p.shotsOnTarget} emphasis={p.shotsOnTarget>0?"emerald":"none"}/>
+              <H2HStatCell value={p.goals} emphasis={p.goals>0?"emerald":"none"}/>
+              <H2HStatCell value={p.assists} emphasis={p.assists>0?"cyan":"none"}/>
+              <td className="px-3 py-3.5 text-center text-sm">{p.red?"🟥":p.yellow?"🟨":"—"}</td>
+            </tr>)}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>:null}
   </article>
 }
+function H2HLeader({label,player,value}:{label:string;player:string;value:string}){
+  return <div className="rounded-2xl border border-white/7 bg-black/20 p-3"><p className="text-[0.44rem] font-black uppercase leading-tight text-white/25">{label}</p><p className="mt-1 truncate text-xs font-black text-white/70">{player}</p><p className="mt-1 font-mono text-lg font-black">{value}</p></div>
+}
+function H2HStatCell({value,emphasis}:{value:number;emphasis:"amber"|"cyan"|"emerald"|"white"|"none"}){
+  const tone=emphasis==="amber"?"text-amber-200":emphasis==="cyan"?"text-cyan-200":emphasis==="emerald"?"text-emerald-200":emphasis==="white"?"text-white/80":"text-white/25"
+  return <td className={"px-3 py-3.5 text-center font-mono text-sm font-black "+tone}>{value}</td>
+}
 function H2HTeamTotals({label,x}:{label:string;x:{yellow:number;red:number;fouls:number;shots:number;sot:number}}){
-  return <div className="rounded-xl bg-white/[0.04] px-2 py-1.5"><p className="truncate text-[0.45rem] font-black text-white/35">{label}</p><p className="mt-1 font-mono text-[0.48rem] text-white/55">{x.fouls} fouls · {x.shots} shots · {x.sot} SOT · {x.yellow} YC{x.red?" · "+x.red+" RC":""}</p></div>
+  return <div className="rounded-2xl bg-white/[0.045] p-3"><p className="truncate text-[0.5rem] font-black text-white/40">{label}</p><div className="mt-2 grid grid-cols-4 gap-1 text-center"><div><p className="font-mono text-sm font-black">{x.fouls}</p><p className="text-[0.38rem] uppercase text-white/20">Fouls</p></div><div><p className="font-mono text-sm font-black">{x.shots}</p><p className="text-[0.38rem] uppercase text-white/20">Shots</p></div><div><p className="font-mono text-sm font-black">{x.sot}</p><p className="text-[0.38rem] uppercase text-white/20">SOT</p></div><div><p className="font-mono text-sm font-black text-amber-100">{x.yellow}</p><p className="text-[0.38rem] uppercase text-white/20">YC</p></div></div></div>
 }
 
 function RiskCard({build,onUse}:{build:RiskBuilder;onUse:()=>void}){
