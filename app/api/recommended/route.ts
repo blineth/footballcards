@@ -37,11 +37,12 @@ type FoulTargetSlip={
 type ScorecardMarket={
   key?:string;label:string;probability:number;fairOdds?:number|null;bookmakerOdds?:number|null;
   bookmakerName?:string|null;edge?:number|null;confidence:"A"|"B"|"C"|"D";reasons?:string[];
-  sampleMatches?:number;recent5HitRate?:number;seasonHitRate?:number;h2hHitRate?:number|null;h2hMatches?:number
+  sampleMatches?:number;recent5HitRate?:number;seasonHitRate?:number;h2hHitRate?:number|null;h2hMatches?:number;recommendationScore?:number
 }
 type ScorecardPlayer={
   name:string;dbName?:string;team:string;
   markets?:Record<string,ScorecardMarket>;
+  cardContext?:{rolePrior?:number;clubMatches?:number;clubYellows?:number;clubCardRate?:number|null;clubCompetitions?:string[]};
   yellowConditionals?:{
     overall?:{matches:number;yellows:number;rate:number};
     after1PlusFouls?:{matches:number;yellows:number;rate:number|null};
@@ -87,7 +88,7 @@ type TargetOddsGame={
 
 const competitions:Competition[]=["Premier League","Championship","League One","League Two","International"]
 
-const ESPN_INTL_SLUGS=["uefa.nations","fifa.friendly","fifa.world","fifa.worldq.uefa","fifa.worldq.conmebol","fifa.worldq.concacaf","fifa.worldq.afc","fifa.worldq.caf"]
+const ESPN_INTL_SLUGS=["uefa.euro","uefa.nations","fifa.friendly","fifa.world","fifa.worldq.uefa","fifa.worldq.conmebol","fifa.worldq.concacaf","fifa.worldq.afc","fifa.worldq.caf"]
 const ESPN_LEAGUE_SLUGS:Partial<Record<Competition,string>>={
   "Premier League":"eng.1",Championship:"eng.2","League One":"eng.3","League Two":"eng.4",
 }
@@ -410,7 +411,7 @@ type MultiMatchBuild={
 }
 type YellowCardWatchRow={
   fixtureId:string;competition:Competition;kickoff:string;home:string;away:string;homeCrest?:string|null;awayCrest?:string|null;
-  player:string;team:string;probability:number;bookmakerOdds:number;confidence:SlipLeg["confidence"];reason:string;
+  player:string;team:string;probability:number;evidenceScore?:number;bookmakerOdds:number;confidence:SlipLeg["confidence"];reason:string;
   probabilityBasis:"model"|"bet365-implied"
 }
 function fullPlayerMarketSet(status:Scorecard["marketAvailability"]){
@@ -424,12 +425,16 @@ function cardEvidenceEligible(player:ScorecardPlayer,market:ScorecardMarket){
   const recent=Number(market.recent5HitRate??0)
   const season=Number(market.seasonHitRate??0)
   const sample=Number(market.sampleMatches??0)
+  const evidenceScore=Number(market.recommendationScore??market.probability??0)
   const after2=player.yellowConditionals?.after2PlusFouls
+  const clubMatches=Number(player.cardContext?.clubMatches??0)
+  const clubRate=Number(player.cardContext?.clubCardRate??0)
   const strongH2H=h2hN>=2&&h2hRate>=.50
   const strongCurrent=recent>=.40&&season>=.20
   const strongSeason=sample>=8&&season>=.30
+  const strongClub=clubMatches>=8&&clubRate>=.20
   const foulPressure=Number(after2?.matches??0)>=3&&Number(after2?.rate??0)>=.45
-  return Number(market.probability)>=.16&&(strongH2H||strongCurrent||strongSeason||foulPressure)
+  return Number(market.probability)>=.14&&evidenceScore>=.145&&(strongH2H||strongCurrent||strongSeason||strongClub||foulPressure)
 }
 
 function directPlayerCandidates(scorecard:Scorecard){
@@ -443,7 +448,7 @@ function directPlayerCandidates(scorecard:Scorecard){
       if(!supported)continue
       const exact=market.bookmakerName==="Bet365"&&market.bookmakerOdds!=null&&Number(market.bookmakerOdds)>1
       const probability=Number(market.probability)
-      const minimum=marketKey==="card"?.16:marketKey.startsWith("goal")||marketKey.startsWith("assist")?.18:marketKey.startsWith("sot")?.24:.30
+      const minimum=marketKey==="card"?.14:marketKey.startsWith("goal")||marketKey.startsWith("assist")?.18:marketKey.startsWith("sot")?.24:.30
       if(!exact||!Number.isFinite(probability)||probability<minimum||market.confidence==="D")continue
       if(marketKey==="card"&&!cardEvidenceEligible(player,market))continue
       const key=normName(player.name)+"|"+marketKey+"|"+market.label
@@ -629,7 +634,7 @@ function buildYellowCardWatchFromScans(scans:FixtureScan[]):YellowCardWatchRow[]
       rows.push({
         fixtureId:scan.fixture.id,competition:scan.fixture.competition,kickoff:scan.fixture.kickoff,
         home:scan.fixture.home.name,away:scan.fixture.away.name,homeCrest:scan.fixture.home.crest??null,awayCrest:scan.fixture.away.crest??null,
-        player:player.name,team:player.team,probability:Number(market.probability),
+        player:player.name,team:player.team,probability:Number(market.probability),evidenceScore:Number(market.recommendationScore??market.probability),
         bookmakerOdds:Number(market.bookmakerOdds),confidence:market.confidence,
         reason:(market.reasons??[]).join(" · ")||"Verified Bet365 player-card market",
         probabilityBasis:"model",
@@ -643,6 +648,8 @@ function buildYellowCardWatchFromScans(scans:FixtureScan[]):YellowCardWatchRow[]
   return rows
     .sort((a,b)=>{
       if(a.probabilityBasis!==b.probabilityBasis)return a.probabilityBasis==="model"?-1:1
+      const evidenceDiff=Number(b.evidenceScore??b.probability)-Number(a.evidenceScore??a.probability)
+      if(Math.abs(evidenceDiff)>.0001)return evidenceDiff
       return b.probability-a.probability
     })
     .slice(0,16)
