@@ -1012,8 +1012,11 @@ export default function BetBuilderPage(){
       if(!r.ok)return
       const next=await r.json() as Scorecard
       if(next?.ok&&next.players?.length){
-        setData(next)
-        writeScorecardCache(f,next)
+        setData(current=>{
+          const merged={...next,referee:next.referee??current?.referee??null}
+          writeScorecardCache(f,merged)
+          return merged
+        })
         setLoading(false)
       }
     }catch{}
