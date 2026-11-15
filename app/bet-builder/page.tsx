@@ -457,9 +457,9 @@ function buildBroadTargetBuilders(rows:Selection[]):RiskBuilder[]{
 }
 function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuilder[]{
   const configs=[
-    {id:"safe-3-1",title:"Safe 3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4,min:.40,max:8,minFamilies:1,maxPerFamily:6},
-    {id:"balanced-10-1",title:"Balanced 10/1",risk:"Balanced" as const,targetFractional:"10/1",targetDecimal:11,min:.15,max:7,minFamilies:2,maxPerFamily:3},
-    {id:"high-20-1",title:"High Risk 20/1+",risk:"High Risk" as const,targetFractional:"20/1+",targetDecimal:21,min:.09,max:8,minFamilies:2,maxPerFamily:3},
+    {id:"safe-3-1",title:"Safe 3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4,min:.40,max:8,minFamilies:1,maxPerFamily:8},
+    {id:"balanced-10-1",title:"Balanced 10/1",risk:"Balanced" as const,targetFractional:"10/1",targetDecimal:11,min:.15,max:9,minFamilies:1,maxPerFamily:9},
+    {id:"high-20-1",title:"High Risk 20/1+",risk:"High Risk" as const,targetFractional:"20/1+",targetDecimal:21,min:.09,max:10,minFamilies:1,maxPerFamily:10},
   ]
   const family=(market:string)=>market.startsWith("goal")?"goal":market.startsWith("assist")?"assist":market.startsWith("fouled")?"fouled":market.startsWith("foul")?"foul":market.startsWith("sot")?"sot":market.startsWith("shot")?"shot":"card"
   const baseMarket=(market:string)=>market==="goal1"||market==="assist1"||market==="foul1"||market==="fouled1"||market==="card"||market==="shot1"||market==="sot1"
@@ -506,15 +506,12 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
 
     const allCandidateRows=rows
       .filter(r=>r.confidence!=="D"&&(verifiedOnly?verifiedBet365Odd(r)!=null:Number(r.fairOdds??0)>1))
-      .filter(r=>{
-        if(cfg.risk==="Safe")return true
-        const pref=preferred.get(normPlayer(r.player))
-        return Boolean(pref&&family(r.market)===pref.family)
-      })
       .map(r=>({row:r,family:family(r.market),signal:preferred.get(normPlayer(r.player))?.score??0}))
-      .sort((a,b)=>cfg.risk==="Safe"
-        ?(b.row.probability-a.row.probability)||((baseMarket(a.row.market)?0:1)-(baseMarket(b.row.market)?0:1))
-        :(b.signal-a.signal)||(b.row.probability-a.row.probability))
+      .sort((a,b)=>
+        (b.row.probability-a.row.probability)||
+        ((baseMarket(a.row.market)?0:1)-(baseMarket(b.row.market)?0:1))||
+        (b.signal-a.signal)
+      )
 
     const runSearch=(candidateRows:typeof allCandidateRows)=>{
       type State={legs:Selection[];product:number;prob:number;conservative:number;players:Set<string>;quality:number;families:Record<string,number>}
@@ -541,59 +538,40 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
         })
       }
       states=next.sort((a,b)=>{
-        if(cfg.risk==="Safe"){
-          const aHit=a.product>=cfg.targetDecimal,bHit=b.product>=cfg.targetDecimal
-          if(aHit!==bHit)return aHit?-1:1
-          if(aHit&&bHit){
-            if(Math.abs(a.prob-b.prob)>.001)return b.prob-a.prob
-            if(Math.abs(a.conservative-b.conservative)>.001)return b.conservative-a.conservative
-            return Math.abs(a.product-cfg.targetDecimal)-Math.abs(b.product-cfg.targetDecimal)
-          }
-          // Before crossing the target, keep high-probability states that are
-          // making useful progress towards 3/1.
-          const aProgress=Math.min(1,a.product/cfg.targetDecimal)
-          const bProgress=Math.min(1,b.product/cfg.targetDecimal)
-          const aScore=a.prob*Math.pow(aProgress,.32)
-          const bScore=b.prob*Math.pow(bProgress,.32)
-          if(Math.abs(aScore-bScore)>.0005)return bScore-aScore
-          return b.conservative-a.conservative
+        const aHit=a.product>=cfg.targetDecimal,bHit=b.product>=cfg.targetDecimal
+        if(aHit!==bHit)return aHit?-1:1
+        if(aHit&&bHit){
+          if(Math.abs(a.prob-b.prob)>.001)return b.prob-a.prob
+          if(Math.abs(a.conservative-b.conservative)>.001)return b.conservative-a.conservative
+          return Math.abs(a.product-cfg.targetDecimal)-Math.abs(b.product-cfg.targetDecimal)
         }
-        const score=(x:State)=>{
-          if(!x.legs.length)return 999
-          const gap=Math.abs(Math.log(Math.max(1.01,x.product))-Math.log(cfg.targetDecimal))
-          const diversity=Object.keys(x.families).length
-          const avg=x.quality/Math.max(1,x.legs.length)
-          return gap*1.15+(x.product<cfg.targetDecimal?.8:0)-x.conservative*2.1-avg*.18-diversity*.05+x.legs.length*.015
-        }
-        return score(a)-score(b)
-      }).slice(0,cfg.risk==="Safe"?2600:900)
+        const aProgress=Math.min(1,a.product/cfg.targetDecimal)
+        const bProgress=Math.min(1,b.product/cfg.targetDecimal)
+        const aScore=a.prob*Math.pow(aProgress,.32)
+        const bScore=b.prob*Math.pow(bProgress,.32)
+        if(Math.abs(aScore-bScore)>.0005)return bScore-aScore
+        return b.conservative-a.conservative
+      }).slice(0,3000)
     }
 
       const best=states.filter(s=>s.legs.length>=2&&s.product>=cfg.targetDecimal&&Object.keys(s.families).length>=cfg.minFamilies)
         .sort((a,b)=>{
-        if(cfg.risk==="Safe"){
           if(Math.abs(a.prob-b.prob)>.002)return b.prob-a.prob
           if(Math.abs(a.conservative-b.conservative)>.002)return b.conservative-a.conservative
           const da=Math.abs(Math.log(a.product)-Math.log(cfg.targetDecimal))
           const db=Math.abs(Math.log(b.product)-Math.log(cfg.targetDecimal))
           if(Math.abs(da-db)>.015)return da-db
           return a.legs.length-b.legs.length
-        }
-        if(Math.abs(a.conservative-b.conservative)>.002)return b.conservative-a.conservative
-        const da=Math.abs(Math.log(a.product)-Math.log(cfg.targetDecimal))
-        const db=Math.abs(Math.log(b.product)-Math.log(cfg.targetDecimal))
-        if(Math.abs(da-db)>.015)return da-db
-        return a.legs.length-b.legs.length
         })[0]
       return best
     }
 
-    // Safe first tries only low-threshold "1+" player markets across different
-    // players. Higher thresholds (2+ fouls, 2+ shots, 2+ SOT, etc.) are only
-    // considered if those safer base lines cannot reach the requested target.
-    const safeBaseRows=cfg.risk==="Safe"?allCandidateRows.filter(x=>baseMarket(x.row.market)):allCandidateRows
-    let best=runSearch(safeBaseRows)
-    if(!best&&cfg.risk==="Safe")best=runSearch(allCandidateRows)
+    // Every target first tries only low-threshold 1+ markets across different
+    // players. Higher thresholds are fallback-only if the simple lines cannot
+    // reach the requested price within the leg cap.
+    const baseRows=allCandidateRows.filter(x=>baseMarket(x.row.market))
+    let best=runSearch(baseRows)
+    if(!best)best=runSearch(allCandidateRows)
 
     if(!best)return {
       id:cfg.id,title:cfg.title,risk:cfg.risk,targetFractional:cfg.targetFractional,targetDecimal:cfg.targetDecimal,
