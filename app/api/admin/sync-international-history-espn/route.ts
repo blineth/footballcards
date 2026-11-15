@@ -22,16 +22,12 @@ const DATASETS:Record<string,DatasetConfig>={
   "euro-qualifiers":{
     label:"UEFA European Championship qualifying",
     sources:[{slug:"uefa.euroq",months:[
-      "201409","201410","201411","201503","201506","201509","201510","201511",
-      "201903","201906","201909","201910","201911",
       "202303","202306","202309","202310","202311","202403"
     ]}],
   },
   nations:{
     label:"UEFA Nations League",
     sources:[{slug:"uefa.nations",months:[
-      "201809","201810","201811","201906",
-      "202009","202010","202011","202110",
       "202206","202209","202306",
       "202409","202410","202411","202503","202506",
       "202609","202610","202611"
@@ -39,13 +35,11 @@ const DATASETS:Record<string,DatasetConfig>={
   },
   "world-cup":{
     label:"FIFA World Cup",
-    sources:[{slug:"fifa.world",months:["201806","201807","202211","202212"]}],
+    sources:[{slug:"fifa.world",months:["202211","202212"]}],
   },
   "world-cup-uefa-qualifiers":{
     label:"FIFA World Cup UEFA qualifying",
     sources:[{slug:"fifa.worldq.uefa",months:[
-      "201609","201610","201611","201703","201706","201709","201710","201711",
-      "202103","202109","202110","202111","202203",
       "202503","202506","202509","202510","202511","202603"
     ]}],
   },
