@@ -6,6 +6,8 @@ import { Activity, CalendarDays, ChevronDown, Flame, RefreshCw, ShieldCheck, Spa
 type Leg={fixtureId:string;competition:string;kickoff:string;home:string;away:string;inPlay?:boolean;elapsed?:number|null;score?:{home:number;away:number}|null;market:string;label:string;probability:number;fairOdds:number;bookmakerOdds:number|null;bookmaker:string|null;grade:"A"|"B"|"C"|"D";reasons:string[]}
 type Slip={id:string;title:string;subtitle:string;legs:Leg[];fairCombinedOdds:number|null;bookmaker:string|null;exactCombinedOdds:number|null;exactPriced:boolean;available?:boolean;requiredLegs?:number;containsLive?:boolean;modelAllHitProbability?:number|null;adjustedAllHitProbability?:number|null;historicalStructureSample?:number;historicalStructureHitRate?:number|null;combinedProbabilityNote?:string}
 type Prediction={id:string;competition:string;kickoff:string;status?:string;inPlay?:boolean;finished?:boolean;bttsSettled?:boolean;elapsed?:number|null;score?:{home:number;away:number}|null;home:string;away:string;homeCrest?:string|null;awayCrest?:string|null;homeStats:any;awayStats:any;h2h:any;preMatchProbabilities?:{homeWin:number;draw:number;awayWin:number;bttsYes:number;bttsNo:number};probabilities:{homeWin:number;draw:number;awayWin:number;bttsYes:number;bttsNo:number};winnerPick?:{side:string;team:string;loser:string;probability:number;grade:string}|null;drawPick?:{probability:number;grade:string}|null;bttsPick?:{selection:string;probability:number;grade:string}|null;reasons:string[]}
+type H2HMeeting={date:string;competition?:string|null;home:string;away:string;homeGoals:number;awayGoals:number;scorers:Array<{player:string;team:string;goals:number;assists:number}>;bookings:Array<{player:string;team:string;yellow:boolean;red:boolean;minute?:number|null;second?:number|null;clock?:string|null}>;players:Array<{player:string;team:string;minutes:number;goals:number;assists:number;foulsCommitted:number;foulsDrawn:number;shots:number;shotsOnTarget:number;yellow:boolean;red:boolean}>;totals:{home:{yellow:number;red:number;fouls:number;shots:number;sot:number};away:{yellow:number;red:number;fouls:number;shots:number;sot:number}}}
+type H2HData={ok:boolean;source?:string;scope?:string;meetings:H2HMeeting[];count:number;error?:string}
 type RiskMode="safe"|"balanced"|"aggressive"
 type Outcome="home"|"draw"|"away"
 type Response={ok:boolean;date?:string;fixtureCount?:number;activeFixtureCount?:number;finishedFixtureCount?:number;predictions?:Prediction[];finishedPredictions?:Prediction[];slips?:Slip[];generatedAt?:string;cached?:boolean;staleFallback?:boolean;warning?:string;error?:string}
@@ -15,6 +17,7 @@ function addDays(date:string,days:number){const d=new Date(date+"T12:00:00Z");d.
 function prettyDate(date:string){return new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/London",weekday:"long",day:"numeric",month:"long"}).format(new Date(date+"T12:00:00Z"))}
 function percent(v:number|null|undefined){return v==null?"—":Math.round(v*100)+"%"}
 function time(v:string){return new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/London",hour:"2-digit",minute:"2-digit",hour12:false}).format(new Date(v))}
+function kickoffDate(v:string){return new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/London",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(v))}
 
 export default function AccumulatorPage(){
   const[date,setDate]=useState(londonDate)
@@ -159,18 +162,62 @@ function outcomeTone(probability:number,isBest:boolean,selected:boolean){
 }
 function OutcomeCard({prediction:p,selected,onSelect}:{prediction:Prediction;selected:Outcome|null;onSelect:(o:Outcome)=>void}){
   const[h2hOpen,setH2hOpen]=useState(false)
+  const[h2hLoading,setH2hLoading]=useState(false)
+  const[h2hData,setH2hData]=useState<H2HData|null>(null)
   const probs={home:p.probabilities.homeWin,draw:p.probabilities.draw,away:p.probabilities.awayWin}
   const best=Math.max(probs.home,probs.draw,probs.away)
   const rows:[Outcome,string,number][]=[["home",p.home,probs.home],["draw","Draw",probs.draw],["away",p.away,probs.away]]
+  const toggleH2H=async()=>{
+    if(h2hOpen){setH2hOpen(false);return}
+    setH2hOpen(true)
+    if(h2hData)return
+    setH2hLoading(true)
+    try{
+      const q=new URLSearchParams({date:kickoffDate(p.kickoff),home:p.home,away:p.away,competition:p.competition})
+      const r=await fetch("/api/team-h2h?"+q.toString(),{cache:"no-store"})
+      setH2hData(r.ok?await r.json():{ok:false,meetings:[],count:0,error:"Unable to load H2H history."})
+    }catch{
+      setH2hData({ok:false,meetings:[],count:0,error:"Unable to load H2H history."})
+    }finally{setH2hLoading(false)}
+  }
   return <article className="rounded-3xl border border-white/9 bg-white/[0.035] p-4">
     <div className="flex items-start justify-between gap-3"><div><p className="text-[0.5rem] font-black uppercase text-white/25">{p.competition} · {time(p.kickoff)}</p><p className="mt-1 text-sm font-black">{p.home} <span className="text-white/25">v</span> {p.away}</p></div>{p.inPlay&&p.score?<span className="rounded-full bg-rose-300/12 px-2 py-1 text-[0.45rem] font-black text-rose-200">LIVE {p.elapsed??"?"}' · {p.score.home}-{p.score.away}</span>:null}</div>
     <div className="mt-3 grid grid-cols-3 gap-2">{rows.map(([outcome,label,probability])=><button key={outcome} onClick={()=>onSelect(outcome)} className={"rounded-2xl border px-2 py-3 text-center transition "+outcomeTone(probability,probability===best,selected===outcome)}><p className="truncate text-[0.55rem] font-black">{label}</p><p className="mt-1 font-mono text-lg font-black">{percent(probability)}</p><p className="mt-0.5 text-[0.42rem] font-black uppercase opacity-55">{(1/Math.max(.01,probability)).toFixed(2)} fair</p></button>)}</div>
     <div className="mt-3 flex items-center gap-2">
-      <button onClick={()=>setH2hOpen(v=>!v)} className="rounded-xl bg-white/[0.06] px-3 py-2 text-[0.5rem] font-black text-white/45">{h2hOpen?"Hide H2H":"H2H history"}</button>
+      <button onClick={()=>void toggleH2H()} className={"rounded-xl px-3 py-2 text-[0.5rem] font-black "+(h2hOpen?"bg-amber-300 text-amber-950":"bg-white/[0.06] text-white/45")}>{h2hOpen?"Hide H2H":"H2H history"}</button>
       <details className="flex-1"><summary className="cursor-pointer text-[0.5rem] font-black text-white/30">Why these percentages?</summary><p className="mt-2 text-[0.56rem] leading-relaxed text-white/40">{p.reasons.join(" · ")}</p></details>
     </div>
-    {h2hOpen?<div className="mt-3 rounded-2xl border border-white/8 bg-black/20 p-3"><div className="flex items-center justify-between gap-2"><p className="text-[0.5rem] font-black uppercase tracking-[0.12em] text-white/35">Recent H2H</p><p className="text-[0.46rem] text-white/25">{p.h2h?.matches??0} tracked meeting{Number(p.h2h?.matches??0)===1?"":"s"}</p></div>{Array.isArray(p.h2h?.recent)&&p.h2h.recent.length?<div className="mt-2 space-y-1.5">{p.h2h.recent.map((m:any,i:number)=><div key={String(m.date)+"|"+i} className="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-xl bg-white/[0.04] px-3 py-2"><p className="text-[0.48rem] font-mono text-white/30">{new Intl.DateTimeFormat("en-GB",{day:"2-digit",month:"short",year:"2-digit"}).format(new Date(String(m.date)+"T12:00:00Z"))}</p><p className="min-w-0 truncate text-[0.54rem] text-white/55">{m.home} v {m.away}</p><p className="font-mono text-sm font-black">{m.homeGoals}-{m.awayGoals}</p></div>)}</div>:<p className="mt-2 text-[0.55rem] text-white/30">No tracked previous meetings found in the current history source.</p>}</div>:null}
+    {h2hOpen?<AccaH2HPanel data={h2hData} loading={h2hLoading}/>:null}
   </article>
+}
+
+function AccaH2HPanel({data,loading}:{data:H2HData|null;loading:boolean}){
+  if(loading)return <div className="mt-3 rounded-2xl border border-white/8 bg-black/20 p-5 text-center"><RefreshCw className="mx-auto size-4 animate-spin text-amber-300"/><p className="mt-2 text-[0.55rem] text-white/35">Loading full H2H history…</p></div>
+  if(!data?.meetings?.length)return <div className="mt-3 rounded-2xl border border-white/8 bg-black/20 p-4"><p className="text-xs text-white/35">{data?.error??"No matching meetings found in the H2H history service."}</p></div>
+  return <div className="mt-3 rounded-3xl border border-white/8 bg-black/20 p-3">
+    <div className="flex items-start justify-between gap-3"><div><p className="text-[0.5rem] font-black uppercase tracking-[0.12em] text-amber-200">Full H2H history</p><p className="mt-1 text-[0.52rem] leading-relaxed text-white/35">{data.scope??"Recent league and cup meetings."}</p></div><span className="rounded-full bg-white/6 px-2 py-1 text-[0.42rem] font-black text-white/30">{data.count} matches</span></div>
+    <div className="mt-3 space-y-2">{data.meetings.map(m=><AccaH2HMeeting key={m.date+"|"+m.home+"|"+m.away} meeting={m}/>)}</div>
+  </div>
+}
+function AccaH2HMeeting({meeting:m}:{meeting:H2HMeeting}){
+  const[open,setOpen]=useState(false)
+  const fmt=new Intl.DateTimeFormat("en-GB",{day:"2-digit",month:"short",year:"numeric"}).format(new Date(m.date+"T12:00:00Z"))
+  return <div className="overflow-hidden rounded-2xl border border-white/7 bg-white/[0.035]">
+    <button onClick={()=>setOpen(v=>!v)} className="grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 px-3 py-3 text-left">
+      <div><p className="font-mono text-[0.48rem] text-white/30">{fmt}</p><p className="mt-0.5 max-w-24 truncate text-[0.4rem] font-black uppercase text-amber-200/60">{m.competition??"Match"}</p></div>
+      <div className="min-w-0"><p className="truncate text-xs font-black">{m.home} v {m.away}</p><p className="mt-0.5 text-[0.44rem] text-white/25">{m.bookings.length} cards · {m.totals.home.fouls+m.totals.away.fouls} fouls</p></div>
+      <p className="font-mono text-lg font-black">{m.homeGoals}-{m.awayGoals}</p>
+    </button>
+    {open?<div className="border-t border-white/7 p-3">
+      <div className="grid gap-2 sm:grid-cols-2"><div className="rounded-xl bg-black/20 p-2.5"><p className="text-[0.44rem] font-black uppercase text-white/25">Scorers</p><p className="mt-1 text-[0.54rem] text-white/60">{m.scorers.length?m.scorers.map(s=>s.player+(s.goals>1?" ×"+s.goals:"")).join(", "):"No scorer detail"}</p></div><div className="rounded-xl bg-black/20 p-2.5"><p className="text-[0.44rem] font-black uppercase text-amber-100/50">Cards</p><p className="mt-1 text-[0.54rem] text-white/60">{m.bookings.length?m.bookings.map(b=>b.player+(b.clock?" "+b.clock:"")+(b.red?" 🟥":" 🟨")).join(", "):"No cards"}</p></div></div>
+      <div className="mt-3 overflow-x-auto rounded-xl border border-white/7">
+        <table className="min-w-[760px] w-full text-left">
+          <thead className="bg-black/25 text-[0.46rem] font-black uppercase text-white/30"><tr><th className="px-3 py-2">Player</th><th className="px-3 py-2 text-center">Fouls committed</th><th className="px-3 py-2 text-center">Fouls drawn</th><th className="px-3 py-2 text-center">Shots</th><th className="px-3 py-2 text-center">SOT</th><th className="px-3 py-2 text-center">Cards</th></tr></thead>
+          <tbody>{m.players.map((x,i)=><tr key={x.team+"|"+x.player} className={i?"border-t border-white/[0.05]":""}><td className="px-3 py-2.5"><p className="text-[0.58rem] font-black">{x.player}</p><p className="text-[0.42rem] text-white/25">{x.team}</p></td><td className="px-3 py-2.5 text-center font-mono text-xs">{x.foulsCommitted}</td><td className="px-3 py-2.5 text-center font-mono text-xs">{x.foulsDrawn}</td><td className="px-3 py-2.5 text-center font-mono text-xs">{x.shots}</td><td className="px-3 py-2.5 text-center font-mono text-xs">{x.shotsOnTarget}</td><td className="px-3 py-2.5 text-center">{x.red?"🟥":x.yellow?"🟨":"—"}</td></tr>)}</tbody>
+        </table>
+      </div>
+    </div>:null}
+  </div>
 }
 
 function ManualAccaTray({picks,probability,odds,risk,open,setOpen,onRemove,onClear}:{picks:Array<Prediction&{outcome:Outcome;label:string;probability:number;fairOdds:number}>;probability:number|null;odds:number|null;risk:string;open:boolean;setOpen:(v:boolean)=>void;onRemove:(id:string)=>void;onClear:()=>void}){
