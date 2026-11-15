@@ -98,6 +98,24 @@ function avgProbability(slip:Slip){
   return slip.legs.length?slip.legs.reduce((s,l)=>s+l.probability,0)/slip.legs.length:0
 }
 
+function londonToday(){
+  return new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/London",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date())
+}
+function multiCacheKey(){return "match-edge:multi:"+londonToday()}
+function readMultiCache():Response|null{
+  try{
+    const raw=window.localStorage.getItem(multiCacheKey())
+    if(!raw)return null
+    const parsed=JSON.parse(raw)
+    return parsed?.data?.ok?parsed.data as Response:null
+  }catch{return null}
+}
+function writeMultiCache(data:Response){
+  try{
+    if(data?.ok)window.localStorage.setItem(multiCacheKey(),JSON.stringify({savedAt:new Date().toISOString(),data}))
+  }catch{}
+}
+
 export default function RecommendedPage(){
   const[loading,setLoading]=useState(false)
   const[data,setData]=useState<Response|null>(null)
@@ -106,19 +124,32 @@ export default function RecommendedPage(){
     setLoading(true)
     try{
       const url="/api/recommended"+(force?"?refresh=1":"")
-      const r=await fetch(url,{cache:force?"no-store":"default"})
-      setData(r.ok?await r.json() as Response:{ok:false,error:"Multi-match scan failed"})
+      const r=await fetch(url,{cache:"no-store"})
+      const next=r.ok?await r.json() as Response:{ok:false,error:"Multi-match scan failed"}
+      setData(next)
+      if(next.ok)writeMultiCache(next)
     }catch{
-      setData({ok:false,error:"Multi-match scan failed"})
+      setData(cur=>cur??{ok:false,error:"Multi-match scan failed"})
     }finally{setLoading(false)}
   },[])
 
-  useEffect(()=>{void refresh(false)},[refresh])
   useEffect(()=>{
-    const live=(data?.liveMatches?.length??0)>0
-    const t=window.setInterval(()=>void refresh(false),live?30000:180000)
+    const cached=readMultiCache()
+    if(cached){setData(cached);setLoading(false);return}
+    void refresh(false)
+  },[refresh])
+
+  useEffect(()=>{
+    const t=window.setInterval(()=>{
+      const now=Date.now()
+      const likelyLive=(data?.liveMatches?.length??0)>0||(data?.multiMatchBuild?.matchBuilders??[]).some(m=>{
+        const kickoff=new Date(m.kickoff).getTime()
+        return Number.isFinite(kickoff)&&now>=kickoff-2*60*1000&&now<=kickoff+3*60*60*1000
+      })
+      if(likelyLive)void refresh(false)
+    },30000)
     return()=>window.clearInterval(t)
-  },[refresh,data?.liveMatches?.length])
+  },[refresh,data])
 
   const multi=data?.multiMatchBuild
   const cards=data?.yellowCardWatch??[]
@@ -139,7 +170,7 @@ export default function RecommendedPage(){
         <div className="mt-3 flex flex-wrap gap-1.5 text-[0.46rem] font-black uppercase">
           {["Cards","Fouls committed","Fouls drawn","Shots","SOT"].map(x=><span key={x} className="rounded-full bg-emerald-300/10 px-2 py-1 text-emerald-200">{x}</span>)}
         </div>
-        <p className="mt-2 text-[0.52rem] text-white/30">A match is excluded unless Bet365 has every market above. Each included match then gets its own safest verified route to roughly 3/1 using the same logic as the individual Match Builder.</p>
+        <p className="mt-2 text-[0.52rem] text-white/30">A match is excluded unless Bet365 has every market above. Pre-match results are cached on this device until you press refresh; in-play matches can refresh automatically.</p>
       </div>
     </header>
 
