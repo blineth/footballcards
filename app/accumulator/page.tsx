@@ -71,9 +71,12 @@ export default function AccumulatorPage(){
   },[data,load])
   const selectedSlip=useMemo(()=>{
     const slips=(data?.slips??[]).filter(s=>s.available!==false)
-    const target=risk==="safe"?5:risk==="balanced"?7:10
-    return slips.find(s=>(s.requiredLegs??s.legs.length)===target)??slips.sort((a,b)=>Math.abs((a.requiredLegs??a.legs.length)-target)-Math.abs((b.requiredLegs??b.legs.length)-target))[0]??null
+    const id=risk==="safe"?"fold-5":risk==="balanced"?"fold-7":"fold-10"
+    return slips.find(s=>s.id===id)??null
   },[data?.slips,risk])
+  const safeSlip=(data?.slips??[]).find(s=>s.id==="fold-5"&&s.available!==false)??null
+  const balancedSlip=(data?.slips??[]).find(s=>s.id==="fold-7"&&s.available!==false)??null
+  const riskySlip=(data?.slips??[]).find(s=>s.id==="fold-10"&&s.available!==false)??null
 
   const manualPicks=useMemo(()=>{
     const rows:(Prediction&{outcome:Outcome;label:string;probability:number;fairOdds:number})[]=[]
@@ -104,9 +107,9 @@ export default function AccumulatorPage(){
       <section className="rounded-3xl border border-amber-300/12 bg-gradient-to-br from-amber-300/[0.08] to-black/20 p-4">
         <div className="flex items-start gap-3"><Target className="mt-0.5 size-4 text-amber-300"/><div><p className="text-sm font-black">Choose your build</p><p className="mt-1 text-[0.62rem] leading-relaxed text-white/45">Like the best acca tools, risk is the first decision. Safe targets five stronger legs, Balanced targets seven, and Aggressive targets ten. Every leg comes from a different match.</p></div></div>
         <div className="mt-4 grid grid-cols-3 gap-2">
-          <RiskButton mode="safe" active={risk==="safe"} onClick={()=>setRisk("safe")} title="Safe" sub="5 fold" icon={<ShieldCheck className="size-4"/>}/>
-          <RiskButton mode="balanced" active={risk==="balanced"} onClick={()=>setRisk("balanced")} title="Balanced" sub="7 fold" icon={<Activity className="size-4"/>}/>
-          <RiskButton mode="aggressive" active={risk==="aggressive"} onClick={()=>setRisk("aggressive")} title="Risky" sub="10 fold" icon={<Flame className="size-4"/>}/>
+          <RiskButton mode="safe" active={risk==="safe"} onClick={()=>setRisk("safe")} title="Safe" sub={(safeSlip?.legs.length??5)+" fold"} icon={<ShieldCheck className="size-4"/>}/>
+          <RiskButton mode="balanced" active={risk==="balanced"} onClick={()=>setRisk("balanced")} title="Balanced" sub={(balancedSlip?.legs.length??7)+" fold"} icon={<Activity className="size-4"/>}/>
+          <RiskButton mode="aggressive" active={risk==="aggressive"} onClick={()=>setRisk("aggressive")} title="Risky" sub={(riskySlip?.legs.length??10)+" fold"} icon={<Flame className="size-4"/>}/>
         </div>
       </section>
 
@@ -117,7 +120,7 @@ export default function AccumulatorPage(){
 
       {selectedSlip?<><AccaSnapshot slip={selectedSlip}/><section className="space-y-3"><div className="px-1"><p className="font-black">{risk==="safe"?"Safer":"Selected"} build</p><p className="text-[0.6rem] text-white/35">The weakest leg and combined chance are visible before you expand the full slip.</p></div><SlipCard slip={selectedSlip} hero/></section></>:<section className="rounded-3xl border border-dashed border-white/10 bg-white/[0.03] p-6 text-center"><p className="font-black">No {risk} build available</p><p className="mt-1 text-sm text-white/35">There are not enough qualifying matches for this risk level on {prettyDate(resolvedDate)}.</p></section>}
 
-      <details className="rounded-3xl border border-white/8 bg-white/[0.025] p-4"><summary className="cursor-pointer text-sm font-black text-white/45">Compare all acca builds</summary><div className="mt-3 space-y-3">{(data.slips??[]).map(s=><SlipCard key={"compare-"+s.id} slip={s}/>)}</div></details>
+      <section className="space-y-3"><div className="px-1"><p className="font-black">Suggested accas</p><p className="mt-1 text-[0.6rem] text-white/35">Safe, Balanced and Risky are generated automatically. Tap a risk above to focus on one, or expand any suggestion below.</p></div><div className="space-y-3">{(data.slips??[]).map(s=><SlipCard key={"suggested-"+s.id} slip={s}/>)}</div></section>
 
       <section className="space-y-3"><div className="px-1"><p className="font-black">Build your own acca</p><p className="mt-1 text-[0.6rem] text-white/35">Tap Home, Draw or Away. Green is the strongest result call, amber is closer, red is less likely. Your slip updates at the bottom.</p></div>{(data.predictions??[]).map(p=><OutcomeCard key={p.id} prediction={p} selected={selectedOutcomes[p.id]??null} onSelect={o=>chooseOutcome(p.id,o)}/>)}</section>
       {(data.finishedPredictions?.length??0)>0?<details className="rounded-3xl border border-white/8 bg-white/[0.025] p-4"><summary className="cursor-pointer text-sm font-black text-white/45">Finished matches ({data.finishedPredictions?.length})</summary><div className="mt-3 space-y-2">{(data.finishedPredictions??[]).map(p=><PredictionCard key={"finished-"+p.id} prediction={p}/>)}</div></details>:null}</>:null}
