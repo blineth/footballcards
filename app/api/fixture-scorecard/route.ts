@@ -401,6 +401,10 @@ function confidenceGrade(input: { matches: number; minutes: number; confirmed: b
   if (input.confirmed) score += 20
   if (input.matchup) score += 10
   if (input.h2h >= 2) score += 5
+  // A confirmed XI removes the biggest availability uncertainty. When historical
+  // coverage is thin, keep the player at C rather than dropping a real starter
+  // completely; the probability itself remains shrunk toward calibrated priors.
+  if (input.confirmed) score = Math.max(score,50)
   if (score >= 82) return "A" as const
   if (score >= 66) return "B" as const
   if (score >= 50) return "C" as const
