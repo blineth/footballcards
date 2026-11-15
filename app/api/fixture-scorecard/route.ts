@@ -836,6 +836,9 @@ type RiskBuilder = {
   safetyScore:number|null
   exactPriced:boolean
   bookmaker:string|null
+  verifiedBet365LegPrices:boolean
+  exactBet365BuilderPrice:boolean
+  pricingBasis:"bet365_singles_product"|"none"
   note:string
 }
 
@@ -868,9 +871,13 @@ function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
     return Math.max(0,Math.min(1,(below+equal*.5)/values.length))
   }
 
+  const isVerifiedBet365Leg=(leg:SlipLeg)=>leg.priceSource==="exact"&&leg.bookmakerName==="Bet365"&&leg.bookmakerOdds!=null&&Number(leg.bookmakerOdds)>1
+  const bet365Odd=(leg:SlipLeg)=>isVerifiedBet365Leg(leg)?Number(leg.bookmakerOdds):0
+
   const baseLegs=players.flatMap(player=>baseMarkets.map(m=>marketLeg(player,m)))
     .filter(leg=>leg.confidence!=="D"&&leg.probability>=.05)
     .filter(leg=>leg.expectedValue==null||leg.expectedValue>=-.12)
+    .filter(isVerifiedBet365Leg)
   const peers=new Map<string,number[]>()
   for(const leg of baseLegs){
     const arr=peers.get(leg.market)??[]
@@ -922,6 +929,7 @@ function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
     const options=baseMarkets.map(m=>marketLeg(player,m))
       .filter(l=>l.confidence!=="D"&&l.probability>=.05)
       .filter(l=>l.expectedValue==null||l.expectedValue>=-.12)
+      .filter(isVerifiedBet365Leg)
       .map(l=>({family:family(l.market),signal:signal(l)}))
       .sort((a,b)=>b.signal-a.signal)
     if(options[0])preferredFamily.set(norm(player.name),options[0])
@@ -934,7 +942,7 @@ function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
   })
     .filter(x=>x.leg.confidence!=="D"&&x.leg.probability>=.08)
     .filter(x=>x.leg.expectedValue==null||x.leg.expectedValue>=-.12)
-    .filter(x=>referenceOdd(x.leg)>1)
+    .filter(x=>isVerifiedBet365Leg(x.leg))
     .sort((a,b)=>(b.signal-a.signal)||(legRank(b.leg)-legRank(a.leg)))
 
   return configs.map(config=>{
@@ -948,7 +956,7 @@ function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
         if(state.players.has(pkey))continue
         const familyCount=state.families[option.family]??0
         if(familyCount>=config.maxPerFamily)continue
-        const odd=referenceOdd(option.leg)
+        const odd=bet365Odd(option.leg)
         if(!(odd>1))continue
         const product=state.product*odd
         if(product>config.targetDecimal*1.45&&state.legs.length>=1)continue
@@ -996,13 +1004,13 @@ function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
     if(!best)return {
       id:config.id,title:config.title,risk:config.risk,targetFractional:config.targetFractional,targetDecimal:config.targetDecimal,
       legs:[],referenceProductOdds:null,averageLegProbability:null,minimumLegProbability:null,modelAllHitProbability:null,conservativeAllHitProbability:null,safetyScore:null,
-      exactPriced:false,bookmaker:null,note:"No strong, market-diverse combination actually reaches this odds target yet."
+      exactPriced:false,bookmaker:null,verifiedBet365LegPrices:false,exactBet365BuilderPrice:false,pricingBasis:"none" as const,
+      note:"No combination of verified Bet365 player prices reaches this target with the required model strength yet."
     }
-    const books=[...new Set(best.legs.map(l=>l.bookmakerName).filter(Boolean))] as string[]
-    const exactPriced=best.legs.every(l=>l.bookmakerOdds!=null)&&books.length===1
     const avg=best.legs.reduce((s,l)=>s+l.probability,0)/best.legs.length
     const min=Math.min(...best.legs.map(l=>l.probability))
     const families=[...new Set(best.legs.map(l=>family(l.market)))]
+    const verifiedBet365LegPrices=best.legs.every(isVerifiedBet365Leg)
     return {
       id:config.id,title:config.title,risk:config.risk,targetFractional:config.targetFractional,targetDecimal:config.targetDecimal,
       legs:best.legs,referenceProductOdds:Math.round(best.product*100)/100,
@@ -1010,11 +1018,12 @@ function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
       modelAllHitProbability:Math.round(best.prob*10000)/10000,
       conservativeAllHitProbability:Math.round(best.conservative*10000)/10000,
       safetyScore:Math.round(best.conservative*1000)/1000,
-      exactPriced,bookmaker:exactPriced?books[0]:null,
-      note:(exactPriced
-        ?"All displayed singles have exact prices at "+books[0]+". "
-        :"Displayed odds use exact singles where available and model fair odds otherwise. ")
-        +"The builder first chooses each player's strongest market family, then compares every qualifying combination by conservative all-hit probability. Safe is allowed to use several foul/fouled legs if that is safer than forcing a goal/card. Confidence and same-market concentration are penalised before ranking. It still must actually reach "+config.targetFractional+". Same-game bookmaker correlation can still change the final quoted Builder price."
+      exactPriced:verifiedBet365LegPrices,
+      bookmaker:verifiedBet365LegPrices?"Bet365":null,
+      verifiedBet365LegPrices,
+      exactBet365BuilderPrice:false,
+      pricingBasis:"bet365_singles_product" as const,
+      note:"Every displayed leg price is a verified Bet365 price. The target is built from the product of those live Bet365 singles ("+families.join(", ")+"), never model/fair odds. The model then chooses the highest conservative hit-probability route that reaches the target. Bet365 can reprice correlated legs inside Bet Builder, so this product is not labelled as an exact Bet Builder quote."
     }
   })
 }
