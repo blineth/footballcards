@@ -7,7 +7,7 @@ type Competition="Premier League"|"Championship"|"League One"|"League Two"|"Inte
 type LivePlayerStat={
   player:string;team:string;minutes:number|null;foulsCommitted:number;foulsDrawn:number;shots:number;shotsOnTarget:number;
   goals:number;assists:number;yellowCards:number;redCards:number;subbedOff:boolean;
-  tackles:number;interceptions:number;blocks:number;duelsTotal:number;duelsWon:number
+  tackles:number;interceptions:number;blocks:number;duelsTotal:number;duelsWon:number;defensiveInterventions:number
 }
 type LivePayload={
   ok:boolean;source:string|null;status:"scheduled"|"live"|"halftime"|"finished"|"unknown";elapsed:number;
@@ -91,10 +91,33 @@ async function espnLive(input:{date:string;home:string;away:string;competition:C
             blocks:Math.max(espnStat(row,"blocks"),espnStat(row,"blockedShots")),
             duelsTotal:Math.max(espnStat(row,"duels"),espnStat(row,"totalDuels")),
             duelsWon:Math.max(espnStat(row,"duelsWon"),espnStat(row,"wonDuels")),
-            subbedOff:false,
+            defensiveInterventions:espnStat(row,"defensiveInterventions"),
+            subbedOff:Boolean(row?.subbedOut),
           })
         }
       }
+      // ESPN exposes richer defensive work for match leaders separately from
+      // the roster rows. Merge those exact player stats where available.
+      for(const teamLeaders of summary?.leaders??[]){
+        for(const category of teamLeaders?.leaders??[]){
+          for(const leader of category?.leaders??[]){
+            const name=String(leader?.athlete?.displayName??leader?.athlete?.fullName??"").trim()
+            const row=map.get(norm(name));if(!row)continue
+            const stat=(name:string)=>{
+              const hit=(leader?.statistics??[]).find((s:any)=>String(s?.name??"")===name)
+              const value=Number(hit?.value??hit?.displayValue??0)
+              return Number.isFinite(value)?value:0
+            }
+            row.tackles=Math.max(row.tackles,stat("effectiveTackles"),stat("totalTackles"))
+            row.interceptions=Math.max(row.interceptions,stat("interceptions"))
+            row.blocks=Math.max(row.blocks,stat("blocks"),stat("outfielderBlocks"))
+            row.duelsTotal=Math.max(row.duelsTotal,stat("duels"),stat("totalDuels"))
+            row.duelsWon=Math.max(row.duelsWon,stat("duelsWon"))
+            row.defensiveInterventions=Math.max(row.defensiveInterventions,stat("defensiveInterventions"))
+          }
+        }
+      }
+
       for(const ev of summary?.keyEvents??[]){
         const type=String(ev?.type?.type??ev?.type?.text??"").toLowerCase()
         const rawText=String(ev?.text??ev?.shortText??"")
@@ -168,6 +191,7 @@ function mergeLivePlayers(primary:LivePayload,secondary:LivePayload|null){
       blocks:Math.max(Number(player.blocks??0),Number(other.blocks??0)),
       duelsTotal:Math.max(Number(player.duelsTotal??0),Number(other.duelsTotal??0)),
       duelsWon:Math.max(Number(player.duelsWon??0),Number(other.duelsWon??0)),
+      defensiveInterventions:Math.max(Number(player.defensiveInterventions??0),Number(other.defensiveInterventions??0)),
       foulsCommitted:Math.max(Number(player.foulsCommitted??0),Number(other.foulsCommitted??0)),
       foulsDrawn:Math.max(Number(player.foulsDrawn??0),Number(other.foulsDrawn??0)),
       shots:Math.max(Number(player.shots??0),Number(other.shots??0)),
@@ -227,6 +251,7 @@ async function apiFootballLive(input:{date:string;home:string;away:string;compet
           blocks:Number(s?.tackles?.blocks??0)||0,
           duelsTotal:Number(s?.duels?.total??0)||0,
           duelsWon:Number(s?.duels?.won??0)||0,
+          defensiveInterventions:0,
           subbedOff:subbedOffNames.has(norm(player)),
         })
       }
