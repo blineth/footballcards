@@ -43,9 +43,15 @@ type LivePlayerStat={
   recentFouls10?:number;recentFouls15?:number;recentFouled10?:number;disciplineHeat?:number;
   aggressionScore?:number;aggressionSignals?:string[];lastAggressionMinute?:number|null
 }
+type RefereeLiveContext={
+  name:string|null;source:string|null;matches:number|null;historicalYellowsPerGame:number|null;historicalFoulsPerGame:number|null;
+  liveFouls:number;liveYellows:number;liveReds:number;liveFoulsPer90:number|null;liveYellowsPer90:number|null;
+  liveCardPerFoul:number|null;historicalCardPerFoul:number|null;strictnessScore:number;strictnessLabel:"strict"|"average"|"lenient";
+  historicalModifier:number;liveDecisionModifier:number
+}
 type LiveData={
   ok:boolean;source:string|null;status:"scheduled"|"live"|"halftime"|"finished"|"unknown";elapsed:number;
-  score:{home:number|null;away:number|null};players:LivePlayerStat[];updatedAt:string
+  score:{home:number|null;away:number|null};players:LivePlayerStat[];updatedAt:string;referee?:RefereeLiveContext|null
 }
 type LiveOddSelection={kind:string;label:string;odd:number|null;bookmaker?:string|null;noVigProbability?:number|null}
 type AvailableBet={
@@ -336,7 +342,11 @@ function applyLive(rows:Selection[],live:LiveData|null,scorecard:Scorecard|null=
       const overall=yc?.overall?.rate
       const disciplineHeat=Math.max(0,Math.min(1,Number(stat.disciplineHeat??0)))
       const recentBurst=Math.min(.34,Number(stat.recentFouls10??0)*.17+Math.max(0,Number(stat.recentFouls15??0)-Number(stat.recentFouls10??0))*.07)
-      let cardDelta=Math.min(1.05,pressure.card*.72+disciplineHeat*.52+recentBurst)
+      const refHistorical=Math.max(-.18,Math.min(.18,Number(live.referee?.historicalModifier??0)))
+      const refLive=Math.max(-.34,Math.min(.34,Number(live.referee?.liveDecisionModifier??0)))
+      const refDelta=Math.max(-.30,Math.min(.30,refHistorical*.45+refLive))
+      const refInteraction=refDelta*(.72+disciplineHeat*.45+Math.min(.18,fouls*.035))
+      let cardDelta=Math.min(1.18,pressure.card*.72+disciplineHeat*.52+recentBurst+refInteraction)
       if(fouls>0&&conditional?.rate!=null&&overall!=null&&conditional.matches>=2){
         const reliability=Math.min(1,conditional.matches/10)
         const observedDelta=logit(Number(conditional.rate))-logit(Math.max(.02,Number(overall)))
@@ -349,6 +359,11 @@ function applyLive(rows:Selection[],live:LiveData|null,scorecard:Scorecard|null=
       if(Number(stat.recentFouls10??0)>0)liveReason+=(liveReason?" · ":"")+`${stat.recentFouls10} new foul${stat.recentFouls10===1?"":"s"} in the last 10 minutes`
       if((stat.aggressionSignals??[]).length)liveReason+=(liveReason?" · ":"")+`live signal: ${(stat.aggressionSignals??[]).slice(0,2).join(", ")}`
       liveReason+=(liveReason?" · ":"")+`discipline heat ${Math.round(disciplineHeat*100)}/100 · opponent drawing fouls at ${pressure.oppDrawRate.toFixed(1)}/90`
+      if(live.referee?.name){
+        liveReason+=` · referee ${live.referee.name}: ${live.referee.strictnessLabel}`
+        if(live.referee.historicalYellowsPerGame!=null)liveReason+=` (${Number(live.referee.historicalYellowsPerGame).toFixed(1)} yellows/game historically)`
+        if(live.referee.liveYellowsPer90!=null)liveReason+=` · live pace ${Number(live.referee.liveYellowsPer90).toFixed(1)} yellows/90`
+      }
       const refYellows=Number(scorecard?.referee?.yellowsPerGame??0)
       if(refYellows>0){
         probability=logistic(logit(probability)+Math.max(-.18,Math.min(.22,(refYellows-4.2)*.055)))
@@ -1396,7 +1411,7 @@ function H2HTeamTotals({label,x}:{label:string;x:{yellow:number;red:number;fouls
 function CardRiskPanel({rows,fixture,live,liveBet365}:{rows:Selection[];fixture:Fixture;live:LiveData|null;liveBet365:boolean}){
   return <div className="mt-4 overflow-hidden rounded-2xl border border-amber-300/14 bg-black/20">
     <div className="border-b border-white/7 px-3 py-3">
-      <div className="flex items-center justify-between gap-3"><div><p className="text-xs font-black text-amber-100">Live card risk</p><p className="mt-1 text-[0.48rem] text-white/30">Ranked from live discipline heat: foul load, recent foul bursts and any dangerous/reckless, confrontation or dissent signals in the commentary, then normal card history and Bet365 price.</p></div>{live?<span className="rounded-full bg-rose-300/10 px-2 py-1 text-[0.42rem] font-black text-rose-200">{live.elapsed}' LIVE</span>:null}</div>
+      <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-black text-amber-100">Live card risk</p><p className="mt-1 text-[0.48rem] text-white/30">Ranked from live discipline heat, referee strictness, foul load, recent foul bursts and any dangerous/reckless, confrontation or dissent signals in the commentary, then normal card history and Bet365 price.</p>{live?.referee?.name?<div className="mt-2 flex flex-wrap gap-1.5"><span className={"rounded-full px-2 py-1 text-[0.42rem] font-black "+(live.referee.strictnessLabel==="strict"?"bg-rose-300/12 text-rose-100":live.referee.strictnessLabel==="lenient"?"bg-emerald-300/10 text-emerald-100":"bg-white/6 text-white/45")}>REF {live.referee.name} · {live.referee.strictnessLabel.toUpperCase()}</span>{live.referee.historicalYellowsPerGame!=null?<span className="rounded-full bg-white/6 px-2 py-1 text-[0.42rem] font-black text-white/40">{Number(live.referee.historicalYellowsPerGame).toFixed(1)} YC/G</span>:null}{live.referee.liveYellowsPer90!=null?<span className="rounded-full bg-amber-300/10 px-2 py-1 text-[0.42rem] font-black text-amber-100">LIVE {Number(live.referee.liveYellowsPer90).toFixed(1)} YC/90</span>:null}</div>:null}</div>{live?<span className="rounded-full bg-rose-300/10 px-2 py-1 text-[0.42rem] font-black text-rose-200">{live.elapsed}' LIVE</span>:null}</div>
     </div>
     {rows.length?rows.map((row,i)=><div key={row.id} className={"grid grid-cols-[auto_1fr_auto] items-center gap-3 px-3 py-3 "+(i?"border-t border-white/[0.055]":"")}>
       <span className={"flex size-8 items-center justify-center rounded-full font-mono text-xs font-black "+(i===0?"bg-amber-300 text-amber-950":"bg-white/6 text-white/45")}>{i+1}</span>
