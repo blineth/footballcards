@@ -208,8 +208,9 @@ export default function MatchesPage(){
   useEffect(()=>{const t=window.setInterval(()=>void refresh(),60000);return()=>window.clearInterval(t)},[refresh])
   useEffect(()=>{void refreshBet365Availability(visibleFixtures)},[visibleFixtures,refreshBet365Availability])
   useEffect(()=>{
-    if(!visibleFixtures.some(isLive))return
-    const t=window.setInterval(()=>void refreshBet365Availability(visibleFixtures),30000)
+    const liveOnly=visibleFixtures.filter(isLive)
+    if(!liveOnly.length)return
+    const t=window.setInterval(()=>void refreshBet365Availability(liveOnly),30000)
     return()=>window.clearInterval(t)
   },[visibleFixtures,refreshBet365Availability])
 
@@ -250,7 +251,7 @@ export default function MatchesPage(){
 
 function CompetitionSection({competition,fixtures,availability,onOpen}:{competition:Competition;fixtures:Fixture[];availability:Record<string,Bet365Availability>;onOpen:(f:Fixture)=>void}){
   return <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03]">
-    <div className="flex items-center justify-between border-b border-white/8 px-4 py-3"><div><p className="text-sm font-black">{competition}</p><p className="mt-0.5 text-[0.46rem] text-white/25">{fixtures.length} match{fixtures.length===1?"":"es"}</p></div><span className="rounded-full bg-white/6 px-2 py-1 text-[0.42rem] font-black text-white/30">3 MODEL BUILDS PER MATCH</span></div>
+    <div className="flex items-center justify-between border-b border-white/8 px-4 py-3"><div><p className="text-sm font-black">{competition}</p><p className="mt-0.5 text-[0.46rem] text-white/25">{fixtures.length} match{fixtures.length===1?"":"es"}</p></div><span className="rounded-full bg-white/6 px-2 py-1 text-[0.42rem] font-black text-white/30">BET365 MARKET CHECK</span></div>
     {fixtures.map((f,i)=>{
       const liveNow=isLive(f)
       const confirmed=f.lineupStatus==="confirmed"
