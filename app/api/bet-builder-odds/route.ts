@@ -283,7 +283,7 @@ async function oddsApiIo(path:string,params:Record<string,string>,key:string){
   for(const[k,v]of Object.entries(params))url.searchParams.set(k,v)
   // Persist successful provider responses in Vercel/Next's data cache.
   // Odds refresh quickly; fixture/bookmaker metadata can live longer.
-  const revalidateSeconds=path==="/odds"?20:path==="/events"?120:600
+  const revalidateSeconds=path==="/odds"?10:path==="/events"?(params.status==="live"?10:60):600
   const response=await fetch(url,{
     next:{revalidate:revalidateSeconds},
     signal:AbortSignal.timeout(10000),
@@ -302,25 +302,33 @@ async function oddsIoSelectedBooks(key:string){
     return names
   }catch{return []}
 }
-async function oddsIoEvents(input:{date:string;competition:string;key:string}){
+async function oddsIoEvents(input:{date:string;competition:string;key:string;liveOnly?:boolean}){
   const league=ODDS_API_IO_LEAGUES[input.competition]??""
-  const cacheKey=[input.date,league||"international"].join("|")
+  const today=new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/London",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date())
+  const isToday=input.date===today
+  const cacheKey=[input.date,league||"international",input.liveOnly?"live":"all"].join("|")
   const cached=oddsIoEventCache.get(cacheKey)
   if(cached&&cached.expires>Date.now())return cached.rows
-  const params:Record<string,string>={sport:"football",bookmaker:"Bet365",status:"pending",limit:"500"}
-  if(league)params.league=league
-  let rows=await oddsApiIo("/events",params,input.key)
-  if(!Array.isArray(rows))rows=Array.isArray(rows?.events)?rows.events:[]
-  // Same-day/in-play fixture can disappear from pending; add live boards when relevant.
-  if(input.date===new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/London",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date())){
+
+  let rows:any[]=[]
+  if(!input.liveOnly){
+    const params:Record<string,string>={sport:"football",bookmaker:"Bet365",status:"pending",limit:"500"}
+    if(league)params.league=league
+    let pending=await oddsApiIo("/events",params,input.key)
+    if(!Array.isArray(pending))pending=Array.isArray(pending?.events)?pending.events:[]
+    rows=[...pending]
+  }
+  if(isToday){
     try{
-      let live=await oddsApiIo("/events",{sport:"football",bookmaker:"Bet365",status:"live",limit:"500"},input.key)
+      const liveParams:Record<string,string>={sport:"football",bookmaker:"Bet365",status:"live",limit:"500"}
+      if(league)liveParams.league=league
+      let live=await oddsApiIo("/events",liveParams,input.key)
       if(!Array.isArray(live))live=Array.isArray(live?.events)?live.events:[]
       rows=[...rows,...live]
     }catch{}
   }
   const dedup=[...new Map(rows.map((x:any)=>[String(x?.id??""),x])).values()]
-  oddsIoEventCache.set(cacheKey,{expires:Date.now()+5*60*1000,rows:dedup})
+  oddsIoEventCache.set(cacheKey,{expires:Date.now()+(input.liveOnly?12_000:isToday?20_000:2*60*1000),rows:dedup})
   return dedup
 }
 function oddsIoDistanceHours(value:any,date:string){
@@ -391,7 +399,7 @@ function flattenOddsApiIo(payload:any){
   }
   return out
 }
-async function fromOddsApiIo(input:{date:string;home:string;away:string;competition:string;key:string}){
+async function fromOddsApiIo(input:{date:string;home:string;away:string;competition:string;key:string;liveOnly?:boolean}){
   const events=await oddsIoEvents(input)
   const candidates=events
     .filter((row:any)=>teamMatch(row?.home,input.home)&&teamMatch(row?.away,input.away))
@@ -695,6 +703,7 @@ export async function GET(request: Request) {
   const home = url.searchParams.get("home") ?? ""
   const away = url.searchParams.get("away") ?? ""
   const competition = url.searchParams.get("competition") ?? "Premier League"
+  const liveOnly = url.searchParams.get("live") === "1"
 
   if (!date || !home || !away) {
     return NextResponse.json({ connected: false, selections: [], error: "Invalid fixture parameters" }, { status: 400 })
@@ -706,20 +715,41 @@ export async function GET(request: Request) {
     const oddsApiIoKey=process.env.ODDS_API_IO_KEY
     if(oddsApiIoKey){
       try{
-        const primary=await fromOddsApiIo({date,home,away,competition,key:oddsApiIoKey})
+        const primary=await fromOddsApiIo({date,home,away,competition,key:oddsApiIoKey,liveOnly})
         if(primary&&primary.selections.length){
           await saveSnapshots({date,home,away,competition,bookmaker:primary.bookmaker,source:primary.source,capturedAt:primary.capturedAt,selections:primary.selections})
           const selections=primary.selections
           return NextResponse.json({
-            ...primary,selections,priceAvailable:true,freeTier:false,cached:false,maxUsableAgeSeconds:300,
+            ...primary,selections,priceAvailable:true,liveVerified:liveOnly?true:undefined,freeTier:false,cached:false,maxUsableAgeSeconds:liveOnly?45:300,
             marketAvailability:marketAvailability(selections,true),
             bookmakerAvailability:bookmakerAvailability(selections,["Bet365"]),
-            cacheLayer:{provider:"Vercel Data Cache",oddsTtlSeconds:20,eventTtlSeconds:120,lastGoodDatabase:"oddsSnapshots when database is available"},
+            cacheLayer:{provider:"Vercel Data Cache",oddsTtlSeconds:10,eventTtlSeconds:liveOnly?12:20,lastGoodDatabase:liveOnly?"disabled for live verification":"oddsSnapshots when database is available"},
           })
         }
       }catch(error){
         console.log("[bet-builder-odds] Odds-API.io:",error instanceof Error?error.message:error)
       }
+    }
+
+    if(liveOnly){
+      return NextResponse.json({
+        connected:Boolean(oddsApiIoKey),
+        bookmaker:"Bet365",
+        bookmakers:["Bet365"],
+        source:oddsApiIoKey?"Odds-API.io":null,
+        selections:[],
+        priceAvailable:false,
+        liveVerified:false,
+        freeTier:false,
+        cached:false,
+        maxUsableAgeSeconds:45,
+        marketAvailability:marketAvailability([],Boolean(oddsApiIoKey)),
+        bookmakerAvailability:bookmakerAvailability([],oddsApiIoKey?["Bet365"]:[]),
+        providerStatus:{oddsApiIo:Boolean(oddsApiIoKey)},
+        note:oddsApiIoKey
+          ?"No current Bet365 live player-prop prices are available from the verified live feed for this fixture."
+          :"No verified Bet365 live odds provider is configured.",
+      })
     }
 
     // 2) Legacy dedicated player-props feed.
