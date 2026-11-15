@@ -514,25 +514,10 @@ export async function buildSnapshotScorecard(input:{
 
   if(input.competition==="International"){
     const squadVerified=official.squadCounts.home>=12&&official.squadCounts.away>=12
-    if(!official.confirmed&&!squadVerified){
-      return {
-        ...baseResponse("squad"),
-        lineupSource:"Waiting for verified current senior matchday squad",
-        playerCount:0,
-        players:[],
-        slips:[],
-        riskBuilders:[],
-        squadEligibility:{
-          source:official.source,
-          eventId:official.eventId,
-          homeSquadCount:official.squadCounts.home,
-          awaySquadCount:official.squadCounts.away,
-          verified:false,
-          rule:"International player recommendations are blocked until the current senior matchday squad is verified.",
-        },
-        fallbackReason:"Snapshot data is available, but player betting recommendations are intentionally blocked because the current senior international squad is not verified.",
-      }
-    }
+    // Do not leave pre-match internationals blank while waiting for the official
+    // squad/XI. probableInternational() falls back to genuine senior international
+    // usage when no current squad is published, then ranks likely starters from
+    // recent national-team selection history plus current club form.
     const allProfiles=await internationalPlayersForFixture(input.home,input.away)
     const profiles=official.confirmed
       ? allProfiles.filter((p:any)=>official.starters.has(normName(String(p?.name??""))))
@@ -660,15 +645,21 @@ export async function buildSnapshotScorecard(input:{
     }))
     return {
       ...baseResponse(official.confirmed?"confirmed":"predicted"),
-      lineupSource:official.confirmed?"Official starting XI":"Probable international XI restricted to current ESPN senior squad/roster",
+      lineupSource:official.confirmed
+        ?"Official starting XI"
+        :squadVerified
+          ?"Probable international XI restricted to the verified current senior squad"
+          :"Probable international XI from recent senior national-team selection history + current club form",
       playerCount:profiles.length,
       squadEligibility:{
         source:official.source,
         eventId:official.eventId,
         homeSquadCount:official.squadCounts.home,
         awaySquadCount:official.squadCounts.away,
-        verified:true,
-        rule:"Only players in the verified current senior matchday squad are eligible before confirmed lineups.",
+        verified:squadVerified,
+        rule:squadVerified
+          ?"Predicted XI is restricted to the verified current senior squad until official starters arrive."
+          :"Current squad is not published yet; predicted XI is restricted to players with genuine senior international usage and is replaced automatically by the official XI.",
       },
       players:playerRows,
       slips,
