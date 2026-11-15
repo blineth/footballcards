@@ -258,7 +258,7 @@ export default function MatchesPage(){
   },[resolvedDate,selectedDate])
 
   const refreshLineups=useCallback(async(fixtures:Fixture[],force=false)=>{
-    const targets=fixtures.filter(shouldCheckLineup).filter(f=>force||!lineups[f.id]?.data?.confirmed)
+    const targets=fixtures.filter(shouldCheckLineup)
     if(!targets.length)return
     setLineups(cur=>{
       const next={...cur}
@@ -276,7 +276,7 @@ export default function MatchesPage(){
       }
     }))
     setLineups(cur=>({...cur,...Object.fromEntries(rows)}))
-  },[lineups])
+  },[])
 
   const fetchDate=useCallback(async(date:string,force=false)=>{
     const q=new URLSearchParams({date,nextIfEmpty:"0"})
