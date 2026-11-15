@@ -12,7 +12,7 @@ const PREMIER_LEAGUE_SEASON_START = "2026-08-21"
 const CHAMPIONSHIP_SEASON_START = "2026-08-01"
 const LEAGUE_ONE_SEASON_START = "2026-08-01"
 const LEAGUE_TWO_SEASON_START = "2026-08-01"
-const INTERNATIONAL_FORM_START = "2026-01-01"
+const INTERNATIONAL_FORM_START = "2024-06-01"
 
 function norm(value: string | null | undefined) {
   return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\b(afc|fc)\b/g, "").replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ")
@@ -121,6 +121,20 @@ async function mergeInternationalProfiles(data:any,home:string,away:string){
       cards90:Number.isFinite(Number(intl?.cards90))?Number(intl.cards90):Number(current?.cards90??base?.cards90??0),
       shots90:Number.isFinite(Number(intl?.shots90))?Number(intl.shots90):Number(current?.shots90??base?.shots90??0),
       shotsOnTarget90:Number.isFinite(Number(intl?.shotsOnTarget90))?Number(intl.shotsOnTarget90):Number(current?.shotsOnTarget90??base?.shotsOnTarget90??0),
+      domesticCurrent:current?{
+        club:String(current?.club??current?.team??""),
+        competition:String(current?.competition??""),
+        season:String(current?.season??"2026/27"),
+        appearances:Number(current?.appearances??0),
+        starts:Number(current?.starts??0),
+        minutes:Number(current?.minutes??0),
+        yellowCards:Number(current?.yellowCards??0),
+        redCards:Number(current?.redCards??0),
+        foulsCommitted:Number(current?.foulsCommitted??0),
+        foulsDrawn:Number(current?.foulsDrawn??0),
+        cards90:Number(current?.cards90??0),
+        fouls90:Number(current?.fouls90??0),
+      }:base?.domesticCurrent??null,
       score:Number(profile?.blended?.foulResearchScore??base?.score??0),
       internationalProfile:true,
     })
