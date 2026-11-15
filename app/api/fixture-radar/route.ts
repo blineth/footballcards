@@ -5,6 +5,7 @@ import { directOpponentRoles, getPredictedFixture, getPredictedPlayer, normalise
 import { and, eq, inArray } from "drizzle-orm"
 import { NextResponse } from "next/server"
 import { GET as espnGET } from "../fixture-radar-espn/route"
+import { GET as internationalPlayersGET } from "../international/players/route"
 
 export const dynamic = "force-dynamic"
 const PREMIER_LEAGUE_SEASON_START = "2026-08-21"
@@ -50,6 +51,91 @@ function confirmedAppointmentFallback(date: string, home: string, away: string, 
   if (competition !== "Premier League") return null
   const appointments: Record<string, string> = { "2026-08-22|nottingham forest|leeds united": "Robert Jones" }
   return appointments[`${date}|${norm(home)}|${norm(away)}`] ?? null
+}
+
+async function mergeInternationalProfiles(data:any,home:string,away:string){
+  if(!Array.isArray(data?.candidates))data.candidates=[]
+  const load=async(team:string)=>{
+    try{
+      const response=await internationalPlayersGET(new Request("http://local/api/international/players?team="+encodeURIComponent(team)))
+      if(!response.ok)return [] as any[]
+      const json=await response.json()
+      return Array.isArray(json?.players)?json.players:[]
+    }catch{return [] as any[]}
+  }
+  const [homeProfiles,awayProfiles]=await Promise.all([load(home),load(away)])
+  const profiles=[...homeProfiles,...awayProfiles]
+  if(!profiles.length)return data
+
+  const existing=new Map<string,any>()
+  for(const candidate of data.candidates){
+    const key=norm(String(candidate?.name??candidate?.dbName??""))+"|"+norm(String(candidate?.team??""))
+    if(key)existing.set(key,candidate)
+  }
+
+  const merged:any[]=[]
+  const used=new Set<string>()
+  for(const profile of profiles){
+    const name=String(profile?.name??"").trim()
+    const team=String(profile?.nationalTeam??"").trim()
+    if(!name||!team)continue
+    const key=norm(name)+"|"+norm(team)
+    const current=profile?.domesticCurrent??null
+    const intl=profile?.international??{}
+    const intlMatches=Number(intl?.matches??0)
+    const intlStarts=Number(intl?.starts??0)
+    const intlMinutes=Number(intl?.minutes??0)
+    const intlStartRate=intlMatches>0?intlStarts/intlMatches:0
+    const intlMinutesRate=intlMatches>0?Math.min(1,intlMinutes/(intlMatches*90)):0
+    const clubApps=Number(current?.appearances??0)
+    const clubStarts=Number(current?.starts??0)
+    const clubStartRate=clubApps>0?clubStarts/clubApps:0
+    const startLikelihood=Math.max(.05,Math.min(.95,
+      .08+intlStartRate*.64+intlMinutesRate*.18+clubStartRate*.10
+    ))
+    const profilePosition=String(profile?.position??"")
+    const position=norm(profilePosition)==="sub"
+      ? String(current?.position??profilePosition||"")
+      : (profilePosition||String(current?.position??""))
+    const base=existing.get(key)??{}
+    merged.push({
+      ...base,
+      name:base?.name??name,
+      dbName:base?.dbName??name,
+      team:base?.team??team,
+      position:position||base?.position??null,
+      appearances:intlMatches,
+      starts:intlStarts,
+      minutes:intlMinutes,
+      internationalMatches:intlMatches,
+      internationalStarts:intlStarts,
+      internationalMinutes:intlMinutes,
+      startLikelihood,
+      fouls90:Number.isFinite(Number(intl?.fouls90))?Number(intl.fouls90):Number(current?.fouls90??base?.fouls90??0),
+      fouled90:Number.isFinite(Number(intl?.fouled90))?Number(intl.fouled90):Number(current?.fouled90??base?.fouled90??0),
+      cards90:Number.isFinite(Number(intl?.cards90))?Number(intl.cards90):Number(current?.cards90??base?.cards90??0),
+      shots90:Number.isFinite(Number(intl?.shots90))?Number(intl.shots90):Number(current?.shots90??base?.shots90??0),
+      shotsOnTarget90:Number.isFinite(Number(intl?.shotsOnTarget90))?Number(intl.shotsOnTarget90):Number(current?.shotsOnTarget90??base?.shotsOnTarget90??0),
+      score:Number(profile?.blended?.foulResearchScore??base?.score??0),
+      internationalProfile:true,
+    })
+    used.add(key)
+  }
+
+  for(const candidate of data.candidates){
+    const key=norm(String(candidate?.name??candidate?.dbName??""))+"|"+norm(String(candidate?.team??""))
+    if(!used.has(key))merged.push(candidate)
+  }
+
+  data.candidates=merged
+  data.internationalProfileMerge={
+    source:"International senior history + current domestic form",
+    profiles:profiles.length,
+    homeProfiles:homeProfiles.length,
+    awayProfiles:awayProfiles.length,
+    rule:"Before confirmed XIs, senior international starts/minutes drive starter likelihood; club starts are secondary only.",
+  }
+  return data
 }
 
 async function addCurrentSeasonLayer(data: any, competition: string) {
@@ -98,11 +184,20 @@ function positionGroup(position:string|null|undefined){
   return "other"
 }
 function predictedStarterScore(candidate:any){
-  const starts=Number(candidate.starts??0),apps=Number(candidate.appearances??0),minutes=Number(candidate.minutes??0)
+  const starts=Number(candidate.internationalStarts??candidate.starts??0)
+  const apps=Number(candidate.internationalMatches??candidate.appearances??0)
+  const minutes=Number(candidate.internationalMinutes??candidate.minutes??0)
   const startRate=apps>0?starts/apps:0
+  const minutesPerCap=apps>0?Math.min(1,minutes/(apps*90)):0
   const likelihood=Number(candidate.startLikelihood??0)
-  const minutesReliability=Math.min(1,minutes/1800)
-  return likelihood*.58+startRate*.24+minutesReliability*.12+Math.min(1,Number(candidate.score??0)/100)*.06
+  const subPenalty=norm(candidate.position)==="sub"?.18:0
+  return Math.max(0,
+    likelihood*.44+
+    startRate*.34+
+    minutesPerCap*.16+
+    Math.min(1,Number(candidate.score??0)/100)*.06-
+    subPenalty
+  )
 }
 function candidateMatchesName(candidate:any,name:string){
   const a=normalisePredictedName(candidate?.name??candidate?.dbName??"")
@@ -337,6 +432,7 @@ export async function GET(request: Request) {
     let data = await response.json()
     const url = new URL(request.url)
     const date = url.searchParams.get("date") ?? "", home = url.searchParams.get("home") ?? "", away = url.searchParams.get("away") ?? "", competition = url.searchParams.get("competition") ?? "Premier League"
+    if(competition==="International")data=await mergeInternationalProfiles(data,home,away)
     data = await addCurrentSeasonLayer(data, competition)
     data = applyLineupMode(data, date, home, away, competition)
     data = await addH2HMatchesAndBalance(data, home, away, competition, date)
