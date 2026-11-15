@@ -9,8 +9,8 @@ export const revalidate = 0
 export const maxDuration = 60
 
 const ESPN_ROOT = "https://site.api.espn.com/apis/site/v2/sports/soccer"
-const FORM_START = "2026-01-01"
-const SLUGS = ["uefa.nations","fifa.friendly","fifa.world","fifa.worldq.uefa","fifa.worldq.conmebol","fifa.worldq.concacaf","fifa.worldq.afc","fifa.worldq.caf"]
+const FORM_START = "2024-06-01"
+const SLUGS = ["uefa.euro","uefa.nations","fifa.friendly","fifa.world","fifa.worldq.uefa","fifa.worldq.conmebol","fifa.worldq.concacaf","fifa.worldq.afc","fifa.worldq.caf"]
 
 function n(value:unknown){const v=Number(value??0);return Number.isFinite(v)?v:0}
 function stat(row:any,name:string){const found=(row?.stats??[]).find((s:any)=>s?.name===name);return n(found?.value??found?.displayValue)}
