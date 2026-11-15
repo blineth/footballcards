@@ -36,7 +36,8 @@ type FoulTargetSlip={
 }
 type ScorecardMarket={
   key?:string;label:string;probability:number;fairOdds?:number|null;bookmakerOdds?:number|null;
-  bookmakerName?:string|null;edge?:number|null;confidence:"A"|"B"|"C"|"D";reasons?:string[]
+  bookmakerName?:string|null;edge?:number|null;confidence:"A"|"B"|"C"|"D";reasons?:string[];
+  sampleMatches?:number;recent5HitRate?:number;seasonHitRate?:number;h2hHitRate?:number|null;h2hMatches?:number
 }
 type ScorecardPlayer={
   name:string;dbName?:string;team:string;
@@ -213,6 +214,7 @@ function rankSlip(slip:BetSlip|FoulTargetSlip,confirmed:boolean,placeable:boolea
 }
 
 const TARGET_ODDS=[
+  {fractional:"3/1",decimal:4},
   {fractional:"5/1",decimal:6},
   {fractional:"10/1",decimal:11},
   {fractional:"15/1",decimal:16},
@@ -224,95 +226,77 @@ const TARGET_ODDS=[
 ] as const
 const TARGET_BOOKS=["Bet365"] as const
 
-function buildTargetOddsSlips(recommendations:Recommendation[],fixtureId:string):TargetOddsSlip[]{
-  type Candidate={
-    fixture:Fixture;leg:SlipLeg;bookmaker:string|null;exactPrice:number|null;
-    marketVerified:boolean
-  }
-  const candidates:Candidate[]=[]
-  const seen=new Set<string>()
-  for(const rec of recommendations){
-    if(rec.fixture.id!==fixtureId)continue
-    for(const leg of rec.slip.legs??[]){
-      const p=Math.max(.01,Math.min(.99,Number(leg.probability??0)))
-      if(p<.12||leg.confidence==="D")continue
-      const book=leg.bookmakerName??rec.slip.bookmaker??null
-      const exact=book==="Bet365"&&leg.bookmakerOdds!=null&&leg.priceSource!=="estimated"?Number(leg.bookmakerOdds):null
-      if(exact==null||!Number.isFinite(exact)||exact<=1)continue
-      const key=[leg.player,leg.market,leg.label,"Bet365"].join("|")
-      if(seen.has(key))continue
-      seen.add(key)
-      candidates.push({
-        fixture:rec.fixture,leg,bookmaker:"Bet365",exactPrice:exact,
-        marketVerified:true,
-      })
-    }
-  }
+function buildTargetOddsSlips(scorecard:Scorecard|null,fixture:Fixture):TargetOddsSlip[]{
+  type Candidate={fixture:Fixture;leg:SlipLeg;exactPrice:number}
+  const candidates:Candidate[]=(scorecard?.ok?directPlayerCandidates(scorecard):[])
+    .filter(leg=>leg.bookmakerName==="Bet365"&&leg.bookmakerOdds!=null&&leg.priceSource!=="estimated"&&Number(leg.bookmakerOdds)>1)
+    .map(leg=>({fixture,leg,exactPrice:Number(leg.bookmakerOdds)}))
 
   const family=(market:string)=>market.startsWith("goal")?"goal":market.startsWith("assist")?"assist":market.startsWith("fouled")?"fouled":market.startsWith("foul")?"foul":market.startsWith("sot")?"sot":market.startsWith("shot")?"shot":"card"
   const baseMarket=(market:string)=>market==="goal1"||market==="assist1"||market==="foul1"||market==="fouled1"||market==="card"||market==="shot1"||market==="sot1"
-  function search(targetDecimal:number,bookmaker:"Bet365"){
-    const minFamilies=targetDecimal>=16?3:2
-    type State={legs:Candidate[];odds:number;prob:number;players:Set<string>;families:Record<string,number>}
-    let states:State[]=[{legs:[],odds:1,prob:1,players:new Set(),families:{}}]
-    const pool=candidates
-      .filter(x=>x.bookmaker===bookmaker&&x.exactPrice!=null)
-      .sort((a,b)=>b.leg.probability-a.leg.probability)
-      .slice(0,24)
+
+  function search(targetDecimal:number){
+    type State={legs:Candidate[];odds:number;prob:number;players:Set<string>;families:Record<string,number>;baseCount:number}
+    let states:State[]=[{legs:[],odds:1,prob:1,players:new Set(),families:{},baseCount:0}]
+    const pool=[...candidates]
+      .sort((a,b)=>b.leg.probability-a.leg.probability||((baseMarket(a.leg.market)?0:1)-(baseMarket(b.leg.market)?0:1))||a.exactPrice-b.exactPrice)
+      .slice(0,60)
 
     for(const option of pool){
       const next=[...states]
       for(const state of states){
-        if(state.legs.length>=8||state.players.has(option.leg.player))continue
+        const playerKey=normName(option.leg.player)
+        if(state.legs.length>=10||state.players.has(playerKey))continue
         const fam=family(option.leg.market)
         const familyCount=state.families[fam]??0
-        if(familyCount>=2)continue
-        const price=option.exactPrice
-        if(price==null)continue
-        const odds=state.odds*price
-        if(odds>targetDecimal*1.65&&state.legs.length>=1)continue
+        // Do not force artificial market diversity. If five different players
+        // getting 1+ foul is the safest route, that should beat one speculative
+        // 2+ foul/card/SOT leg simply because it creates more market families.
+        if(familyCount>=8)continue
+        const odds=state.odds*option.exactPrice
+        if(odds>targetDecimal*1.55&&state.legs.length>=1)continue
         next.push({
           legs:[...state.legs,option],
           odds,
           prob:state.prob*option.leg.probability,
-          players:new Set([...state.players,option.leg.player]),
+          players:new Set([...state.players,playerKey]),
           families:{...state.families,[fam]:familyCount+1},
+          baseCount:state.baseCount+(baseMarket(option.leg.market)?1:0),
         })
       }
-      const score=(s:State)=>{
-        if(!s.legs.length)return 999
-        const distance=Math.abs(Math.log(Math.max(1.01,s.odds))-Math.log(targetDecimal))
-        const minProb=Math.min(...s.legs.map(x=>x.leg.probability))
-        const avgProb=s.legs.reduce((sum,x)=>sum+x.leg.probability,0)/s.legs.length
-        const confidence=s.legs.filter(x=>x.leg.confidence==="A"||x.leg.confidence==="B").length/s.legs.length
-        const diversity=Object.keys(s.families).length
-        return distance*2.45-avgProb*.48-minProb*.18-confidence*.08-diversity*.07+s.legs.length*.015
-      }
-      // Preserve the most likely combinations across the whole price range.
-      // A close-to-target but speculative combination must not crowd out a safer
-      // combination that reaches the same target with more short-priced legs.
+
       const buckets=new Map<string,State[]>()
       for(const state of next){
-        const oddsBucket=Math.floor(Math.log(Math.max(1,state.odds))*100)
+        const oddsBucket=Math.floor(Math.log(Math.max(1,state.odds))*120)
         const key=oddsBucket+"|"+state.legs.length
         const rows=buckets.get(key)??[]
         rows.push(state)
-        rows.sort((a,b)=>b.prob-a.prob||score(a)-score(b))
-        buckets.set(key,rows.slice(0,10))
+        rows.sort((a,b)=>{
+          if(Math.abs(a.prob-b.prob)>.000001)return b.prob-a.prob
+          const weakA=a.legs.length?Math.min(...a.legs.map(x=>x.leg.probability)):0
+          const weakB=b.legs.length?Math.min(...b.legs.map(x=>x.leg.probability)):0
+          if(Math.abs(weakA-weakB)>.0001)return weakB-weakA
+          return b.baseCount-a.baseCount
+        })
+        buckets.set(key,rows.slice(0,14))
       }
       states=[...buckets.values()].flat()
-        .sort((a,b)=>b.prob-a.prob||score(a)-score(b))
-        .slice(0,2200)
+        .sort((a,b)=>b.prob-a.prob||b.baseCount-a.baseCount)
+        .slice(0,3200)
     }
-    const acceptable=states.filter(s=>s.legs.length>=2&&s.odds>=targetDecimal&&s.odds<=targetDecimal*1.35&&Object.keys(s.families).length>=minFamilies)
+
+    const acceptable=states.filter(state=>
+      state.legs.length>=2&&state.odds>=targetDecimal&&state.odds<=targetDecimal*1.35
+    )
     if(!acceptable.length)return null
     return acceptable.sort((a,b)=>{
-      // Primary objective: highest whole-slip hit probability. Odds proximity is
-      // only a tie-breaker once both combinations genuinely meet the target.
+      // The target price is a constraint, not the objective. Once both builds
+      // genuinely reach it, choose the combination with the best modelled chance.
       if(Math.abs(a.prob-b.prob)>.0005)return b.prob-a.prob
       const weakA=Math.min(...a.legs.map(x=>x.leg.probability))
       const weakB=Math.min(...b.legs.map(x=>x.leg.probability))
       if(Math.abs(weakA-weakB)>.005)return weakB-weakA
+      if(a.baseCount!==b.baseCount)return b.baseCount-a.baseCount
       const da=Math.abs(Math.log(a.odds)-Math.log(targetDecimal))
       const db=Math.abs(Math.log(b.odds)-Math.log(targetDecimal))
       if(Math.abs(da-db)>.01)return da-db
@@ -321,47 +305,43 @@ function buildTargetOddsSlips(recommendations:Recommendation[],fixtureId:string)
   }
 
   return TARGET_ODDS.map(target=>{
-    let chosen:{legs:Candidate[];odds:number;prob:number;players:Set<string>}|null=search(target.decimal,"Bet365")
-    const chosenBook:"Bet365"="Bet365"
-    const source:"bookmaker-singles"|null=chosen?"bookmaker-singles":null
+    const chosen=search(target.decimal)
     if(!chosen)return {
-      id:"target-"+fixtureId+"-"+target.fractional.replace("/","-"),
+      id:"target-"+fixture.id+"-"+target.fractional.replace("/","-"),
       targetFractional:target.fractional,targetDecimal:target.decimal,
       available:false,referenceOdds:null,modelAllHitProbability:null,bookmaker:null,
       priceSource:null,marketsVerified:false,legs:[],
-      note:"No strong, market-diverse combination actually reaches this target. A lower-priced slip is never labelled as this target.",
+      note:"No sufficiently strong verified Bet365 player-prop combination reaches this target. The engine will not add a weak card, high threshold, match winner, double chance, total-goals line or corners just to manufacture the price.",
     }
-    const legs:TargetOddsLeg[]=chosen.legs.map(x=>{
-      const price=Number(x.exactPrice)
-      return {
-        fixtureId:x.fixture.id,competition:x.fixture.competition,kickoff:x.fixture.kickoff,
-        home:x.fixture.home.name,away:x.fixture.away.name,player:x.leg.player,team:x.leg.team,
-        market:x.leg.market,label:x.leg.label,probability:x.leg.probability,
-        price:Math.round(price*1000)/1000,priceSource:"exact" as const,
-        bookmaker:"Bet365" as const,confidence:x.leg.confidence,
-      }
-    })
-    const marketsVerified=chosen.legs.every(x=>x.marketVerified&&x.bookmaker==="Bet365"&&x.exactPrice!=null)
+    const legs:TargetOddsLeg[]=chosen.legs.map(x=>({
+      fixtureId:fixture.id,competition:fixture.competition,kickoff:fixture.kickoff,
+      home:fixture.home.name,away:fixture.away.name,player:x.leg.player,team:x.leg.team,
+      market:x.leg.market,label:x.leg.label,probability:x.leg.probability,
+      price:Math.round(x.exactPrice*1000)/1000,priceSource:"exact" as const,
+      bookmaker:"Bet365" as const,confidence:x.leg.confidence,
+    }))
     return {
-      id:"target-"+fixtureId+"-"+target.fractional.replace("/","-"),
+      id:"target-"+fixture.id+"-"+target.fractional.replace("/","-"),
       targetFractional:target.fractional,targetDecimal:target.decimal,available:true,
       referenceOdds:Math.round(chosen.odds*100)/100,
       modelAllHitProbability:Math.round(chosen.prob*10000)/10000,
-      bookmaker:chosenBook,priceSource:source,marketsVerified,legs,
-      note:"Uses verified Bet365 individual leg prices only. Once a combination reaches the target, the model chooses the highest estimated whole-slip hit probability rather than simply the closest price. No model/fair odds are used as bookmaker prices. Bet365 can still apply correlation when quoting the final same-game Bet Builder.",
+      bookmaker:"Bet365" as const,priceSource:"bookmaker-singles" as const,marketsVerified:true,legs,
+      note:"Probability first: verified Bet365 player-prop prices set the target, then the model chooses the highest estimated whole-slip hit chance. Multiple safer 1+ events across different players are allowed to beat a riskier 2+/card/SOT leg. Cards require supporting form/H2H/foul-pressure evidence. Match winner, double chance, total goals and corners are excluded here.",
     }
   })
 }
 
-function buildTargetOddsGames(recommendations:Recommendation[],fixturePool:Fixture[]=[]):TargetOddsGame[]{
+function buildTargetOddsGames(scans:FixtureScan[],fixturePool:Fixture[]=[]):TargetOddsGame[]{
   const fixtures=new Map<string,Fixture>()
-  // Let the user choose any remaining game today, even when that fixture does not
-  // currently have enough qualified legs for a full recommendation card.
+  const scorecards=new Map<string,Scorecard|null>()
   for(const fixture of fixturePool)fixtures.set(fixture.id,fixture)
-  for(const rec of recommendations)fixtures.set(rec.fixture.id,rec.fixture)
+  for(const scan of scans){
+    fixtures.set(scan.fixture.id,scan.fixture)
+    scorecards.set(scan.fixture.id,scan.scorecard)
+  }
   return [...fixtures.values()]
     .sort((a,b)=>a.kickoff.localeCompare(b.kickoff))
-    .map(fixture=>({fixture,targets:buildTargetOddsSlips(recommendations,fixture.id)}))
+    .map(fixture=>({fixture,targets:buildTargetOddsSlips(scorecards.get(fixture.id)??null,fixture)}))
 }
 function selectDiversifiedRecommendations(rows:Recommendation[],limit=8){
   const sorted=[...rows].sort((a,b)=>b.rank-a.rank)
@@ -438,16 +418,34 @@ function fullPlayerMarketSet(status:Scorecard["marketAvailability"]){
 }
 type FixtureScan={fixture:Fixture;scorecard:Scorecard|null;recommendations:Recommendation[]}
 
+function cardEvidenceEligible(player:ScorecardPlayer,market:ScorecardMarket){
+  const h2hN=Number(market.h2hMatches??0)
+  const h2hRate=Number(market.h2hHitRate??0)
+  const recent=Number(market.recent5HitRate??0)
+  const season=Number(market.seasonHitRate??0)
+  const sample=Number(market.sampleMatches??0)
+  const after2=player.yellowConditionals?.after2PlusFouls
+  const strongH2H=h2hN>=2&&h2hRate>=.50
+  const strongCurrent=recent>=.40&&season>=.20
+  const strongSeason=sample>=8&&season>=.30
+  const foulPressure=Number(after2?.matches??0)>=3&&Number(after2?.rate??0)>=.45
+  return Number(market.probability)>=.16&&(strongH2H||strongCurrent||strongSeason||foulPressure)
+}
+
 function directPlayerCandidates(scorecard:Scorecard){
   const out:SlipLeg[]=[]
   const seen=new Set<string>()
   for(const player of scorecard.players??[]){
     for(const [marketKey,market] of Object.entries(player.markets??{})){
+      // Recommendation builders are player-prop led. Match winner, double chance,
+      // total goals and corners are intentionally not supported here.
       const supported=marketKey==="card"||marketKey.startsWith("foul")||marketKey.startsWith("fouled")||marketKey.startsWith("shot")||marketKey.startsWith("sot")||marketKey.startsWith("goal")||marketKey.startsWith("assist")
       if(!supported)continue
       const exact=market.bookmakerName==="Bet365"&&market.bookmakerOdds!=null&&Number(market.bookmakerOdds)>1
       const probability=Number(market.probability)
-      if(!exact||!Number.isFinite(probability)||probability<.34)continue
+      const minimum=marketKey==="card"?.16:marketKey.startsWith("goal")||marketKey.startsWith("assist")?.18:marketKey.startsWith("sot")?.24:.30
+      if(!exact||!Number.isFinite(probability)||probability<minimum||market.confidence==="D")continue
+      if(marketKey==="card"&&!cardEvidenceEligible(player,market))continue
       const key=normName(player.name)+"|"+marketKey+"|"+market.label
       if(seen.has(key))continue
       seen.add(key)
@@ -506,12 +504,12 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
 
     const runSearch=(pool:SlipLeg[])=>{
       const minLegProbability=.34
-      const byPlayerFamily=new Map<string,SlipLeg[]>()
+      const byPlayer=new Map<string,SlipLeg[]>()
       for(const leg of pool){
         if(leg.probability<minLegProbability)continue
-        const key=normName(leg.player)+"|"+family(leg.market)
-        if(!byPlayerFamily.has(key))byPlayerFamily.set(key,[])
-        byPlayerFamily.get(key)!.push(leg)
+        const key=normName(leg.player)
+        if(!byPlayer.has(key))byPlayer.set(key,[])
+        byPlayer.get(key)!.push(leg)
       }
 
       type State={legs:SlipLeg[];product:number;raw:number;conservative:number;families:Record<string,number>}
@@ -523,7 +521,7 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
       let states=new Map<number,State>()
       states.set(0,{legs:[],product:1,raw:1,conservative:1,families:{}})
 
-      for(const options of byPlayerFamily.values()){
+      for(const options of byPlayer.values()){
         const next=new Map(states)
         for(const state of states.values()){
           if(state.legs.length>=8)continue
@@ -624,7 +622,7 @@ function buildYellowCardWatchFromScans(scans:FixtureScan[]):YellowCardWatchRow[]
     // Prefer Match Edge model probabilities when a current player row exists.
     for(const player of scorecard.players??[]){
       const market=player.markets?.card
-      if(!market||market.bookmakerName!=="Bet365"||market.bookmakerOdds==null||Number(market.bookmakerOdds)<=1||market.confidence==="D")continue
+      if(!market||market.bookmakerName!=="Bet365"||market.bookmakerOdds==null||Number(market.bookmakerOdds)<=1||market.confidence==="D"||!cardEvidenceEligible(player,market))continue
       const key=scan.fixture.id+"|"+normName(player.name)
       if(seen.has(key))continue
       seen.add(key)
@@ -638,25 +636,8 @@ function buildYellowCardWatchFromScans(scans:FixtureScan[]):YellowCardWatchRow[]
       })
     }
 
-    // If lineups/model rows are not ready yet, keep the Yellow Card Watch visible
-    // using the actual Bet365 card board. This is bookmaker-implied only, not a
-    // Match Edge player prediction.
-    for(const selection of scorecard.oddsSelections??[]){
-      if(selection.kind!=="card"||selection.bookmaker!=="Bet365"||selection.odd==null||Number(selection.odd)<=1)continue
-      const player=String(selection.label??"").split("·")[0]?.trim()
-      if(!player)continue
-      const key=scan.fixture.id+"|"+normName(player)
-      if(seen.has(key))continue
-      seen.add(key)
-      const implied=Math.max(.01,Math.min(.99,1/Number(selection.odd)))
-      rows.push({
-        fixtureId:scan.fixture.id,competition:scan.fixture.competition,kickoff:scan.fixture.kickoff,
-        home:scan.fixture.home.name,away:scan.fixture.away.name,
-        player,team:"",probability:implied,bookmakerOdds:Number(selection.odd),confidence:"C",
-        reason:"Verified Bet365 Player to be Booked price. Match Edge model probability will replace this bookmaker-implied figure when the current player/lineup model is ready.",
-        probabilityBasis:"bet365-implied",
-      })
-    }
+    // Do not fall back to bookmaker-implied card prices. Cards only appear here
+    // when the player model has supporting H2H/current-form/foul-pressure evidence.
   }
 
   return rows
@@ -686,7 +667,12 @@ function buildLivePlayerProps(scorecard:Scorecard|null,elapsed:number,liveStats:
       if(seen.has(key))continue
       seen.add(key)
       const stat=liveStats.get(normName(leg.player))
-      if(market==="card"&&stat&&(stat.yellowCards>0||stat.redCards>0))continue
+      if(market==="card"){
+        const player=(scorecard.players??[]).find(p=>normName(p.name)===normName(leg.player)||normName(String(p.dbName??""))===normName(leg.player))
+        const cardMarket=player?.markets?.card
+        if(!player||!cardMarket||!cardEvidenceEligible(player,cardMarket))continue
+        if(stat&&(stat.yellowCards>0||stat.redCards>0))continue
+      }
 
       let currentCount=0
       let nextLabel=leg.label
@@ -1048,7 +1034,7 @@ export async function GET(request:Request){
 
     const allRecommendations=scans.flatMap(x=>x.recommendations).sort((a,b)=>b.rank-a.rank)
     const recommendations=selectDiversifiedRecommendations(allRecommendations,8)
-    const targetOddsGames=buildTargetOddsGames(allRecommendations,upcoming)
+    const targetOddsGames=buildTargetOddsGames(scans,upcoming)
     const multiMatchBuild=buildMultiMatchFromScans(scans)
     const yellowCardWatch=buildYellowCardWatchFromScans(scans)
     const nowForSave=Date.now()
@@ -1087,7 +1073,7 @@ export async function GET(request:Request){
         recommendationCalibration:"Final ranking uses a second walk-forward calibration layer built from historical recommendations that survived the selection process.",
         cache:"Recommended scans today's matchday only. It never silently advances to tomorrow. Manual refresh bypasses the normal scan cadence, while provider and last-good caches protect against temporary source failures.",
         tracking:"Predicted-XI recommendations remain visible before official teams. As soon as confirmed lineups arrive, the scorecard is rebuilt and benched players disappear. Recommendations are saved before kickoff and graded later from imported player-match data.",
-        targetOdds:"Select a match, then 5/1 through 50/1 targets use verified Bet365 individual leg prices only. If Bet365 prices are missing, the target is unavailable; model/fair odds are never substituted. The final Bet365 Bet Builder quote can still differ because of correlation.",
+        targetOdds:"Select a match, then 3/1 through 50/1 targets use every eligible verified Bet365 player-prop option from the scorecard. The target price is only a constraint: the chosen route maximises estimated whole-slip hit probability, can use several safer 1+ events across different players, and never adds match winner, double chance, total goals or corners. Cards require supporting H2H/current-form/foul-pressure evidence. Model/fair odds are never substituted for Bet365 prices.",
         multiMatch:"The Multi-Match Builder only admits fixtures where Bet365 has Cards, Fouls Committed, Fouls Drawn, Shots and Shots on Target all available. It builds the safest verified same-game route to roughly 3/1 in each included match using the same probability-first logic as the individual Match Builder, then combines up to 10 match builders. Each match can contain multiple underlying player selections.",
         liveRecommended:"Matches remain on Recommended after kick-off. Live rows use the current score and minute plus current player event counts. Confirmed-XI card, foul, fouled, shot and SOT models become next-threshold remaining-match probabilities; already-carded players are removed from the card market, and stale pre-match bookmaker prices are never relabelled as live prices.",
         liveFeedback:liveTopSample>=50
