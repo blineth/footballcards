@@ -141,12 +141,24 @@ function buildPredictedTeam(candidates:any[],teamName:string,curatedTeam:any|nul
   }
   return chosen.slice(0,11)
 }
-function applyLineupMode(data:any,date:string,home:string,away:string){
+function applyLineupMode(data:any,date:string,home:string,away:string,competition:string){
   if(!Array.isArray(data?.candidates)||!data.candidates.length)return data
   if(data?.lineupsConfirmed===true){
     data.lineupMode="confirmed"
     data.lineupSource="Official starting XI"
     data.candidates=data.candidates.map((c:any)=>({...c,predictedStarter:false}))
+    return data
+  }
+  if(competition==="International"&&data?.squadVerified!==true){
+    data.lineupMode="squad"
+    data.lineupSource="Waiting for verified current senior matchday squad"
+    data.predictedLineups=null
+    // Accuracy over coverage: never turn a broad/stale national-team player pool
+    // into a betting XI. Once ESPN exposes the current matchday squad this route
+    // will immediately resume predicted-XI modelling; confirmed starters remain
+    // the final authority.
+    data.candidates=[]
+    data.recommendationsBlockedReason="Current senior matchday squad is not verified yet"
     return data
   }
   const curated=getPredictedFixture(date,home,away)
@@ -329,7 +341,7 @@ export async function GET(request: Request) {
     const url = new URL(request.url)
     const date = url.searchParams.get("date") ?? "", home = url.searchParams.get("home") ?? "", away = url.searchParams.get("away") ?? "", competition = url.searchParams.get("competition") ?? "Premier League"
     data = await addCurrentSeasonLayer(data, competition)
-    data = applyLineupMode(data, date, home, away)
+    data = applyLineupMode(data, date, home, away, competition)
     data = await addH2HMatchesAndBalance(data, home, away, competition, date)
 
     let refereeName = data?.referee?.name ?? null
