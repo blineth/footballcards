@@ -271,6 +271,10 @@ function buildTargetOddsSlips(scorecard:Scorecard|null,fixture:Fixture):TargetOd
 
   const candidates:Candidate[]=(scorecard?.ok?directPlayerCandidates(scorecard):[])
     .filter(leg=>leg.bookmakerName==="Bet365"&&leg.bookmakerOdds!=null&&leg.priceSource!=="estimated"&&Number(leg.bookmakerOdds)>1)
+    .filter(leg=>{
+      const f=family(leg.market)
+      return f==="foul"||f==="fouled"||f==="shot"||f==="sot"
+    })
     .map(leg=>{
       const exactPrice=Number(leg.bookmakerOdds)
       return {fixture,leg,exactPrice,conservativeP:conservativeLegProbability(leg,exactPrice),modelP:Number(leg.probability),teamKey:teamKey(leg.team)}
@@ -628,13 +632,13 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
     },
     {
       id:"balanced",title:"Balanced",targetFractional:"5/1",targetDecimal:6,minLeg:.25,maxFactor:1.42,
-      allowHighVariance:true,forceBestCard:false,
-      description:"More ambitious but still probability-first. Can use stronger 2+ lines or one high-variance market when it genuinely improves the route.",
+      allowHighVariance:false,forceBestCard:false,
+      description:"Higher target price, still probability-first: fouls, fouled, shots and SOT only. It may use stronger 2+ lines when needed, but will not shortcut with a scorer, assist or card.",
     },
     {
       id:"risky",title:"Risky",targetFractional:"10/1",targetDecimal:11,minLeg:.15,maxFactor:1.38,
-      allowHighVariance:true,forceBestCard:true,
-      description:"Deliberately higher risk but still evidence-led. If a qualified card market exists, the single strongest card candidate is included, then safer fouls/shots/SOT build around it.",
+      allowHighVariance:false,forceBestCard:false,
+      description:"Highest target price of the three, but still built from the safest available fouls, fouled, shots and SOT. More legs or higher thresholds are preferred to a speculative scorer/card shortcut.",
     },
   ]
 
@@ -784,14 +788,14 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
     const note=config.id==="safe"
       ?"Safe uses only fouls, fouled, shots and SOT, choosing the highest conservative-probability route that reaches about 3/1 in each match. No card, scorer or assist is inserted just to make the price."
       :config.id==="balanced"
-        ?"Balanced targets about 5/1 per match. It still prefers frequent player events, but can use stronger 2+ lines or at most one evidence-backed goal/assist/card market when that genuinely improves the route."
-        :"Risky targets about 10/1 per match. Where a qualified Bet365 card candidate exists, it anchors the builder with the single strongest evidence-backed card pick, then uses the safest available fouls, shots and SOT around it. If no card is sufficiently supported, it does not invent one."
+        ?"Balanced targets about 5/1 per match using only fouls, fouled, shots and SOT. It prefers extra high-probability 1+ legs over one weaker 2+ line whenever the joint conservative probability is better."
+        :"Risky targets about 10/1 per match but remains probability-first: only fouls, fouled, shots and SOT are used in the automatic builder. Higher odds come from the safest available combination, not from forcing a card, scorer or assist."
     return {
       id:config.id,title:config.title,description:config.description,targetFractionalPerMatch:config.targetFractional,targetDecimalPerMatch:config.targetDecimal,
       available:matchBuilders.length>=2,matchBuilders,legs,
       combinedBet365Odds:combined==null?null:Math.round(combined*100)/100,
       conservativeAllHitProbability:allHit==null?null:Math.round(allHit*10000)/10000,
-      note:note+(config.id==="risky"?" Qualified card picks included in "+cardCount+" match"+(cardCount===1?"":"es")+".":""),
+      note,
     }
   })
 
@@ -808,7 +812,7 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
     conservativeAllHitProbability:safe.conservativeAllHitProbability,
     tiers,
     defaultTier:"safe",
-    note:"Multi-Match now has three distinct probability-led risk profiles: Safe (~3/1 per match), Balanced (~5/1) and Risky (~10/1). All use verified Bet365 player markets, both teams where qualifying props exist, one prop per player, up to 12 selections and no more than six players per team. Official lineups replace predicted XIs automatically when confirmed.",
+    note:"Multi-Match has three probability-led target levels: Safe (~3/1), Balanced (~5/1) and Risky (~10/1) per match. All automatic builds use verified Bet365 fouls, fouls drawn, shots and SOT only, both teams where qualifying props exist, one prop per player, up to 12 selections and no more than six players per team. Once official lineups are confirmed, only those starters are eligible.",
   }
 }
 
@@ -1012,9 +1016,9 @@ export async function GET(request:Request){
       headers:{"Cache-Control":"public, s-maxage=15, stale-while-revalidate=30"}
     })
   }
-  if(!refresh&&!multiOnly&&lastGoodRecommended&&Date.now()-lastGoodAt<STALE_CACHE_MS){
+  if(!refresh&&!multiOnly&&lastGoodRecommended&&Date.now()-lastGoodAt<30*1000){
     return NextResponse.json({...lastGoodRecommended,staleFallback:false,servedFrom:"server-last-good"},{
-      headers:{"Cache-Control":"public, s-maxage=120, stale-while-revalidate=1800"}
+      headers:{"Cache-Control":"public, s-maxage=15, stale-while-revalidate=30"}
     })
   }
   const maxFixtures=Math.max(6,Math.min(24,Number(url.searchParams.get("limit")??18)||18))
