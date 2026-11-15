@@ -615,7 +615,10 @@ function marketReasons(input: {
   if (input.market === "card" && input.conditional2 && input.conditional2.matches >= 3 && Number(input.conditional2.rate ?? 0) >= 0.45) {
     reasons.push("Booked in " + input.conditional2.yellows + "/" + input.conditional2.matches + " matches with 2+ fouls")
   }
-  if (input.h2hRate != null && input.h2hN >= 2 && input.h2hRate >= 0.5) reasons.push("Strong personal H2H hit pattern")
+  if (input.h2hRate != null && input.h2hN >= 2 && input.h2hRate >= 0.5) {
+    const hits=Math.round(input.h2hRate*input.h2hN)
+    reasons.push("Personal H2H: "+hits+"/"+input.h2hN+" hit this market")
+  }
   if (input.market==="card" && input.countryH2H && input.countryH2H.matches>=2 && input.countryH2H.playerSamples>=12 && Number(input.countryH2H.cardRate??0)>=0.26) {
     reasons.push("Country H2H has elevated booking intensity ("+Math.round(Number(input.countryH2H.cardRate)*100)+"% of tracked player appearances)")
   }
@@ -906,10 +909,30 @@ function buildRiskBuilders(players:ScorePlayer[],scope:"all"|"discipline"="all")
 
   const isVerifiedBet365Leg=(leg:SlipLeg)=>leg.priceSource==="exact"&&leg.bookmakerName==="Bet365"&&leg.bookmakerOdds!=null&&Number(leg.bookmakerOdds)>1
   const bet365Odd=(leg:SlipLeg)=>isVerifiedBet365Leg(leg)?Number(leg.bookmakerOdds):0
+  const automaticEvidenceEligible=(leg:SlipLeg)=>{
+    if(leg.market!=="card")return true
+    const player=players.find(p=>norm(p.name)===norm(leg.player))
+    const market=player?.markets?.card
+    if(!player||!market)return false
+    const h2hN=Number(market.h2hMatches??0)
+    const h2hRate=Number(market.h2hHitRate??0)
+    const recent=Number(market.recent5HitRate??0)
+    const season=Number(market.seasonHitRate??0)
+    const sample=Number(market.sampleMatches??player.sampleMatches??0)
+    const after2=player.yellowConditionals?.after2PlusFouls
+    const strongH2H=h2hN>=2&&h2hRate>=0.50
+    const strongCurrent=recent>=0.40&&season>=0.20
+    const strongSeason=sample>=8&&season>=0.30
+    const foulPressure=Number(after2?.matches??0)>=3&&Number(after2?.rate??0)>=0.45
+    // Cards are high-variance. Do not auto-build them merely because their price
+    // helps reach a target: require a repeat opponent pattern or strong behaviour.
+    return leg.probability>=0.16&&(strongH2H||strongCurrent||strongSeason||foulPressure)
+  }
 
   const baseLegs=players.flatMap(player=>baseMarkets.map(m=>marketLeg(player,m)))
     .filter(leg=>leg.confidence!=="D"&&leg.probability>=.05)
     .filter(isVerifiedBet365Leg)
+    .filter(automaticEvidenceEligible)
   const peers=new Map<string,number[]>()
   for(const leg of baseLegs){
     const arr=peers.get(leg.market)??[]
@@ -978,6 +1001,7 @@ function buildRiskBuilders(players:ScorePlayer[],scope:"all"|"discipline"="all")
     const options=baseMarkets.map(m=>marketLeg(player,m))
       .filter(l=>l.confidence!=="D"&&l.probability>=.05)
       .filter(isVerifiedBet365Leg)
+      .filter(automaticEvidenceEligible)
       .map(l=>({family:family(l.market),signal:signal(l)}))
       .sort((a,b)=>b.signal-a.signal)
     if(options[0])preferredFamily.set(norm(player.name),options[0])
@@ -1000,6 +1024,7 @@ function buildRiskBuilders(players:ScorePlayer[],scope:"all"|"discipline"="all")
   )
     .filter(x=>x.leg.confidence!=="D"&&x.leg.probability>=.08)
     .filter(x=>isVerifiedBet365Leg(x.leg))
+    .filter(x=>automaticEvidenceEligible(x.leg))
     .sort((a,b)=>(b.safeP-a.safeP)||(b.leg.probability-a.leg.probability))
 
   return configs.map(config=>{
@@ -1420,9 +1445,17 @@ export async function GET(request: Request) {
       const weightedH2HRate=h2hContext.weightedRate(market)
       const overlap=h2hContext.averageLineupOverlap??0
       const sampleReliability=h2hRows.length/(h2hRows.length+3)
-      const sameMatchupBoost=h2hContext.sameMatchupMeetings>0?0.05:0
-      const maxWeight=market==="card"||market.startsWith("foul")?0.34:market.startsWith("shot")||market.startsWith("sot")?0.26:0.22
-      const h2hWeight=Math.min(maxWeight,(0.10+overlap*0.16+sameMatchupBoost)*sampleReliability)
+      const sameMatchupBoost=h2hContext.sameMatchupMeetings>0?0.06:0
+      // Repeat H2H patterns matter more than a generic one-off meeting. A 2/2,
+      // 2/3 or 3/3 pattern should materially move the estimate, especially for
+      // fouls/cards, while still being shrunk by sample size and lineup overlap.
+      const repeatPatternBoost=h2hRows.length>=2&&Number(h2hHitRate??0)>=0.66
+        ? (market==="card"||market.startsWith("foul")?0.13:0.08)
+        : h2hRows.length>=2&&Number(h2hHitRate??0)>=0.50
+          ? (market==="card"||market.startsWith("foul")?0.07:0.04)
+          : 0
+      const maxWeight=market==="card"||market.startsWith("foul")?0.48:market.startsWith("shot")||market.startsWith("sot")?0.34:0.28
+      const h2hWeight=Math.min(maxWeight,(0.11+overlap*0.18+sameMatchupBoost+repeatPatternBoost)*sampleReliability)
       probability = blend(probability, weightedH2HRate??h2hHitRate, h2hWeight)
 
       const threshold = thresholdForMarket(market)
@@ -1457,6 +1490,10 @@ export async function GET(request: Request) {
       }
 
       if (market.startsWith("foul") && !market.startsWith("fouled")) {
+        if(market==="foul1"&&h2hRows.length>=2&&Number(h2hHitRate??0)>=0.66){
+          const repeatReliability=Math.min(1,h2hRows.length/4)
+          probability=logitAdjust(probability,0.12*repeatReliability)
+        }
         if(h2hContext.sameMatchupMeetings>0&&h2hContext.sameMatchupFouls>0){
           const perMeeting=h2hContext.sameMatchupFouls/Math.max(1,h2hContext.sameMatchupMeetings)
           const reliability=Math.min(1,h2hContext.sameMatchupMeetings/3)
@@ -1474,6 +1511,10 @@ export async function GET(request: Request) {
       }
       if (market === "card") {
         const overallRate = rows.length ? yellowOverall / rows.length : PRIOR.card
+        if(h2hRows.length>=2&&Number(h2hHitRate??0)>=0.66){
+          const repeatReliability=Math.min(1,h2hRows.length/4)
+          probability=logitAdjust(probability,0.16*repeatReliability)
+        }
         if(h2hRows.length>0&&h2hContext.cards>0){
           const cardRate=h2hContext.cards/h2hRows.length
           const overlap=h2hContext.averageLineupOverlap??0
