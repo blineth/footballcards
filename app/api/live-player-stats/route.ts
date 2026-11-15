@@ -6,7 +6,7 @@ export const revalidate=0
 type Competition="Premier League"|"Championship"|"League One"|"League Two"|"International"
 type LivePlayerStat={
   player:string;team:string;minutes:number|null;foulsCommitted:number;foulsDrawn:number;shots:number;shotsOnTarget:number;
-  goals:number;yellowCards:number;redCards:number;subbedOff:boolean
+  goals:number;assists:number;yellowCards:number;redCards:number;subbedOff:boolean
 }
 type LivePayload={
   ok:boolean;source:string|null;status:"scheduled"|"live"|"halftime"|"finished"|"unknown";elapsed:number;
@@ -81,7 +81,8 @@ async function espnLive(input:{date:string;home:string;away:string;competition:C
             foulsDrawn:espnStat(row,"foulsSuffered"),
             shots:espnStat(row,"totalShots"),
             shotsOnTarget:espnStat(row,"shotsOnTarget"),
-            goals:espnStat(row,"goals"),
+            goals:Math.max(espnStat(row,"goals"),espnStat(row,"totalGoals")),
+            assists:espnStat(row,"goalAssists"),
             yellowCards:espnStat(row,"yellowCards"),
             redCards:espnStat(row,"redCards"),
             subbedOff:false,
@@ -150,6 +151,7 @@ async function apiFootballLive(input:{date:string;home:string;away:string;compet
           shots:Number(s?.shots?.total??0)||0,
           shotsOnTarget:Number(s?.shots?.on??0)||0,
           goals:Number(s?.goals?.total??0)||0,
+          assists:Number(s?.goals?.assists??0)||0,
           yellowCards:Number(s?.cards?.yellow??0)||0,
           redCards:Number(s?.cards?.red??0)||0,
           subbedOff:false,
