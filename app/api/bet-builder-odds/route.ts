@@ -12,6 +12,8 @@ const UK_ODDS_BASE = "https://api.ukoddsapi.com"
 const ODDS_API_DEV_BASE = "https://api.oddsapi.dev/v1"
 const ODDS_API_IO_BASE = "https://api.odds-api.io/v3"
 const FREE_ODDS_CACHE_MS = 10 * 60 * 1000
+const SNAPSHOT_WRITE_MS = 30 * 60 * 1000
+const snapshotWriteAt = new Map<string,number>()
 const PREFERRED_UK_BOOKMAKERS = ["Bet365","Paddy Power","BetMGM UK","Sky Bet","William Hill"] as const
 const LEAGUE_IDS: Record<string, string> = {
   "Premier League": "39",
@@ -56,10 +58,18 @@ function seasonFor(date: string) {
 }
 async function saveSnapshots(input:{date:string;home:string;away:string;competition:string;bookmaker?:string;source?:string|null;capturedAt?:string|null;selections:Array<{market:string;kind:string;label:string;odd:number|null;bookmaker?:string|null}>}) {
   if (!isDatabaseConfigured || !input.selections.length) return
+
+  // Odds are already held in the provider/Vercel cache. Neon only needs a
+  // periodic last-good history point, not another insert on every scorecard call.
+  const nowMs=Date.now()
+  const snapshotKey=[input.date,input.competition,norm(input.home),norm(input.away),norm(input.bookmaker??"")].join("|")
+  if(nowMs-(snapshotWriteAt.get(snapshotKey)??0)<SNAPSHOT_WRITE_MS)return
+  snapshotWriteAt.set(snapshotKey,nowMs)
+
   try {
     await ensureResearchSchema()
-    const now = new Date()
-    const bucket = new Date(Math.floor(now.getTime() / 300000) * 300000)
+    const now = new Date(nowMs)
+    const bucket = new Date(Math.floor(now.getTime() / SNAPSHOT_WRITE_MS) * SNAPSHOT_WRITE_MS)
     const captured = input.capturedAt ? new Date(input.capturedAt) : now
     const capturedAt = Number.isNaN(captured.getTime()) ? now : captured
     const rows = input.selections
@@ -96,7 +106,7 @@ async function attachMovement(input:{date:string;home:string;away:string;competi
         eq(oddsSnapshots.bookmaker, input.bookmaker),
       ))
       .orderBy(desc(oddsSnapshots.capturedAt))
-      .limit(1000)
+      .limit(300)
 
     return input.selections.map(selection => {
       if (selection.odd == null) return { ...selection, previousOdd:null, movement:null }
@@ -189,7 +199,7 @@ async function cachedSnapshot(input:{date:string;home:string;away:string;competi
         eq(oddsSnapshots.awayTeam,input.away),
       ))
       .orderBy(desc(oddsSnapshots.capturedAt))
-      .limit(1000)
+      .limit(300)
     if (!rows.length) return null
 
     const latest = rows[0]
