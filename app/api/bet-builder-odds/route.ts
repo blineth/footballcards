@@ -354,6 +354,84 @@ function oddsIoPlayerKind(name:string){
   if(n==="player shots on target")return "sot"
   return "other"
 }
+type AvailableBet={
+  market:string;kind:string;label:string;odd:number;bookmaker:string;
+  probability:number|null;probabilityBasis:"no-vig"|"implied";line?:number|null;side?:string|null
+}
+function pairNoVig(a:number|null,b:number|null){
+  if(!(a&&a>1&&b&&b>1))return [null,null] as const
+  const qa=1/a,qb=1/b,total=qa+qb
+  return [qa/total,qb/total] as const
+}
+function tripleNoVig(a:number|null,b:number|null,d:number|null){
+  if(!(a&&a>1&&b&&b>1&&d&&d>1))return [null,null,null] as const
+  const qa=1/a,qb=1/b,qd=1/d,total=qa+qb+qd
+  return [qa/total,qb/total,qd/total] as const
+}
+function flattenGeneralOddsApiIo(payload:any,home:string,away:string){
+  const out:AvailableBet[]=[]
+  const bookmakers=payload?.bookmakers&&typeof payload.bookmakers==="object"?payload.bookmakers:{}
+  const push=(market:string,kind:string,label:string,odd:any,probability:number|null,basis:"no-vig"|"implied",line?:number|null,side?:string|null)=>{
+    const price=Number(odd)
+    if(!Number.isFinite(price)||price<=1)return
+    out.push({market,kind,label,odd:price,bookmaker:"Bet365",probability:probability==null?null:Math.max(.001,Math.min(.999,probability)),probabilityBasis:basis,line:line??null,side:side??null})
+  }
+  for(const [rawBook,marketsRaw] of Object.entries(bookmakers)){
+    if(preferredBookmakerName(String(rawBook))!=="Bet365")continue
+    for(const market of (Array.isArray(marketsRaw)?marketsRaw:[]) as any[]){
+      const name=String(market?.name??"")
+      const n=norm(name)
+      const rows=Array.isArray(market?.odds)?market.odds:[]
+      for(const row of rows){
+        if(n==="ml"){
+          const h=numericOdd(row?.home),d=numericOdd(row?.draw),a=numericOdd(row?.away)
+          const [hp,dp,ap]=tripleNoVig(h,d,a)
+          if(h)push(name,"result",home+" to win",h,hp,"no-vig",null,"home")
+          if(d)push(name,"result","Draw",d,dp,"no-vig",null,"draw")
+          if(a)push(name,"result",away+" to win",a,ap,"no-vig",null,"away")
+        }else if(n==="draw no bet"){
+          const h=numericOdd(row?.home),a=numericOdd(row?.away)
+          const [hp,ap]=pairNoVig(h,a)
+          if(h)push(name,"draw-no-bet",home+" draw no bet",h,hp,"no-vig",null,"home")
+          if(a)push(name,"draw-no-bet",away+" draw no bet",a,ap,"no-vig",null,"away")
+        }else if(n==="double chance"){
+          for(const [key,label] of [["1X",home+" or Draw"],["12",home+" or "+away],["X2","Draw or "+away]] as const){
+            const odd=numericOdd(row?.[key],row?.[key.toLowerCase()])
+            if(odd)push(name,"double-chance",label,odd,1/odd,"implied",null,key)
+          }
+        }else if(n==="both teams to score"){
+          const yes=numericOdd(row?.yes),no=numericOdd(row?.no)
+          const [yp,np]=pairNoVig(yes,no)
+          if(yes)push(name,"btts","Both teams to score · Yes",yes,yp,"no-vig",null,"yes")
+          if(no)push(name,"btts","Both teams to score · No",no,np,"no-vig",null,"no")
+        }else if(n==="first team to score"){
+          const h=numericOdd(row?.home),a=numericOdd(row?.away),none=numericOdd(row?.none)
+          const [hp,ap,np]=tripleNoVig(h,a,none)
+          if(h)push(name,"first-team-score",home+" to score first",h,hp,"no-vig",null,"home")
+          if(a)push(name,"first-team-score",away+" to score first",a,ap,"no-vig",null,"away")
+          if(none)push(name,"first-team-score","No goal",none,np,"no-vig",null,"none")
+        }else if(["totals","team total home","team total away","corners totals","bookings totals"].includes(n)){
+          const lineRaw=Number(row?.hdp??row?.line)
+          const line=Number.isFinite(lineRaw)?lineRaw:null
+          const over=numericOdd(row?.over),under=numericOdd(row?.under)
+          const [op,up]=pairNoVig(over,under)
+          const prefix=n==="totals"?"Total goals":n==="team total home"?home+" team goals":n==="team total away"?away+" team goals":n==="corners totals"?"Total corners":"Total bookings"
+          const kind=n==="totals"?"total-goals":n==="team total home"||n==="team total away"?"team-goals":n==="corners totals"?"corners":"bookings"
+          if(over)push(name,kind,prefix+" over "+(line??""),over,op,"no-vig",line,"over")
+          if(under)push(name,kind,prefix+" under "+(line??""),under,up,"no-vig",line,"under")
+        }else if(n==="corners spread"){
+          const lineRaw=Number(row?.hdp??row?.line)
+          const line=Number.isFinite(lineRaw)?lineRaw:null
+          const h=numericOdd(row?.home),a=numericOdd(row?.away)
+          const [hp,ap]=pairNoVig(h,a)
+          if(h)push(name,"corners-handicap",home+" corners "+(line!=null?(line>=0?"+":"")+line:"handicap"),h,hp,"no-vig",line,"home")
+          if(a)push(name,"corners-handicap",away+" corners "+(line!=null?(line<=0?"+":"")+String(line!=null?-line:""):"handicap"),a,ap,"no-vig",line==null?null:-line,"away")
+        }
+      }
+    }
+  }
+  return out.sort((a,b)=>(b.probability??0)-(a.probability??0)||a.odd-b.odd)
+}
 function flattenOddsApiIo(payload:any){
   const out:Array<{market:string;kind:string;label:string;odd:number|null;underOdd?:number|null;noVigProbability?:number|null;bookmaker?:string|null}>=[]
   const bookmakers=payload?.bookmakers&&typeof payload.bookmakers==="object"?payload.bookmakers:{}
@@ -408,10 +486,16 @@ async function fromOddsApiIo(input:{date:string;home:string;away:string;competit
   const id=String(event?.id??"")
   if(!id)return null
   const selectedBookmakers=await oddsIoSelectedBooks(input.key)
-  const payload=await oddsApiIo("/odds",{eventId:id,bookmakers:"Bet365",markets:"Anytime Goalscorer,Player To Assist,Player to be Booked,Player Fouls,Player To Be Fouled,Player Shots,Player Shots on Target"},input.key)
+  const requestedMarkets=[
+    "ML","Draw No Bet","Double Chance","Totals","Both Teams To Score","First Team To Score",
+    "Team Total Home","Team Total Away","Corners Totals","Corners Spread","Bookings Totals",
+    "Anytime Goalscorer","Player To Assist","Player to be Booked","Player Fouls","Player To Be Fouled","Player Shots","Player Shots on Target",
+  ].join(",")
+  const payload=await oddsApiIo("/odds",{eventId:id,bookmakers:"Bet365",markets:requestedMarkets},input.key)
   const selections=flattenOddsApiIo(payload)
-  const books=[...new Set(selections.map(s=>s.bookmaker).filter(Boolean))] as string[]
-  if(!selections.length)return null
+  const availableBets=flattenGeneralOddsApiIo(payload,input.home,input.away)
+  const books=[...new Set([...selections.map(s=>s.bookmaker),...availableBets.map(s=>s.bookmaker)].filter(Boolean))] as string[]
+  if(!selections.length&&!availableBets.length)return null
   const updatedTimes=Object.values(payload?.bookmakers??{}).flatMap((markets:any)=>Array.isArray(markets)?markets.map((m:any)=>String(m?.updatedAt??"")).filter(Boolean):[])
   const providerUpdatedAt=updatedTimes.sort().reverse()[0]??null
   // capturedAt means when Match Edge verified this board from the provider.
@@ -427,6 +511,8 @@ async function fromOddsApiIo(input:{date:string;home:string;away:string;competit
     providerUpdatedAt,
     eventId:id,
     selections,
+    availableBets,
+    availableMarketNames:[...new Set(availableBets.map(x=>x.market))],
     bookmakerUrls:payload?.urls??{},
     provider:"odds-api.io",
     selectedBookmakers:selectedBookmakers.filter((x:string)=>norm(x).includes("bet365")),
