@@ -356,10 +356,58 @@ function clientRiskBuilders(rows:Selection[]):RiskBuilder[]{
     }
   }
 
+  function guaranteedModelTarget(cfg:(typeof configs)[number]):RiskBuilder{
+    const pool=[...rows]
+      .filter(r=>r.confidence!=="D"&&Number(r.probability)>0&&Number(r.fairOdds??0)>1)
+      .sort((a,b)=>b.probability-a.probability)
+    const legs:Selection[]=[]
+    const usedPlayers=new Set<string>()
+    const familyCounts:Record<string,number>={}
+    let product=1
+    let raw=1
+
+    for(const row of pool){
+      const playerKey=normPlayer(row.player)
+      const f=family(row.market)
+      if(usedPlayers.has(playerKey))continue
+      if((familyCounts[f]??0)>=cfg.maxPerFamily)continue
+      // Safe should never be forced by a speculative low-probability leg.
+      const floor=cfg.risk==="Safe"?.34:cfg.risk==="Balanced"?.16:.08
+      if(row.probability<floor)continue
+      legs.push(row)
+      usedPlayers.add(playerKey)
+      familyCounts[f]=(familyCounts[f]??0)+1
+      product*=Number(row.fairOdds)
+      raw*=Number(row.probability)
+      if(product>=cfg.targetDecimal&&legs.length>=2)break
+      if(legs.length>=cfg.max)break
+    }
+
+    if(product<cfg.targetDecimal||legs.length<2)return {
+      id:cfg.id,title:cfg.title,risk:cfg.risk,targetFractional:cfg.targetFractional,targetDecimal:cfg.targetDecimal,
+      legs:[],referenceProductOdds:null,averageLegProbability:null,minimumLegProbability:null,
+      modelAllHitProbability:null,conservativeAllHitProbability:null,safetyScore:null,
+      exactPriced:false,bookmaker:null,verifiedBet365LegPrices:false,exactBet365BuilderPrice:false,pricingBasis:"none" as const,
+      note:"No remaining live model route reaches this target."
+    }
+    const conservative=conservativeJoint(legs,raw)
+    return {
+      id:cfg.id,title:cfg.title,risk:cfg.risk,targetFractional:cfg.targetFractional,targetDecimal:cfg.targetDecimal,
+      legs,referenceProductOdds:Math.round(product*100)/100,
+      averageLegProbability:legs.reduce((s,x)=>s+x.probability,0)/legs.length,
+      minimumLegProbability:Math.min(...legs.map(x=>x.probability)),
+      modelAllHitProbability:raw,conservativeAllHitProbability:conservative,safetyScore:conservative,
+      exactPriced:false,bookmaker:null,verifiedBet365LegPrices:false,exactBet365BuilderPrice:false,pricingBasis:"none" as const,
+      note:"Live probability-first model route. Current match events are removed/adjusted first. This is not a Bet365 price; check the actual Bet365 live builder before placing."
+    }
+  }
+
   return configs.map(cfg=>{
     const verified=buildOne(cfg,true)
     if(verified.legs.length)return verified
-    return buildOne(cfg,false)
+    const model=buildOne(cfg,false)
+    if(model.legs.length)return model
+    return guaranteedModelTarget(cfg)
   })
 }
 
