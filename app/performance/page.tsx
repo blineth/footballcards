@@ -1,7 +1,8 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { Activity, BarChart3, RefreshCw, ShieldCheck, TrendingUp } from "lucide-react"
+import { Activity, BarChart3, CheckCircle2, Clock3, RefreshCw, ShieldCheck, TrendingUp, Trash2, XCircle } from "lucide-react"
+import { betProfit, betReturn, getTrackedBets, removeTrackedBet, settleTrackedBet, trackedBetEventName, type TrackedBet } from "@/lib/tracked-bets"
 
 type MarketRow={
   market:string;sample:number;hits:number;hitRate:number|null;avgProbability:number|null;avgExactOdds:number|null
@@ -32,6 +33,7 @@ function marketName(v:string){
 export default function PerformancePage(){
   const[data,setData]=useState<Response|null>(null)
   const[loading,setLoading]=useState(false)
+  const[tracked,setTracked]=useState<TrackedBet[]>([])
 
   const load=useCallback(async(force=false)=>{
     setLoading(true)
@@ -44,9 +46,26 @@ export default function PerformancePage(){
   },[])
 
   useEffect(()=>{void load(false)},[load])
+  useEffect(()=>{
+    const refresh=()=>setTracked(getTrackedBets())
+    refresh()
+    const event=trackedBetEventName()
+    window.addEventListener(event,refresh)
+    window.addEventListener("storage",refresh)
+    return()=>{window.removeEventListener(event,refresh);window.removeEventListener("storage",refresh)}
+  },[])
   const t=data?.tracking
   const markets=useMemo(()=>[...(t?.byMarket??[])].sort((a,b)=>(b.sample??0)-(a.sample??0)),[t?.byMarket])
   const enough=(t?.gradedLegs??0)>=20
+  const settled=tracked.filter(b=>b.status!=="open")
+  const openBets=tracked.filter(b=>b.status==="open")
+  const won=settled.filter(b=>b.status==="won")
+  const decided=settled.filter(b=>b.status==="won"||b.status==="lost")
+  const totalStaked=settled.reduce((s,b)=>s+b.stake,0)
+  const totalReturned=settled.reduce((s,b)=>s+(betReturn(b)??0),0)
+  const totalProfit=settled.reduce((s,b)=>s+(betProfit(b)??0),0)
+  const roi=totalStaked>0?totalProfit/totalStaked:null
+  const userWinRate=decided.length?won.length/decided.length:null
 
   return <main className="min-h-screen bg-[#07120e] pb-28 text-white">
     <header className="sticky top-0 z-30 border-b border-white/10 bg-[#07120e]/95 backdrop-blur-xl">
@@ -66,6 +85,16 @@ export default function PerformancePage(){
       {!data&&!loading?<div className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center">Loading performance…</div>:null}
       {loading&&!data?<div className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center"><RefreshCw className="mx-auto mb-3 size-5 animate-spin text-emerald-300"/><p className="font-black">Loading settled results…</p></div>:null}
       {data&&!data.ok?<div className="rounded-3xl border border-rose-300/15 bg-rose-400/5 p-6 text-center"><p className="font-black">Results unavailable</p><p className="mt-1 text-sm text-white/40">{data.error}</p></div>:null}
+
+      <section className="rounded-3xl border border-cyan-300/15 bg-gradient-to-br from-cyan-400/[0.10] to-black/30 p-4">
+        <div className="flex items-start justify-between gap-3"><div><div className="flex items-center gap-2 text-cyan-300"><TrendingUp className="size-4"/><p className="text-[0.58rem] font-black uppercase tracking-[0.14em]">My Bet Results</p></div><h2 className="mt-2 text-xl font-black">Bets placed from Match Edge</h2><p className="mt-1 max-w-xl text-[0.62rem] leading-relaxed text-white/45">This uses the actual Bet365 odds and stake you saved. Open bets do not affect profit or ROI until you settle them.</p></div><span className="rounded-full bg-white/7 px-2.5 py-1 text-[0.48rem] font-black text-white/40">{openBets.length} OPEN</span></div>
+        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4"><Metric label="Net profit" value={(totalProfit>=0?"+":"")+"£"+totalProfit.toFixed(2)} sub="settled bets"/><Metric label="ROI" value={roi==null?"—":((roi>=0?"+":"")+pct(roi,1))} sub={"£"+totalStaked.toFixed(2)+" staked"}/><Metric label="Win rate" value={pct(userWinRate,1)} sub={won.length+" / "+decided.length+" decided"}/><Metric label="Returned" value={"£"+totalReturned.toFixed(2)} sub={settled.length+" settled"}/></div>
+      </section>
+
+      {tracked.length?<section className="rounded-3xl border border-white/10 bg-white/[0.04] p-4">
+        <div className="flex items-start justify-between gap-3"><div><p className="font-black">My slips</p><p className="mt-1 text-[0.6rem] text-white/35">Settle each bet after Bet365 has graded it. Won, lost and void bets feed the money analytics above.</p></div><span className="rounded-full bg-white/6 px-2 py-1 text-[0.42rem] font-black text-white/30">{tracked.length} SAVED</span></div>
+        <div className="mt-3 space-y-2">{tracked.map(b=><TrackedBetCard key={b.id} bet={b} onChange={()=>setTracked(getTrackedBets())}/>)}</div>
+      </section>:<section className="rounded-3xl border border-dashed border-white/10 bg-white/[0.025] p-5 text-center"><p className="font-black">No personal bets tracked yet</p><p className="mt-1 text-xs text-white/35">Use “Track this bet” in Match Builder or “Track this Acca” in Accas after you place it at Bet365.</p></section>}
 
       {data?.ok&&t?.available?<>
         <section className="rounded-3xl border border-emerald-300/15 bg-gradient-to-br from-emerald-400/12 to-black/30 p-4">
@@ -109,6 +138,20 @@ export default function PerformancePage(){
       </>:data?.ok?<section className="rounded-3xl border border-dashed border-white/10 bg-white/[0.03] p-8 text-center"><p className="font-black">No settled tracking data yet</p><p className="mt-1 text-sm text-white/35">Recommendations will populate this page as they are graded.</p></section>:null}
     </div>
   </main>
+}
+
+function TrackedBetCard({bet,onChange}:{bet:TrackedBet;onChange:()=>void}){
+  const returned=betReturn(bet)
+  const profit=betProfit(bet)
+  const settle=(status:"won"|"lost"|"void")=>{settleTrackedBet(bet.id,status);onChange()}
+  const remove=()=>{removeTrackedBet(bet.id);onChange()}
+  const statusTone=bet.status==="won"?"text-emerald-300 bg-emerald-300/10":bet.status==="lost"?"text-rose-300 bg-rose-300/10":bet.status==="void"?"text-amber-200 bg-amber-300/10":"text-cyan-200 bg-cyan-300/10"
+  return <article className="rounded-2xl border border-white/7 bg-black/20 p-3">
+    <div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="flex items-center gap-2"><p className="truncate text-sm font-black">{bet.title}</p><span className={"rounded-full px-2 py-0.5 text-[0.4rem] font-black uppercase "+statusTone}>{bet.status}</span></div><p className="mt-0.5 text-[0.48rem] text-white/25">{bet.fixture??bet.source} · Bet365 · {new Date(bet.createdAt).toLocaleDateString("en-GB")}</p></div><button onClick={remove} className="rounded-lg bg-white/5 p-1.5 text-white/25"><Trash2 className="size-3"/></button></div>
+    <div className="mt-3 grid grid-cols-3 gap-2"><div className="rounded-xl bg-white/[0.04] p-2"><p className="font-mono text-sm font-black">{bet.odds.toFixed(2)}</p><p className="text-[0.4rem] uppercase text-white/20">Actual odds</p></div><div className="rounded-xl bg-white/[0.04] p-2"><p className="font-mono text-sm font-black">£{bet.stake.toFixed(2)}</p><p className="text-[0.4rem] uppercase text-white/20">Stake</p></div><div className="rounded-xl bg-white/[0.04] p-2"><p className={"font-mono text-sm font-black "+(profit==null?"":profit>=0?"text-emerald-300":"text-rose-300")}>{profit==null?"£"+(bet.stake*bet.odds).toFixed(2):(profit>=0?"+":"")+"£"+profit.toFixed(2)}</p><p className="text-[0.4rem] uppercase text-white/20">{profit==null?"Potential return":"Profit / loss"}</p></div></div>
+    <details className="mt-2"><summary className="cursor-pointer text-[0.5rem] font-black text-white/30">{bet.legs.length} selections · view bet</summary><div className="mt-2 space-y-1">{bet.legs.map((leg,i)=><div key={i} className="rounded-lg bg-white/[0.035] px-2.5 py-2"><p className="text-[0.54rem] font-black text-white/65">{leg.label}</p><p className="mt-0.5 text-[0.42rem] text-white/25">{leg.fixture??leg.team??""}{leg.modelProbability!=null?" · model "+pct(leg.modelProbability,0):""}{leg.bet365Odds!=null?" · "+leg.bet365Odds.toFixed(3)+" Bet365":""}</p></div>)}</div></details>
+    {bet.status==="open"?<div className="mt-3 grid grid-cols-3 gap-2"><button onClick={()=>settle("won")} className="flex items-center justify-center gap-1 rounded-xl bg-emerald-400 px-2 py-2 text-[0.52rem] font-black text-emerald-950"><CheckCircle2 className="size-3"/>WON</button><button onClick={()=>settle("lost")} className="flex items-center justify-center gap-1 rounded-xl bg-rose-400/15 px-2 py-2 text-[0.52rem] font-black text-rose-200"><XCircle className="size-3"/>LOST</button><button onClick={()=>settle("void")} className="flex items-center justify-center gap-1 rounded-xl bg-amber-300/12 px-2 py-2 text-[0.52rem] font-black text-amber-100"><Clock3 className="size-3"/>VOID</button></div>:<p className="mt-3 text-[0.48rem] text-white/25">{returned!=null?"Returned £"+returned.toFixed(2):""}{bet.settledAt?" · settled "+new Date(bet.settledAt).toLocaleDateString("en-GB"):""}</p>}
+  </article>
 }
 
 function Metric({label,value,sub}:{label:string;value:string;sub:string}){
