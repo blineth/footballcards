@@ -862,14 +862,22 @@ type RiskBuilder = {
   note:string
 }
 
-function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
-  const configs=[
-    {id:"safe-3-1",title:"Safe 3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4,minSafety:.50,maxLegs:10},
-    {id:"balanced-10-1",title:"Balanced 10/1",risk:"Balanced" as const,targetFractional:"10/1",targetDecimal:11,minSafety:.38,maxLegs:10},
-    {id:"high-20-1",title:"High Risk 20/1+",risk:"High Risk" as const,targetFractional:"20/1+",targetDecimal:21,minSafety:.28,maxLegs:10},
-  ]
+function buildRiskBuilders(players:ScorePlayer[],scope:"all"|"discipline"="all"):RiskBuilder[]{
+  const configs=scope==="discipline"
+    ?[
+      {id:"discipline-safe-3-1",title:"Fouls & Cards 3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4,minSafety:.42,maxLegs:10},
+      {id:"discipline-balanced-10-1",title:"Fouls & Cards 10/1",risk:"Balanced" as const,targetFractional:"10/1",targetDecimal:11,minSafety:.30,maxLegs:10},
+      {id:"discipline-high-20-1",title:"Fouls & Cards 20/1+",risk:"High Risk" as const,targetFractional:"20/1+",targetDecimal:21,minSafety:.20,maxLegs:10},
+    ]
+    :[
+      {id:"safe-3-1",title:"Safe 3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4,minSafety:.50,maxLegs:10},
+      {id:"balanced-10-1",title:"Balanced 10/1",risk:"Balanced" as const,targetFractional:"10/1",targetDecimal:11,minSafety:.38,maxLegs:10},
+      {id:"high-20-1",title:"High Risk 20/1+",risk:"High Risk" as const,targetFractional:"20/1+",targetDecimal:21,minSafety:.28,maxLegs:10},
+    ]
   const baseMarkets:MarketKey[]=["goal1","assist1","shot1","sot1","foul1","fouled1","card"]
-  const allPricedMarkets:MarketKey[]=["goal1","assist1","shot1","shot2","sot1","sot2","foul1","foul2","foul3","foul4","foul5","fouled1","card"]
+  const allPricedMarkets:MarketKey[]=scope==="discipline"
+    ?["foul1","foul2","foul3","foul4","foul5","fouled1","card"]
+    :["goal1","assist1","shot1","shot2","sot1","sot2","foul1","foul2","foul3","foul4","foul5","fouled1","card"]
   const familyLines:Record<string,MarketKey[]>={
     goal:["goal1"],assist:["assist1"],shot:["shot1","shot2"],sot:["sot1","sot2"],
     foul:["foul1","foul2","foul3","foul4","foul5"],fouled:["fouled1"],card:["card"],
@@ -1077,9 +1085,11 @@ function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
       id:config.id,title:config.title,risk:config.risk,targetFractional:config.targetFractional,targetDecimal:config.targetDecimal,
       legs:[],referenceProductOdds:null,averageLegProbability:null,minimumLegProbability:null,modelAllHitProbability:null,conservativeAllHitProbability:null,safetyScore:null,
       exactPriced:false,bookmaker:null,verifiedBet365LegPrices:false,exactBet365BuilderPrice:false,pricingBasis:"none" as const,
-      note:config.risk==="Safe"
-        ?"No combination of verified Bet365 legs with at least 60% consensus safety reaches the 3/1 target."
-        :"No combination of verified Bet365 player prices reaches this target with the required model strength yet."
+      note:scope==="discipline"
+        ?"No verified Bet365 combination of cards, fouls committed or fouls drawn reaches this target at the required safety level yet."
+        :config.risk==="Safe"
+          ?"No combination of verified Bet365 legs reaches the 3/1 target at the required consensus-safety level."
+          :"No combination of verified Bet365 player prices reaches this target with the required model strength yet."
     }
     const avg=best.legs.reduce((sum,leg)=>sum+leg.probability,0)/best.legs.length
     const min=Math.min(...best.legs.map(leg=>leg.probability))
@@ -1097,9 +1107,11 @@ function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
       verifiedBet365LegPrices,
       exactBet365BuilderPrice:false,
       pricingBasis:"bet365_singles_product" as const,
-      note:config.risk==="Safe"
-        ?"Every leg has a verified Bet365 price. Safe first tries to reach the target using only 78%+ consensus-safety legs, then 74%, 70%, 66%, 62% and finally 60% only if necessary. Within the highest tier that can reach the target it maximises conservative joint hit probability; leg count is only a tie-breaker. This allows several short-priced fouls/shots to beat a speculative two-leg shortcut. Large model-vs-Bet365 disagreements are capped."
-        :"Every verified Bet365 player market is searched across goals, assists, cards, fouls, fouls drawn, shots and SOT. The model chooses the combination with the highest conservative all-hit probability that reaches the target; market type and leg count do not get preference. Bet365 can reprice correlated legs inside Bet Builder, so this is not labelled as the final Builder quote."
+      note:scope==="discipline"
+        ?"This slip searches only verified Bet365 yellow-card, foul-committed and foul-drawn markets. Within that discipline-only pool it chooses the combination with the highest conservative all-hit probability that reaches the target. Cards are not forced in when higher-probability foul legs are safer."
+        :config.risk==="Safe"
+          ?"Every verified Bet365 player market is searched. Safe chooses the highest conservative all-hit probability that reaches the target; several short-priced fouls/shots can beat a speculative two-leg route."
+          :"Every verified Bet365 player market is searched across goals, assists, cards, fouls, fouls drawn, shots and SOT. The model chooses the combination with the highest conservative all-hit probability that reaches the target; market type and leg count do not get preference. Bet365 can reprice correlated legs inside Bet Builder, so this is not labelled as the final Builder quote."
     }
   })
 }
@@ -1158,6 +1170,7 @@ async function buildVerifiedBet365SnapshotFallback(input:{request:Request;date:s
     priceAvailable:Boolean(odds?.priceAvailable)&&freshness!=="STALE",
     players:fallbackPlayers,
     riskBuilders:buildRiskBuilders(fallbackPlayers as ScorePlayer[]),
+    foulCardBuilders:buildRiskBuilders(fallbackPlayers as ScorePlayer[],"discipline"),
     fallbackReason:"Live research database is temporarily unavailable; snapshot probabilities are combined with verified Bet365 prices.",
   }
 }
@@ -1284,6 +1297,8 @@ export async function GET(request: Request) {
           priceAvailable:Boolean(odds?.priceAvailable)&&oddsFreshness!=="STALE",
           players:fallbackPlayers,
           riskBuilders:verifiedRiskBuilders,
+      foulCardBuilders:buildRiskBuilders(players,"discipline"),
+          foulCardBuilders:buildRiskBuilders(fallbackPlayers as ScorePlayer[],"discipline"),
           fallbackReason:"Live history database is temporarily unavailable; snapshot probabilities are being combined with verified Bet365 prices.",
         })
       } catch {
