@@ -481,7 +481,7 @@ function H2HMeetingCard({meeting:m}:{meeting:H2HMeeting}){
         <div className="grid grid-cols-[1fr_auto] gap-3 border-b border-white/7 px-3 py-2"><p className="text-[0.5rem] font-black uppercase text-amber-100/70">Booked player</p><p className="text-[0.5rem] font-black uppercase text-amber-100/70">Match clock</p></div>
         {m.bookings.length?m.bookings.map((b,i)=><div key={b.player+"|"+String(b.clock??b.minute??i)} className={"grid grid-cols-[1fr_auto] items-center gap-3 px-3 py-3 "+(i?"border-t border-white/[0.055]":"")}>
           <div className="min-w-0"><div className="flex items-center gap-2"><span className="text-base">{b.red?"🟥":"🟨"}</span><p className="truncate text-sm font-black">{b.player}</p></div><p className="mt-0.5 truncate text-[0.52rem] text-white/35">{b.team||"Team unavailable"}{b.detail?" · "+b.detail:""}</p></div>
-          <div className="text-right"><p className="font-mono text-base font-black text-amber-100">{b.clock??(b.minute!=null?String(b.minute)+"'":"—")}</p>{b.second!=null?<p className="text-[0.42rem] text-white/25">second {b.second}</p>:null}</div>
+          <div className="text-right">{b.minute!=null&&b.second!=null?<><p className="font-mono text-base font-black text-amber-100">{String(b.minute).padStart(2,"0")}:{String(b.second).padStart(2,"0")}</p><p className="text-[0.42rem] text-white/25">{b.clock??"exact elapsed clock"}</p></>:<p className="font-mono text-base font-black text-amber-100">{b.clock??(b.minute!=null?String(b.minute)+"'":"—")}</p>}</div>
         </div>):<p className="px-3 py-4 text-xs text-white/35">No booking event detail available from this source.</p>}
       </div>:null}
 
