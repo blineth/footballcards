@@ -1688,7 +1688,7 @@ export async function GET(request: Request) {
   if (!date || !home || !away) return NextResponse.json({ ok: false, error: "Invalid fixture parameters" }, { status: 400 })
   if (!isDatabaseConfigured) {
     try {
-      return NextResponse.json(compactBuilderScorecard(await buildVerifiedBet365SnapshotFallback({request,date,home,away,competition})))
+      { const fallback=await buildVerifiedBet365SnapshotFallback({request,date,home,away,competition}); return NextResponse.json(builderView?compactBuilderScorecard(fallback):fallback) }
     } catch {
       return NextResponse.json({ ok: false, error: "Database not connected and snapshot fallback unavailable" }, { status: 503 })
     }
@@ -1698,7 +1698,7 @@ export async function GET(request: Request) {
     await ensureResearchSchema()
   } catch (error) {
     try {
-      return NextResponse.json(compactBuilderScorecard(await buildVerifiedBet365SnapshotFallback({request,date,home,away,competition})))
+      { const fallback=await buildVerifiedBet365SnapshotFallback({request,date,home,away,competition}); return NextResponse.json(builderView?compactBuilderScorecard(fallback):fallback) }
     } catch {
       return NextResponse.json({
         ok:false,
@@ -1713,7 +1713,7 @@ export async function GET(request: Request) {
     radarResponse = await radarGET(request)
   } catch (error) {
     try {
-      return NextResponse.json(compactBuilderScorecard(await buildVerifiedBet365SnapshotFallback({request,date,home,away,competition})))
+      { const fallback=await buildVerifiedBet365SnapshotFallback({request,date,home,away,competition}); return NextResponse.json(builderView?compactBuilderScorecard(fallback):fallback) }
     } catch {
       return NextResponse.json({
         ok:false,
