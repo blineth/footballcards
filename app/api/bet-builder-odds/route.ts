@@ -377,7 +377,7 @@ async function fromOddsApiIo(input:{date:string;home:string;away:string;competit
   const id=String(event?.id??"")
   if(!id)return null
   const selectedBookmakers=await oddsIoSelectedBooks(input.key)
-  const payload=await oddsApiIo("/odds",{eventId:id,bookmakers:"Bet365,Skybet",markets:"Anytime Goalscorer,Player To Assist,Player to be Booked,Player Fouls,Player To Be Fouled,Player Shots,Player Shots on Target"},input.key)
+  const payload=await oddsApiIo("/odds",{eventId:id,bookmakers:"Bet365",markets:"Anytime Goalscorer,Player To Assist,Player to be Booked,Player Fouls,Player To Be Fouled,Player Shots,Player Shots on Target"},input.key)
   const selections=flattenOddsApiIo(payload)
   const books=[...new Set(selections.map(s=>s.bookmaker).filter(Boolean))] as string[]
   if(!selections.length)return null
@@ -385,15 +385,15 @@ async function fromOddsApiIo(input:{date:string;home:string;away:string;competit
   const capturedAt=updatedTimes.sort().reverse()[0]??new Date().toISOString()
   return {
     connected:true,
-    bookmaker:books.length===1?books[0]:"Best of Bet365 + Sky Bet",
-    bookmakers:books,
+    bookmaker:"Bet365",
+    bookmakers:["Bet365"],
     source:"Odds-API.io",
     capturedAt,
     eventId:id,
     selections,
     bookmakerUrls:payload?.urls??{},
     provider:"odds-api.io",
-    selectedBookmakers,
+    selectedBookmakers:selectedBookmakers.filter((x:string)=>norm(x).includes("bet365")),
   }
 }
 
@@ -684,7 +684,7 @@ export async function GET(request: Request) {
           return NextResponse.json({
             ...primary,selections,priceAvailable:true,freeTier:false,cached:false,maxUsableAgeSeconds:300,
             marketAvailability:marketAvailability(selections,true),
-            bookmakerAvailability:bookmakerAvailability(selections,primary.bookmakers??[]),
+            bookmakerAvailability:bookmakerAvailability(selections,["Bet365"]),
           })
         }
       }catch(error){
