@@ -508,9 +508,20 @@ function probableInternational(
 }
 
 export async function buildSnapshotScorecard(input:{
-  date:string;home:string;away:string;competition:Competition
+  date:string;home:string;away:string;competition:Competition;confirmedStarterNames?:string[]
 }){
-  const official=await confirmedStartersForFixture(input)
+  const suppliedStarters=(input.confirmedStarterNames??[]).map(normName).filter(Boolean)
+  const official=suppliedStarters.length>=20
+    ? {
+        confirmed:true,
+        starters:new Set<string>(suppliedStarters),
+        source:"live-player-stats",
+        eventId:null,
+        slug:null,
+        squads:{home:new Set<string>(),away:new Set<string>()},
+        squadCounts:{home:0,away:0},
+      }
+    : await confirmedStartersForFixture(input)
 
   if(input.competition==="International"){
     const squadVerified=official.squadCounts.home>=12&&official.squadCounts.away>=12
