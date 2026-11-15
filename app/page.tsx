@@ -106,7 +106,7 @@ const broadMarketLabels:Record<string,string>={
 function availabilitySummary(a:Bet365Availability|undefined){
   if(!a||a.loading)return {tone:"checking",title:"Checking Bet365 markets",detail:""}
   const playerAvailable=Object.entries(a.marketAvailability??{}).filter(([,v])=>v==="available").map(([k])=>marketLabels[k]??k)
-  const broadAvailable=(a.availableBets??[]).map(b=>broadMarketLabels[b.kind]??b.market).filter(Boolean)
+  const broadAvailable=(a.availableBets??[]).filter(b=>b.kind==="btts").map(b=>broadMarketLabels[b.kind]??b.market).filter(Boolean)
   const available=[...new Set([...playerAvailable,...broadAvailable])]
   if(!available.length)return {
     tone:"none",
