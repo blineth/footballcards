@@ -749,7 +749,7 @@ export async function GET(request: Request) {
         maxUsableAgeSeconds:300,
         marketAvailability:marketAvailability([],true),
         bookmakerAvailability:bookmakerAvailability([],["Bet365"]),
-        providerStatus:{oddsApiIo:true,oddsApiDev:Boolean(oddsApiDevKey),ukOddsApi:Boolean(ukOddsKey),apiFootball:Boolean(apiKey)},
+        providerStatus:{oddsApiIo:true,oddsApiDev:Boolean(oddsApiDevKey),ukOddsApi:Boolean(ukOddsKey),apiFootball:Boolean(process.env.API_FOOTBALL_KEY)},
         note:"Odds-API.io is connected, but Bet365 has not returned a verified board for this fixture/market yet.",
       })
     }
