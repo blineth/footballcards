@@ -1,0 +1,72 @@
+name: Backfill H2H history
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/backfill-h2h-history.py"
+      - ".github/workflows/backfill-h2h-history.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: backfill-h2h-history
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+
+      - name: Build and sync H2H history
+        env:
+          SYNC_URL: https://footballcards-wheat.vercel.app
+        run: python scripts/backfill-h2h-history.py
+
+      - name: Validate output
+        shell: bash
+        run: |
+          python - <<'PY'
+          import csv, json
+          from pathlib import Path
+          root=Path("data/h2h-history")
+          rows=list(csv.DictReader((root/"player_h2h_2025_26_2026_27_plus_england.csv").open(encoding="utf-8")))
+          report=json.load((root/"quality-report.json").open(encoding="utf-8"))
+          assert len(rows)>=1000, len(rows)
+          assert report["fouls"]>0
+          assert report["shotsOnTarget"]>0
+          assert report["yellowCards"]>0
+          assert int((report.get("neonSync") or {}).get("rows") or 0)>0
+          print("Validated", len(rows), "rows")
+          print(json.dumps(report.get("neonSync"), indent=2))
+          PY
+
+      - name: Commit H2H snapshot
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/h2h-history/player_h2h_2025_26_2026_27_plus_england.csv data/h2h-history/quality-report.json
+          if git diff --cached --quiet; then
+            echo "History snapshot already up to date."
+            exit 0
+          fi
+          git commit -m "Backfill 2025-27 domestic and England H2H history"
+          git pull --rebase origin main
+          git push origin main
