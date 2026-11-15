@@ -56,6 +56,19 @@ function calibrateSnapshot(market:"goal1"|"assist1"|"foul1"|"fouled1"|"card"|"sh
   const value=Number(bands[idx]?.calibratedProbability)
   return Number.isFinite(value)?value:raw
 }
+function poissonAtLeastFromOne(p1:number,threshold:number){
+  const p=Math.max(.001,Math.min(.995,p1))
+  if(threshold<=1)return p
+  const lambda=Math.max(.001,-Math.log(1-p))
+  let cumulative=0
+  let term=Math.exp(-lambda)
+  cumulative+=term
+  for(let k=1;k<threshold;k++){
+    term*=lambda/k
+    cumulative+=term
+  }
+  return Math.max(.001,Math.min(.995,1-cumulative))
+}
 
 export async function confirmedStartersForFixture(input:{
   date:string;home:string;away:string;competition:Competition
@@ -586,9 +599,15 @@ export async function buildSnapshotScorecard(input:{
         goal1:marketRow({key:"goal1",label:"Anytime goalscorer",probability:x.goal,confidence:x.confidence,reason:"Snapshot model: blended current domestic and international scoring rate."}),
         assist1:marketRow({key:"assist1",label:"1+ assist",probability:x.assist,confidence:x.confidence,reason:"Snapshot model: blended current domestic and international assist rate."}),
         foul1:marketRow({key:"foul1",label:"1+ foul committed",probability:x.foul,confidence:x.confidence,reason:"Snapshot model: blended current domestic and international foul rate."}),
+        foul2:marketRow({key:"foul2",label:"2+ fouls committed",probability:poissonAtLeastFromOne(x.foul,2),confidence:x.confidence,reason:"Snapshot count model derived from blended foul rate."}),
+        foul3:marketRow({key:"foul3",label:"3+ fouls committed",probability:poissonAtLeastFromOne(x.foul,3),confidence:x.confidence,reason:"Snapshot count model derived from blended foul rate."}),
+        foul4:marketRow({key:"foul4",label:"4+ fouls committed",probability:poissonAtLeastFromOne(x.foul,4),confidence:x.confidence,reason:"Snapshot count model derived from blended foul rate."}),
+        foul5:marketRow({key:"foul5",label:"5+ fouls committed",probability:poissonAtLeastFromOne(x.foul,5),confidence:x.confidence,reason:"Snapshot count model derived from blended foul rate."}),
         fouled1:marketRow({key:"fouled1",label:"1+ foul drawn",probability:x.fouled,confidence:x.confidence,reason:"Snapshot model: blended current domestic and international fouls-drawn rate."}),
         shot1:marketRow({key:"shot1",label:"1+ shot",probability:x.shot,confidence:x.confidence,reason:"Snapshot model: blended current domestic and international shot rate."}),
+        shot2:marketRow({key:"shot2",label:"2+ shots",probability:poissonAtLeastFromOne(x.shot,2),confidence:x.confidence,reason:"Snapshot count model derived from blended shot rate."}),
         sot1:marketRow({key:"sot1",label:"1+ shot on target",probability:x.sot,confidence:x.confidence,reason:"Snapshot model: blended current domestic and international shot-on-target rate."}),
+        sot2:marketRow({key:"sot2",label:"2+ shots on target",probability:poissonAtLeastFromOne(x.sot,2),confidence:x.confidence,reason:"Snapshot count model derived from blended shots-on-target rate."}),
         card:marketRow({key:"card",label:"Yellow card",probability:x.card,confidence:x.confidence,reason:"Snapshot model: blended domestic, international and prior-season booking rate."}),
       },
     }))
@@ -638,9 +657,15 @@ export async function buildSnapshotScorecard(input:{
     const shot=calibrateSnapshot("shot1",beta(shotHits,history.length,.58,6)*.72+beta(recentShot,recent.length,.58,4)*.28)
     const sot=calibrateSnapshot("sot1",beta(sotHits,history.length,.32,6)*.72+beta(recentSot,recent.length,.32,4)*.28)
     const card=calibrateSnapshot("card",beta(cardHits,history.length,.20,7)*.72+beta(recentCard,recent.length,.20,4)*.28)
+    const foul2=beta(history.filter(row=>row.fouls_committed>=2).length,history.length,.38,6)*.72+beta(recent.filter(row=>row.fouls_committed>=2).length,recent.length,.38,4)*.28
+    const foul3=beta(history.filter(row=>row.fouls_committed>=3).length,history.length,.17,6)*.72+beta(recent.filter(row=>row.fouls_committed>=3).length,recent.length,.17,4)*.28
+    const foul4=beta(history.filter(row=>row.fouls_committed>=4).length,history.length,.055,6)*.72+beta(recent.filter(row=>row.fouls_committed>=4).length,recent.length,.055,4)*.28
+    const foul5=beta(history.filter(row=>row.fouls_committed>=5).length,history.length,.018,6)*.72+beta(recent.filter(row=>row.fouls_committed>=5).length,recent.length,.018,4)*.28
+    const shot2=beta(history.filter(row=>row.shots>=2).length,history.length,.36,6)*.72+beta(recent.filter(row=>row.shots>=2).length,recent.length,.36,4)*.28
+    const sot2=beta(history.filter(row=>row.shots_on_target>=2).length,history.length,.12,6)*.72+beta(recent.filter(row=>row.shots_on_target>=2).length,recent.length,.12,4)*.28
     const confidence:"A"|"B"|"C"|"D"=history.length>=10&&p.minutes>=600?"B":history.length>=5?"C":"D"
-    return {p,goal,assist,foul,fouled,shot,sot,card,confidence}
-  }).filter(Boolean) as Array<{p:any;goal:number;assist:number;foul:number;fouled:number;shot:number;sot:number;card:number;confidence:"A"|"B"|"C"|"D"}>
+    return {p,goal,assist,foul,foul2,foul3,foul4,foul5,fouled,shot,shot2,sot,sot2,card,confidence}
+  }).filter(Boolean) as Array<{p:any;goal:number;assist:number;foul:number;foul2:number;foul3:number;foul4:number;foul5:number;fouled:number;shot:number;shot2:number;sot:number;sot2:number;card:number;confidence:"A"|"B"|"C"|"D"}>
 
   const foulLegs=[...scored].filter(x=>x.confidence!=="D").sort((a,b)=>b.foul-a.foul).slice(0,4).map(x=>leg({
     player:x.p.player_name,team:x.p.team,market:"foul1",label:"1+ foul committed",
@@ -684,9 +709,15 @@ export async function buildSnapshotScorecard(input:{
       goal1:marketRow({key:"goal1",label:"Anytime goalscorer",probability:x.goal,confidence:x.confidence,reason:"Snapshot model: season and recent scoring history."}),
       assist1:marketRow({key:"assist1",label:"1+ assist",probability:x.assist,confidence:x.confidence,reason:"Snapshot model: season and recent assist history."}),
       foul1:marketRow({key:"foul1",label:"1+ foul committed",probability:x.foul,confidence:x.confidence,reason:"Snapshot model: season and recent foul history."}),
+      foul2:marketRow({key:"foul2",label:"2+ fouls committed",probability:x.foul2,confidence:x.confidence,reason:"Snapshot model: season and recent 2+ foul history."}),
+      foul3:marketRow({key:"foul3",label:"3+ fouls committed",probability:x.foul3,confidence:x.confidence,reason:"Snapshot model: season and recent 3+ foul history."}),
+      foul4:marketRow({key:"foul4",label:"4+ fouls committed",probability:x.foul4,confidence:x.confidence,reason:"Snapshot model: season and recent 4+ foul history."}),
+      foul5:marketRow({key:"foul5",label:"5+ fouls committed",probability:x.foul5,confidence:x.confidence,reason:"Snapshot model: season and recent 5+ foul history."}),
       fouled1:marketRow({key:"fouled1",label:"1+ foul drawn",probability:x.fouled,confidence:x.confidence,reason:"Snapshot model: season and recent fouls-drawn history."}),
       shot1:marketRow({key:"shot1",label:"1+ shot",probability:x.shot,confidence:x.confidence,reason:"Snapshot model: season and recent shot history."}),
+      shot2:marketRow({key:"shot2",label:"2+ shots",probability:x.shot2,confidence:x.confidence,reason:"Snapshot model: season and recent 2+ shot history."}),
       sot1:marketRow({key:"sot1",label:"1+ shot on target",probability:x.sot,confidence:x.confidence,reason:"Snapshot model: season and recent shot-on-target history."}),
+      sot2:marketRow({key:"sot2",label:"2+ shots on target",probability:x.sot2,confidence:x.confidence,reason:"Snapshot model: season and recent 2+ shot-on-target history."}),
       card:marketRow({key:"card",label:"Yellow card",probability:x.card,confidence:x.confidence,reason:"Snapshot model: season and recent booking history."}),
     },
   }))
