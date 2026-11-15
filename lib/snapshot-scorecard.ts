@@ -48,7 +48,7 @@ function blendedRate(input:{
   const priorWeight=Math.max(.15,1-Math.min(.85,total))
   return (weighted+input.prior*priorWeight)/(total+priorWeight)
 }
-function calibrateSnapshot(market:"goal1"|"foul1"|"fouled1"|"card"|"shot1"|"sot1",raw:number){
+function calibrateSnapshot(market:"goal1"|"assist1"|"foul1"|"fouled1"|"card"|"shot1"|"sot1",raw:number){
   const source=(calibrationSnapshot as any)?.global?.[market]
   const bands=source?.bands
   if(!Array.isArray(bands)||bands.length!==20)return raw
@@ -381,15 +381,30 @@ export async function buildSnapshotScorecard(input:{
         }
         return total>0?weighted/total:.22
       })()
+      const assistRate=(()=>{
+        const rows=[intl,current,previous].filter(Boolean)
+        let weighted=0,total=0
+        for(const row of rows){
+          const minutes=Number(row?.minutes??0)
+          const direct=Number(row?.assists90)
+          const rate=Number.isFinite(direct)&&direct>=0?direct:(minutes>0?(Number(row?.assists??0)*90)/minutes:NaN)
+          if(!Number.isFinite(rate))continue
+          const w=Math.min(1,minutes/1200)
+          weighted+=Math.min(1.8,rate)*w
+          total+=w
+        }
+        return total>0?weighted/total:.14
+      })()
       const minutesScale=expectedMinutes/90
       const goal=calibrateSnapshot("goal1",1-Math.exp(-goalRate*minutesScale))
+      const assist=calibrateSnapshot("assist1",1-Math.exp(-assistRate*minutesScale))
       const foul=calibrateSnapshot("foul1",1-Math.exp(-foulRate*minutesScale))
       const fouled=calibrateSnapshot("fouled1",1-Math.exp(-fouledRate*minutesScale))
       const shot=calibrateSnapshot("shot1",1-Math.exp(-shotsRate*minutesScale))
       const sot=calibrateSnapshot("sot1",1-Math.exp(-sotRate*minutesScale))
       const card=calibrateSnapshot("card",1-Math.exp(-cardRate*minutesScale))
       const confidence:"A"|"B"|"C"|"D"=appearances>=12&&expectedMinutes>=65?"B":appearances>=6?"C":"D"
-      return {p,goal,foul,fouled,shot,sot,card,confidence}
+      return {p,goal,assist,foul,fouled,shot,sot,card,confidence}
     })
 
     const foulLegs=[...scored].filter((x:any)=>x.confidence!=="D").sort((a:any,b:any)=>b.foul-a.foul).slice(0,4).map((x:any)=>leg({
@@ -432,6 +447,7 @@ export async function buildSnapshotScorecard(input:{
       lineupConfidence:official.confirmed?"official":"snapshot-predicted",
       markets:{
         goal1:marketRow({key:"goal1",label:"Anytime goalscorer",probability:x.goal,confidence:x.confidence,reason:"Snapshot model: blended current domestic and international scoring rate."}),
+        assist1:marketRow({key:"assist1",label:"1+ assist",probability:x.assist,confidence:x.confidence,reason:"Snapshot model: blended current domestic and international assist rate."}),
         foul1:marketRow({key:"foul1",label:"1+ foul committed",probability:x.foul,confidence:x.confidence,reason:"Snapshot model: blended current domestic and international foul rate."}),
         fouled1:marketRow({key:"fouled1",label:"1+ foul drawn",probability:x.fouled,confidence:x.confidence,reason:"Snapshot model: blended current domestic and international fouls-drawn rate."}),
         shot1:marketRow({key:"shot1",label:"1+ shot",probability:x.shot,confidence:x.confidence,reason:"Snapshot model: blended current domestic and international shot rate."}),
@@ -458,26 +474,29 @@ export async function buildSnapshotScorecard(input:{
     const history=before.filter(row=>row.player_name===p.player_name).sort((a,b)=>a.match_date.localeCompare(b.match_date))
     const recent=history.slice(-5)
     const goalHits=history.filter(row=>row.goals>=1).length
+    const assistHits=history.filter(row=>row.assists>=1).length
     const foulHits=history.filter(row=>row.fouls_committed>=1).length
     const fouledHits=history.filter(row=>row.fouls_drawn>=1).length
     const shotHits=history.filter(row=>row.shots>=1).length
     const sotHits=history.filter(row=>row.shots_on_target>=1).length
     const cardHits=history.filter(row=>row.yellow_card).length
     const recentGoal=recent.filter(row=>row.goals>=1).length
+    const recentAssist=recent.filter(row=>row.assists>=1).length
     const recentFoul=recent.filter(row=>row.fouls_committed>=1).length
     const recentFouled=recent.filter(row=>row.fouls_drawn>=1).length
     const recentShot=recent.filter(row=>row.shots>=1).length
     const recentSot=recent.filter(row=>row.shots_on_target>=1).length
     const recentCard=recent.filter(row=>row.yellow_card).length
     const goal=calibrateSnapshot("goal1",beta(goalHits,history.length,.18,7)*.72+beta(recentGoal,recent.length,.18,4)*.28)
+    const assist=calibrateSnapshot("assist1",beta(assistHits,history.length,.12,7)*.72+beta(recentAssist,recent.length,.12,4)*.28)
     const foul=calibrateSnapshot("foul1",beta(foulHits,history.length,.50,6)*.72+beta(recentFoul,recent.length,.50,4)*.28)
     const fouled=calibrateSnapshot("fouled1",beta(fouledHits,history.length,.45,6)*.72+beta(recentFouled,recent.length,.45,4)*.28)
     const shot=calibrateSnapshot("shot1",beta(shotHits,history.length,.58,6)*.72+beta(recentShot,recent.length,.58,4)*.28)
     const sot=calibrateSnapshot("sot1",beta(sotHits,history.length,.32,6)*.72+beta(recentSot,recent.length,.32,4)*.28)
     const card=calibrateSnapshot("card",beta(cardHits,history.length,.20,7)*.72+beta(recentCard,recent.length,.20,4)*.28)
     const confidence:"A"|"B"|"C"|"D"=history.length>=10&&p.minutes>=600?"B":history.length>=5?"C":"D"
-    return {p,goal,foul,fouled,shot,sot,card,confidence}
-  }).filter(Boolean) as Array<{p:any;goal:number;foul:number;fouled:number;shot:number;sot:number;card:number;confidence:"A"|"B"|"C"|"D"}>
+    return {p,goal,assist,foul,fouled,shot,sot,card,confidence}
+  }).filter(Boolean) as Array<{p:any;goal:number;assist:number;foul:number;fouled:number;shot:number;sot:number;card:number;confidence:"A"|"B"|"C"|"D"}>
 
   const foulLegs=[...scored].filter(x=>x.confidence!=="D").sort((a,b)=>b.foul-a.foul).slice(0,4).map(x=>leg({
     player:x.p.player_name,team:x.p.team,market:"foul1",label:"1+ foul committed",
@@ -519,6 +538,7 @@ export async function buildSnapshotScorecard(input:{
     lineupConfidence:official.confirmed?"official":"snapshot-predicted",
     markets:{
       goal1:marketRow({key:"goal1",label:"Anytime goalscorer",probability:x.goal,confidence:x.confidence,reason:"Snapshot model: season and recent scoring history."}),
+      assist1:marketRow({key:"assist1",label:"1+ assist",probability:x.assist,confidence:x.confidence,reason:"Snapshot model: season and recent assist history."}),
       foul1:marketRow({key:"foul1",label:"1+ foul committed",probability:x.foul,confidence:x.confidence,reason:"Snapshot model: season and recent foul history."}),
       fouled1:marketRow({key:"fouled1",label:"1+ foul drawn",probability:x.fouled,confidence:x.confidence,reason:"Snapshot model: season and recent fouls-drawn history."}),
       shot1:marketRow({key:"shot1",label:"1+ shot",probability:x.shot,confidence:x.confidence,reason:"Snapshot model: season and recent shot history."}),
