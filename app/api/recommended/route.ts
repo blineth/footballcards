@@ -3,6 +3,7 @@ import { GET as fixturesGET } from "../fixtures/route"
 import { GET as scorecardGET } from "../fixture-scorecard/route"
 import { GET as matchAccaGET } from "../match-acca/route"
 import { GET as livePlayerStatsGET } from "../live-player-stats/route"
+import { GET as betBuilderOddsGET } from "../bet-builder-odds/route"
 import { gradeHistoricalRecommendations, recommendationTrackingSummary, saveRecommendationSnapshots } from "@/lib/recommendation-tracking"
 import recommendationBacktest from "@/data/model/recommendation-backtest.json"
 import calibrationSnapshot from "@/data/model/calibration.json"
@@ -745,6 +746,8 @@ function buildLivePlayerProps(scorecard:Scorecard|null,elapsed:number,liveStats:
 
 let lastGoodRecommended:any=null
 let lastGoodAt=0
+let lastGoodMulti:any=null
+let lastGoodMultiAt=0
 const STALE_CACHE_MS=60*60*1000
 
 // Tracking/calibration is useful background data, but it should not turn every
@@ -794,10 +797,13 @@ async function fallbackScorecard(f:Fixture):Promise<Scorecard|null>{
 export async function GET(request:Request){
   const url=new URL(request.url)
   const refresh=url.searchParams.get("refresh")==="1"
-  // Pre-match Multi should be instant after the first successful build. Reuse the
-  // last-good server snapshot unless the user explicitly forces a refresh. Live
-  // pages still bypass this through their own live polling paths.
-  if(!refresh&&lastGoodRecommended&&Date.now()-lastGoodAt<STALE_CACHE_MS){
+  const multiOnly=url.searchParams.get("mode")==="multi"
+  if(!refresh&&multiOnly&&lastGoodMulti&&Date.now()-lastGoodMultiAt<STALE_CACHE_MS){
+    return NextResponse.json({...lastGoodMulti,staleFallback:false,servedFrom:"server-multi-cache"},{
+      headers:{"Cache-Control":"public, s-maxage=300, stale-while-revalidate=1800"}
+    })
+  }
+  if(!refresh&&!multiOnly&&lastGoodRecommended&&Date.now()-lastGoodAt<STALE_CACHE_MS){
     return NextResponse.json({...lastGoodRecommended,staleFallback:false,servedFrom:"server-last-good"},{
       headers:{"Cache-Control":"public, s-maxage=120, stale-while-revalidate=1800"}
     })
@@ -824,6 +830,65 @@ export async function GET(request:Request){
       for(const competition of competitions){
         for(const f of fixtureData.leagues?.[competition]??[])fixtureMap.set(String(f.id),f)
       }
+    }
+
+    if(multiOnly){
+      const upcoming=[...fixtureMap.values()]
+        .filter(f=>{
+          const status=String(f.status??"").toLowerCase()
+          const blocked=["postponed","cancelled","canceled","finished","halftime","in progress","live"]
+          return new Date(f.kickoff).getTime()>Date.now()&&!blocked.includes(status)
+        })
+        .sort((a,b)=>a.kickoff.localeCompare(b.kickoff))
+        .slice(0,maxFixtures)
+
+      // Cheap first pass: only inspect Bet365 market coverage. Full scorecards
+      // are built for the small set that actually has every required player prop.
+      const coverage=await Promise.all(upcoming.map(async fixture=>{
+        try{
+          const q=new URLSearchParams({
+            date:fixtureDate(fixture),home:fixture.home.name,away:fixture.away.name,competition:fixture.competition,
+          })
+          if(refresh)q.set("refresh",String(Date.now()))
+          const response=await betBuilderOddsGET(new Request("http://local/api/bet-builder-odds?"+q.toString()))
+          if(!response.ok)return null
+          const odds=await response.json()
+          return fullPlayerMarketSet(odds?.marketAvailability)?fixture:null
+        }catch{return null}
+      }))
+
+      const eligibleFixtures=coverage.filter(Boolean) as Fixture[]
+      const scans:FixtureScan[]=await Promise.all(eligibleFixtures.map(async fixture=>{
+        try{
+          let scorecard=await scorecardFor(fixture,refresh)
+          if(!scorecard?.ok)scorecard=await fallbackScorecard(fixture)
+          return {fixture,scorecard:scorecard?.ok?scorecard:null,recommendations:[]}
+        }catch{return {fixture,scorecard:null,recommendations:[]}}
+      }))
+
+      const multiMatchBuild=buildMultiMatchFromScans(scans)
+      const yellowCardWatch=buildYellowCardWatchFromScans(scans)
+      const payload={
+        ok:true,
+        date:resolvedDate,
+        updatedAt:new Date().toISOString(),
+        fixturesScanned:upcoming.length,
+        eligibleFixtures:eligibleFixtures.length,
+        multiMatchBuild,
+        yellowCardWatch,
+        liveMatches:[],
+        staleFallback:false,
+        methodology:{
+          multiMatch:"Fast path: Bet365 coverage is checked first. Full scorecards are only built for fixtures with Cards, Fouls Committed, Fouls Drawn, Shots and SOT all available.",
+        },
+      }
+      lastGoodMulti=payload
+      lastGoodMultiAt=Date.now()
+      return NextResponse.json(payload,{
+        headers:refresh
+          ?{"Cache-Control":"public, s-maxage=30, stale-while-revalidate=300"}
+          :{"Cache-Control":"public, s-maxage=300, stale-while-revalidate=1800"},
+      })
     }
 
     const liveFixtures=[...fixtureMap.values()]
