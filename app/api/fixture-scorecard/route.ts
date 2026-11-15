@@ -1348,7 +1348,7 @@ export async function GET(request: Request) {
   }
   if (!radarResponse.ok) return radarResponse
   const radar = await radarResponse.json()
-  const candidates: any[] = Array.isArray(radar?.candidates) ? radar.candidates : []
+  let candidates: any[] = Array.isArray(radar?.candidates) ? radar.candidates : []
 
   // International confirmed XIs can be much better covered by the dedicated
   // national-team snapshot than by club-baseline matching. If the live research
@@ -1365,8 +1365,6 @@ export async function GET(request: Request) {
       }
     }catch{}
   }
-
-  const names = Array.from(new Set(candidates.map(c => String(c.dbName ?? "")).filter(Boolean))) as string[]
 
   let odds: any = { selections: [], priceAvailable: false }
   try {
@@ -1386,6 +1384,31 @@ export async function GET(request: Request) {
         ? (odds?.cached ? "CACHED" : "SLIGHTLY STALE")
         : "STALE"
   const usableSelections = oddsFreshness === "STALE" ? [] : selections
+
+  const confirmedLineup = radar?.lineupsConfirmed === true
+  const bet365PlayerSelections=usableSelections.filter(selection=>
+    selection.bookmaker==="Bet365"&&
+    ["goal","assist","card","foul","fouled","shot","sot"].includes(String(selection.kind??""))&&
+    selection.odd!=null&&Number(selection.odd)>1
+  )
+  const radarCandidateNames=candidates.map(c=>String(c.name??c.dbName??"")).filter(Boolean)
+  const isBet365ListedCandidate=(candidate:any)=>{
+    const candidateNames=[String(candidate?.name??""),String(candidate?.dbName??"")].filter(Boolean)
+    return bet365PlayerSelections.some(selection=>
+      candidateNames.some(name=>playerInLabel(selection,name,radarCandidateNames))
+    )
+  }
+
+  // Before official lineups, Bet365's published player board is the eligibility
+  // gate. This avoids recommending a model-predicted starter who the bookmaker
+  // is not actually offering. Once XIs are confirmed, the official starters
+  // take precedence and Bet365 is used to verify/prices their available props.
+  if(!confirmedLineup){
+    candidates=candidates.filter(isBet365ListedCandidate)
+  }
+
+  const names = Array.from(new Set(candidates.map(c => String(c.dbName ?? c.name ?? "")).filter(Boolean))) as string[]
+
   const marketAvailability:MarketAvailability = {
     goal: odds?.marketAvailability?.goal ?? "unknown",
     assist: odds?.marketAvailability?.assist ?? "unknown",
@@ -1480,7 +1503,7 @@ export async function GET(request: Request) {
     foulsPerPlayer:countryH2HFouls/countryH2HPlayerSamples,
   } : null
 
-  const confirmed = radar?.lineupsConfirmed === true
+  const confirmed = confirmedLineup
   const lineupMode: "confirmed" | "predicted" | "squad" = confirmed ? "confirmed" : radar?.lineupMode === "predicted" ? "predicted" : "squad"
   const predicted = lineupMode === "predicted"
   const recommendationsAllowed = confirmed || predicted
@@ -1941,6 +1964,8 @@ export async function GET(request: Request) {
     home,
     away,
     lineupsConfirmed: confirmed,
+    playerEligibilitySource: confirmed ? "official-starting-xi" : "bet365-player-board",
+    bet365ListedPlayerCount: !confirmed ? candidates.length : bet365PlayerSelections.length,
     lineupMode,
     lineupSource: radar?.lineupSource ?? (confirmed ? "Official starting XI" : predicted ? "Probable XI" : "Current squad"),
     predictedLineups: radar?.predictedLineups ?? null,
@@ -1991,7 +2016,7 @@ export async function GET(request: Request) {
     previewFoulTargetSlips,
     methodology: {
       version: "scorecard-v2-calibrated",
-      description: "Player-level pre-match probabilities use only match rows dated before the target fixture. Before official teams are released, the model uses a probable XI built from current squad availability, start rate, minutes and any stronger published predicted-XI source available. Once official lineups arrive, predicted starters are discarded and the scorecard is rebuilt from the confirmed XI. For international fixtures, senior international appearances from Euro 2024 onward are the primary player sample for minutes, shots, SOT, fouls, fouls drawn, goals, assists and cards; club form only stabilises thin national-team samples. Domestic fixtures use club history. All probabilities also incorporate recency, opponent H2H, expected minutes, matchup pressure, count-rate checks, referee/card context and walk-forward calibration. H2H is lineup-aware: previous meetings receive more weight when more of today's predicted/confirmed opponents also played, and the strongest extra weight is reserved for a returning likely direct matchup.",
+      description: "Player-level pre-match probabilities use only match rows dated before the target fixture. Before official teams are released, Bet365's available player-prop board is the hard eligibility gate; predicted-XI/current-squad data is used only to rank and model players that Bet365 is actually offering. Once official lineups arrive, the player pool is rebuilt from the confirmed starters and Bet365 is rechecked for the markets and prices available on those starters. For international fixtures, senior international appearances from Euro 2024 onward are the primary player sample for minutes, shots, SOT, fouls, fouls drawn, goals, assists and cards; club form only stabilises thin national-team samples. Domestic fixtures use club history. All probabilities also incorporate recency, opponent H2H, expected minutes, matchup pressure, count-rate checks, referee/card context and walk-forward calibration. H2H is lineup-aware: previous meetings receive more weight when more of today's predicted/confirmed opponents also played, and the strongest extra weight is reserved for a returning likely direct matchup.",
       cardConditional: "Yellow-card estimates measure each player's booking rate at 0 fouls, exactly 1, exactly 2, 3+, 1+ and 2+ foul states, with sample-size reliability. Match-level data still cannot identify the exact foul that triggered the booking.",
       calibrationWarning: "Displayed probabilities are adjusted through walk-forward calibration built from earlier-match-only predictions across 30 competitions. They remain estimates, not guarantees.",
       slipWarning: "Same-player and same-match legs can be correlated. Exact individual bookmaker foul lines are mirrored only when their threshold is explicitly present in the feed. Bet365's same-game Builder price is proprietary and is not labelled exact unless a bookmaker builder quote is supplied.",
