@@ -22,7 +22,7 @@ CACHE.mkdir(parents=True, exist_ok=True)
 
 TODAY = date.today()
 DOMESTIC_START = date(2025, 7, 1)
-INTERNATIONAL_START = date(2022, 1, 1)
+INTERNATIONAL_START = date(2021, 6, 1)
 
 DOMESTIC = [
     ("eng.1", "Premier League"),
@@ -317,7 +317,7 @@ def main() -> int:
     report = {
         "generatedAt": __import__("datetime").datetime.utcnow().isoformat() + "Z",
         "domesticScope": "2025/26 + 2026/27 to date, Premier League/Championship/League One/League Two + FA Cup + League Cup",
-        "internationalScope": "All senior national teams from 2022 onward: Euros, Euro qualifying, Nations League, World Cup, all regional World Cup qualifying feeds and friendlies",
+        "internationalScope": "All senior national teams from Euro 2020 (played June 2021) onward: Euro 2020, World Cup 2022, Euro 2024, World Cup 2026, Nations League, qualifiers and relevant friendlies",
         "rows": len(rows),
         "yellowCards": sum(int(r["yellow_card"]) for r in rows),
         "goals": sum(int(r["goals"]) for r in rows),
