@@ -345,14 +345,23 @@ export default function BetBuilderPage(){
   const allRows=useMemo(()=>applyLive(preMatchRows,live),[preMatchRows,live])
   const visible=useMemo(()=>{
     const allowed=new Set(categories.find(x=>x.id===category)?.markets??[])
-    const rows=category==="popular"?allRows.filter(x=>allowed.has(x.market as MarketKey)):allRows.filter(x=>allowed.has(x.market as MarketKey))
-    const bestByPlayerMarket=new Map<string,Selection>()
-    for(const row of rows.sort((a,b)=>b.probability-a.probability)){
-      const family=categoryForMarket(row.market)
-      const k=category==="popular"?row.player.toLowerCase()+"|"+family:row.id
-      if(!bestByPlayerMarket.has(k))bestByPlayerMarket.set(k,row)
+    const rows=allRows.filter(x=>allowed.has(x.market as MarketKey))
+    if(category!=="popular")return [...rows].sort((a,b)=>b.probability-a.probability)
+
+    // Most likely = one strongest action per player, judged relative to that
+    // market rather than by raw percentage alone.
+    const score=(row:Selection)=>{
+      const t=trafficFor(row,allRows)
+      const traffic=t==="high"?1:t==="average"?.58:.18
+      return traffic+row.probability*.22+Math.max(0,row.edge??0)*.15
     }
-    return [...bestByPlayerMarket.values()].sort((a,b)=>b.probability-a.probability)
+    const best=new Map<string,Selection>()
+    for(const row of rows){
+      const key=normPlayer(row.player)
+      const current=best.get(key)
+      if(!current||score(row)>score(current))best.set(key,row)
+    }
+    return [...best.values()].sort((a,b)=>score(b)-score(a))
   },[allRows,category])
   const serverBuilders=(data?.riskBuilders??[]).filter(x=>x.legs?.length)
   const inPlay=live?.status==="live"||live?.status==="halftime"
@@ -425,7 +434,7 @@ export default function BetBuilderPage(){
 
           <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]">
             <div className="border-b border-white/8 px-3 py-2"><div className="flex items-center justify-between gap-3"><p className="text-[0.48rem] font-black uppercase text-white/25">Most likely first</p><p className="text-[0.48rem] font-black uppercase text-white/25">{visible.length} options</p></div><div className="mt-1.5 flex gap-2 text-[0.4rem] font-black uppercase"><span className="text-emerald-300">● High</span><span className="text-amber-200">● Average</span><span className="text-rose-200/80">● Low</span><span className="text-white/20">relative to this market</span></div></div>
-            <div>{visible.length?visible.map((row,i)=><SelectionRow key={row.id} row={row} selected={Boolean(selected[row.id])} onToggle={()=>toggle(row)} rank={i+1} traffic={trafficFor(row,allRows)}/>):<p className="px-4 py-8 text-center text-sm text-white/35">No qualifying selections in this market.</p>}</div>
+            <div>{visible.length?visible.map((row,i)=><SelectionRow key={row.id} row={row} selected={Boolean(selected[row.id])} onToggle={()=>toggle(row)} rank={i+1} traffic={trafficFor(row,allRows)} bestAction={category==="popular"}/>):<p className="px-4 py-8 text-center text-sm text-white/35">No qualifying selections in this market.</p>}</div>
           </div>
         </section>
 
@@ -470,14 +479,14 @@ function RiskCard({build,onUse}:{build:RiskBuilder;onUse:()=>void}){
 }
 function MiniStat({label,value}:{label:string;value:string}){return <div className="rounded-xl bg-black/20 px-2 py-1.5"><p className="font-mono text-xs font-black">{value}</p><p className="text-[0.4rem] uppercase text-white/25">{label}</p></div>}
 
-function SelectionRow({row,selected,onToggle,rank,traffic}:{row:Selection;selected:boolean;onToggle:()=>void;rank:number;traffic:Traffic}){
+function SelectionRow({row,selected,onToggle,rank,traffic,bestAction=false}:{row:Selection;selected:boolean;onToggle:()=>void;rank:number;traffic:Traffic;bestAction?:boolean}){
   const exact=row.bookmakerOdds!=null
   const trafficText=traffic==="high"?"HIGH":traffic==="average"?"AVERAGE":"LOW"
   const trafficClass=traffic==="high"?"bg-emerald-300/15 text-emerald-200 border-emerald-300/20":traffic==="average"?"bg-amber-300/12 text-amber-100 border-amber-300/20":"bg-rose-300/10 text-rose-100/75 border-rose-300/15"
   const probabilityClass=traffic==="high"?"text-emerald-200":traffic==="average"?"text-amber-100":"text-rose-100/80"
   return <button onClick={onToggle} className={"grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 px-3 py-3 text-left transition "+(rank>1?"border-t border-white/[0.055] ":"")+(selected?"bg-emerald-400/[0.08]":"hover:bg-white/[0.025]")}>
     <span className={"flex size-7 items-center justify-center rounded-full text-[0.56rem] font-black "+(traffic==="high"?"bg-emerald-400/12 text-emerald-300":traffic==="average"?"bg-amber-300/10 text-amber-200":"bg-rose-300/8 text-rose-200/65")}>{rank}</span>
-    <div className="min-w-0"><div className="flex items-center gap-1.5"><p className="truncate text-sm font-black">{row.player}</p>{selected?<BadgeCheck className="size-3.5 shrink-0 text-emerald-300"/>:null}</div><p className="mt-0.5 truncate text-[0.54rem] font-bold text-white/55">{row.label}</p><p className="mt-0.5 truncate text-[0.46rem] text-white/25">{row.team} · Grade {row.confidence}{row.liveAdjusted?" · live count "+(row.currentCount??0):row.edge!=null?" · "+(row.edge>=0?"+":"")+(row.edge*100).toFixed(1)+"pp vs price":""}</p></div>
+    <div className="min-w-0"><div className="flex items-center gap-1.5"><p className="truncate text-sm font-black">{row.player}</p>{bestAction?<span className="rounded-full bg-cyan-300/10 px-1.5 py-0.5 text-[0.36rem] font-black text-cyan-200">BEST ACTION</span>:null}{selected?<BadgeCheck className="size-3.5 shrink-0 text-emerald-300"/>:null}</div><p className="mt-0.5 truncate text-[0.54rem] font-bold text-white/55">{row.label}</p><p className="mt-0.5 truncate text-[0.46rem] text-white/25">{row.team} · Grade {row.confidence}{row.liveAdjusted?" · live count "+(row.currentCount??0):row.edge!=null?" · "+(row.edge>=0?"+":"")+(row.edge*100).toFixed(1)+"pp vs price":""}</p></div>
     <div className="min-w-[5rem] text-right"><div className="mb-1 flex justify-end"><span className={"rounded-full border px-1.5 py-0.5 text-[0.38rem] font-black "+trafficClass}>{trafficText}</span></div><p className={"font-mono text-base font-black "+probabilityClass}>{percent(row.probability)}</p><p className="text-[0.42rem] text-white/25">{exact?(row.bookmakerOdds!.toFixed(2)+" "+(row.bookmakerName??"book")):((row.fairOdds?.toFixed(2)??"—")+(row.liveAdjusted?" live fair":" fair"))}</p><span className={"mt-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[0.4rem] font-black "+(selected?"bg-emerald-300 text-emerald-950":"bg-white/6 text-white/30")}>{selected?<X className="size-2.5"/>:<CirclePlus className="size-2.5"/>}{selected?"REMOVE":"ADD"}</span></div>
   </button>
 }
