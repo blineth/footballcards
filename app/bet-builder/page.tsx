@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { ArrowLeft, BadgeCheck, CirclePlus, Clock3, RefreshCw, ShieldCheck, Sparkles, Target, Trash2, X } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { addTrackedBet } from "@/lib/tracked-bets"
 
 type Competition = "Premier League" | "Championship" | "League One" | "League Two" | "International"
 type MarketStatus = "available"|"unavailable"|"unknown"
@@ -48,6 +49,7 @@ type RiskBuilder={
   verifiedBet365LegPrices?:boolean;exactBet365BuilderPrice?:boolean;pricingBasis?:"bet365_singles_product"|"none";note:string
 }
 type FallbackSlip={id:string;title:string;risk:string;legs:Selection[];averageLegProbability:number|null;note?:string}
+type TrackDraft={title:string;fixture:string;legs:Selection[];modelProbability:number|null;suggestedProduct:number|null}
 type Scorecard={
   ok:boolean;lineupsConfirmed?:boolean;lineupMode?:"confirmed"|"predicted"|"squad";lineupSource?:string|null;predictedLineups?:any;
   snapshotFallback?:boolean;fallbackReason?:string|null;
@@ -354,6 +356,7 @@ export default function BetBuilderPage(){
   const[h2hOpen,setH2hOpen]=useState(false)
   const[h2hLoading,setH2hLoading]=useState(false)
   const[h2hData,setH2hData]=useState<H2HData|null>(null)
+  const[trackDraft,setTrackDraft]=useState<TrackDraft|null>(null)
 
   useEffect(()=>{setFixture(parseFixture())},[])
   const load=useCallback(async(f:Fixture)=>{setLoading(true);try{const r=await fetch(scorecardUrl(f),{cache:"no-store"});setData(await r.json().catch(()=>({ok:false,error:"Unable to load match model."})))}finally{setLoading(false)}},[])
@@ -443,6 +446,25 @@ export default function BetBuilderPage(){
     })
   }
   function useBuild(build:RiskBuilder){const next:Record<string,Selection>={};for(const leg of build.legs){const row={...leg,id:leg.id||keyOf(leg)};next[row.id]=row}setSelected(next);setTrayOpen(true)}
+  function trackBuild(build:RiskBuilder){
+    setTrackDraft({
+      title:build.title,
+      fixture:fixture.home+" v "+fixture.away,
+      legs:build.legs.map(leg=>({...leg,id:leg.id||keyOf(leg)})),
+      modelProbability:build.conservativeAllHitProbability??build.modelAllHitProbability??null,
+      suggestedProduct:build.referenceProductOdds,
+    })
+  }
+  function trackCustom(){
+    if(!selectedRows.length)return
+    setTrackDraft({
+      title:"Custom Bet Builder",
+      fixture:fixture.home+" v "+fixture.away,
+      legs:selectedRows,
+      modelProbability:modelProduct,
+      suggestedProduct:referenceProduct,
+    })
+  }
 
   return <main className="min-h-screen bg-[#07120e] pb-36 text-white">
     <header className="sticky top-0 z-30 border-b border-white/10 bg-[#07120e]/95 backdrop-blur-xl">
@@ -471,7 +493,7 @@ export default function BetBuilderPage(){
         </section>
         <section className="rounded-3xl border border-emerald-300/12 bg-gradient-to-br from-emerald-400/[0.09] to-black/25 p-4">
           <div className="flex items-start justify-between gap-3"><div><div className="flex items-center gap-2 text-emerald-300"><Sparkles className="size-4"/><p className="text-[0.54rem] font-black uppercase tracking-[0.13em]">3 suggested slips</p></div><h2 className="mt-1 text-lg font-black">Choose one or build your own</h2><p className="mt-1 text-[0.6rem] leading-relaxed text-white/40">{inPlay?"These are rebuilt from the remaining live markets after anything already landed is removed.":"Safe aims around 3/1, Balanced around 10/1 and Risky 20/1+. The model picks the strongest route to each target."}</p></div><span className={"rounded-full px-2 py-1 text-[0.46rem] font-black "+(data.lineupMode==="confirmed"?"bg-emerald-400/10 text-emerald-300":"bg-amber-300/10 text-amber-200")}>{data.lineupMode==="confirmed"?"XI CONFIRMED":"PREDICTED XI"}</span></div>
-          <div className="mt-4 grid gap-2 sm:grid-cols-3">{builders.length?builders.map(b=><RiskCard key={b.id} build={b} liveBet365={liveBet365} onUse={()=>useBuild(b)}/>):<div className="sm:col-span-3 rounded-2xl border border-white/8 bg-black/20 p-4 text-center"><p className="text-xs font-black text-white/55">No verified Bet365 target slip available yet</p><p className="mt-1 text-[0.5rem] text-white/25">The model will not label anything 3/1, 10/1 or 20/1 without verified Bet365 leg prices.</p></div>}</div>
+          <div className="mt-4 grid gap-2 sm:grid-cols-3">{builders.length?builders.map(b=><RiskCard key={b.id} build={b} liveBet365={liveBet365} onTrack={()=>trackBuild(b)} onUse={()=>useBuild(b)}/>):<div className="sm:col-span-3 rounded-2xl border border-white/8 bg-black/20 p-4 text-center"><p className="text-xs font-black text-white/55">No verified Bet365 target slip available yet</p><p className="mt-1 text-[0.5rem] text-white/25">The model will not label anything 3/1, 10/1 or 20/1 without verified Bet365 leg prices.</p></div>}</div>
         </section>
 
         <section className="space-y-3">
@@ -488,7 +510,8 @@ export default function BetBuilderPage(){
       </>:null}
     </div>
 
-    {selectedRows.length?<BuilderTray rows={selectedRows} referenceProduct={referenceProduct} modelProduct={modelProduct} risk={customRisk} open={trayOpen} setOpen={setTrayOpen} onRemove={row=>toggle(row)} onClear={()=>setSelected({})}/>:null}
+    {selectedRows.length?<BuilderTray rows={selectedRows} referenceProduct={referenceProduct} modelProduct={modelProduct} risk={customRisk} open={trayOpen} setOpen={setTrayOpen} onRemove={row=>toggle(row)} onClear={()=>setSelected({})} onTrack={trackCustom}/>:null}
+    {trackDraft?<TrackBetModal draft={trackDraft} onClose={()=>setTrackDraft(null)} onSaved={()=>{setTrackDraft(null);router.push("/performance")}}/>:null}
   </main>
 }
 
@@ -585,14 +608,52 @@ function H2HTeamTotals({label,x}:{label:string;x:{yellow:number;red:number;fouls
   return <div className="rounded-2xl bg-white/[0.045] p-3"><p className="truncate text-[0.5rem] font-black text-white/40">{label}</p><div className="mt-2 grid grid-cols-4 gap-1 text-center"><div><p className="font-mono text-sm font-black">{x.fouls}</p><p className="text-[0.38rem] uppercase text-white/20">Fouls</p></div><div><p className="font-mono text-sm font-black">{x.shots}</p><p className="text-[0.38rem] uppercase text-white/20">Shots</p></div><div><p className="font-mono text-sm font-black">{x.sot}</p><p className="text-[0.38rem] uppercase text-white/20">SOT</p></div><div><p className="font-mono text-sm font-black text-amber-100">{x.yellow}</p><p className="text-[0.38rem] uppercase text-white/20">YC</p></div></div></div>
 }
 
-function RiskCard({build,onUse,liveBet365=false}:{build:RiskBuilder;onUse:()=>void;liveBet365?:boolean}){
+function RiskCard({build,onUse,onTrack,liveBet365=false}:{build:RiskBuilder;onUse:()=>void;onTrack:()=>void;liveBet365?:boolean}){
   const tone=build.risk==="Safe"?"border-emerald-300/18 bg-emerald-400/[0.06]":build.risk==="Balanced"?"border-amber-300/18 bg-amber-300/[0.05]":"border-rose-300/18 bg-rose-400/[0.05]"
   const accent=build.risk==="Safe"?"text-emerald-300":build.risk==="Balanced"?"text-amber-300":"text-rose-300"
   return <article className={"rounded-2xl border p-3 "+tone}>
     <div className="flex items-start justify-between gap-2"><div><p className={"text-[0.5rem] font-black uppercase "+accent}>{build.risk==="High Risk"?"Risky":build.risk}</p><p className="mt-1 text-lg font-black">{build.targetFractional}</p></div><ShieldCheck className={"size-4 "+accent}/></div>
-    {build.legs.length?<><div className="mt-2 flex items-center gap-1.5"><span className={"rounded-full px-2 py-1 text-[0.38rem] font-black "+(liveBet365?"bg-emerald-300/15 text-emerald-200":"bg-cyan-300/10 text-cyan-100")}>{liveBet365?"LIVE BET365 LEGS":"VERIFIED BET365 LEGS"}</span><span className="text-[0.38rem] text-white/25">final Bet Builder quote may differ</span></div><div className="mt-2 grid grid-cols-3 gap-1.5"><MiniStat label="Raw chance" value={percent(build.modelAllHitProbability,1)}/><MiniStat label="Safety chance" value={percent(build.conservativeAllHitProbability??build.modelAllHitProbability,1)}/><MiniStat label="Bet365 leg product" value={build.referenceProductOdds?.toFixed(2)??"—"}/></div><div className="mt-2 space-y-1.5">{build.legs.map(l=><div key={keyOf(l)} className="flex items-center justify-between gap-2 rounded-lg bg-black/15 px-2 py-1.5"><p className="min-w-0 flex-1 truncate text-[0.5rem] text-white/65">{l.player} · {l.label}</p><span className="shrink-0 font-mono text-[0.48rem] font-black text-white/45">{percent(l.probability)}</span></div>)}</div><button onClick={onUse} className="mt-3 w-full rounded-xl bg-white px-3 py-2 text-[0.58rem] font-black text-[#07120e]">Add this slip</button></>:<p className="mt-2 text-[0.54rem] text-white/30">No strong route available yet.</p>}
+    {build.legs.length?<><div className="mt-2 flex items-center gap-1.5"><span className={"rounded-full px-2 py-1 text-[0.38rem] font-black "+(liveBet365?"bg-emerald-300/15 text-emerald-200":"bg-cyan-300/10 text-cyan-100")}>{liveBet365?"LIVE BET365 LEGS":"VERIFIED BET365 LEGS"}</span><span className="text-[0.38rem] text-white/25">final Bet Builder quote may differ</span></div><div className="mt-2 grid grid-cols-3 gap-1.5"><MiniStat label="Raw chance" value={percent(build.modelAllHitProbability,1)}/><MiniStat label="Safety chance" value={percent(build.conservativeAllHitProbability??build.modelAllHitProbability,1)}/><MiniStat label="Bet365 leg product" value={build.referenceProductOdds?.toFixed(2)??"—"}/></div><div className="mt-2 space-y-1.5">{build.legs.map(l=><div key={keyOf(l)} className="flex items-center justify-between gap-2 rounded-lg bg-black/15 px-2 py-1.5"><p className="min-w-0 flex-1 truncate text-[0.5rem] text-white/65">{l.player} · {l.label}</p><span className="shrink-0 font-mono text-[0.48rem] font-black text-white/45">{percent(l.probability)}</span></div>)}</div><div className="mt-3 grid grid-cols-2 gap-2"><button onClick={onUse} className="rounded-xl bg-white/8 px-3 py-2 text-[0.54rem] font-black text-white/55">Use selections</button><button onClick={onTrack} className="rounded-xl bg-white px-3 py-2 text-[0.58rem] font-black text-[#07120e]">Track this bet</button></div></>:<p className="mt-2 text-[0.54rem] text-white/30">No strong route available yet.</p>}
   </article>
 }
+function TrackBetModal({draft,onClose,onSaved}:{draft:TrackDraft;onClose:()=>void;onSaved:()=>void}){
+  const[odds,setOdds]=useState("")
+  const[stake,setStake]=useState("")
+  const actualOdds=Number(odds)
+  const actualStake=Number(stake)
+  const valid=Number.isFinite(actualOdds)&&actualOdds>1&&Number.isFinite(actualStake)&&actualStake>0
+  const save=()=>{
+    if(!valid)return
+    addTrackedBet({
+      source:"match-builder",
+      title:draft.title,
+      fixture:draft.fixture,
+      odds:actualOdds,
+      stake:actualStake,
+      modelProbability:draft.modelProbability,
+      legs:draft.legs.map(leg=>({
+        label:(leg.player?leg.player+" · ":"")+leg.label,
+        player:leg.player,
+        team:leg.team,
+        market:leg.market,
+        modelProbability:leg.probability,
+        bet365Odds:verifiedBet365Odd(leg),
+      })),
+    })
+    onSaved()
+  }
+  return <div className="fixed inset-0 z-[80] flex items-end bg-black/70 p-3 backdrop-blur-sm sm:items-center sm:justify-center">
+    <div className="w-full max-w-lg rounded-3xl border border-emerald-300/20 bg-[#0d1d17] p-4 shadow-2xl">
+      <div className="flex items-start justify-between gap-3"><div><p className="text-[0.52rem] font-black uppercase tracking-[0.13em] text-emerald-300">My slips</p><h3 className="mt-1 text-lg font-black">{draft.title}</h3><p className="mt-1 text-[0.55rem] text-white/35">{draft.fixture} · {draft.legs.length} selections</p></div><button onClick={onClose} className="rounded-xl bg-white/7 p-2 text-white/45"><X className="size-4"/></button></div>
+      <div className="mt-3 max-h-40 space-y-1.5 overflow-y-auto">{draft.legs.map(leg=><div key={keyOf(leg)} className="rounded-xl bg-white/[0.045] px-3 py-2"><p className="text-xs font-black">{leg.player} · {leg.label}</p><p className="mt-0.5 text-[0.44rem] text-white/25">{percent(leg.probability)} model{verifiedBet365Odd(leg)!=null?" · "+Number(verifiedBet365Odd(leg)).toFixed(3)+" Bet365 single":""}</p></div>)}</div>
+      <div className="mt-4 rounded-2xl border border-amber-300/12 bg-amber-300/[0.045] p-3"><p className="text-[0.55rem] font-black text-amber-100">Enter what you actually placed at Bet365</p><p className="mt-1 text-[0.48rem] leading-relaxed text-white/35">Use the final Bet Builder odds Bet365 shows after all selections are added. Do not use the leg-product estimate{draft.suggestedProduct?" ("+draft.suggestedProduct.toFixed(2)+")":""}.</p></div>
+      <div className="mt-3 grid grid-cols-2 gap-2"><label className="rounded-2xl bg-black/20 p-3"><span className="text-[0.44rem] font-black uppercase text-white/25">Actual Bet365 odds</span><input inputMode="decimal" value={odds} onChange={e=>setOdds(e.target.value)} placeholder="e.g. 4.00" className="mt-1 w-full bg-transparent font-mono text-lg font-black outline-none"/></label><label className="rounded-2xl bg-black/20 p-3"><span className="text-[0.44rem] font-black uppercase text-white/25">Stake £</span><input inputMode="decimal" value={stake} onChange={e=>setStake(e.target.value)} placeholder="e.g. 10" className="mt-1 w-full bg-transparent font-mono text-lg font-black outline-none"/></label></div>
+      {valid?<div className="mt-3 grid grid-cols-2 gap-2"><MiniStat label="Potential return" value={"£"+(actualStake*actualOdds).toFixed(2)}/><MiniStat label="Potential profit" value={"£"+(actualStake*(actualOdds-1)).toFixed(2)}/></div>:null}
+      <button disabled={!valid} onClick={save} className="mt-4 w-full rounded-xl bg-emerald-400 px-4 py-3 text-sm font-black text-emerald-950 disabled:opacity-30">Save as open bet</button>
+    </div>
+  </div>
+}
+
 function MiniStat({label,value}:{label:string;value:string}){return <div className="rounded-xl bg-black/20 px-2 py-1.5"><p className="font-mono text-xs font-black">{value}</p><p className="text-[0.4rem] uppercase text-white/25">{label}</p></div>}
 
 function SelectionRow({row,selected,onToggle,rank,traffic,bestAction=false,liveBet365=false}:{row:Selection;selected:boolean;onToggle:()=>void;rank:number;traffic:Traffic;bestAction?:boolean;liveBet365?:boolean}){
@@ -607,13 +668,14 @@ function SelectionRow({row,selected,onToggle,rank,traffic,bestAction=false,liveB
   </button>
 }
 
-function BuilderTray({rows,referenceProduct,modelProduct,risk,open,setOpen,onRemove,onClear}:{rows:Selection[];referenceProduct:number|null;modelProduct:number;risk:"Safe"|"Balanced"|"Risky";open:boolean;setOpen:(v:boolean)=>void;onRemove:(r:Selection)=>void;onClear:()=>void}){
+function BuilderTray({rows,referenceProduct,modelProduct,risk,open,setOpen,onRemove,onClear,onTrack}:{rows:Selection[];referenceProduct:number|null;modelProduct:number;risk:"Safe"|"Balanced"|"Risky";open:boolean;setOpen:(v:boolean)=>void;onRemove:(r:Selection)=>void;onClear:()=>void;onTrack:()=>void}){
   return <div className="fixed inset-x-0 bottom-[4.85rem] z-40 px-3">
     <div className="mx-auto max-w-3xl overflow-hidden rounded-3xl border border-emerald-300/20 bg-[#0d1d17]/98 shadow-2xl backdrop-blur-xl">
       {open?<div className="max-h-[46vh] overflow-y-auto border-b border-white/8 p-3">
         <div className="mb-2 flex items-center justify-between"><p className="text-sm font-black">Your builder</p><button onClick={onClear} className="flex items-center gap-1 text-[0.5rem] font-black text-rose-300"><Trash2 className="size-3"/>CLEAR</button></div>
         <div className="space-y-1.5">{rows.map(row=><div key={row.id} className="flex items-center justify-between gap-3 rounded-xl bg-white/[0.045] px-3 py-2"><div className="min-w-0"><p className="truncate text-xs font-black">{row.player} · {row.label}</p><p className="text-[0.44rem] text-white/25">{percent(row.probability)} model · {verifiedBet365Odd(row)!=null?Number(verifiedBet365Odd(row)).toFixed(3)+" verified Bet365":"no verified Bet365 price"}</p></div><button onClick={()=>onRemove(row)} className="rounded-lg bg-white/6 p-1.5 text-white/35"><X className="size-3"/></button></div>)}</div>
         <p className="mt-2 text-[0.46rem] leading-relaxed text-white/25">Reference odds multiply singles only. Same-game bookmaker Builder pricing can be lower because correlated selections are repriced together.</p>
+        <button onClick={onTrack} className="mt-3 w-full rounded-xl bg-emerald-400 px-3 py-2.5 text-[0.58rem] font-black text-emerald-950">Track this bet in Match Edge</button>
       </div>:null}
       <button onClick={()=>setOpen(!open)} className="grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 p-3 text-left"><div className="flex size-10 items-center justify-center rounded-2xl bg-emerald-400 text-emerald-950"><Target className="size-5"/></div><div className="min-w-0"><div className="flex items-center gap-2"><p className="text-sm font-black">{rows.length} selection{rows.length===1?"":"s"}</p><span className={"rounded-full px-1.5 py-0.5 text-[0.42rem] font-black "+(risk==="Safe"?"bg-emerald-300/15 text-emerald-300":risk==="Balanced"?"bg-amber-300/15 text-amber-200":"bg-rose-300/15 text-rose-200")}>{risk.toUpperCase()}</span></div><p className="mt-0.5 text-[0.5rem] text-white/35">Model chance {percent(modelProduct,1)} · tap to {open?"collapse":"review"}</p></div><div className="text-right"><p className="font-mono text-lg font-black">{referenceProduct!=null?referenceProduct.toFixed(2):"—"}</p><p className="text-[0.4rem] uppercase text-white/25">{referenceProduct!=null?"Bet365 leg product":"need Bet365 prices"}</p></div></button>
     </div>
