@@ -203,6 +203,24 @@ const PRIOR: Record<MarketKey, number> = {
   sot2: 0.12,
 }
 
+const INTERNATIONAL_COMPETITIONS=new Set([
+  "International",
+  "UEFA European Championship",
+  "UEFA European Championship Qualifying",
+  "UEFA Nations League",
+  "FIFA World Cup",
+  "FIFA World Cup Qualifying - UEFA",
+  "FIFA World Cup Qualifying - CONMEBOL",
+  "FIFA World Cup Qualifying - CONCACAF",
+  "FIFA World Cup Qualifying - AFC",
+  "FIFA World Cup Qualifying - CAF",
+  "FIFA World Cup Qualifying - OFC",
+  "International Friendly",
+])
+function isInternationalHistoryCompetition(value:unknown){
+  return INTERNATIONAL_COMPETITIONS.has(String(value??""))
+}
+
 function clamp(value: number, min = 0.01, max = 0.99) {
   return Math.max(min, Math.min(max, value))
 }
@@ -1460,14 +1478,14 @@ export async function GET(request: Request) {
   const players: ScorePlayer[] = candidates.map(candidate => {
     const allRows = history.filter(row => row.playerName === candidate.dbName && played(row))
     const internationalRows = competition==="International"
-      ? allRows.filter(row=>row.competition==="International"&&String(row.matchDate??"")>="2026-01-01")
+      ? allRows.filter(row=>isInternationalHistoryCompetition(row.competition)&&String(row.matchDate??"")>="2026-01-01")
       : []
     // National-team role first. Club rows only rescue a genuinely tiny international sample.
     const primaryRows = competition==="International"&&internationalRows.length>=2 ? internationalRows : allRows
     const rows = recommendationsAllowed ? starterRows(primaryRows) : primaryRows
     const opponent = teamMatch(candidate.team, home) ? away : home
     const h2hRows = competition==="International"
-      ? allRows.filter(row=>row.competition==="International"&&teamMatch(row.opponent,opponent))
+      ? allRows.filter(row=>isInternationalHistoryCompetition(row.competition)&&teamMatch(row.opponent,opponent))
       : rows.filter(row => teamMatch(row.opponent, opponent))
     const recent5Rows = [...rows].sort((a, b) => String(a.matchDate).localeCompare(String(b.matchDate))).slice(-5)
     const sampleMinutes = rows.reduce((sum, row) => sum + Number(row.minutes ?? 0), 0)
@@ -1500,7 +1518,7 @@ export async function GET(request: Request) {
     const domesticCurrent=candidate?.domesticCurrent??null
     const domesticCompetition=norm(String(domesticCurrent?.competition??""))
     const currentClubRows=allRows.filter(row=>
-      row.competition!=="International" &&
+      !isInternationalHistoryCompetition(row.competition) &&
       rowDate(row)>="2026-08-01" &&
       (!domesticCompetition||norm(String(row.competition??""))!==domesticCompetition)
     )
