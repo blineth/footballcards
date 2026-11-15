@@ -35,7 +35,7 @@ type Selection={
 type LivePlayerStat={
   player:string;team:string;minutes:number|null;foulsCommitted:number;foulsDrawn:number;shots:number;shotsOnTarget:number;
   goals:number;assists:number;yellowCards:number;redCards:number;subbedOff:boolean;
-  tackles:number;interceptions:number;blocks:number;duelsTotal:number;duelsWon:number
+  tackles:number;interceptions:number;blocks:number;duelsTotal:number;duelsWon:number;defensiveInterventions:number
 }
 type LiveData={
   ok:boolean;source:string|null;status:"scheduled"|"live"|"halftime"|"finished"|"unknown";elapsed:number;
@@ -183,7 +183,7 @@ function applyLive(rows:Selection[],live:LiveData|null,scorecard:Scorecard|null=
     const pos=String(position??"").toLowerCase()
     const role=pos.includes("def")?1.08:pos.includes("mid")?1.04:pos.includes("forward")||pos.includes("att")?.88:pos.includes("goal")?.45:1
     const raw=Number(stat.tackles??0)*.07+Number(stat.interceptions??0)*.045+Number(stat.blocks??0)*.025+
-      Number(stat.duelsTotal??0)*.009+Number(stat.duelsWon??0)*.006
+      Number(stat.duelsTotal??0)*.009+Number(stat.duelsWon??0)*.006+Number(stat.defensiveInterventions??0)*.025
     return Math.max(0,Math.min(.48,raw*role))
   }
   for(const row of rows){
@@ -250,7 +250,7 @@ function applyLive(rows:Selection[],live:LiveData|null,scorecard:Scorecard|null=
       currentCount:current,
       liveAdjusted:true,
       tackles:Number(stat.tackles??0),interceptions:Number(stat.interceptions??0),blocks:Number(stat.blocks??0),
-      duelsTotal:Number(stat.duelsTotal??0),duelsWon:Number(stat.duelsWon??0),
+      duelsTotal:Number(stat.duelsTotal??0),duelsWon:Number(stat.duelsWon??0),defensiveInterventions:Number(stat.defensiveInterventions??0),
       reason:liveReason||`Live: ${current} already recorded; ${Math.round(probability*100)}% model chance of reaching ${row.label} from ${live.elapsed}'`,
     })
   }
