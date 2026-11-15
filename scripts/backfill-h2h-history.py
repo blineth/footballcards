@@ -6,6 +6,7 @@ import io
 import json
 import os
 import time
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
 from pathlib import Path
