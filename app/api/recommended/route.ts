@@ -23,7 +23,8 @@ type MarketStatus="available"|"unavailable"|"unknown"
 type SlipLeg={
   player:string;dbPlayerName?:string|null;team:string;market:string;label:string;
   probability:number;fairOdds:number|null;bookmakerOdds:number|null;bookmakerName?:string|null;
-  edge:number|null;confidence:"A"|"B"|"C"|"D";reason:string;priceSource?:"exact"|"estimated"|null
+  edge:number|null;confidence:"A"|"B"|"C"|"D";reason:string;priceSource?:"exact"|"estimated"|null;
+  bookmakerProbability?:number|null
 }
 type BetSlip={
   id:string;bookmaker?:string|null;title:string;risk:string;legs:SlipLeg[];
@@ -37,7 +38,8 @@ type FoulTargetSlip={
 type ScorecardMarket={
   key?:string;label:string;probability:number;fairOdds?:number|null;bookmakerOdds?:number|null;
   bookmakerName?:string|null;edge?:number|null;confidence:"A"|"B"|"C"|"D";reasons?:string[];
-  sampleMatches?:number;recent5HitRate?:number;seasonHitRate?:number;h2hHitRate?:number|null;h2hMatches?:number;recommendationScore?:number
+  sampleMatches?:number;recent5HitRate?:number;seasonHitRate?:number;h2hHitRate?:number|null;h2hMatches?:number;recommendationScore?:number;
+  impliedProbability?:number|null;bookmakerNoVigProbability?:number|null
 }
 type ScorecardPlayer={
   name:string;dbName?:string;team:string;
@@ -72,14 +74,14 @@ type Recommendation={
 }
 type TargetOddsLeg={
   fixtureId:string;competition:Competition;kickoff:string;home:string;away:string;
-  player:string;team:string;market:string;label:string;probability:number;
+  player:string;team:string;market:string;label:string;probability:number;conservativeProbability:number;
   price:number;priceSource:"exact";bookmaker:"Bet365";confidence:SlipLeg["confidence"]
 }
 type TargetOddsSlip={
   id:string;targetFractional:string;targetDecimal:number;available:boolean;
-  referenceOdds:number|null;modelAllHitProbability:number|null;bookmaker:string|null;
+  referenceOdds:number|null;modelAllHitProbability:number|null;conservativeAllHitProbability:number|null;safetyScore:number|null;bookmaker:string|null;
   priceSource:"bookmaker-singles"|null;marketsVerified:boolean;legs:TargetOddsLeg[];
-  note:string
+  maxSelections:number;maxPlayersPerTeam:number;note:string
 }
 type TargetOddsGame={
   fixture:Fixture
@@ -228,84 +230,126 @@ const TARGET_ODDS=[
 const TARGET_BOOKS=["Bet365"] as const
 
 function buildTargetOddsSlips(scorecard:Scorecard|null,fixture:Fixture):TargetOddsSlip[]{
-  type Candidate={fixture:Fixture;leg:SlipLeg;exactPrice:number}
-  const candidates:Candidate[]=(scorecard?.ok?directPlayerCandidates(scorecard):[])
-    .filter(leg=>leg.bookmakerName==="Bet365"&&leg.bookmakerOdds!=null&&leg.priceSource!=="estimated"&&Number(leg.bookmakerOdds)>1)
-    .map(leg=>({fixture,leg,exactPrice:Number(leg.bookmakerOdds)}))
-
+  const MAX_SELECTIONS=12
+  const MAX_PLAYERS_PER_TEAM=6
+  const teamKey=(team:string)=>sameTeamName(team,fixture.home.name)?"home":sameTeamName(team,fixture.away.name)?"away":normName(team)
   const family=(market:string)=>market.startsWith("goal")?"goal":market.startsWith("assist")?"assist":market.startsWith("fouled")?"fouled":market.startsWith("foul")?"foul":market.startsWith("sot")?"sot":market.startsWith("shot")?"shot":"card"
   const baseMarket=(market:string)=>market==="goal1"||market==="assist1"||market==="foul1"||market==="fouled1"||market==="card"||market==="shot1"||market==="sot1"
 
+  type Candidate={fixture:Fixture;leg:SlipLeg;exactPrice:number;conservativeP:number;modelP:number;teamKey:string}
+  const conservativeLegProbability=(leg:SlipLeg,price:number)=>{
+    const modelP=Math.max(.01,Math.min(.99,Number(leg.probability)))
+    const bookmakerP=Math.max(.01,Math.min(.99,Number(leg.bookmakerProbability??(1/price))))
+    const uplift=leg.confidence==="A"?1.18:leg.confidence==="B"?1.12:leg.confidence==="C"?1.07:1
+    // Treat the market as an external calibration anchor. The model may disagree,
+    // but a very large positive edge cannot be accepted at face value until it
+    // proves itself in backtesting. This stops a long-priced goalscorer from
+    // dominating a target simply because our raw model is over-confident.
+    let p=Math.min(modelP,bookmakerP*uplift)
+    if(leg.market.startsWith("goal")||leg.market.startsWith("assist"))p*=.98
+    if(leg.market==="card")p*=.985
+    return Math.max(.01,Math.min(.99,p))
+  }
+
+  const candidates:Candidate[]=(scorecard?.ok?directPlayerCandidates(scorecard):[])
+    .filter(leg=>leg.bookmakerName==="Bet365"&&leg.bookmakerOdds!=null&&leg.priceSource!=="estimated"&&Number(leg.bookmakerOdds)>1)
+    .map(leg=>{
+      const exactPrice=Number(leg.bookmakerOdds)
+      return {fixture,leg,exactPrice,conservativeP:conservativeLegProbability(leg,exactPrice),modelP:Number(leg.probability),teamKey:teamKey(leg.team)}
+    })
+    .filter(x=>x.conservativeP>=.10)
+
+  const bothTeamsAvailable=candidates.some(x=>x.teamKey==="home")&&candidates.some(x=>x.teamKey==="away")
+
+  function stateSafety(state:{conservativeProb:number;legs:Candidate[]}){
+    if(!state.legs.length)return 0
+    const minP=Math.min(...state.legs.map(x=>x.conservativeP))
+    const avgP=state.legs.reduce((sum,x)=>sum+x.conservativeP,0)/state.legs.length
+    // Joint chance remains the main signal, but a weak-link penalty deliberately
+    // favours several high-frequency legs over one speculative leg when the
+    // whole-slip probabilities are otherwise close/uncertain.
+    return state.conservativeProb*Math.pow(Math.max(.12,minP)/.50,.72)*Math.pow(Math.max(.35,avgP)/.60,.18)
+  }
+
   function search(targetDecimal:number){
-    type State={legs:Candidate[];odds:number;prob:number;players:Set<string>;families:Record<string,number>;baseCount:number;teamCounts:Record<string,number>}
-    let states:State[]=[{legs:[],odds:1,prob:1,players:new Set(),families:{},baseCount:0,teamCounts:{}}]
+    type State={
+      legs:Candidate[];odds:number;modelProb:number;conservativeProb:number;
+      players:Set<string>;families:Record<string,number>;teamCounts:Record<string,number>;baseCount:number
+    }
+    let states:State[]=[{legs:[],odds:1,modelProb:1,conservativeProb:1,players:new Set(),families:{},teamCounts:{},baseCount:0}]
     const pool=[...candidates]
-      .sort((a,b)=>b.leg.probability-a.leg.probability||((baseMarket(a.leg.market)?0:1)-(baseMarket(b.leg.market)?0:1))||a.exactPrice-b.exactPrice)
+      .sort((a,b)=>b.conservativeP-a.conservativeP||b.modelP-a.modelP||((baseMarket(a.leg.market)?0:1)-(baseMarket(b.leg.market)?0:1))||a.exactPrice-b.exactPrice)
       .slice(0,90)
 
     for(const option of pool){
       const next=[...states]
       for(const state of states){
         const playerKey=normName(option.leg.player)
-        if(state.legs.length>=12||state.players.has(playerKey))continue
-        const teamKey=normName(option.leg.team)
-        const teamCount=state.teamCounts[teamKey]??0
-        if(teamCount>=6)continue
+        if(state.legs.length>=MAX_SELECTIONS||state.players.has(playerKey))continue
+        const teamCount=state.teamCounts[option.teamKey]??0
+        if(teamCount>=MAX_PLAYERS_PER_TEAM)continue
         const fam=family(option.leg.market)
         const familyCount=state.families[fam]??0
-        // Do not force artificial market diversity. If five different players
-        // getting 1+ foul is the safest route, that should beat one speculative
-        // 2+ foul/card/SOT leg simply because it creates more market families.
-        if(familyCount>=12)continue
         const odds=state.odds*option.exactPrice
-        if(odds>targetDecimal*1.55&&state.legs.length>=1)continue
+        if(odds>targetDecimal*1.45&&state.legs.length>=1)continue
         next.push({
           legs:[...state.legs,option],
           odds,
-          prob:state.prob*option.leg.probability,
+          modelProb:state.modelProb*option.modelP,
+          conservativeProb:state.conservativeProb*option.conservativeP,
           players:new Set([...state.players,playerKey]),
           families:{...state.families,[fam]:familyCount+1},
+          teamCounts:{...state.teamCounts,[option.teamKey]:teamCount+1},
           baseCount:state.baseCount+(baseMarket(option.leg.market)?1:0),
-          teamCounts:{...state.teamCounts,[teamKey]:teamCount+1},
         })
       }
 
       const buckets=new Map<string,State[]>()
       for(const state of next){
-        const oddsBucket=Math.floor(Math.log(Math.max(1,state.odds))*120)
-        const key=oddsBucket+"|"+state.legs.length
+        const oddsBucket=Math.floor(Math.log(Math.max(1,state.odds))*130)
+        const homeCount=state.teamCounts.home??0,awayCount=state.teamCounts.away??0
+        const key=oddsBucket+"|"+state.legs.length+"|"+homeCount+"|"+awayCount
         const rows=buckets.get(key)??[]
         rows.push(state)
         rows.sort((a,b)=>{
-          if(Math.abs(a.prob-b.prob)>.000001)return b.prob-a.prob
-          const weakA=a.legs.length?Math.min(...a.legs.map(x=>x.leg.probability)):0
-          const weakB=b.legs.length?Math.min(...b.legs.map(x=>x.leg.probability)):0
+          const sa=stateSafety(a),sb=stateSafety(b)
+          if(Math.abs(sa-sb)>.0000001)return sb-sa
+          if(Math.abs(a.conservativeProb-b.conservativeProb)>.0000001)return b.conservativeProb-a.conservativeProb
+          const weakA=a.legs.length?Math.min(...a.legs.map(x=>x.conservativeP)):0
+          const weakB=b.legs.length?Math.min(...b.legs.map(x=>x.conservativeP)):0
           if(Math.abs(weakA-weakB)>.0001)return weakB-weakA
           return b.baseCount-a.baseCount
         })
-        buckets.set(key,rows.slice(0,14))
+        buckets.set(key,rows.slice(0,12))
       }
       states=[...buckets.values()].flat()
-        .sort((a,b)=>b.prob-a.prob||b.baseCount-a.baseCount)
-        .slice(0,3200)
+        .sort((a,b)=>stateSafety(b)-stateSafety(a)||b.conservativeProb-a.conservativeProb)
+        .slice(0,4200)
     }
 
-    const acceptable=states.filter(state=>
+    let acceptable=states.filter(state=>
       state.legs.length>=2&&state.odds>=targetDecimal&&state.odds<=targetDecimal*1.35
     )
+    if(bothTeamsAvailable){
+      const balanced=acceptable.filter(state=>(state.teamCounts.home??0)>0&&(state.teamCounts.away??0)>0)
+      if(balanced.length)acceptable=balanced
+    }
     if(!acceptable.length)return null
+
     return acceptable.sort((a,b)=>{
-      // The target price is a constraint, not the objective. Once both builds
-      // genuinely reach it, choose the combination with the best modelled chance.
-      if(Math.abs(a.prob-b.prob)>.0005)return b.prob-a.prob
-      const weakA=Math.min(...a.legs.map(x=>x.leg.probability))
-      const weakB=Math.min(...b.legs.map(x=>x.leg.probability))
-      if(Math.abs(weakA-weakB)>.005)return weakB-weakA
-      if(a.baseCount!==b.baseCount)return b.baseCount-a.baseCount
+      const sa=stateSafety(a),sb=stateSafety(b)
+      if(Math.abs(sa-sb)>.0000001)return sb-sa
+      if(Math.abs(a.conservativeProb-b.conservativeProb)>.0000001)return b.conservativeProb-a.conservativeProb
+      const weakA=Math.min(...a.legs.map(x=>x.conservativeP))
+      const weakB=Math.min(...b.legs.map(x=>x.conservativeP))
+      if(Math.abs(weakA-weakB)>.001)return weakB-weakA
+      const avgA=a.legs.reduce((x,l)=>x+l.conservativeP,0)/a.legs.length
+      const avgB=b.legs.reduce((x,l)=>x+l.conservativeP,0)/b.legs.length
+      if(Math.abs(avgA-avgB)>.001)return avgB-avgA
       const da=Math.abs(Math.log(a.odds)-Math.log(targetDecimal))
       const db=Math.abs(Math.log(b.odds)-Math.log(targetDecimal))
-      if(Math.abs(da-db)>.01)return da-db
-      return a.legs.length-b.legs.length
+      if(Math.abs(da-db)>.005)return da-db
+      return b.legs.length-a.legs.length
     })[0]
   }
 
@@ -314,14 +358,14 @@ function buildTargetOddsSlips(scorecard:Scorecard|null,fixture:Fixture):TargetOd
     if(!chosen)return {
       id:"target-"+fixture.id+"-"+target.fractional.replace("/","-"),
       targetFractional:target.fractional,targetDecimal:target.decimal,
-      available:false,referenceOdds:null,modelAllHitProbability:null,bookmaker:null,
-      priceSource:null,marketsVerified:false,legs:[],
-      note:"No sufficiently strong verified Bet365 player-prop combination reaches this target. The engine will not add a weak card, high threshold, match winner, double chance, total-goals line or corners just to manufacture the price.",
+      available:false,referenceOdds:null,modelAllHitProbability:null,conservativeAllHitProbability:null,safetyScore:null,bookmaker:null,
+      priceSource:null,marketsVerified:false,legs:[],maxSelections:MAX_SELECTIONS,maxPlayersPerTeam:MAX_PLAYERS_PER_TEAM,
+      note:"No sufficiently strong two-team verified Bet365 player-prop route reaches this target under the 12-selection / six-players-per-team limits. The engine will not add match winner, double chance, total goals or corners just to manufacture the price.",
     }
     const legs:TargetOddsLeg[]=chosen.legs.map(x=>({
       fixtureId:fixture.id,competition:fixture.competition,kickoff:fixture.kickoff,
       home:fixture.home.name,away:fixture.away.name,player:x.leg.player,team:x.leg.team,
-      market:x.leg.market,label:x.leg.label,probability:x.leg.probability,
+      market:x.leg.market,label:x.leg.label,probability:x.leg.probability,conservativeProbability:Math.round(x.conservativeP*1000)/1000,
       price:Math.round(x.exactPrice*1000)/1000,priceSource:"exact" as const,
       bookmaker:"Bet365" as const,confidence:x.leg.confidence,
     }))
@@ -329,9 +373,12 @@ function buildTargetOddsSlips(scorecard:Scorecard|null,fixture:Fixture):TargetOd
       id:"target-"+fixture.id+"-"+target.fractional.replace("/","-"),
       targetFractional:target.fractional,targetDecimal:target.decimal,available:true,
       referenceOdds:Math.round(chosen.odds*100)/100,
-      modelAllHitProbability:Math.round(chosen.prob*10000)/10000,
+      modelAllHitProbability:Math.round(chosen.modelProb*10000)/10000,
+      conservativeAllHitProbability:Math.round(chosen.conservativeProb*10000)/10000,
+      safetyScore:Math.round(stateSafety(chosen)*10000)/10000,
       bookmaker:"Bet365" as const,priceSource:"bookmaker-singles" as const,marketsVerified:true,legs,
-      note:"Probability first: verified Bet365 player-prop prices set the target, then the model chooses the highest estimated whole-slip hit chance. It can use up to 12 selections, capped at six players per team, so a longer set of safer 1+ events can beat a shorter riskier route. Cards require supporting form/H2H/foul-pressure evidence. Match winner, double chance, total goals and corners are excluded here.",
+      maxSelections:MAX_SELECTIONS,maxPlayersPerTeam:MAX_PLAYERS_PER_TEAM,
+      note:"Safest-route search: up to 12 Bet365 selections, max six different players per team, both teams considered, and one prop per player to reduce same-player correlation. Each leg is conservatively calibrated against Bet365's implied/no-vig probability before whole-slip optimisation. The engine can use all 12 selections if that is safer than reaching the target with one or two speculative legs. Match winner, double chance, total goals and corners are excluded.",
     }
   })
 }
@@ -465,6 +512,7 @@ function directPlayerCandidates(scorecard:Scorecard){
         edge:market.edge??null,confidence:market.confidence,
         reason:(market.reasons??[]).join(" · ")||"Verified Bet365 player market",
         priceSource:"exact",
+        bookmakerProbability:market.bookmakerNoVigProbability??market.impliedProbability??(Number(market.bookmakerOdds)>1?1/Number(market.bookmakerOdds):null),
       })
     }
   }
