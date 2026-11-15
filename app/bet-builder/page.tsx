@@ -33,12 +33,15 @@ type Selection={
   tackles?:number;interceptions?:number;blocks?:number;duelsTotal?:number;duelsWon?:number;defensiveInterventions?:number;
   livePressureScore?:number;liveRankScore?:number;preMarketProbability?:number;
   liveFoulsCommitted?:number;liveFoulsDrawn?:number;liveShots?:number;liveShotsOnTarget?:number;
+  disciplineHeat?:number;recentFouls10?:number;recentFouls15?:number;aggressionSignals?:string[];lastAggressionMinute?:number|null;
   referenceBookmakerOdds?:number|null;referenceImpliedProbability?:number|null;referenceOddsLive?:boolean
 }
 type LivePlayerStat={
   player:string;team:string;minutes:number|null;foulsCommitted:number;foulsDrawn:number;shots:number;shotsOnTarget:number;
   goals:number;assists:number;yellowCards:number;redCards:number;starter?:boolean;subbedOn?:boolean;subbedOff:boolean;
-  tackles:number;interceptions:number;blocks:number;duelsTotal:number;duelsWon:number;defensiveInterventions:number
+  tackles:number;interceptions:number;blocks:number;duelsTotal:number;duelsWon:number;defensiveInterventions:number;
+  recentFouls10?:number;recentFouls15?:number;recentFouled10?:number;disciplineHeat?:number;
+  aggressionScore?:number;aggressionSignals?:string[];lastAggressionMinute?:number|null
 }
 type LiveData={
   ok:boolean;source:string|null;status:"scheduled"|"live"|"halftime"|"finished"|"unknown";elapsed:number;
@@ -331,7 +334,9 @@ function applyLive(rows:Selection[],live:LiveData|null,scorecard:Scorecard|null=
       const yc=row.yellowConditionals
       const conditional=fouls>=3?yc?.after3PlusFouls:fouls>=2?yc?.after2PlusFouls:fouls>=1?yc?.after1PlusFouls:null
       const overall=yc?.overall?.rate
-      let cardDelta=pressure.card
+      const disciplineHeat=Math.max(0,Math.min(1,Number(stat.disciplineHeat??0)))
+      const recentBurst=Math.min(.34,Number(stat.recentFouls10??0)*.17+Math.max(0,Number(stat.recentFouls15??0)-Number(stat.recentFouls10??0))*.07)
+      let cardDelta=Math.min(1.05,pressure.card*.72+disciplineHeat*.52+recentBurst)
       if(fouls>0&&conditional?.rate!=null&&overall!=null&&conditional.matches>=2){
         const reliability=Math.min(1,conditional.matches/10)
         const observedDelta=logit(Number(conditional.rate))-logit(Math.max(.02,Number(overall)))
@@ -341,7 +346,9 @@ function applyLive(rows:Selection[],live:LiveData|null,scorecard:Scorecard|null=
         liveReason=`${fouls} foul${fouls===1?"":"s"} committed already`
       }
       probability=logistic(logit(probability)+cardDelta)
-      liveReason+=(liveReason?" · ":"")+`opponent drawing fouls at ${pressure.oppDrawRate.toFixed(1)}/90`
+      if(Number(stat.recentFouls10??0)>0)liveReason+=(liveReason?" · ":"")+`${stat.recentFouls10} new foul${stat.recentFouls10===1?"":"s"} in the last 10 minutes`
+      if((stat.aggressionSignals??[]).length)liveReason+=(liveReason?" · ":"")+`live signal: ${(stat.aggressionSignals??[]).slice(0,2).join(", ")}`
+      liveReason+=(liveReason?" · ":"")+`discipline heat ${Math.round(disciplineHeat*100)}/100 · opponent drawing fouls at ${pressure.oppDrawRate.toFixed(1)}/90`
       const refYellows=Number(scorecard?.referee?.yellowsPerGame??0)
       if(refYellows>0){
         probability=logistic(logit(probability)+Math.max(-.18,Math.min(.22,(refYellows-4.2)*.055)))
@@ -370,7 +377,7 @@ function applyLive(rows:Selection[],live:LiveData|null,scorecard:Scorecard|null=
       }
     }
 
-    const livePressureScore=row.market==="card"?pressure.card:
+    const livePressureScore=row.market==="card"?Math.max(pressure.card,Math.min(1,Number(stat.disciplineHeat??0))):
       row.market.startsWith("fouled")?pressure.fouled:
       row.market.startsWith("foul")?pressure.foul:
       row.market.startsWith("shot")||row.market.startsWith("sot")?Math.min(.45,Number(stat.shots??0)*.08+Number(stat.shotsOnTarget??0)*.12):0
@@ -389,6 +396,8 @@ function applyLive(rows:Selection[],live:LiveData|null,scorecard:Scorecard|null=
       liveRankScore:probability+livePressureScore*.08,
       liveFoulsCommitted:Number(stat.foulsCommitted??0),liveFoulsDrawn:Number(stat.foulsDrawn??0),
       liveShots:Number(stat.shots??0),liveShotsOnTarget:Number(stat.shotsOnTarget??0),
+      disciplineHeat:Number(stat.disciplineHeat??0),recentFouls10:Number(stat.recentFouls10??0),recentFouls15:Number(stat.recentFouls15??0),
+      aggressionSignals:Array.isArray(stat.aggressionSignals)?stat.aggressionSignals.slice(0,4):[],lastAggressionMinute:stat.lastAggressionMinute??null,
       tackles:Number(stat.tackles??0),interceptions:Number(stat.interceptions??0),blocks:Number(stat.blocks??0),
       duelsTotal:Number(stat.duelsTotal??0),duelsWon:Number(stat.duelsWon??0),defensiveInterventions:Number(stat.defensiveInterventions??0),
       reason:liveReason||`Live: ${current} already recorded; ${Math.round(probability*100)}% remaining-match chance of reaching ${row.label} from ${elapsed}'`,
@@ -1109,9 +1118,11 @@ export default function BetBuilderPage(){
     .sort((a,b)=>{
       // Live card risk is driven first by actual foul involvement in this match.
       // Fouls committed matter most; fouls drawn are a smaller involvement signal.
-      const aScore=Number(a.probability)+Math.min(.18,Number(a.liveFoulsCommitted??0)*.055)+Math.min(.025,Number(a.liveFoulsDrawn??0)*.008)
+      const aScore=Number(a.probability)*.62+Math.min(.15,Number(a.liveFoulsCommitted??0)*.045)+Math.min(.03,Number(a.liveFoulsDrawn??0)*.008)
+        +Math.min(.22,Number(a.disciplineHeat??0)*.22)+Math.min(.12,Number(a.recentFouls10??0)*.06)
         +(a.referenceImpliedProbability!=null?Math.min(.035,Math.max(-.02,(a.referenceImpliedProbability-a.probability)*.10)):0)
-      const bScore=Number(b.probability)+Math.min(.18,Number(b.liveFoulsCommitted??0)*.055)+Math.min(.025,Number(b.liveFoulsDrawn??0)*.008)
+      const bScore=Number(b.probability)*.62+Math.min(.15,Number(b.liveFoulsCommitted??0)*.045)+Math.min(.03,Number(b.liveFoulsDrawn??0)*.008)
+        +Math.min(.22,Number(b.disciplineHeat??0)*.22)+Math.min(.12,Number(b.recentFouls10??0)*.06)
         +(b.referenceImpliedProbability!=null?Math.min(.035,Math.max(-.02,(b.referenceImpliedProbability-b.probability)*.10)):0)
       return bScore-aScore||Number(b.liveFoulsCommitted??0)-Number(a.liveFoulsCommitted??0)||b.probability-a.probability
     })
@@ -1385,7 +1396,7 @@ function H2HTeamTotals({label,x}:{label:string;x:{yellow:number;red:number;fouls
 function CardRiskPanel({rows,fixture,live,liveBet365}:{rows:Selection[];fixture:Fixture;live:LiveData|null;liveBet365:boolean}){
   return <div className="mt-4 overflow-hidden rounded-2xl border border-amber-300/14 bg-black/20">
     <div className="border-b border-white/7 px-3 py-3">
-      <div className="flex items-center justify-between gap-3"><div><p className="text-xs font-black text-amber-100">Live card risk</p><p className="mt-1 text-[0.48rem] text-white/30">Ranked from fouls committed + fouls drawn in this game, then normal card history and Bet365 card price.</p></div>{live?<span className="rounded-full bg-rose-300/10 px-2 py-1 text-[0.42rem] font-black text-rose-200">{live.elapsed}' LIVE</span>:null}</div>
+      <div className="flex items-center justify-between gap-3"><div><p className="text-xs font-black text-amber-100">Live card risk</p><p className="mt-1 text-[0.48rem] text-white/30">Ranked from live discipline heat: foul load, recent foul bursts and any dangerous/reckless, confrontation or dissent signals in the commentary, then normal card history and Bet365 price.</p></div>{live?<span className="rounded-full bg-rose-300/10 px-2 py-1 text-[0.42rem] font-black text-rose-200">{live.elapsed}' LIVE</span>:null}</div>
     </div>
     {rows.length?rows.map((row,i)=><div key={row.id} className={"grid grid-cols-[auto_1fr_auto] items-center gap-3 px-3 py-3 "+(i?"border-t border-white/[0.055]":"")}>
       <span className={"flex size-8 items-center justify-center rounded-full font-mono text-xs font-black "+(i===0?"bg-amber-300 text-amber-950":"bg-white/6 text-white/45")}>{i+1}</span>
@@ -1394,6 +1405,9 @@ function CardRiskPanel({rows,fixture,live,liveBet365}:{rows:Selection[];fixture:
         <div className="mt-1 flex flex-wrap gap-1.5">
           <span className="rounded-full bg-rose-300/10 px-2 py-0.5 text-[0.42rem] font-black text-rose-100">FOULS {Number(row.liveFoulsCommitted??0)}</span>
           <span className="rounded-full bg-cyan-300/10 px-2 py-0.5 text-[0.42rem] font-black text-cyan-100">FOULED {Number(row.liveFoulsDrawn??0)}</span>
+          {row.disciplineHeat!=null?<span className="rounded-full bg-amber-300/10 px-2 py-0.5 text-[0.42rem] font-black text-amber-100">HEAT {Math.round(Number(row.disciplineHeat)*100)}</span>:null}
+          {Number(row.recentFouls10??0)>0?<span className="rounded-full bg-rose-300/10 px-2 py-0.5 text-[0.42rem] font-black text-rose-100">+{Number(row.recentFouls10)} RECENT FOUL{Number(row.recentFouls10)===1?"":"S"}</span>:null}
+          {(row.aggressionSignals??[]).slice(0,1).map(signal=><span key={signal} className="rounded-full bg-orange-300/10 px-2 py-0.5 text-[0.42rem] font-black text-orange-100">{signal.toUpperCase()}</span>)}
           {row.referenceBookmakerOdds?<span className="rounded-full bg-emerald-300/10 px-2 py-0.5 text-[0.42rem] font-black text-emerald-100">{row.referenceOddsLive?"BET365 LIVE ":"LAST BET365 "}{Number(row.referenceBookmakerOdds).toFixed(2)}</span>:null}
         </div>
       </div>
