@@ -15,7 +15,7 @@ type Fixture={id:string;date:string;kickoff:string;competition:Competition;home:
 type ScoreMarket={
   key:MarketKey;label:string;probability:number;fairOdds:number|null;confidence:"A"|"B"|"C"|"D";
   bookmakerOdds:number|null;bookmakerName:string|null;edge:number|null;expectedValue:number|null;
-  recent5HitRate:number;seasonHitRate:number;h2hHitRate:number|null;reasons:string[]
+  recent5HitRate:number;seasonHitRate:number;h2hHitRate:number|null;recommendationScore?:number;reasons:string[]
 }
 type YellowConditional={matches:number;yellows:number;rate:number|null}
 type YellowConditionals={
@@ -29,7 +29,7 @@ type ScorePlayer={
 type Selection={
   id:string;player:string;team:string;market:string;label:string;probability:number;fairOdds:number|null;
   bookmakerOdds:number|null;bookmakerName?:string|null;edge:number|null;confidence:"A"|"B"|"C"|"D";reason:string;
-  currentCount?:number|null;liveAdjusted?:boolean;yellowConditionals?:YellowConditionals;position?:string|null;
+  currentCount?:number|null;liveAdjusted?:boolean;yellowConditionals?:YellowConditionals;position?:string|null;recommendationScore?:number;
   tackles?:number;interceptions?:number;blocks?:number;duelsTotal?:number;duelsWon?:number;defensiveInterventions?:number
 }
 type LivePlayerStat={
@@ -397,7 +397,7 @@ function selectionsFrom(data:Scorecard|null){
   for(const p of data?.players??[]){
     for(const m of Object.values(p.markets??{})){
       if(!m)continue
-      const row:Selection={id:"",player:p.name,team:p.team,market:m.key,label:m.label,probability:m.probability,fairOdds:m.fairOdds,bookmakerOdds:m.bookmakerOdds,bookmakerName:m.bookmakerName,edge:m.edge,confidence:m.confidence,reason:m.reasons?.[0]??"Player history and current matchup model",yellowConditionals:p.yellowConditionals,position:p.position}
+      const row:Selection={id:"",player:p.name,team:p.team,market:m.key,label:m.label,probability:m.probability,fairOdds:m.fairOdds,bookmakerOdds:m.bookmakerOdds,bookmakerName:m.bookmakerName,edge:m.edge,confidence:m.confidence,reason:m.reasons?.[0]??"Player history and current matchup model",yellowConditionals:p.yellowConditionals,position:p.position,recommendationScore:m.recommendationScore}
       row.id=keyOf(row)
       if(seen.has(row.id))continue
       seen.add(row.id);out.push(row)
@@ -483,7 +483,7 @@ function buildBroadTargetBuilders(rows:Selection[]):RiskBuilder[]{
       modelAllHitProbability:best.prob,conservativeAllHitProbability:best.prob,safetyScore:best.prob,
       exactPriced:true,bookmaker:"Bet365",verifiedBet365LegPrices:true,exactBet365BuilderPrice:false,
       pricingBasis:"bet365_singles_product" as const,
-      note:"Uses only currently verified Bet365 markets. Market-level probabilities use de-vigged Bet365 prices where Match Edge has no independent model. The final Bet Builder price can differ because of correlation."
+      note:"Uses only currently verified Bet365 BTTS and player-prop markets. Match-level BTTS uses de-vigged Bet365 probability where Match Edge has no independent model. The final Bet Builder price can differ because of correlation."
     }
   })
 }
@@ -530,7 +530,8 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
       ).map(r=>{
         const t=trafficFor(r,rows)
         const trafficScore=t==="high"?1:t==="average"?.58:.18
-        const rankScore=trafficScore+r.probability*.22+Math.max(0,r.edge??0)*.15
+        const modelScore=r.market==="card"?Number(r.recommendationScore??r.probability):r.probability
+        const rankScore=trafficScore+modelScore*.22+Math.max(0,r.edge??0)*.15
         return {family:family(r.market),score:rankScore}
       }).sort((a,b)=>b.score-a.score)
       if(options[0])preferred.set(player,options[0])
@@ -538,12 +539,15 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
 
     const allCandidateRows=rows
       .filter(r=>r.confidence!=="D"&&(verifiedOnly?verifiedBet365Odd(r)!=null:Number(r.fairOdds??0)>1))
+      .filter(r=>r.market!=="card"||Number(r.recommendationScore??r.probability)>=.145)
       .map(r=>({row:r,family:family(r.market),signal:preferred.get(normPlayer(r.player))?.score??0}))
-      .sort((a,b)=>
-        (b.row.probability-a.row.probability)||
+      .sort((a,b)=>{
+        const ap=a.row.market==="card"?Number(a.row.recommendationScore??a.row.probability):a.row.probability
+        const bp=b.row.market==="card"?Number(b.row.recommendationScore??b.row.probability):b.row.probability
+        return (bp-ap)||
         ((baseMarket(a.row.market)?0:1)-(baseMarket(b.row.market)?0:1))||
         (b.signal-a.signal)
-      )
+      })
 
     const runSearch=(candidateRows:typeof allCandidateRows)=>{
       // Exact objective: maximise joint hit probability subject to reaching the
@@ -653,7 +657,12 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
   function guaranteedModelTarget(cfg:(typeof configs)[number]):RiskBuilder{
     const pool=[...rows]
       .filter(r=>r.confidence!=="D"&&Number(r.probability)>0&&Number(r.fairOdds??0)>1)
-      .sort((a,b)=>b.probability-a.probability)
+      .filter(r=>r.market!=="card"||Number(r.recommendationScore??r.probability)>=.145)
+      .sort((a,b)=>{
+        const ap=a.market==="card"?Number(a.recommendationScore??a.probability):a.probability
+        const bp=b.market==="card"?Number(b.recommendationScore??b.probability):b.probability
+        return bp-ap
+      })
     const legs:Selection[]=[]
     const usedPlayers=new Set<string>()
     const familyCounts:Record<string,number>={}
@@ -844,14 +853,23 @@ export default function BetBuilderPage(){
   const visible=useMemo(()=>{
     const allowed=new Set(categories.find(x=>x.id===category)?.markets??[])
     const rows=allRows.filter(x=>allowed.has(x.market as MarketKey))
+    if(category==="cards")return [...rows].sort((a,b)=>{
+      const ar=a.liveAdjusted?a.probability:Number(a.recommendationScore??a.probability)
+      const br=b.liveAdjusted?b.probability:Number(b.recommendationScore??b.probability)
+      return br-ar||b.probability-a.probability
+    })
     if(category!=="popular")return [...rows].sort((a,b)=>b.probability-a.probability)
 
-    // Most likely = one strongest action per player, judged relative to that
-    // market rather than by raw percentage alone.
+    // Most likely = one strongest action per player. Cards use the evidence score
+    // rather than raw probability so a weak 19% card cannot outrank a stronger
+    // H2H/current-form card simply because the calibrated percentage is larger.
     const score=(row:Selection)=>{
       const t=trafficFor(row,allRows)
       const traffic=t==="high"?1:t==="average"?.58:.18
-      return traffic+row.probability*.22+Math.max(0,row.edge??0)*.15
+      const model=row.market==="card"
+        ? (row.liveAdjusted?row.probability:Number(row.recommendationScore??row.probability))
+        : row.probability
+      return traffic+model*.22+Math.max(0,row.edge??0)*.15
     }
     const best=new Map<string,Selection>()
     for(const row of rows){
@@ -877,7 +895,9 @@ export default function BetBuilderPage(){
   const unavailableBet365Markets=marketKinds.filter(kind=>activeMarketAvailability?.[kind]==="unavailable")
   const availableBet365Markets=marketKinds.filter(kind=>activeMarketAvailability?.[kind]==="available")
   const activeAvailableBets=(inPlay?(liveOdds?.availableBets??[]):(data?.availableBets??[]))
-  const broadRows=useMemo(()=>fixture?activeAvailableBets.map(b=>broadBetToSelection(b,fixture)):[],[activeAvailableBets,fixture])
+  const broadRows=useMemo(()=>fixture
+    ? activeAvailableBets.filter(b=>b.kind==="btts").map(b=>broadBetToSelection(b,fixture))
+    :[],[activeAvailableBets,fixture])
   const verifiedPlayerRows=useMemo(()=>allRows.filter(r=>verifiedBet365Odd(r)!=null),[allRows])
   const broadTargetBuilders=useMemo(()=>buildBroadTargetBuilders([...broadRows,...verifiedPlayerRows]),[broadRows,verifiedPlayerRows])
   const playerBuilders=clientRiskBuilders(allRows,true)
@@ -1007,7 +1027,7 @@ export default function BetBuilderPage(){
   ?"Bet365 has not priced enough qualifying card/foul legs to build this target safely."
   :builderMode==="player"
     ?"Bet365 has not priced enough verified player-prop legs to build this target safely."
-    :"Bet365 has not priced enough verified markets across the full board to build this target safely."}</p></div>}</div>
+    :"Bet365 has not priced enough verified BTTS + player-prop markets to build this target safely."}</p></div>}</div>
         </section>
 
         <section className="space-y-3">
