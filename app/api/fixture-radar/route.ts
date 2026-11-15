@@ -185,7 +185,7 @@ function positionGroup(position:string|null|undefined){
   const compact=p.replace(/\s+/g,"")
   if(p.includes("goal")||compact==="gk"||compact==="g")return "gk"
   if(p.includes("back")||p.includes("def")||/(^|[^a-z])(cb|lb|rb|lwb|rwb)([^a-z]|$)/.test(" "+p+" ")||compact.startsWith("cd"))return "def"
-  if(p.includes("forward")||p.includes("striker")||p.includes("wing")||compact==="f"||compact.startsWith("st")||compact.startsWith("cf")||compact==="lw"||compact==="rw")return "att"
+  if(p.includes("forward")||p.includes("striker")||p.includes("wing")||compact==="f"||compact.startsWith("st")||compact.startsWith("cf")||["lw","rw","lf","rf","ss"].includes(compact))return "att"
   if(p.includes("mid")||compact.startsWith("dm")||compact.startsWith("cm")||compact.startsWith("am")||compact==="lm"||compact==="rm"||compact.startsWith("cdm")||compact.startsWith("cam"))return "mid"
   return "other"
 }
