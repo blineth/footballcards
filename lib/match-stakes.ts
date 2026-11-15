@@ -143,6 +143,11 @@ function domesticTeamContext(team:string,row:TableRow,table:TableRow[],cfg:(type
     position:row.position,points:row.points,matchesPlayed:row.played,matchesRemaining:remaining,gapToBoundary:best.gap,
   } satisfies TeamStakesContext
 }
+function domesticSeasonStart(date:string){
+  const d=new Date(date+"T12:00:00Z"),year=d.getUTCFullYear(),month=d.getUTCMonth()+1
+  const startYear=month>=7?year:year-1
+  return String(startYear)+"-07-01"
+}
 async function domesticTableFromDatabase(date:string,competition:string){
   if(!isDatabaseConfigured)return [] as TableRow[]
   try{
@@ -150,10 +155,10 @@ async function domesticTableFromDatabase(date:string,competition:string){
       `SELECT match_date::text AS date, team, opponent, COALESCE(venue,'') AS venue,
               SUM(COALESCE(goals,0))::int AS goals
        FROM player_h2h
-       WHERE competition=$1 AND match_date < $2
+       WHERE competition=$1 AND match_date >= $2 AND match_date < $3
        GROUP BY match_date,team,opponent,venue
        ORDER BY match_date`,
-      [competition,date],
+      [competition,domesticSeasonStart(date),date],
     )
     const rows=(result.rows??[]).map((r:any)=>({
       date:String(r.date??"").slice(0,10),team:String(r.team??""),opponent:String(r.opponent??""),
