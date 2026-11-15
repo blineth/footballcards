@@ -1120,6 +1120,8 @@ function buildRiskBuilders(players:ScorePlayer[],scope:"all"|"discipline"="all")
 
   return configs.map(config=>{
     const sourceCandidates=safeCandidates
+    const qualifyingTeams=new Set(sourceCandidates.map(x=>norm(x.leg.team)).filter(Boolean))
+    const requireBothTeams=qualifyingTeams.size>=2
     const safeFloors=[config.minSafety]
     type State={legs:SlipLeg[];product:number;quality:number;prob:number;conservative:number;players:Set<string>;families:Record<string,number>;teamCounts:Record<string,number>}
     let best:State|undefined
@@ -1185,7 +1187,7 @@ function buildRiskBuilders(players:ScorePlayer[],scope:"all"|"discipline"="all")
       const valid=states.filter(state=>
         state.legs.length>=2&&
         state.product>=config.targetDecimal&&
-        true
+        (!requireBothTeams||Object.keys(state.teamCounts).filter(k=>state.teamCounts[k]>0).length>=2)
       )
       const candidateBest=valid.sort((a,b)=>{
         if(Math.abs(a.conservative-b.conservative)>.0005)return b.conservative-a.conservative
