@@ -292,7 +292,8 @@ function buildTargetOddsSlips(scorecard:Scorecard|null,fixture:Fixture):TargetOd
     // Joint chance remains the main signal, but a weak-link penalty deliberately
     // favours several high-frequency legs over one speculative leg when the
     // whole-slip probabilities are otherwise close/uncertain.
-    return state.conservativeProb*Math.pow(Math.max(.12,minP)/.50,.72)*Math.pow(Math.max(.35,avgP)/.60,.18)
+    const jointSafety=state.conservativeProb*Math.pow(Math.max(.12,minP)/.50,.72)*Math.pow(Math.max(.35,avgP)/.60,.18)
+    return routeSelectionSafety(state.legs.map(x=>x.leg),jointSafety)
   }
 
   function search(targetDecimal:number){
@@ -302,7 +303,11 @@ function buildTargetOddsSlips(scorecard:Scorecard|null,fixture:Fixture):TargetOd
     }
     let states:State[]=[{legs:[],odds:1,modelProb:1,conservativeProb:1,players:new Set(),families:{},teamCounts:{},baseCount:0}]
     const pool=[...candidates]
-      .sort((a,b)=>b.conservativeP-a.conservativeP||b.modelP-a.modelP||((baseMarket(a.leg.market)?0:1)-(baseMarket(b.leg.market)?0:1))||a.exactPrice-b.exactPrice)
+      .sort((a,b)=>{
+        const aRank=a.conservativeP*marketStabilityFactor(a.leg)
+        const bRank=b.conservativeP*marketStabilityFactor(b.leg)
+        return bRank-aRank||b.conservativeP-a.conservativeP||b.modelP-a.modelP||((baseMarket(a.leg.market)?0:1)-(baseMarket(b.leg.market)?0:1))||a.exactPrice-b.exactPrice
+      })
       .slice(0,90)
 
     for(const option of pool){
@@ -546,6 +551,27 @@ function cardEvidenceEligible(player:ScorecardPlayer,market:ScorecardMarket){
 function lowThresholdMarket(market:string){
   return market==="foul1"||market==="fouled1"||market==="shot1"||market==="sot1"
 }
+function marketStabilityFactor(leg:SlipLeg){
+  if(leg.market==="foul1")return 1.10
+  if(leg.market==="fouled1")return 1.045
+  if(leg.market==="shot1")return 1.02
+  if(leg.market==="sot1")return .985
+  if(/^foul[2-9]/.test(leg.market))return .93
+  if(leg.market==="shot2")return .945
+  if(leg.market==="sot2")return .91
+  if(leg.market==="card")return .84
+  if(leg.market==="goal1")return .82
+  if(leg.market==="assist1")return .79
+  return .96
+}
+function routeSelectionSafety(legs:SlipLeg[],joint:number){
+  if(!legs.length)return 0
+  const stabilityGeo=Math.exp(legs.reduce((sum,leg)=>sum+Math.log(Math.max(.70,marketStabilityFactor(leg))),0)/legs.length)
+  const foulOneCount=legs.filter(leg=>leg.market==="foul1").length
+  const lowThresholdCount=legs.filter(leg=>lowThresholdMarket(leg.market)).length
+  const repeatEventBonus=1+Math.min(.09,foulOneCount*.018+Math.max(0,lowThresholdCount-foulOneCount)*.006)
+  return joint*stabilityGeo*repeatEventBonus
+}
 function evidenceSupport(leg:SlipLeg){
   const recent=Number(leg.recent5HitRate),season=Number(leg.seasonHitRate)
   const h2h=Number(leg.h2hHitRate),h2hN=Number(leg.h2hMatches??0)
@@ -691,7 +717,7 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
     let candidates=directPlayerCandidates(scorecard)
       .filter(leg=>leg.bookmakerName==="Bet365"&&leg.bookmakerOdds!=null&&Number(leg.bookmakerOdds)>1)
       .filter(leg=>safetyLegProbability(leg)>=config.minLeg)
-      .sort((a,b)=>safetyLegProbability(b)-safetyLegProbability(a)||b.probability-a.probability||Number(a.bookmakerOdds)-Number(b.bookmakerOdds))
+      .sort((a,b)=>(safetyLegProbability(b)*marketStabilityFactor(b))-(safetyLegProbability(a)*marketStabilityFactor(a))||safetyLegProbability(b)-safetyLegProbability(a)||b.probability-a.probability||Number(a.bookmakerOdds)-Number(b.bookmakerOdds))
       .slice(0,120)
 
     if(!config.allowHighVariance){
@@ -770,6 +796,9 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
         const rows=buckets.get(key)??[]
         rows.push(state)
         rows.sort((a,b)=>{
+          const routeA=routeSelectionSafety(a.legs,a.conservative)
+          const routeB=routeSelectionSafety(b.legs,b.conservative)
+          if(Math.abs(routeA-routeB)>.000001)return routeB-routeA
           if(Math.abs(a.conservative-b.conservative)>.000001)return b.conservative-a.conservative
           const weakA=a.legs.length?Math.min(...a.legs.map(safetyLegProbability)):0
           const weakB=b.legs.length?Math.min(...b.legs.map(safetyLegProbability)):0
@@ -779,7 +808,7 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
         buckets.set(key,rows.slice(0,10))
       }
       states=[...buckets.values()].flat()
-        .sort((a,b)=>b.conservative-a.conservative||b.raw-a.raw)
+        .sort((a,b)=>routeSelectionSafety(b.legs,b.conservative)-routeSelectionSafety(a.legs,a.conservative)||b.conservative-a.conservative||b.raw-a.raw)
         .slice(0,5000)
     }
 
@@ -794,6 +823,9 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
     if(!valid.length)return null
 
     const best=valid.sort((a,b)=>{
+      const routeA=routeSelectionSafety(a.legs,a.conservative)
+      const routeB=routeSelectionSafety(b.legs,b.conservative)
+      if(Math.abs(routeA-routeB)>.000001)return routeB-routeA
       if(Math.abs(a.conservative-b.conservative)>.000001)return b.conservative-a.conservative
       const weakA=Math.min(...a.legs.map(safetyLegProbability))
       const weakB=Math.min(...b.legs.map(safetyLegProbability))
