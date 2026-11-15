@@ -8,7 +8,7 @@ export const dynamic="force-dynamic"
 export const revalidate=0
 
 const DOMESTIC_START="2025-07-01"
-const INTERNATIONAL_START="2022-11-01"
+const INTERNATIONAL_START="2024-06-01"
 const DOMESTIC=new Set(["Premier League","Championship","League One","League Two"])
 
 const DOMESTIC_ESPN=[
@@ -20,12 +20,11 @@ const DOMESTIC_ESPN=[
   {slug:"eng.league_cup",label:"League Cup",seasons:[2025,2026]},
 ]
 const INTERNATIONAL_ESPN=[
-  {slug:"fifa.world",label:"FIFA World Cup",seasons:[2022]},
+  {slug:"fifa.world",label:"FIFA World Cup",seasons:[2026]},
   {slug:"uefa.euro",label:"UEFA European Championship",seasons:[2024]},
   {slug:"uefa.nations",label:"UEFA Nations League",seasons:[2022,2024,2026]},
-  {slug:"uefa.euroq",label:"European Championship Qualifying",seasons:[2024]},
   {slug:"fifa.worldq.uefa",label:"FIFA World Cup Qualifying - UEFA",seasons:[2026]},
-  {slug:"fifa.friendly",label:"International Friendly",seasons:[2022,2023,2024,2025,2026]},
+  {slug:"fifa.friendly",label:"International Friendly",seasons:[2024,2025,2026]},
 ]
 
 function norm(v:string|null|undefined){
@@ -354,7 +353,7 @@ export async function GET(request:Request){
   const meetings=mergeMeetings(local,api,espnRows)
   const scope=DOMESTIC.has(competition)
     ?"2025/26 + 2026/27 seasons, including league and domestic cup meetings"
-    :"International history from the 2022 World Cup onward: World Cup, Euros, Nations League, qualifiers and friendlies"
+    :"Recent international cycle: Euro 2024, 2024/25 and 2026/27 Nations League, 2026 World Cup qualifying, 2026 World Cup and relevant friendlies"
 
   return NextResponse.json({
     ok:true,home,away,competition,date,startDate:start,scope,
