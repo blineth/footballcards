@@ -832,6 +832,8 @@ type RiskBuilder = {
   averageLegProbability:number|null
   minimumLegProbability:number|null
   modelAllHitProbability:number|null
+  conservativeAllHitProbability:number|null
+  safetyScore:number|null
   exactPriced:boolean
   bookmaker:string|null
   note:string
@@ -839,9 +841,9 @@ type RiskBuilder = {
 
 function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
   const configs=[
-    {id:"safe-3-1",title:"Safe 3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4,minProb:.42,maxLegs:5,minFamilies:2,maxPerFamily:2},
-    {id:"balanced-10-1",title:"Balanced 10/1",risk:"Balanced" as const,targetFractional:"10/1",targetDecimal:11,minProb:.16,maxLegs:6,minFamilies:3,maxPerFamily:2},
-    {id:"high-20-1",title:"High Risk 20/1+",risk:"High Risk" as const,targetFractional:"20/1+",targetDecimal:21,minProb:.10,maxLegs:7,minFamilies:3,maxPerFamily:2},
+    {id:"safe-3-1",title:"Safe 3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4,minProb:.40,maxLegs:6,minFamilies:1,maxPerFamily:4},
+    {id:"balanced-10-1",title:"Balanced 10/1",risk:"Balanced" as const,targetFractional:"10/1",targetDecimal:11,minProb:.15,maxLegs:7,minFamilies:2,maxPerFamily:3},
+    {id:"high-20-1",title:"High Risk 20/1+",risk:"High Risk" as const,targetFractional:"20/1+",targetDecimal:21,minProb:.09,maxLegs:8,minFamilies:2,maxPerFamily:3},
   ]
   const baseMarkets:MarketKey[]=["goal1","assist1","shot1","sot1","foul1","fouled1","card"]
   const familyLines:Record<string,MarketKey[]>={
@@ -883,6 +885,34 @@ function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
     const edge=Math.max(0,Number(leg.edge??0))*.20
     return pct*.55+Math.max(0,rel)*.25+leg.probability*.12+confidence+edge
   }
+  const confidenceReliability=(leg:SlipLeg)=>leg.confidence==="A"?1:leg.confidence==="B"?.96:leg.confidence==="C"?.88:.74
+  const marketReliability=(leg:SlipLeg)=>{
+    const f=family(leg.market)
+    if(f==="foul")return .99
+    if(f==="fouled")return .985
+    if(f==="shot")return .98
+    if(f==="sot")return .95
+    if(f==="card")return .93
+    if(f==="goal")return .92
+    if(f==="assist")return .90
+    return .95
+  }
+  const conservativeJoint=(legs:SlipLeg[],raw:number)=>{
+    if(!legs.length)return 0
+    const counts:Record<string,number>={}
+    let reliability=1
+    for(const leg of legs){
+      const f=family(leg.market)
+      counts[f]=(counts[f]??0)+1
+      reliability*=confidenceReliability(leg)*marketReliability(leg)
+    }
+    // Same-market legs in one match can rise/fall together with game state.
+    // Penalise concentration so we do not overstate independence.
+    let concentrationPenalty=1
+    for(const count of Object.values(counts))if(count>1)concentrationPenalty*=Math.pow(.965,count-1)
+    const legCountPenalty=Math.pow(.985,Math.max(0,legs.length-2))
+    return Math.max(0,Math.min(.99,raw*reliability*concentrationPenalty*legCountPenalty))
+  }
 
   // Choose the action family where each player stands out most versus the other
   // players in that same market. A 22% card can therefore outrank a 40% shot
@@ -908,8 +938,8 @@ function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
     .sort((a,b)=>(b.signal-a.signal)||(legRank(b.leg)-legRank(a.leg)))
 
   return configs.map(config=>{
-    type State={legs:SlipLeg[];product:number;quality:number;prob:number;players:Set<string>;families:Record<string,number>}
-    let states:State[]=[{legs:[],product:1,quality:0,prob:1,players:new Set(),families:{}}]
+    type State={legs:SlipLeg[];product:number;quality:number;prob:number;conservative:number;players:Set<string>;families:Record<string,number>}
+    let states:State[]=[{legs:[],product:1,quality:0,prob:1,conservative:1,players:new Set(),families:{}}]
     for(const option of candidates.filter(x=>x.leg.probability>=config.minProb||x.signal>=.82)){
       const next=[...states]
       for(const state of states){
@@ -922,11 +952,14 @@ function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
         if(!(odd>1))continue
         const product=state.product*odd
         if(product>config.targetDecimal*1.45&&state.legs.length>=1)continue
+        const legs=[...state.legs,option.leg]
+        const rawProb=state.prob*option.leg.probability
         next.push({
-          legs:[...state.legs,option.leg],
+          legs,
           product,
           quality:state.quality+option.signal+legRank(option.leg)*.35,
-          prob:state.prob*option.leg.probability,
+          prob:rawProb,
+          conservative:conservativeJoint(legs,rawProb),
           players:new Set([...state.players,pkey]),
           families:{...state.families,[option.family]:familyCount+1},
         })
@@ -937,8 +970,9 @@ function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
         const diversity=Object.keys(s.families).length
         const avg=s.quality/s.legs.length
         const weak=Math.min(...s.legs.map(l=>l.probability))
-        const under=s.product<config.targetDecimal?.7:0
-        return distance*2+under-avg*.34-weak*.12-diversity*.07+s.legs.length*.025
+        const under=s.product<config.targetDecimal?.8:0
+        const safety=s.conservative
+        return distance*1.15+under-safety*2.1-avg*.18-weak*.08-diversity*(config.risk==="Safe"?.01:.05)+s.legs.length*.015
       }
       states=next.sort((a,b)=>score(a)-score(b)).slice(0,650)
     }
@@ -948,18 +982,20 @@ function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
       Object.keys(s.families).length>=config.minFamilies
     )
     const best=validStates.sort((a,b)=>{
+      // Safety first: among combinations that genuinely reach the target,
+      // maximise the conservative all-hit probability.
+      if(Math.abs(a.conservative-b.conservative)>.002)return b.conservative-a.conservative
       const da=Math.abs(Math.log(a.product)-Math.log(config.targetDecimal))
       const db=Math.abs(Math.log(b.product)-Math.log(config.targetDecimal))
       if(Math.abs(da-db)>.015)return da-db
       const qa=a.quality/Math.max(1,a.legs.length)
       const qb=b.quality/Math.max(1,b.legs.length)
       if(Math.abs(qa-qb)>.01)return qb-qa
-      if(a.legs.length!==b.legs.length)return a.legs.length-b.legs.length
-      return b.prob-a.prob
+      return a.legs.length-b.legs.length
     })[0]
     if(!best)return {
       id:config.id,title:config.title,risk:config.risk,targetFractional:config.targetFractional,targetDecimal:config.targetDecimal,
-      legs:[],referenceProductOdds:null,averageLegProbability:null,minimumLegProbability:null,modelAllHitProbability:null,
+      legs:[],referenceProductOdds:null,averageLegProbability:null,minimumLegProbability:null,modelAllHitProbability:null,conservativeAllHitProbability:null,safetyScore:null,
       exactPriced:false,bookmaker:null,note:"No strong, market-diverse combination actually reaches this odds target yet."
     }
     const books=[...new Set(best.legs.map(l=>l.bookmakerName).filter(Boolean))] as string[]
@@ -971,11 +1007,14 @@ function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
       id:config.id,title:config.title,risk:config.risk,targetFractional:config.targetFractional,targetDecimal:config.targetDecimal,
       legs:best.legs,referenceProductOdds:Math.round(best.product*100)/100,
       averageLegProbability:Math.round(avg*1000)/1000,minimumLegProbability:Math.round(min*1000)/1000,
-      modelAllHitProbability:Math.round(best.prob*10000)/10000,exactPriced,bookmaker:exactPriced?books[0]:null,
+      modelAllHitProbability:Math.round(best.prob*10000)/10000,
+      conservativeAllHitProbability:Math.round(best.conservative*10000)/10000,
+      safetyScore:Math.round(best.conservative*1000)/1000,
+      exactPriced,bookmaker:exactPriced?books[0]:null,
       note:(exactPriced
         ?"All displayed singles have exact prices at "+books[0]+". "
         :"Displayed odds use exact singles where available and model fair odds otherwise. ")
-        +"The builder first chooses each player's strongest market family, then requires market variety ("+families.join(", ")+") while actually reaching "+config.targetFractional+". Same-game bookmaker correlation can still change the final quoted Builder price."
+        +"The builder first chooses each player's strongest market family, then compares every qualifying combination by conservative all-hit probability. Safe is allowed to use several foul/fouled legs if that is safer than forcing a goal/card. Confidence and same-market concentration are penalised before ranking. It still must actually reach "+config.targetFractional+". Same-game bookmaker correlation can still change the final quoted Builder price."
     }
   })
 }
