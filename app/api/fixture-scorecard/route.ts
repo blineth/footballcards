@@ -473,19 +473,22 @@ function calibrationFor(competition: string, market: MarketKey, rawProbability: 
     sample: Number.isFinite(Number(source?.sample)) ? Number(source.sample) : null,
   }
 }
-function confidenceGrade(input: { matches: number; minutes: number; confirmed: boolean; matchup: boolean; h2h: number }) {
-  let score = Math.min(45, input.matches * 2.5)
-  score += Math.min(15, input.minutes / 120)
+function confidenceGrade(input: { matches: number; minutes: number; confirmed: boolean; predicted: boolean; matchup: boolean; h2h: number }) {
+  // Confidence is evidence coverage, not pick probability. The old scale was too
+  // harsh for internationals: a genuine probable starter with 5-6 current caps,
+  // a direct matchup and repeat H2H still landed at D and was removed entirely.
+  let score = Math.min(40, input.matches * 5)
+  score += Math.min(15, input.minutes / 60)
   if (input.confirmed) score += 20
-  if (input.matchup) score += 10
-  if (input.h2h >= 2) score += 5
-  // A confirmed XI removes the biggest availability uncertainty. When historical
-  // coverage is thin, keep the player at C rather than dropping a real starter
-  // completely; the probability itself remains shrunk toward calibrated priors.
-  if (input.confirmed) score = Math.max(score,50)
+  else if (input.predicted) score += 12
+  if (input.matchup) score += 8
+  if (input.h2h >= 2) score += 8
+  else if (input.h2h === 1) score += 3
+  if (input.confirmed) score = Math.max(score,52)
+  if (input.predicted && input.matches >= 4) score = Math.max(score,50)
   if (score >= 82) return "A" as const
-  if (score >= 66) return "B" as const
-  if (score >= 50) return "C" as const
+  if (score >= 65) return "B" as const
+  if (score >= 45) return "C" as const
   return "D" as const
 }
 function thresholdForMarket(market: MarketKey) {
@@ -1545,7 +1548,7 @@ export async function GET(request: Request) {
     const cond1 = conditional(rows, 1)
     const cond2 = conditional(rows, 2)
     const cond3 = conditional(rows, 3)
-    const confidence = confidenceGrade({ matches: rows.length, minutes: sampleMinutes, confirmed, matchup: Boolean(candidate?.likelyMatchup?.name), h2h: h2hRows.length })
+    const confidence = confidenceGrade({ matches: rows.length, minutes: sampleMinutes, confirmed, predicted, matchup: Boolean(candidate?.likelyMatchup?.name), h2h: h2hRows.length })
 
     const markets = {} as Record<MarketKey, ScoreMarket>
     const keys = Object.keys(MARKET_LABELS) as MarketKey[]
