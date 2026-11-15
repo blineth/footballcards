@@ -17,7 +17,7 @@ type Competition="Premier League"|"Championship"|"League One"|"League Two"|"Inte
 type Fixture={
   id:string;competition:Competition;tournament?:string;kickoff:string;status?:string;
   score?:{home:number|null;away:number|null};elapsed?:number|null;
-  home:{name:string};away:{name:string};lineupStatus?:"expected"|"confirmed"|"unavailable"
+  home:{name:string;shortName?:string;crest?:string|null};away:{name:string;shortName?:string;crest?:string|null};lineupStatus?:"expected"|"confirmed"|"unavailable"
 }
 type MarketStatus="available"|"unavailable"|"unknown"
 type SlipLeg={
@@ -399,7 +399,7 @@ type MultiMatchLeg={
   bookmakerOdds:number;bookmaker:"Bet365";confidence:SlipLeg["confidence"]
 }
 type MultiMatchGameBuilder={
-  fixtureId:string;competition:Competition;kickoff:string;home:string;away:string;
+  fixtureId:string;competition:Competition;kickoff:string;home:string;away:string;homeCrest?:string|null;awayCrest?:string|null;
   targetFractional:"3/1";referenceOdds:number;modelAllHitProbability:number;
   conservativeAllHitProbability:number;legs:MultiMatchLeg[]
 }
@@ -409,7 +409,7 @@ type MultiMatchBuild={
   combinedBet365Odds:number|null;modelAllHitProbability:number|null;note:string
 }
 type YellowCardWatchRow={
-  fixtureId:string;competition:Competition;kickoff:string;home:string;away:string;
+  fixtureId:string;competition:Competition;kickoff:string;home:string;away:string;homeCrest?:string|null;awayCrest?:string|null;
   player:string;team:string;probability:number;bookmakerOdds:number;confidence:SlipLeg["confidence"];reason:string;
   probabilityBasis:"model"|"bet365-implied"
 }
@@ -578,7 +578,7 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
     }))
     return {
       fixtureId:scan.fixture.id,competition:scan.fixture.competition,kickoff:scan.fixture.kickoff,
-      home:scan.fixture.home.name,away:scan.fixture.away.name,targetFractional:"3/1",
+      home:scan.fixture.home.name,away:scan.fixture.away.name,homeCrest:scan.fixture.home.crest??null,awayCrest:scan.fixture.away.crest??null,targetFractional:"3/1",
       referenceOdds:Math.round(best.product*100)/100,
       modelAllHitProbability:Math.round(best.raw*10000)/10000,
       conservativeAllHitProbability:Math.round(best.conservative*10000)/10000,
@@ -628,7 +628,7 @@ function buildYellowCardWatchFromScans(scans:FixtureScan[]):YellowCardWatchRow[]
       seen.add(key)
       rows.push({
         fixtureId:scan.fixture.id,competition:scan.fixture.competition,kickoff:scan.fixture.kickoff,
-        home:scan.fixture.home.name,away:scan.fixture.away.name,
+        home:scan.fixture.home.name,away:scan.fixture.away.name,homeCrest:scan.fixture.home.crest??null,awayCrest:scan.fixture.away.crest??null,
         player:player.name,team:player.team,probability:Number(market.probability),
         bookmakerOdds:Number(market.bookmakerOdds),confidence:market.confidence,
         reason:(market.reasons??[]).join(" · ")||"Verified Bet365 player-card market",
@@ -926,14 +926,14 @@ export async function GET(request:Request){
         let scorecard=primaryScorecard
         if(!scorecard?.ok)scorecard=await fallbackScorecard(f)
         const livePlayerProps=buildLivePlayerProps(scorecard,elapsed,liveStatData.players)
-        if(model)return {...model,livePlayerProps,livePlayerStatsSource:liveStatData.source}
+        if(model)return {...model,homeCrest:f.home.crest??model.homeCrest??null,awayCrest:f.away.crest??model.awayCrest??null,livePlayerProps,livePlayerStatsSource:liveStatData.source}
         const home=Number(f.score?.home),away=Number(f.score?.away)
         const hasScore=Number.isFinite(home)&&Number.isFinite(away)
         const bttsSettled=Boolean(hasScore&&home>0&&away>0)
         return {
           id:String(f.id),competition:f.competition,kickoff:f.kickoff,status:f.status??"live",
           inPlay:true,elapsed:f.elapsed??null,score:hasScore?{home,away}:null,
-          home:f.home.name,away:f.away.name,probabilities:null,winnerPick:null,bttsPick:null,bttsSettled,
+          home:f.home.name,away:f.away.name,homeCrest:f.home.crest??null,awayCrest:f.away.crest??null,probabilities:null,winnerPick:null,bttsPick:null,bttsSettled,
           livePlayerProps,livePlayerStatsSource:liveStatData.source,
           reasons:["Live score available. The live win-probability model is not currently available for this competition."],
         }
@@ -947,7 +947,7 @@ export async function GET(request:Request){
         return {
           id:String(f.id),competition:f.competition,kickoff:f.kickoff,status:f.status??"live",
           inPlay:true,elapsed:f.elapsed??null,
-          score:f.score??null,home:f.home.name,away:f.away.name,
+          score:f.score??null,home:f.home.name,away:f.away.name,homeCrest:f.home.crest??null,awayCrest:f.away.crest??null,
           probabilities:null,winnerPick:null,bttsPick:null,
           bttsSettled:Boolean((f.score?.home??0)>0&&(f.score?.away??0)>0),
           livePlayerProps:buildLivePlayerProps(scorecard,elapsed,liveStatData.players),
