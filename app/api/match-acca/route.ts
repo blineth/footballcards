@@ -243,14 +243,18 @@ async function espnCompetitionHistory(slug:string,beforeDate:string){
 function formFromRows(rows:any[],teamId:string,teamName:string){
   const matches=rows.filter(r=>(teamId&&String(r.teamId)===String(teamId))||same(r.team,teamName)).slice(-8)
   if(!matches.length)return null
-  let points=0,wins=0,draws=0,gf=0,ga=0
+  let points=0,wins=0,draws=0,gf=0,ga=0,btts=0,scored=0,conceded=0
   for(const row of matches){
-    gf+=Number(row.gf??0);ga+=Number(row.ga??0)
+    const a=Number(row.gf??0),b=Number(row.ga??0)
+    gf+=a;ga+=b
+    if(a>0)scored++
+    if(b>0)conceded++
+    if(a>0&&b>0)btts++
     if(row.result==="W"){points+=3;wins++}
     else if(row.result==="D"){points+=1;draws++}
   }
   const n=matches.length
-  return {matches:n,ppg:points/n,winRate:wins/n,drawRate:draws/n,gfPerGame:gf/n,gaPerGame:ga/n,goalDiffPerGame:(gf-ga)/n,recent:matches.map(r=>r.result).join("")}
+  return {matches:n,ppg:points/n,winRate:wins/n,drawRate:draws/n,gfPerGame:gf/n,gaPerGame:ga/n,goalDiffPerGame:(gf-ga)/n,bttsRate:btts/n,scoreRate:scored/n,concedeRate:conceded/n,recent:matches.map(r=>r.result).join("")}
 }
 function h2hFromRows(rows:any[],homeId:string,homeName:string,awayId:string,awayName:string){
   const matches=rows.filter(r=>{
@@ -264,6 +268,7 @@ function h2hFromRows(rows:any[],homeId:string,homeName:string,awayId:string,away
     homeWinRate:matches.filter(r=>r.result==="W").length/matches.length,
     drawRate:matches.filter(r=>r.result==="D").length/matches.length,
     awayWinRate:matches.filter(r=>r.result==="L").length/matches.length,
+    bttsRate:matches.filter(r=>Number(r.gf)>0&&Number(r.ga)>0).length/matches.length,
   }
 }
 async function espnInternationalPrediction(f:any,date:string){
@@ -288,8 +293,11 @@ async function espnInternationalPrediction(f:any,date:string){
     }
   }
   const sum=value.home+value.draw+value.away
+  const scoring=((homeForm.scoreRate*awayForm.concedeRate)+(awayForm.scoreRate*homeForm.concedeRate))/2
+  let bttsYes=homeForm.bttsRate*.30+awayForm.bttsRate*.30+scoring*.30+(hh?.bttsRate??.5)*.10
+  bttsYes=clamp(bttsYes,.12,.82)
   return {
-    home:value.home/sum,draw:value.draw/sum,away:value.away/sum,
+    home:value.home/sum,draw:value.draw/sum,away:value.away/sum,bttsYes,
     source:"ESPN recent "+String(f?.tournament??"international")+" results"+(hh?.matches?" + H2H":""),
     homeForm,awayForm,h2h:hh,
   }
@@ -493,7 +501,8 @@ export async function GET(request:Request){
         const calibratedBttsYes=useCalibration?calibrateMarket("bttsYes",rawBtts):rawBtts
         const calibratedBttsNo=useCalibration?calibrateMarket("bttsNo",1-rawBtts):1-rawBtts
         const bttsScale=calibratedBttsYes+calibratedBttsNo
-        const bttsYes=bttsScale>0?calibratedBttsYes/bttsScale:rawBtts
+        let bttsYes=bttsScale>0?calibratedBttsYes/bttsScale:rawBtts
+        if(intlFallback?.bttsYes!=null)bttsYes=clamp(Number(intlFallback.bttsYes),.08,.92)
         const bttsNo=1-bttsYes
         const status=String(f.status??"scheduled").toLowerCase()
         if(["postponed","cancelled","canceled","abandoned","suspended"].includes(status))continue
@@ -551,11 +560,11 @@ export async function GET(request:Request){
         prediction:p,...x,
         grade:grade(x.probability,Math.max(.45,p?.competition==="International"?.68:(p?.inPlayModel?.reliability??.55))),
         reasons:p.reasons,
-        score:(x.probability-.333)/.34,
+        score:x.probability,
       }))
       const bttsCandidates=p.bttsSettled?[]:[
-        {prediction:p,market:"bttsYes",label:"BTTS Yes",probability:p.probabilities.bttsYes,grade:grade(.5+Math.abs(p.probabilities.bttsYes-.5),.58),reasons:p.reasons,score:(p.probabilities.bttsYes-.5)/.28},
-        {prediction:p,market:"bttsNo",label:"BTTS No",probability:p.probabilities.bttsNo,grade:grade(.5+Math.abs(p.probabilities.bttsNo-.5),.58),reasons:p.reasons,score:(p.probabilities.bttsNo-.5)/.28},
+        {prediction:p,market:"bttsYes",label:"BTTS Yes",probability:p.probabilities.bttsYes,grade:grade(.5+Math.abs(p.probabilities.bttsYes-.5),.58),reasons:p.reasons,score:p.probabilities.bttsYes},
+        {prediction:p,market:"bttsNo",label:"BTTS No",probability:p.probabilities.bttsNo,grade:grade(.5+Math.abs(p.probabilities.bttsNo-.5),.58),reasons:p.reasons,score:p.probabilities.bttsNo},
       ]
       return [...resultCandidates,...bttsCandidates]
         .sort((a:any,b:any)=>b.score-a.score||b.probability-a.probability)[0]??null
