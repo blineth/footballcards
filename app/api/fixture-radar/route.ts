@@ -91,6 +91,10 @@ async function mergeInternationalProfiles(data:any,home:string,away:string){
     const key=norm(String(candidate?.name??candidate?.dbName??""))+"|"+norm(String(candidate?.team??""))
     if(key)existing.set(key,candidate)
   }
+  // Once ESPN has published both starting XIs, that 22-player set is immutable.
+  // Profile enrichment may add history to those starters, but must never append
+  // squad players or substitutes back into the confirmed pool.
+  const confirmedKeys=data?.lineupsConfirmed===true?new Set(existing.keys()):null
 
   const merged:any[]=[]
   const used=new Set<string>()
@@ -99,6 +103,7 @@ async function mergeInternationalProfiles(data:any,home:string,away:string){
     const team=String(profile?.nationalTeam??"").trim()
     if(!name||!team)continue
     const key=norm(name)+"|"+norm(team)
+    if(confirmedKeys&&!confirmedKeys.has(key))continue
     const current=profile?.domesticCurrent??null
     const intl=profile?.international??{}
     const intlMatches=Number(intl?.matches??0)
