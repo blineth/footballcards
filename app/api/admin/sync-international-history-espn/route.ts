@@ -112,7 +112,7 @@ export async function GET(request:Request){
   const config=DATASETS[dataset]
   if(!config)return NextResponse.json({ok:false,error:"Unknown dataset",availableDatasets:Object.keys(DATASETS)},{status:400})
   const offset=Math.max(0,Number(url.searchParams.get("offset")??"0")||0)
-  const limit=Math.max(1,Math.min(15,Number(url.searchParams.get("limit")??"10")||10))
+  const limit=Math.max(1,Math.min(40,Number(url.searchParams.get("limit")??"20")||20))
 
   try{
     const all=await completedEvents(config)
