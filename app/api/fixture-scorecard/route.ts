@@ -1260,15 +1260,13 @@ async function buildVerifiedBet365SnapshotFallback(input:{request:Request;date:s
   const usable=freshness==="STALE"?[]:selections.filter(s=>s.bookmaker==="Bet365")
   let fallbackPlayers:Array<any>=Array.isArray(fallback?.players)?fallback.players:[]
   const allFallbackNames=fallbackPlayers.map(p=>String(p?.name??"")).filter(Boolean)
-  if(fallback?.lineupsConfirmed!==true){
-    fallbackPlayers=fallbackPlayers.filter(player=>
-      usable.some(selection=>
-        ["goal","assist","card","foul","fouled","shot","sot"].includes(String(selection.kind??""))&&
-        selection.odd!=null&&Number(selection.odd)>1&&
-        playerInLabel(selection,String(player?.name??""),allFallbackNames)
-      )
+  fallbackPlayers=fallbackPlayers.filter(player=>
+    usable.some(selection=>
+      ["goal","assist","card","foul","fouled","shot","sot"].includes(String(selection.kind??""))&&
+      selection.odd!=null&&Number(selection.odd)>1&&
+      playerInLabel(selection,String(player?.name??""),allFallbackNames)
     )
-  }
+  )
   const names=fallbackPlayers.map(p=>String(p?.name??"")).filter(Boolean)
   for(const player of fallbackPlayers){
     for(const [marketKey,marketRow] of Object.entries(player?.markets??{}) as Array<[MarketKey,any]>){
@@ -1306,8 +1304,8 @@ async function buildVerifiedBet365SnapshotFallback(input:{request:Request;date:s
     bookmakerAvailability,
     eligibleBooks,
     priceAvailable:Boolean(odds?.priceAvailable)&&freshness!=="STALE",
-    playerEligibilitySource:fallback?.lineupsConfirmed===true?"official-starting-xi":"bet365-player-board",
-    bet365ListedPlayerCount:fallback?.lineupsConfirmed===true?usable.length:fallbackPlayers.length,
+    playerEligibilitySource:fallback?.lineupsConfirmed===true?"official-starting-xi-and-bet365-player-board":"bet365-player-board",
+    bet365ListedPlayerCount:fallbackPlayers.length,
     players:fallbackPlayers,
     playerCount:fallbackPlayers.length,
     riskBuilders:buildRiskBuilders(fallbackPlayers as ScorePlayer[]),
@@ -1412,13 +1410,11 @@ export async function GET(request: Request) {
     )
   }
 
-  // Before official lineups, Bet365's published player board is the eligibility
-  // gate. This avoids recommending a model-predicted starter who the bookmaker
-  // is not actually offering. Once XIs are confirmed, the official starters
-  // take precedence and Bet365 is used to verify/prices their available props.
-  if(!confirmedLineup){
-    candidates=candidates.filter(isBet365ListedCandidate)
-  }
+  // Bet365's published player board is always the betting-player eligibility
+  // gate. Before lineups this removes speculative squad names. Once XIs are
+  // confirmed, radar has already reduced the pool to official starters, so the
+  // effective rule becomes: official starting XI ∩ Bet365 offered players.
+  candidates=candidates.filter(isBet365ListedCandidate)
 
   const names = Array.from(new Set(candidates.map(c => String(c.dbName ?? c.name ?? "")).filter(Boolean))) as string[]
 
@@ -1991,8 +1987,8 @@ export async function GET(request: Request) {
     home,
     away,
     lineupsConfirmed: confirmed,
-    playerEligibilitySource: confirmed ? "official-starting-xi" : "bet365-player-board",
-    bet365ListedPlayerCount: !confirmed ? candidates.length : bet365PlayerSelections.length,
+    playerEligibilitySource: confirmed ? "official-starting-xi-and-bet365-player-board" : "bet365-player-board",
+    bet365ListedPlayerCount: candidates.length,
     lineupMode,
     lineupSource: radar?.lineupSource ?? (confirmed ? "Official starting XI" : predicted ? "Probable XI" : "Current squad"),
     predictedLineups: radar?.predictedLineups ?? null,
