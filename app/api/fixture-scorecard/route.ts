@@ -1098,17 +1098,23 @@ export async function GET(request: Request) {
   const away = url.searchParams.get("away") ?? ""
   const competition = url.searchParams.get("competition") ?? "Premier League"
   if (!date || !home || !away) return NextResponse.json({ ok: false, error: "Invalid fixture parameters" }, { status: 400 })
-  if (!isDatabaseConfigured) return NextResponse.json({ ok: false, error: "Database not connected" }, { status: 503 })
+  if (!isDatabaseConfigured) {
+    try {
+      return NextResponse.json(await buildVerifiedBet365SnapshotFallback({request,date,home,away,competition}))
+    } catch {
+      return NextResponse.json({ ok: false, error: "Database not connected and snapshot fallback unavailable" }, { status: 503 })
+    }
+  }
 
   try {
     await ensureResearchSchema()
   } catch (error) {
     try {
-      return NextResponse.json(await buildSnapshotScorecard({date,home,away,competition:competition as any}))
+      return NextResponse.json(await buildVerifiedBet365SnapshotFallback({request,date,home,away,competition}))
     } catch {
       return NextResponse.json({
         ok:false,
-        error:"Live research database is temporarily unavailable and the snapshot fallback could not be loaded.",
+        error:"Live research database is temporarily unavailable and the Bet365-enriched snapshot fallback could not be loaded.",
         fallbackAvailable:false,
       },{status:503})
     }
