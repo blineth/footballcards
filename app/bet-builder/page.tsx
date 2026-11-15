@@ -226,32 +226,80 @@ function selectionsFrom(data:Scorecard|null){
 
 function clientRiskBuilders(rows:Selection[]):RiskBuilder[]{
   const configs=[
-    {id:"safe-3-1",title:"Safe 3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4,min:.62,max:5},
-    {id:"balanced-10-1",title:"Balanced 10/1",risk:"Balanced" as const,targetFractional:"10/1",targetDecimal:11,min:.48,max:6},
-    {id:"high-20-1",title:"High Risk 20/1+",risk:"High Risk" as const,targetFractional:"20/1+",targetDecimal:21,min:.14,max:9},
+    {id:"safe-3-1",title:"Safe 3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4,min:.42,max:5,minFamilies:2,maxPerFamily:2},
+    {id:"balanced-10-1",title:"Balanced 10/1",risk:"Balanced" as const,targetFractional:"10/1",targetDecimal:11,min:.16,max:6,minFamilies:3,maxPerFamily:2},
+    {id:"high-20-1",title:"High Risk 20/1+",risk:"High Risk" as const,targetFractional:"20/1+",targetDecimal:21,min:.10,max:7,minFamilies:3,maxPerFamily:2},
   ]
+  const family=(market:string)=>market.startsWith("goal")?"goal":market.startsWith("assist")?"assist":market.startsWith("fouled")?"fouled":market.startsWith("foul")?"foul":market.startsWith("sot")?"sot":market.startsWith("shot")?"shot":"card"
+  const baseMarket=(market:string)=>market==="goal1"||market==="assist1"||market==="foul1"||market==="fouled1"||market==="card"||market==="shot1"||market==="sot1"
+
+  const preferred=new Map<string,{family:string;score:number}>()
+  const playerNames=[...new Set(rows.map(r=>normPlayer(r.player)))]
+  for(const player of playerNames){
+    const options=rows.filter(r=>normPlayer(r.player)===player&&baseMarket(r.market)&&r.confidence!=="D")
+      .map(r=>{
+        const t=trafficFor(r,rows)
+        const trafficScore=t==="high"?1:t==="average"?.58:.18
+        const rankScore=trafficScore+r.probability*.22+Math.max(0,r.edge??0)*.15
+        return {family:family(r.market),score:rankScore}
+      }).sort((a,b)=>b.score-a.score)
+    if(options[0])preferred.set(player,options[0])
+  }
+
+  const candidateRows=rows
+    .filter(r=>r.confidence!=="D")
+    .filter(r=>{
+      const pref=preferred.get(normPlayer(r.player))
+      return Boolean(pref&&family(r.market)===pref.family)
+    })
+    .map(r=>({row:r,family:family(r.market),signal:preferred.get(normPlayer(r.player))?.score??0}))
+    .sort((a,b)=>(b.signal-a.signal)||(b.row.probability-a.row.probability))
+
   return configs.map(cfg=>{
-    type State={legs:Selection[];product:number;prob:number;players:Set<string>;quality:number}
-    const pool=[...rows].filter(r=>r.probability>=cfg.min&&r.confidence!=="D").sort((a,b)=>b.probability-a.probability).slice(0,42)
-    let states:State[]=[{legs:[],product:1,prob:1,players:new Set(),quality:0}]
-    for(const leg of pool){
+    type State={legs:Selection[];product:number;prob:number;players:Set<string>;quality:number;families:Record<string,number>}
+    let states:State[]=[{legs:[],product:1,prob:1,players:new Set(),quality:0,families:{}}]
+    for(const option of candidateRows.filter(x=>x.row.probability>=cfg.min||x.signal>=.88)){
+      const leg=option.row
       const next=[...states]
       for(const state of states){
-        if(state.legs.length>=cfg.max||state.players.has(leg.player.toLowerCase()))continue
+        const pkey=normPlayer(leg.player)
+        if(state.legs.length>=cfg.max||state.players.has(pkey))continue
+        const count=state.families[option.family]??0
+        if(count>=cfg.maxPerFamily)continue
         const odd=referenceOdd(leg);if(!(odd>1))continue
-        const product=state.product*odd;if(product>cfg.targetDecimal*1.8&&state.legs.length>=1)continue
-        next.push({legs:[...state.legs,leg],product,prob:state.prob*leg.probability,players:new Set([...state.players,leg.player.toLowerCase()]),quality:state.quality+leg.probability+Math.max(0,leg.edge??0)*.2})
+        const product=state.product*odd
+        if(product>cfg.targetDecimal*1.45&&state.legs.length>=1)continue
+        next.push({
+          legs:[...state.legs,leg],product,prob:state.prob*leg.probability,
+          players:new Set([...state.players,pkey]),
+          quality:state.quality+option.signal+leg.probability*.25,
+          families:{...state.families,[option.family]:count+1},
+        })
       }
       states=next.sort((a,b)=>{
-        const s=(x:State)=>Math.abs(Math.log(Math.max(1.01,x.product))-Math.log(cfg.targetDecimal))-(x.quality/Math.max(1,x.legs.length))*.2+(x.product<cfg.targetDecimal*.8?.5:0)
-        return s(a)-s(b)
-      }).slice(0,220)
+        const score=(x:State)=>{
+          if(!x.legs.length)return 999
+          const gap=Math.abs(Math.log(Math.max(1.01,x.product))-Math.log(cfg.targetDecimal))
+          const diversity=Object.keys(x.families).length
+          const avg=x.quality/Math.max(1,x.legs.length)
+          return gap*2+(x.product<cfg.targetDecimal?.7:0)-avg*.28-diversity*.07+x.legs.length*.025
+        }
+        return score(a)-score(b)
+      }).slice(0,650)
     }
-    const best=states.filter(s=>s.legs.length>=2&&s.product>=cfg.targetDecimal)[0]
-    if(!best)return {id:cfg.id,title:cfg.title,risk:cfg.risk,targetFractional:cfg.targetFractional,targetDecimal:cfg.targetDecimal,legs:[],referenceProductOdds:null,averageLegProbability:null,minimumLegProbability:null,modelAllHitProbability:null,exactPriced:false,bookmaker:null,note:"No qualifying combination actually reaches this target yet. A lower-priced slip will not be labelled as "+cfg.targetFractional+"."}
+    const best=states.filter(s=>s.legs.length>=2&&s.product>=cfg.targetDecimal&&Object.keys(s.families).length>=cfg.minFamilies)
+      .sort((a,b)=>{
+        const da=Math.abs(Math.log(a.product)-Math.log(cfg.targetDecimal))
+        const db=Math.abs(Math.log(b.product)-Math.log(cfg.targetDecimal))
+        if(Math.abs(da-db)>.015)return da-db
+        if(a.legs.length!==b.legs.length)return a.legs.length-b.legs.length
+        return b.prob-a.prob
+      })[0]
+    if(!best)return {id:cfg.id,title:cfg.title,risk:cfg.risk,targetFractional:cfg.targetFractional,targetDecimal:cfg.targetDecimal,legs:[],referenceProductOdds:null,averageLegProbability:null,minimumLegProbability:null,modelAllHitProbability:null,exactPriced:false,bookmaker:null,note:"No strong, market-diverse combination actually reaches this target yet."}
     const books=[...new Set(best.legs.map(x=>x.bookmakerName).filter(Boolean))] as string[]
     const exactPriced=best.legs.every(x=>x.bookmakerOdds!=null)&&books.length===1
-    return {id:cfg.id,title:cfg.title,risk:cfg.risk,targetFractional:cfg.targetFractional,targetDecimal:cfg.targetDecimal,legs:best.legs,referenceProductOdds:Math.round(best.product*100)/100,averageLegProbability:best.legs.reduce((s,x)=>s+x.probability,0)/best.legs.length,minimumLegProbability:Math.min(...best.legs.map(x=>x.probability)),modelAllHitProbability:best.prob,exactPriced,bookmaker:exactPriced?books[0]:null,note:exactPriced?"Exact singles are from one bookmaker; its final Builder price can still change for correlation.":"Uses exact single prices where available and model fair odds otherwise; final bookmaker Builder odds can differ."}
+    const families=[...new Set(best.legs.map(x=>family(x.market)))]
+    return {id:cfg.id,title:cfg.title,risk:cfg.risk,targetFractional:cfg.targetFractional,targetDecimal:cfg.targetDecimal,legs:best.legs,referenceProductOdds:Math.round(best.product*100)/100,averageLegProbability:best.legs.reduce((s,x)=>s+x.probability,0)/best.legs.length,minimumLegProbability:Math.min(...best.legs.map(x=>x.probability)),modelAllHitProbability:best.prob,exactPriced,bookmaker:exactPriced?books[0]:null,note:"Built from each player's strongest market family with market variety ("+families.join(", ")+"). It only shows this target when predicted odds actually reach it; final bookmaker Builder pricing can differ for correlation."}
   })
 }
 
