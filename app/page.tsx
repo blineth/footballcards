@@ -82,6 +82,7 @@ function displayFixture(raw:LiveFixture):Fixture{
 function matchUrl(f:Fixture){
   return "/bet-builder?"+new URLSearchParams({
     id:f.id,date:f.dateIso,kickoff:f.kickoff,competition:f.competition,home:f.home,away:f.away,
+    homeCrest:f.homeCrest??"",awayCrest:f.awayCrest??"",
   }).toString()
 }
 function isLive(f:Fixture){
