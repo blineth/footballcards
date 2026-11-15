@@ -1125,6 +1125,7 @@ function buildLivePlayerProps(scorecard:Scorecard|null,elapsed:number,liveStats:
         currentCount,liveStatsAvailable:Boolean(stat),
         currentFouls:stat?.foulsCommitted??null,currentFouled:stat?.foulsDrawn??null,
         currentShots:stat?.shots??null,currentSot:stat?.shotsOnTarget??null,
+        currentGoals:stat?.goals??null,currentAssists:stat?.assists??null,
         currentYellowCards:stat?.yellowCards??null,currentRedCards:stat?.redCards??null,
         reason:"Remaining-match estimate from the active-player model and current match events. "+pressureNote,
       })
