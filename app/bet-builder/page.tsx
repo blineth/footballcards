@@ -820,7 +820,7 @@ export default function BetBuilderPage(){
     const controller=new AbortController()
     const timeout=window.setTimeout(()=>controller.abort(),force?12_000:8_000)
     try{
-      const r=await fetch(scorecardUrl(f,force),{cache:"no-store",signal:controller.signal})
+      const r=await fetch(scorecardUrl(f,force),{cache:force?"no-store":"default",signal:controller.signal})
       const next=await r.json().catch(()=>({ok:false,error:"Unable to load match model."})) as Scorecard
       if(next?.ok){
         setData(next)
