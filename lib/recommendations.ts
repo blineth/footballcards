@@ -42,6 +42,8 @@ async function buildCandidate(
   const foulsPer90 = baseline ? toNum(baseline.foulsPer90) : null
   const yellows = baseline ? toNum(baseline.yellowCards) : null
   const cardsPer90 = baseline ? toNum(baseline.cardsPer90) : null
+  const appearances = baseline ? toNum(baseline.appearances) : null
+  const seasonCardRate = yellows != null && appearances != null && appearances > 0 ? yellows / appearances : null
 
   const h2hGames = h2h.length
   const h2hFoulsTotal = h2h.reduce((acc, m) => acc + (m.foulsCommitted ?? 0), 0)
@@ -52,24 +54,36 @@ async function buildCandidate(
 
   const evidence = (extra: EvidenceItem[]): EvidenceItem[] => extra
 
-  // Scoring. Weighted, and only from data we actually have. If we have no
-  // historical data at all, confidence stays at 0 and the UI flags it.
+  // Card radar is an evidence ranking, not a booking probability. Repeat
+  // opponent history and actual booking frequency matter more than raw yellow
+  // totals, while zero bookings across repeated H2Hs is a genuine negative.
   let score = 0
   let weightUsed = 0
   const add = (value: number | null, normalizeMax: number, weight: number) => {
     if (value === null) return
-    const norm = Math.max(0, Math.min(1, value / normalizeMax))
-    score += norm * weight
+    const normalized = Math.max(0, Math.min(1, value / normalizeMax))
+    score += normalized * weight
     weightUsed += weight
   }
-  add(yellows, 12, 22)
-  add(foulsPer90, 4, 24)
-  add(h2hFoulsPerGame, 4, 16)
-  add(h2hBookings, Math.max(1, h2hGames), 12)
-  add(refYellows, 5, 14)
-  add(cardsPer90, 0.6, 12)
+  add(seasonCardRate, 0.35, 30)
+  add(cardsPer90, 0.35, 18)
+  add(foulsPer90, 2.6, 18)
+  add(h2hFoulsPerGame, 3.0, 8)
+  if (h2hBookings != null && h2hGames > 0) {
+    const reliability = Math.min(1, h2hGames / 4)
+    const bookingRate = h2hBookings / h2hGames
+    score += Math.min(1, bookingRate / 0.5) * 22 * reliability
+    weightUsed += 22 * reliability
+    if (h2hGames >= 2 && h2hBookings === 0) score -= 7 * reliability
+  }
+  if (refBookedPlayer === true) {
+    score += 4
+    weightUsed += 4
+  } else if (refYellows != null) {
+    add(refYellows, 5.0, 4)
+  }
 
-  const researchConfidence = weightUsed > 0 ? Math.round((score / weightUsed) * 100) : 0
+  const researchConfidence = weightUsed > 0 ? Math.max(0, Math.min(100, Math.round((score / weightUsed) * 100))) : 0
   const hasHistoricalData = weightUsed > 0
 
   const cardEvidence: EvidenceItem[] = [
@@ -121,7 +135,9 @@ async function buildCandidate(
 
   // Explanation from real signals only.
   const reasons: string[] = []
-  if (yellows !== null && yellows >= 5) reasons.push(`${yellows} yellow cards on record`)
+  if (seasonCardRate !== null && seasonCardRate >= 0.22) reasons.push(`${Math.round(seasonCardRate*100)}% season booking rate`)
+  if (h2hGames >= 2 && Number(h2hBookings ?? 0) > 0) reasons.push(`booked in ${h2hBookings}/${h2hGames} against ${opponent}`)
+  if (h2hGames >= 2 && Number(h2hBookings ?? 0) === 0) reasons.push(`no bookings in ${h2hGames} H2Hs against ${opponent}`)
   if (foulsPer90 !== null && foulsPer90 >= 2) reasons.push(`a high ${foulsPer90.toFixed(2)} fouls per 90`)
   if (h2hFoulsPerGame !== null && h2hFoulsPerGame >= 1.5)
     reasons.push(`${h2hFoulsPerGame.toFixed(1)} fouls per game against ${opponent}`)
