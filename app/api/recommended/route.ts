@@ -582,7 +582,7 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
     combinedBet365Odds:combined==null?null:Math.round(combined*100)/100,
     modelAllHitProbability:allHit==null?null:Math.round(allHit*10000)/10000,
     note:matchBuilders.length
-      ?"Each included match uses the safest verified Bet365 route that reaches roughly 3/1 using the same probability-first player-prop logic as the individual Match Builder. The overall number is the product of verified Bet365 leg prices; Bet365 can reprice correlated same-game selections in the final Bet Builder Acca."
+      ?"Each included match uses the safest verified Bet365 route that reaches roughly 3/1 using the same probability-first player-prop logic as the individual Match Builder. Predicted-XI players are allowed before confirmation but carry a heavier reliability penalty; the official XI replaces them automatically. The overall number is the product of verified Bet365 leg prices; Bet365 can reprice correlated same-game selections in the final Bet Builder Acca."
       :"No two fully-covered matches currently have a verified Safe 3/1 player-prop route.",
   }
 }
