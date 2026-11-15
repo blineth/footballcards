@@ -7,7 +7,9 @@ type Competition="Premier League"|"Championship"|"League One"|"League Two"|"Inte
 type LivePlayerStat={
   player:string;team:string;minutes:number|null;foulsCommitted:number;foulsDrawn:number;shots:number;shotsOnTarget:number;
   goals:number;assists:number;yellowCards:number;redCards:number;starter:boolean;subbedOn:boolean;subbedOff:boolean;
-  tackles:number;interceptions:number;blocks:number;duelsTotal:number;duelsWon:number;defensiveInterventions:number
+  tackles:number;interceptions:number;blocks:number;duelsTotal:number;duelsWon:number;defensiveInterventions:number;
+  recentFouls10:number;recentFouls15:number;recentFouled10:number;disciplineHeat:number;
+  aggressionScore:number;aggressionSignals:string[];lastAggressionMinute:number|null
 }
 type LivePayload={
   ok:boolean;source:string|null;status:"scheduled"|"live"|"halftime"|"finished"|"unknown";elapsed:number;
@@ -25,6 +27,8 @@ const API_LEAGUES:Record<string,string>={
   "Premier League":"39",Championship:"40","League One":"41","League Two":"42",
 }
 const cache=new Map<string,{expires:number,payload:LivePayload}>()
+type LiveHistorySnapshot={capturedAt:number;elapsed:number;players:Record<string,{fc:number;fd:number}>}
+const liveHistory=new Map<string,LiveHistorySnapshot[]>()
 
 function norm(v:string|null|undefined){
   return String(v??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase()
@@ -33,6 +37,97 @@ function norm(v:string|null|undefined){
 function sameTeam(a:string,b:string){
   const x=norm(a),y=norm(b)
   return Boolean(x&&y&&(x===y||x.includes(y)||y.includes(x)))
+}
+function minuteFromEvent(ev:any){
+  const raw=String(ev?.clock?.displayValue??ev?.time?.displayValue??ev?.time??ev?.minute??ev?.period?.displayValue??"")
+  const m=raw.match(/(\d{1,3})/)
+  return m?Math.max(0,Math.min(130,Number(m[1]))):null
+}
+function eventText(ev:any){
+  return String(ev?.text??ev?.shortText??ev?.commentary??ev?.description??ev?.detail??"").trim()
+}
+function disciplineSignal(text:string){
+  const t=text.toLowerCase()
+  const patterns:Array<{re:RegExp;score:number;label:string}>=[
+    {re:/violent conduct|serious foul play|two[- ]footed|studs? up|stamp(?:s|ed|ing)?|headbutt|elbow(?:s|ed|ing)?|kick(?:s|ed|ing)? out/,score:.62,label:"violent / serious challenge"},
+    {re:/dangerous challenge|reckless challenge|reckless foul|bad foul|late challenge|high challenge|heavy challenge/,score:.46,label:"dangerous / reckless challenge"},
+    {re:/retaliat(?:e|es|ed|ion)|confrontation|scuffle|altercation|squared up|clash(?:es|ed)?/,score:.40,label:"confrontation / retaliation"},
+    {re:/push(?:es|ed|ing)?|shove(?:s|d|ing)?|grab(?:s|bed|bing)?/,score:.30,label:"push / physical confrontation"},
+    {re:/dissent|argu(?:e|es|ed|ing) with (?:the )?referee|protest(?:s|ed|ing)?|abusive language|unsporting/,score:.34,label:"dissent / unsporting behaviour"},
+    {re:/persistent foul|persistent infringement|tactical foul|professional foul/,score:.27,label:"persistent / tactical foul"},
+  ]
+  const hit=patterns.find(p=>p.re.test(t))
+  return hit??null
+}
+function commentaryArrays(summary:any){
+  const candidates=[
+    summary?.commentary,summary?.plays,summary?.details,summary?.keyEvents,
+    summary?.commentary?.items,summary?.commentary?.plays,summary?.plays?.items,
+  ]
+  return candidates.filter(Array.isArray).flat()
+}
+function applyCommentaryDiscipline(summary:any,map:Map<string,LivePlayerStat>,elapsed:number){
+  const seen=new Set<string>()
+  for(const ev of commentaryArrays(summary)){
+    const raw=eventText(ev)
+    if(!raw)continue
+    const sig=disciplineSignal(raw)
+    if(!sig)continue
+    const minute=minuteFromEvent(ev)
+    const key=(minute??-1)+"|"+raw.toLowerCase()
+    if(seen.has(key))continue
+    seen.add(key)
+    const names=new Set<string>()
+    for(const p of ev?.participants??[]){
+      const name=String(p?.athlete?.displayName??p?.athlete?.fullName??p?.name??"").trim()
+      if(name)names.add(norm(name))
+    }
+    if(!names.size){
+      const lower=norm(raw)
+      for(const row of map.values())if(lower.includes(norm(row.player)))names.add(norm(row.player))
+    }
+    const age=minute==null?0:Math.max(0,elapsed-minute)
+    const recency=minute==null?.75:age<=5?1:age<=10?.88:age<=20?.62:.35
+    for(const name of names){
+      const row=map.get(name);if(!row)continue
+      row.aggressionScore=Math.min(1,row.aggressionScore+sig.score*recency)
+      if(!row.aggressionSignals.includes(sig.label))row.aggressionSignals.push(sig.label)
+      row.lastAggressionMinute=minute??row.lastAggressionMinute
+    }
+  }
+}
+function applyRollingDiscipline(key:string,payload:LivePayload){
+  const now=Date.now()
+  const history=(liveHistory.get(key)??[]).filter(s=>now-s.capturedAt<=35*60*1000)
+  const findPast=(minutes:number)=>{
+    const target=Math.max(0,payload.elapsed-minutes)
+    let best:LiveHistorySnapshot|null=null
+    for(const snap of history){
+      if(snap.elapsed<=target&&(!best||snap.elapsed>best.elapsed))best=snap
+    }
+    return best
+  }
+  const past10=findPast(10),past15=findPast(15)
+  for(const row of payload.players){
+    const n=norm(row.player)
+    const p10=past10?.players[n],p15=past15?.players[n]
+    row.recentFouls10=Math.max(0,row.foulsCommitted-Number(p10?.fc??row.foulsCommitted))
+    row.recentFouls15=Math.max(0,row.foulsCommitted-Number(p15?.fc??row.foulsCommitted))
+    row.recentFouled10=Math.max(0,row.foulsDrawn-Number(p10?.fd??row.foulsDrawn))
+    const mins=Math.max(12,Number(row.minutes??payload.elapsed??12))
+    const foulRate=row.foulsCommitted*90/mins
+    const totalLoad=Math.min(.52,row.foulsCommitted*.105)
+    const burst=Math.min(.36,row.recentFouls10*.18+Math.max(0,row.recentFouls15-row.recentFouls10)*.07)
+    const rate=Math.min(.18,Math.max(0,foulRate-2.4)*.035)
+    const confrontation=Math.min(.62,Number(row.aggressionScore??0))
+    row.disciplineHeat=Math.max(0,Math.min(1,totalLoad+burst+rate+confrontation))
+  }
+  const snap:LiveHistorySnapshot={
+    capturedAt:now,elapsed:payload.elapsed,
+    players:Object.fromEntries(payload.players.map(p=>[norm(p.player),{fc:p.foulsCommitted,fd:p.foulsDrawn}])),
+  }
+  history.push(snap)
+  liveHistory.set(key,history.slice(-45))
 }
 function espnStat(row:any,name:string){
   const s=(row?.stats??[]).find((x:any)=>String(x?.name??"")===name)
@@ -94,6 +189,8 @@ async function espnLive(input:{date:string;home:string;away:string;competition:C
             duelsTotal:Math.max(espnStat(row,"duels"),espnStat(row,"totalDuels")),
             duelsWon:Math.max(espnStat(row,"duelsWon"),espnStat(row,"wonDuels")),
             defensiveInterventions:espnStat(row,"defensiveInterventions"),
+            recentFouls10:0,recentFouls15:0,recentFouled10:0,disciplineHeat:0,
+            aggressionScore:0,aggressionSignals:[],lastAggressionMinute:null,
             subbedOff:Boolean(row?.subbedOut),
           })
         }
@@ -120,6 +217,7 @@ async function espnLive(input:{date:string;home:string;away:string;competition:C
         }
       }
 
+      applyCommentaryDiscipline(summary,map,elapsedFrom(event))
       for(const ev of summary?.keyEvents??[]){
         const type=String(ev?.type?.type??ev?.type?.text??"").toLowerCase()
         const rawText=String(ev?.text??ev?.shortText??"")
@@ -213,6 +311,13 @@ function mergeLivePlayers(primary:LivePayload,secondary:LivePayload|null){
       redCards:Math.max(Number(player.redCards??0),Number(other.redCards??0)),
       subbedOn:Boolean(player.subbedOn||other.subbedOn),
       subbedOff:Boolean(player.subbedOff||other.subbedOff),
+      recentFouls10:Math.max(Number(player.recentFouls10??0),Number(other.recentFouls10??0)),
+      recentFouls15:Math.max(Number(player.recentFouls15??0),Number(other.recentFouls15??0)),
+      recentFouled10:Math.max(Number(player.recentFouled10??0),Number(other.recentFouled10??0)),
+      disciplineHeat:Math.max(Number(player.disciplineHeat??0),Number(other.disciplineHeat??0)),
+      aggressionScore:Math.max(Number(player.aggressionScore??0),Number(other.aggressionScore??0)),
+      aggressionSignals:[...new Set([...(player.aggressionSignals??[]),...(other.aggressionSignals??[])])].slice(0,4),
+      lastAggressionMinute:player.lastAggressionMinute??other.lastAggressionMinute??null,
     }
   })
   return {
@@ -271,6 +376,8 @@ async function apiFootballLive(input:{date:string;home:string;away:string;compet
           duelsTotal:Number(s?.duels?.total??0)||0,
           duelsWon:Number(s?.duels?.won??0)||0,
           defensiveInterventions:0,
+          recentFouls10:0,recentFouls15:0,recentFouled10:0,disciplineHeat:0,
+          aggressionScore:0,aggressionSignals:[],lastAggressionMinute:null,
           subbedOff:subbedOffNames.has(norm(player)),
         })
       }
@@ -302,6 +409,7 @@ export async function GET(request:Request){
   if(!payload){
     payload={ok:true,source:null,status:"unknown",elapsed:0,score:{home:null,away:null},players:[],updatedAt:new Date().toISOString()}
   }
+  if(payload.players.length)applyRollingDiscipline(key,payload)
   const ttl=payload.status==="live"||payload.status==="halftime"?45_000:payload.status==="scheduled"?120_000:300_000
   cache.set(key,{expires:Date.now()+ttl,payload})
   return NextResponse.json(payload)
