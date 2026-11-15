@@ -525,6 +525,16 @@ function usablePlayerPropCoverage(status:Scorecard["marketAvailability"]){
   return keys.filter(key=>(status as any)?.[key]==="available").length>=2
 }
 type FixtureScan={fixture:Fixture;scorecard:Scorecard|null;recommendations:Recommendation[]}
+type MultiGameBoardPick={
+  player:string;team:string;market:string;label:string;probability:number;rankScore:number;
+  bookmakerOdds:number|null;bookmakerName:string|null;confidence:SlipLeg["confidence"];reason:string;
+  recent5HitRate:number|null;seasonHitRate:number|null;h2hHitRate:number|null;h2hMatches:number
+}
+type MultiGameBoardGroup={id:"cards"|"fouls"|"fouled"|"shots"|"sot"|"goals"|"assists";title:string;picks:MultiGameBoardPick[]}
+type MultiGameBoard={
+  fixtureId:string;competition:Competition;kickoff:string;home:string;away:string;homeCrest?:string|null;awayCrest?:string|null;
+  lineupsConfirmed:boolean;lineupMode:"confirmed"|"predicted"|"squad";preMatchSnapshot:boolean;groups:MultiGameBoardGroup[]
+}
 
 function cardEvidenceEligible(player:ScorecardPlayer,market:ScorecardMarket){
   const h2hN=Number(market.h2hMatches??0)
@@ -646,6 +656,74 @@ function directPlayerCandidates(scorecard:Scorecard){
   }
   return out
 }
+
+function buildMultiGameBoards(scans:FixtureScan[]):MultiGameBoard[]{
+  const specs:Array<{id:MultiGameBoardGroup["id"];title:string;key:string}>=[
+    {id:"cards",title:"Most likely to be carded",key:"card"},
+    {id:"fouls",title:"Fouls committed",key:"foul1"},
+    {id:"fouled",title:"Fouls drawn",key:"fouled1"},
+    {id:"shots",title:"Shots",key:"shot1"},
+    {id:"sot",title:"Shots on target",key:"sot1"},
+    {id:"goals",title:"Goalscorer",key:"goal1"},
+    {id:"assists",title:"Assists",key:"assist1"},
+  ]
+  const evidence=(m:ScorecardMarket)=>{
+    const recent=Number(m.recent5HitRate),season=Number(m.seasonHitRate),h2h=Number(m.h2hHitRate),h2hN=Number(m.h2hMatches??0)
+    let total=0,weight=0
+    if(Number.isFinite(recent)){total+=recent*.30;weight+=.30}
+    if(Number.isFinite(season)){total+=season*.50;weight+=.50}
+    if(h2hN>=2&&Number.isFinite(h2h)){total+=h2h*.20;weight+=.20}
+    return weight?total/weight:Number(m.probability??0)
+  }
+  const ranking=(id:MultiGameBoardGroup["id"],m:ScorecardMarket)=>{
+    const p=Math.max(0,Math.min(1,Number(m.probability??0)))
+    const ev=Math.max(0,Math.min(1,evidence(m)))
+    if(id==="cards"){
+      const recommendation=Math.max(0,Math.min(1,Number(m.recommendationScore??p)))
+      return p*.38+recommendation*.42+ev*.20
+    }
+    return p*.76+ev*.24
+  }
+  return scans
+    .filter(scan=>scan.scorecard?.ok&&(scan.scorecard.players?.length??0)>0)
+    .sort((a,b)=>a.fixture.kickoff.localeCompare(b.fixture.kickoff))
+    .map(scan=>{
+      const scorecard=scan.scorecard!
+      const groups:MultiGameBoardGroup[]=specs.map(spec=>{
+        const picks=(scorecard.players??[])
+          .map(player=>{
+            const market=player.markets?.[spec.key]
+            if(!market||!Number.isFinite(Number(market.probability)))return null
+            const probability=Math.max(0,Math.min(1,Number(market.probability)))
+            return {
+              player:player.name,team:player.team,market:spec.key,label:market.label,probability,
+              rankScore:ranking(spec.id,market),
+              bookmakerOdds:market.bookmakerName==="Bet365"&&Number(market.bookmakerOdds)>1?Number(market.bookmakerOdds):null,
+              bookmakerName:market.bookmakerName==="Bet365"?"Bet365":null,
+              confidence:market.confidence,
+              reason:(market.reasons??[]).slice(0,2).join(" · ")||"Season, recent-form and matchup model",
+              recent5HitRate:Number.isFinite(Number(market.recent5HitRate))?Number(market.recent5HitRate):null,
+              seasonHitRate:Number.isFinite(Number(market.seasonHitRate))?Number(market.seasonHitRate):null,
+              h2hHitRate:Number.isFinite(Number(market.h2hHitRate))?Number(market.h2hHitRate):null,
+              h2hMatches:Number(market.h2hMatches??0),
+            } as MultiGameBoardPick
+          })
+          .filter(Boolean) as MultiGameBoardPick[]
+        picks.sort((a,b)=>b.rankScore-a.rankScore||b.probability-a.probability)
+        return {id:spec.id,title:spec.title,picks:picks.slice(0,3)}
+      })
+      return {
+        fixtureId:scan.fixture.id,competition:scan.fixture.competition,kickoff:scan.fixture.kickoff,
+        home:scan.fixture.home.name,away:scan.fixture.away.name,
+        homeCrest:scan.fixture.home.crest??null,awayCrest:scan.fixture.away.crest??null,
+        lineupsConfirmed:Boolean(scorecard.lineupsConfirmed),
+        lineupMode:scorecard.lineupMode??"squad",
+        preMatchSnapshot:new Date(scan.fixture.kickoff).getTime()<=Date.now(),
+        groups,
+      }
+    })
+}
+
 
 function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
   const eligible=scans.filter(x=>x.scorecard?.ok&&usablePlayerPropCoverage(x.scorecard.marketAvailability))
@@ -1146,9 +1224,12 @@ export async function GET(request:Request){
       }))
 
       const eligibleFixtures=coverage.filter(Boolean) as Fixture[]
-      const scans:FixtureScan[]=await Promise.all(eligibleFixtures.map(async fixture=>{
+      const coveredIds=new Set(eligibleFixtures.map(f=>f.id))
+      const scans:FixtureScan[]=await Promise.all(upcoming.map(async fixture=>{
         try{
-          let scorecard=await scorecardFor(fixture,refresh)
+          // Every match gets a model board. Only fixtures with usable Bet365
+          // coverage pay the cost of the full bookmaker-enriched scorecard.
+          let scorecard=coveredIds.has(fixture.id)?await scorecardFor(fixture,refresh):await fallbackScorecard(fixture)
           if(!scorecard?.ok)scorecard=await fallbackScorecard(fixture)
           if(!scorecard?.ok)return {fixture,scorecard:null,recommendations:[]}
           const minutesToKickoff=(new Date(fixture.kickoff).getTime()-Date.now())/60000
@@ -1158,6 +1239,7 @@ export async function GET(request:Request){
         }catch{return {fixture,scorecard:null,recommendations:[]}}
       }))
 
+      const multiGameBoards=buildMultiGameBoards(scans)
       const multiMatchBuild=buildMultiMatchFromScans(scans)
       const yellowCardWatch=buildYellowCardWatchFromScans(scans)
       const payload={
@@ -1166,12 +1248,13 @@ export async function GET(request:Request){
         updatedAt:new Date().toISOString(),
         fixturesScanned:upcoming.length,
         eligibleFixtures:eligibleFixtures.length,
+        multiGameBoards,
         multiMatchBuild,
         yellowCardWatch,
         liveMatches:[],
         staleFallback:false,
         methodology:{
-          multiMatch:"Fast path: Bet365 coverage is checked first. Full scorecards are built for every fixture with at least two usable verified player-prop families. Once both official XIs are confirmed, the scorecard is hard-filtered to those 22 starters before Safe, Balanced or Risky candidates are generated; bench players cannot remain eligible. A verified pre-match Multi remains visible for up to three hours after kickoff as a reference snapshot instead of disappearing immediately; it is not relabelled as a fresh live Bet365 price.",
+          multiMatch:"Every match gets a per-game player likelihood board with the top three cards, fouls committed, fouls drawn, shots, SOT, goals and assists. Ranking uses the model probability plus recent/season/H2H evidence, with card-specific recommendation evidence for bookings. Bet365 prices are added when available but are not required for a match or player to appear. Once official XIs are confirmed, the board is hard-filtered to current starters.",
         },
       }
       lastGoodMulti=payload
