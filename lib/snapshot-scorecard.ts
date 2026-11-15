@@ -197,9 +197,9 @@ function snapshotSelections(players:any[]){
 function buildSnapshotRiskBuilders(players:any[]){
   const rows=snapshotSelections(players)
   const configs=[
-    {id:"safe-3-1",title:"Safe 3/1",risk:"Safe",targetFractional:"3/1",targetDecimal:4,minProb:.42,maxLegs:5,minFamilies:2,maxPerFamily:2},
-    {id:"balanced-10-1",title:"Balanced 10/1",risk:"Balanced",targetFractional:"10/1",targetDecimal:11,minProb:.16,maxLegs:6,minFamilies:3,maxPerFamily:2},
-    {id:"high-20-1",title:"High Risk 20/1+",risk:"High Risk",targetFractional:"20/1+",targetDecimal:21,minProb:.10,maxLegs:7,minFamilies:3,maxPerFamily:2},
+    {id:"safe-3-1",title:"Safe 3/1",risk:"Safe",targetFractional:"3/1",targetDecimal:4,minProb:.40,maxLegs:6,minFamilies:1,maxPerFamily:4},
+    {id:"balanced-10-1",title:"Balanced 10/1",risk:"Balanced",targetFractional:"10/1",targetDecimal:11,minProb:.15,maxLegs:7,minFamilies:2,maxPerFamily:3},
+    {id:"high-20-1",title:"High Risk 20/1+",risk:"High Risk",targetFractional:"20/1+",targetDecimal:21,minProb:.09,maxLegs:8,minFamilies:2,maxPerFamily:3},
   ]
   const family=(market:string)=>market.startsWith("goal")?"goal":market.startsWith("assist")?"assist":market.startsWith("fouled")?"fouled":market.startsWith("foul")?"foul":market.startsWith("sot")?"sot":market.startsWith("shot")?"shot":"card"
   const floor=(market:string)=>{
@@ -230,6 +230,30 @@ function buildSnapshotRiskBuilders(players:any[]){
     const confidence=row.confidence==="A"?.08:row.confidence==="B"?.05:row.confidence==="C"?.02:0
     return pct*.55+Math.max(0,rel)*.25+row.probability*.12+confidence
   }
+  const confidenceReliability=(row:any)=>row.confidence==="A"?1:row.confidence==="B"?.96:row.confidence==="C"?.88:.74
+  const marketReliability=(row:any)=>{
+    const f=family(row.market)
+    if(f==="foul")return .99
+    if(f==="fouled")return .985
+    if(f==="shot")return .98
+    if(f==="sot")return .95
+    if(f==="card")return .93
+    if(f==="goal")return .92
+    if(f==="assist")return .90
+    return .95
+  }
+  const conservativeJoint=(legs:any[],raw:number)=>{
+    const counts:Record<string,number>={}
+    let reliability=1
+    for(const leg of legs){
+      const f=family(leg.market)
+      counts[f]=(counts[f]??0)+1
+      reliability*=confidenceReliability(leg)*marketReliability(leg)
+    }
+    let concentration=1
+    for(const count of Object.values(counts))if(count>1)concentration*=Math.pow(.965,count-1)
+    return Math.max(0,Math.min(.99,raw*reliability*concentration*Math.pow(.985,Math.max(0,legs.length-2))))
+  }
   const preferred=new Map<string,{family:string;signal:number}>()
   for(const player of players){
     const options=rows.filter(r=>String(r.player).toLowerCase()===String(player.name).toLowerCase()&&r.confidence!=="D")
@@ -243,8 +267,8 @@ function buildSnapshotRiskBuilders(players:any[]){
     .sort((a,b)=>(b.signal-a.signal)||(b.row.probability-a.row.probability))
 
   return configs.map(cfg=>{
-    type State={legs:any[];product:number;prob:number;players:Set<string>;quality:number;families:Record<string,number>}
-    let states:State[]=[{legs:[],product:1,prob:1,players:new Set(),quality:0,families:{}}]
+    type State={legs:any[];product:number;prob:number;conservative:number;players:Set<string>;quality:number;families:Record<string,number>}
+    let states:State[]=[{legs:[],product:1,prob:1,conservative:1,players:new Set(),quality:0,families:{}}]
     for(const option of candidates.filter(x=>x.row.probability>=cfg.minProb||x.signal>=.88)){
       const leg=option.row
       const next=[...states]
@@ -257,8 +281,10 @@ function buildSnapshotRiskBuilders(players:any[]){
         if(!(odd>1))continue
         const product=state.product*odd
         if(product>cfg.targetDecimal*1.45&&state.legs.length>=1)continue
+        const legs=[...state.legs,leg]
+        const raw=state.prob*leg.probability
         next.push({
-          legs:[...state.legs,leg],product,prob:state.prob*leg.probability,
+          legs,product,prob:raw,conservative:conservativeJoint(legs,raw),
           players:new Set([...state.players,pkey]),
           quality:state.quality+option.signal+leg.probability*.25,
           families:{...state.families,[option.family]:count+1},
@@ -270,22 +296,22 @@ function buildSnapshotRiskBuilders(players:any[]){
           const gap=Math.abs(Math.log(Math.max(1.01,x.product))-Math.log(cfg.targetDecimal))
           const diversity=Object.keys(x.families).length
           const avg=x.quality/Math.max(1,x.legs.length)
-          return gap*2+(x.product<cfg.targetDecimal?.7:0)-avg*.28-diversity*.07+x.legs.length*.025
+          return gap*1.15+(x.product<cfg.targetDecimal?.8:0)-x.conservative*2.1-avg*.18-diversity*(cfg.risk==="Safe"?.01:.05)+x.legs.length*.015
         }
         return score(a)-score(b)
       }).slice(0,650)
     }
     const best=states.filter(s=>s.legs.length>=2&&s.product>=cfg.targetDecimal&&Object.keys(s.families).length>=cfg.minFamilies)
       .sort((a,b)=>{
+        if(Math.abs(a.conservative-b.conservative)>.002)return b.conservative-a.conservative
         const da=Math.abs(Math.log(a.product)-Math.log(cfg.targetDecimal))
         const db=Math.abs(Math.log(b.product)-Math.log(cfg.targetDecimal))
         if(Math.abs(da-db)>.015)return da-db
-        if(a.legs.length!==b.legs.length)return a.legs.length-b.legs.length
-        return b.prob-a.prob
+        return a.legs.length-b.legs.length
       })[0]
     if(!best)return {
       id:cfg.id,title:cfg.title,risk:cfg.risk,targetFractional:cfg.targetFractional,targetDecimal:cfg.targetDecimal,
-      legs:[],referenceProductOdds:null,averageLegProbability:null,minimumLegProbability:null,modelAllHitProbability:null,
+      legs:[],referenceProductOdds:null,averageLegProbability:null,minimumLegProbability:null,modelAllHitProbability:null,conservativeAllHitProbability:null,safetyScore:null,
       exactPriced:false,bookmaker:null,note:"No strong, market-diverse combination reaches "+cfg.targetFractional+" yet.",
     }
     const families=[...new Set(best.legs.map(l=>family(l.market)))]
@@ -294,8 +320,8 @@ function buildSnapshotRiskBuilders(players:any[]){
       legs:best.legs,referenceProductOdds:Math.round(best.product*100)/100,
       averageLegProbability:best.legs.reduce((s,l)=>s+l.probability,0)/best.legs.length,
       minimumLegProbability:Math.min(...best.legs.map(l=>l.probability)),
-      modelAllHitProbability:best.prob,exactPriced:false,bookmaker:null,
-      note:"Snapshot fair-odds build from each player's strongest market family with market variety ("+families.join(", ")+"). It is only labelled "+cfg.targetFractional+" when the calculated product reaches "+cfg.targetDecimal.toFixed(2)+" decimal.",
+      modelAllHitProbability:best.prob,conservativeAllHitProbability:best.conservative,safetyScore:best.conservative,exactPriced:false,bookmaker:null,
+      note:"Snapshot safety-first build from each player's strongest market family ("+families.join(", ")+"). Confidence and same-market concentration are penalised before choosing the highest conservative hit chance at or above "+cfg.targetFractional+".",
     }
   })
 }
