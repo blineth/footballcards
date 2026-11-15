@@ -223,8 +223,8 @@ function rankSlip(slip:BetSlip|FoulTargetSlip,confirmed:boolean,placeable:boolea
   const grade=legs.filter(l=>l.confidence==="A"||l.confidence==="B").length/legs.length
   const reliability=recommendationReliability(avgProbability(slip),liveFactor)
   const exactRatio=legs.filter(l=>l.bookmakerOdds!=null&&l.priceSource!=="estimated").length/legs.length
-  const coreRatio=legs.filter(l=>l.market==="card"||l.market.startsWith("foul")).length/legs.length
-  return geo*.38+min*.19+reliability*.16+grade*.08+coreRatio*.07+exactRatio*.04+(confirmed?.05:0)+(placeable?.03:0)-Math.max(0,legs.length-5)*.006
+  const lowVarianceRatio=legs.filter(l=>l.market.startsWith("foul")||l.market.startsWith("fouled")||l.market.startsWith("shot")||l.market.startsWith("sot")).length/legs.length
+  return geo*.38+min*.19+reliability*.16+grade*.08+lowVarianceRatio*.07+exactRatio*.04+(confirmed?.05:0)+(placeable?.03:0)-Math.max(0,legs.length-5)*.006
 }
 
 const TARGET_ODDS=[
@@ -420,7 +420,7 @@ function buildTargetOddsSlips(scorecard:Scorecard|null,fixture:Fixture):TargetOd
       safetyScore:Math.round(stateSafety(chosen)*10000)/10000,
       bookmaker:"Bet365" as const,priceSource:"bookmaker-singles" as const,marketsVerified:true,legs,
       maxSelections:MAX_SELECTIONS,maxPlayersPerTeam:MAX_PLAYERS_PER_TEAM,
-      note:"Safest-route search: up to 12 Bet365 selections, max six different players per team, both teams considered, and one prop per player to reduce same-player correlation. Each leg is conservatively calibrated against Bet365's implied/no-vig probability. For 3/1 and 5/1, goalscorer/card/assist routes must materially outperform the best all-foul/shot/SOT route before they are chosen, so a longer set of high-frequency 1+ events is preferred when safety is close. Match winner, double chance, total goals and corners are excluded.",
+      note:"Safest-route search: up to 12 Bet365 selections, max six different players per team, both teams considered, and one prop per player to reduce same-player correlation. Automatic Target Odds uses only fouls committed, fouls drawn, shots and shots on target. Each leg is conservatively calibrated against Bet365's implied/no-vig probability, and the engine prefers several high-frequency 1+ events when that gives a better whole-slip chance than a weaker higher threshold. Match winner, double chance, total goals, corners, cards, scorers and assists are excluded from the automatic target route.",
     }
   })
 }
@@ -1199,7 +1199,7 @@ export async function GET(request:Request){
         // Use the target builders as the primary Picks recommendation source because
         // they compare market families per player. Fall back to legacy slips only
         // when a scorecard cannot build a target combination.
-        const rawStandards=builderSlips.length?builderSlips:(scorecard.slips??[])
+        const rawStandards=builderSlips
         const rawFouls=scorecard.foulTargetSlips??[]
         const standards=officialLineup.confirmed?rawStandards.map(s=>filterSlipToOfficialStarters(s,officialLineup)).filter(Boolean) as BetSlip[]:rawStandards
         const fouls=officialLineup.confirmed?rawFouls.map(s=>filterSlipToOfficialStarters(s,officialLineup)).filter(Boolean) as FoulTargetSlip[]:rawFouls
@@ -1285,8 +1285,8 @@ export async function GET(request:Request){
         recommendationCalibration:"Final ranking uses a second walk-forward calibration layer built from historical recommendations that survived the selection process.",
         cache:"Recommended scans today's matchday only. It never silently advances to tomorrow. Manual refresh bypasses the normal scan cadence, while provider and last-good caches protect against temporary source failures.",
         tracking:"Predicted-XI recommendations remain visible before official teams. As soon as confirmed lineups arrive, the scorecard is rebuilt and benched players disappear. Recommendations are saved before kickoff and graded later from imported player-match data.",
-        targetOdds:"Select a match, then 3/1 through 50/1 targets use every eligible verified Bet365 player-prop option from the scorecard. The target price is only a constraint: the chosen route maximises uncertainty-adjusted whole-slip hit probability and can use several safer 1+ events across different players. Longer routes are no longer penalised merely for having more C/B evidence-rated legs. Goals, assists and cards carry a stronger high-variance reliability discount unless their evidence and Bet365 price justify them. Match winner, double chance, total goals and corners remain excluded. Set-piece responsibility from the scorecard is included in player goal/shot/SOT/assist probabilities.",
-        multiMatch:"The Multi-Match Builder uses verified Bet365 player-prop coverage and builds the safest same-game route to roughly 3/1 in each included match. Search-state pruning is conservative-probability first, so a raw-model goalscorer cannot displace a safer four- or five-leg foul/shot route simply because the raw scorer model is higher. Both teams must be represented where qualifying props exist, with up to 12 selections and six players per team.",
+        targetOdds:"Select a match, then 3/1 through 50/1 targets search only verified Bet365 fouls committed, fouls drawn, shots and shots-on-target markets for eligible players. The target price is a constraint, not the objective: the chosen route maximises conservative whole-slip hit probability and can use several safer 1+ events across different starters instead of one weaker 2+ line. Cards, scorers, assists, match winner, double chance, total goals and corners are excluded from the automatic target route. H2H/direct matchup, current form, season history, expected minutes, stakes and set-piece effects are already reflected in each underlying player probability.",
+        multiMatch:"The Multi-Match Builder uses the same probability-first engine as individual Target Odds. Safe (~3/1), Balanced (~5/1) and Risky (~10/1) all search only verified Bet365 fouls committed, fouls drawn, shots and shots-on-target markets. Higher tiers raise the target odds rather than forcing a card/scorer. Search-state pruning is conservative-probability first, both teams are represented where qualifying props exist, and confirmed starters are a hard eligibility gate.",
         liveRecommended:"Matches remain on Recommended after kick-off. Live rows use the current score and minute plus current player event counts. Confirmed-XI card, foul, fouled, shot and SOT models become next-threshold remaining-match probabilities; already-carded players are removed from the card market, and stale pre-match bookmaker prices are never relabelled as live prices.",
         liveFeedback:liveTopSample>=50
           ? "Live top-pick calibration is active. Current 30-day reliability multiplier: "+liveReliabilityFactor.toFixed(3)
