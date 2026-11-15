@@ -1298,12 +1298,24 @@ export async function GET(request: Request) {
   const recommendationsAllowed = confirmed || predicted
   const players: ScorePlayer[] = candidates.map(candidate => {
     const allRows = history.filter(row => row.playerName === candidate.dbName && played(row))
-    const rows = recommendationsAllowed ? starterRows(allRows) : allRows
+    const internationalRows = competition==="International"
+      ? allRows.filter(row=>row.competition==="International"&&String(row.matchDate??"")>="2024-06-01")
+      : []
+    // National-team role first. Club rows only rescue a genuinely tiny international sample.
+    const primaryRows = competition==="International"&&internationalRows.length>=2 ? internationalRows : allRows
+    const rows = recommendationsAllowed ? starterRows(primaryRows) : primaryRows
     const opponent = teamMatch(candidate.team, home) ? away : home
     const h2hRows = rows.filter(row => teamMatch(row.opponent, opponent))
     const recent5Rows = [...rows].sort((a, b) => String(a.matchDate).localeCompare(String(b.matchDate))).slice(-5)
     const sampleMinutes = rows.reduce((sum, row) => sum + Number(row.minutes ?? 0), 0)
-    const expectedMinutes = estimateExpectedMinutes(allRows,recommendationsAllowed)
+    const intlStarts=internationalRows.filter(row=>row.starter===true).length
+    const intlMinutes=internationalRows.reduce((sum,row)=>sum+Number(row.minutes??0),0)
+    const intlExpectedMinutes=internationalRows.length
+      ? Math.max(35,Math.min(90,(intlMinutes/internationalRows.length)*.65+(55+35*(intlStarts/internationalRows.length))*.35))
+      : null
+    const expectedMinutes = competition==="International"&&intlExpectedMinutes!=null
+      ? intlExpectedMinutes
+      : estimateExpectedMinutes(allRows,recommendationsAllowed)
 
     const matchupCandidate = candidates.find(other => norm(other.name) === norm(candidate?.likelyMatchup?.name) || norm(other.dbName) === norm(candidate?.likelyMatchup?.name))
     const matchupFouls90 = Number(matchupCandidate?.fouls90 ?? 0)
@@ -1351,18 +1363,21 @@ export async function GET(request: Request) {
       const minutesScale = expectedMinutes / 90
       const historicGoal90 = sampleMinutes>0 ? (rows.reduce((sum,row)=>sum+Number(row.goals??0),0)*90)/sampleMinutes : 0
       const historicAssist90 = sampleMinutes>0 ? (rows.reduce((sum,row)=>sum+Number(row.assists??0),0)*90)/sampleMinutes : 0
+      const rowPer90=(key:"shots"|"shotsOnTarget"|"foulsDrawn"|"foulsCommitted")=>
+        sampleMinutes>0?(rows.reduce((sum,row)=>sum+Number((row as any)?.[key]??0),0)*90)/sampleMinutes:0
+      const internationalFirst=competition==="International"&&internationalRows.length>=2
       const per90 = market.startsWith("goal")
         ? historicGoal90
         : market.startsWith("assist")
           ? historicAssist90
         : market.startsWith("sot")
-          ? Number(candidate.shotsOnTarget90 ?? 0)
+          ? (internationalFirst?rowPer90("shotsOnTarget"):Number(candidate.shotsOnTarget90 ?? 0))
           : market.startsWith("shot")
-            ? Number(candidate.shots90 ?? 0)
+            ? (internationalFirst?rowPer90("shots"):Number(candidate.shots90 ?? 0))
             : market.startsWith("fouled")
-              ? Number(candidate.fouled90 ?? 0)
+              ? (internationalFirst?rowPer90("foulsDrawn"):Number(candidate.fouled90 ?? 0))
               : market.startsWith("foul")
-                ? Number(candidate.fouls90 ?? 0)
+                ? (internationalFirst?rowPer90("foulsCommitted"):Number(candidate.fouls90 ?? 0))
                 : 0
 
       if (market !== "card" && per90 > 0) {
@@ -1704,7 +1719,7 @@ export async function GET(request: Request) {
     previewFoulTargetSlips,
     methodology: {
       version: "scorecard-v2-calibrated",
-      description: "Player-level pre-match probabilities use only match rows dated before the target fixture. Before official teams are released, the model uses a probable XI built from current squad availability, start rate, minutes and any stronger published predicted-XI source available. Once official lineups arrive, predicted starters are discarded and the scorecard is rebuilt from the confirmed XI. Probabilities combine domestic and international player history, recency, opponent H2H, expected minutes, matchup pressure, count-rate checks, referee/card context and walk-forward calibration. H2H is lineup-aware: previous meetings receive more weight when more of today's predicted/confirmed opponents also played, and the strongest extra weight is reserved for a returning likely direct matchup.",
+      description: "Player-level pre-match probabilities use only match rows dated before the target fixture. Before official teams are released, the model uses a probable XI built from current squad availability, start rate, minutes and any stronger published predicted-XI source available. Once official lineups arrive, predicted starters are discarded and the scorecard is rebuilt from the confirmed XI. For international fixtures, senior international appearances from Euro 2024 onward are the primary player sample for minutes, shots, SOT, fouls, fouls drawn, goals, assists and cards; club form only stabilises thin national-team samples. Domestic fixtures use club history. All probabilities also incorporate recency, opponent H2H, expected minutes, matchup pressure, count-rate checks, referee/card context and walk-forward calibration. H2H is lineup-aware: previous meetings receive more weight when more of today's predicted/confirmed opponents also played, and the strongest extra weight is reserved for a returning likely direct matchup.",
       cardConditional: "Yellow-card estimates measure each player's booking rate at 0 fouls, exactly 1, exactly 2, 3+, 1+ and 2+ foul states, with sample-size reliability. Match-level data still cannot identify the exact foul that triggered the booking.",
       calibrationWarning: "Displayed probabilities are adjusted through walk-forward calibration built from earlier-match-only predictions across 30 competitions. They remain estimates, not guarantees.",
       slipWarning: "Same-player and same-match legs can be correlated. Exact individual bookmaker foul lines are mirrored only when their threshold is explicitly present in the feed. Bet365's same-game Builder price is proprietary and is not labelled exact unless a bookmaker builder quote is supplied.",
