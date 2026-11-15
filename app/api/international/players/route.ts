@@ -132,7 +132,12 @@ export async function GET(request: Request) {
   ])
 
   const groups = new Map<string, Array<typeof playerH2H.$inferSelect>>()
-  for (const row of internationalRows) {
+  // Historical Euros/Nations League/World Cup rows are H2H evidence only.
+  // Current national-team profiles and probable-XI eligibility must be based on
+  // genuinely recent senior usage, otherwise retired/out-of-squad players can
+  // re-enter the candidate pool because of old tournament appearances.
+  const currentInternationalRows=internationalRows.filter(row=>String(row.matchDate??"")>="2026-01-01")
+  for (const row of currentInternationalRows) {
     if (teamFilter && norm(row.team) !== teamFilter) continue
     const key = `${norm(row.playerName)}|${norm(row.team)}`
     const list = groups.get(key) ?? []
@@ -178,7 +183,7 @@ export async function GET(request: Request) {
       blended: {
         fouls90: blendedFouls90,
         foulResearchScore,
-        note: "Research score is not a probability. Current domestic league form carries the most weight, then international form, then 2025/26 history.",
+        note: "Research score is not a probability. 2026 senior international form and current domestic club form drive the profile; older tournament rows are reserved for H2H evidence.",
         weights: {
           domesticCurrent: Math.round(domesticWeight * 100),
           international: Math.round(intlWeight * 100),
