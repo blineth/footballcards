@@ -505,54 +505,63 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
     type State={legs:SlipLeg[];product:number;raw:number;conservative:number;players:Set<string>;families:Record<string,number>}
 
     const runSearch=(pool:SlipLeg[])=>{
-      let states:State[]=[{legs:[],product:1,raw:1,conservative:1,players:new Set(),families:{}}]
+      const minLegProbability=.34
+      const byPlayer=new Map<string,SlipLeg[]>()
       for(const leg of pool){
-        const next=[...states]
-        for(const state of states){
-          if(state.legs.length>=8)continue
-          const pkey=normName(leg.player)
-          if(state.players.has(pkey))continue
-          const fam=family(leg.market)
-          const familyCount=state.families[fam]??0
-          if(familyCount>=6)continue
-          const price=Number(leg.bookmakerOdds)
-          const product=state.product*price
-          if(product>6.2&&state.legs.length>=1)continue
-          const legs=[...state.legs,leg]
-          const raw=state.raw*leg.probability
-          next.push({
-            legs,product,raw,conservative:conservativeJoint(legs,raw),
-            players:new Set([...state.players,pkey]),
-            families:{...state.families,[fam]:familyCount+1},
-          })
-        }
-        states=next
-          .sort((a,b)=>{
-            const ar=a.product>=4,br=b.product>=4
-            if(ar!==br)return ar?-1:1
-            if(ar&&br){
-              if(Math.abs(a.raw-b.raw)>.002)return b.raw-a.raw
-              if(Math.abs(a.conservative-b.conservative)>.002)return b.conservative-a.conservative
-              return Math.abs(a.product-4)-Math.abs(b.product-4)
-            }
-            const aProgress=Math.min(1,a.product/4)
-            const bProgress=Math.min(1,b.product/4)
-            const aScore=a.raw*Math.pow(aProgress,.32)
-            const bScore=b.raw*Math.pow(bProgress,.32)
-            if(Math.abs(aScore-bScore)>.0005)return bScore-aScore
-            return b.conservative-a.conservative
-          })
-          .slice(0,2600)
+        if(leg.probability<minLegProbability)continue
+        const key=normName(leg.player)
+        if(!byPlayer.has(key))byPlayer.set(key,[])
+        byPlayer.get(key)!.push(leg)
       }
 
-      return states
+      type State={legs:SlipLeg[];product:number;raw:number;conservative:number;families:Record<string,number>}
+      const maxProduct=6.2
+      const maxLog=Math.log(maxProduct)
+      const buckets=700
+      const bucketFor=(product:number)=>Math.max(0,Math.min(buckets,Math.round(Math.log(Math.max(1,product))/maxLog*buckets)))
+
+      let states=new Map<number,State>()
+      states.set(0,{legs:[],product:1,raw:1,conservative:1,families:{}})
+
+      for(const options of byPlayer.values()){
+        const next=new Map(states)
+        for(const state of states.values()){
+          if(state.legs.length>=8)continue
+          for(const leg of options){
+            const fam=family(leg.market)
+            const familyCount=state.families[fam]??0
+            if(familyCount>=6)continue
+            const product=state.product*Number(leg.bookmakerOdds)
+            if(product>maxProduct)continue
+            const legs=[...state.legs,leg]
+            const raw=state.raw*leg.probability
+            const candidate:State={
+              legs,product,raw,conservative:conservativeJoint(legs,raw),
+              families:{...state.families,[fam]:familyCount+1},
+            }
+            const bucket=bucketFor(product)
+            const existing=next.get(bucket)
+            if(!existing||
+              candidate.raw>existing.raw+.000001||
+              (Math.abs(candidate.raw-existing.raw)<=.000001&&candidate.conservative>existing.conservative)
+            )next.set(bucket,candidate)
+          }
+        }
+        const ordered=[...next.entries()].sort(([,a],[,b])=>{
+          const aHit=a.product>=4,bHit=b.product>=4
+          if(aHit!==bHit)return aHit?-1:1
+          if(Math.abs(a.raw-b.raw)>.000001)return b.raw-a.raw
+          if(Math.abs(a.conservative-b.conservative)>.000001)return b.conservative-a.conservative
+          return Math.abs(a.product-4)-Math.abs(b.product-4)
+        })
+        states=new Map(ordered.slice(0,Math.min(900,ordered.length)))
+      }
+
+      return [...states.values()]
         .filter(s=>s.legs.length>=2&&s.product>=4&&s.product<=5.8)
         .sort((a,b)=>{
-          if(Math.abs(a.raw-b.raw)>.002)return b.raw-a.raw
-          if(Math.abs(a.conservative-b.conservative)>.002)return b.conservative-a.conservative
-          const weakA=Math.min(...a.legs.map(x=>x.probability))
-          const weakB=Math.min(...b.legs.map(x=>x.probability))
-          if(Math.abs(weakA-weakB)>.005)return weakB-weakA
+          if(Math.abs(a.raw-b.raw)>.000001)return b.raw-a.raw
+          if(Math.abs(a.conservative-b.conservative)>.000001)return b.conservative-a.conservative
           return Math.abs(a.product-4)-Math.abs(b.product-4)
         })[0]
     }
