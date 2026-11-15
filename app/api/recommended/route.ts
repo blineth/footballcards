@@ -310,15 +310,35 @@ function buildTargetOddsSlips(recommendations:Recommendation[],fixtureId:string)
         const diversity=Object.keys(s.families).length
         return distance*2.45-avgProb*.48-minProb*.18-confidence*.08-diversity*.07+s.legs.length*.015
       }
-      states=next.sort((a,b)=>score(a)-score(b)).slice(0,420)
+      // Preserve the most likely combinations across the whole price range.
+      // A close-to-target but speculative combination must not crowd out a safer
+      // combination that reaches the same target with more short-priced legs.
+      const buckets=new Map<string,State[]>()
+      for(const state of next){
+        const oddsBucket=Math.floor(Math.log(Math.max(1,state.odds))*100)
+        const key=oddsBucket+"|"+state.legs.length
+        const rows=buckets.get(key)??[]
+        rows.push(state)
+        rows.sort((a,b)=>b.prob-a.prob||score(a)-score(b))
+        buckets.set(key,rows.slice(0,10))
+      }
+      states=[...buckets.values()].flat()
+        .sort((a,b)=>b.prob-a.prob||score(a)-score(b))
+        .slice(0,2200)
     }
     const acceptable=states.filter(s=>s.legs.length>=2&&s.odds>=targetDecimal&&s.odds<=targetDecimal*1.35&&Object.keys(s.families).length>=minFamilies)
     if(!acceptable.length)return null
     return acceptable.sort((a,b)=>{
+      // Primary objective: highest whole-slip hit probability. Odds proximity is
+      // only a tie-breaker once both combinations genuinely meet the target.
+      if(Math.abs(a.prob-b.prob)>.0005)return b.prob-a.prob
+      const weakA=Math.min(...a.legs.map(x=>x.leg.probability))
+      const weakB=Math.min(...b.legs.map(x=>x.leg.probability))
+      if(Math.abs(weakA-weakB)>.005)return weakB-weakA
       const da=Math.abs(Math.log(a.odds)-Math.log(targetDecimal))
       const db=Math.abs(Math.log(b.odds)-Math.log(targetDecimal))
-      if(Math.abs(da-db)>.02)return da-db
-      return b.prob-a.prob
+      if(Math.abs(da-db)>.01)return da-db
+      return a.legs.length-b.legs.length
     })[0]
   }
 
@@ -350,7 +370,7 @@ function buildTargetOddsSlips(recommendations:Recommendation[],fixtureId:string)
       referenceOdds:Math.round(chosen.odds*100)/100,
       modelAllHitProbability:Math.round(chosen.prob*10000)/10000,
       bookmaker:chosenBook,priceSource:source,marketsVerified,legs,
-      note:"Uses verified Bet365 individual leg prices only. No model/fair odds are allowed into Target Odds. The displayed product reaches the target using those Bet365 singles; Bet365 can still apply correlation when quoting the final same-game Bet Builder.",
+      note:"Uses verified Bet365 individual leg prices only. Once a combination reaches the target, the model chooses the highest estimated whole-slip hit probability rather than simply the closest price. No model/fair odds are used as bookmaker prices. Bet365 can still apply correlation when quoting the final same-game Bet Builder.",
     }
   })
 }
