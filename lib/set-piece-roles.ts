@@ -98,22 +98,59 @@ function collectStrings(node:any,out:string[]=[]){
 function recentEventEvidence(texts:string[],players:string[]){
   const counts=new Map<string,{pen:number;fk:number;corner:number;evidence:string[]}>()
   for(const player of players)counts.set(player,{pen:0,fk:0,corner:0,evidence:[]})
-  for(const raw of texts){
+  for(const raw of [...new Set(texts)]){
     const text=String(raw).replace(/\s+/g," ").trim()
+    const ntext=norm(text)
     const lower=text.toLowerCase()
     for(const player of players){
       const n=norm(player)
       const surname=n.split(" ").at(-1)??n
-      if(!(norm(text).includes(n)||surname.length>=4&&norm(text).includes(surname)))continue
+      const aliases=[n,surname].filter(x=>x.length>=4)
+      if(!aliases.some(alias=>ntext.includes(alias)))continue
       const row=counts.get(player)!
-      if(/penalt/.test(lower)&&/(scor|miss|saved|goal|attempt|taken|takes)/.test(lower)){
-        row.pen+=1;if(row.evidence.length<4)row.evidence.push("Recent penalty event: "+text.slice(0,130))
+      const isNamedBefore=(phrase:string)=>aliases.some(alias=>{
+        const pi=ntext.indexOf(phrase),ni=ntext.indexOf(alias)
+        return pi>=0&&ni>=0&&ni<pi
+      })
+      const isNamedAfter=(phrase:string)=>aliases.some(alias=>{
+        const pi=ntext.indexOf(phrase),ni=ntext.indexOf(alias)
+        return pi>=0&&ni>=0&&ni>pi&&ni-pi<80
+      })
+      const savedByPlayer=aliases.some(alias=>ntext.includes("saved by "+alias))
+      const penaltyTaker=/penalt/.test(lower)&&!savedByPlayer&&(
+        isNamedBefore("converts the penalty")||
+        isNamedBefore("penalty scored")||
+        isNamedBefore("penalty missed")||
+        isNamedBefore("takes the penalty")||
+        isNamedAfter("penalty scored by")||
+        isNamedAfter("penalty missed by")||
+        aliases.some(alias=>ntext.includes(alias+" penalty scored")||ntext.includes(alias+" penalty missed"))
+      )
+      if(penaltyTaker){
+        row.pen+=1
+        if(row.evidence.length<4)row.evidence.push("Recent penalty-taking evidence: "+text.slice(0,150))
       }
-      if(/free[ -]?kick/.test(lower)&&/(shot|goal|attempt|saved|miss|blocked|takes|taken)/.test(lower)){
-        row.fk+=1;if(row.evidence.length<4)row.evidence.push("Recent direct free-kick event: "+text.slice(0,130))
+      const freeKickTaker=/free[ -]?kick/.test(lower)&&!savedByPlayer&&aliases.some(alias=>
+        ntext.includes(alias+" free kick")||
+        ntext.includes("free kick taken by "+alias)||
+        (ntext.includes(alias)&&/(shot|goal|attempt|miss|blocked)/.test(lower)&&ntext.indexOf(alias)<ntext.indexOf("free kick"))
+      )
+      if(freeKickTaker){
+        row.fk+=1
+        if(row.evidence.length<4)row.evidence.push("Recent direct free-kick evidence: "+text.slice(0,150))
       }
-      if(/corner/.test(lower)&&/(taken|takes|cross|assist|kick)/.test(lower)){
-        row.corner+=1;if(row.evidence.length<4)row.evidence.push("Recent corner event: "+text.slice(0,130))
+      // Only credit the actual delivery/taker, not a shooter, header, defender or
+      // goalkeeper who merely appears in a passage that also mentions a corner.
+      const cornerTaker=/corner/.test(lower)&&aliases.some(alias=>
+        ntext.includes("corner taken by "+alias)||
+        ntext.includes(alias+" takes the corner")||
+        ntext.includes(alias+" takes corner")||
+        (ntext.includes("assisted by "+alias)&&ntext.includes("following a corner"))||
+        (ntext.includes("assisted by "+alias)&&ntext.includes("from a corner"))
+      )
+      if(cornerTaker){
+        row.corner+=1
+        if(row.evidence.length<4)row.evidence.push("Recent corner-taking evidence: "+text.slice(0,150))
       }
     }
   }
@@ -154,7 +191,7 @@ async function recentEspnRoles(date:string,competition:string,home:string,away:s
       .slice(0,5)
     if(!prior.length)continue
     const summaries=await Promise.all(prior.map((e:any)=>fetchJson("https://site.api.espn.com/apis/site/v2/sports/soccer/"+found.slug+"/summary?event="+encodeURIComponent(String(e?.id??"")),3500)))
-    const texts=summaries.flatMap(x=>collectStrings(x))
+    const texts=[...new Set(summaries.flatMap(x=>collectStrings(x)))]
     const players=Object.entries(playersByTeam).find(([t])=>sameTeam(t,side.team))?.[1]??[]
     const counts=recentEventEvidence(texts,players)
     const sorted=(key:"pen"|"fk"|"corner")=>[...counts.entries()].filter(([,v])=>v[key]>0).sort((a,b)=>b[1][key]-a[1][key])
