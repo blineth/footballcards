@@ -67,7 +67,8 @@ type Scorecard={
   oddsSelections?:Array<{
     market:string;kind:string;label:string;odd:number|null;underOdd?:number|null;
     noVigProbability?:number|null;bookmaker?:string|null
-  }>
+  }>;
+  referee?:{name?:string|null;yellowsPerGame?:number|null;foulsPerGame?:number|null;matches?:number|null}|null
 }
 type Recommendation={
   id:string;fixture:Fixture;slip:BetSlip|FoulTargetSlip;confirmed:boolean;kind:"standard"|"foul";
@@ -148,6 +149,12 @@ type LivePlayerStat={
   recentFouls10:number;recentFouls15:number;recentFouled10:number;disciplineHeat:number;
   aggressionScore:number;aggressionSignals:string[];lastAggressionMinute:number|null
 }
+type RefereeLiveContext={
+  name:string|null;source:string|null;matches:number|null;historicalYellowsPerGame:number|null;historicalFoulsPerGame:number|null;
+  liveFouls:number;liveYellows:number;liveReds:number;liveFoulsPer90:number|null;liveYellowsPer90:number|null;
+  liveCardPerFoul:number|null;historicalCardPerFoul:number|null;strictnessScore:number;strictnessLabel:"strict"|"average"|"lenient";
+  historicalModifier:number;liveDecisionModifier:number
+}
 function espnStat(row:any,name:string){
   const found=(row?.stats??[]).find((s:any)=>String(s?.name??"")===name)
   const value=Number(found?.value??found?.displayValue??0)
@@ -159,11 +166,12 @@ async function livePlayerStatsForFixture(f:Fixture){
       date:fixtureDate(f),home:f.home.name,away:f.away.name,competition:f.competition,
     })
     const response=await livePlayerStatsGET(new Request("http://local/api/live-player-stats?"+q.toString()))
-    if(!response.ok)return {source:null,status:null,elapsed:null,score:null,players:new Map<string,LivePlayerStat>()}
+    if(!response.ok)return {source:null,status:null,elapsed:null,score:null,referee:null as RefereeLiveContext|null,players:new Map<string,LivePlayerStat>()}
     const data=await response.json()
     const rows:Array<any>=Array.isArray(data?.players)?data.players:[]
     return {
       source:data?.source??null,status:data?.status??null,elapsed:Number.isFinite(Number(data?.elapsed))?Number(data.elapsed):null,score:data?.score??null,
+      referee:data?.referee??null,
       players:new Map<string,LivePlayerStat>(rows.map((row:any)=>[normName(String(row.player??"")),{
         player:String(row.player??""),team:String(row.team??""),
         foulsCommitted:Number(row.foulsCommitted??0),foulsDrawn:Number(row.foulsDrawn??0),
@@ -180,7 +188,7 @@ async function livePlayerStatsForFixture(f:Fixture){
       }]))
     }
   }catch{
-    return {source:null,status:null,elapsed:null,score:null,players:new Map<string,LivePlayerStat>()}
+    return {source:null,status:null,elapsed:null,score:null,referee:null as RefereeLiveContext|null,players:new Map<string,LivePlayerStat>()}
   }
 }
 function filterSlipToOfficialStarters<T extends BetSlip|FoulTargetSlip>(slip:T,lineup:OfficialLineup):T|null{
@@ -1025,7 +1033,7 @@ function liveStatActive(stat:LivePlayerStat){
   return stat.starter||stat.subbedOn||stat.minutes>0||stat.foulsCommitted>0||stat.foulsDrawn>0||stat.shots>0||
     stat.shotsOnTarget>0||stat.goals>0||stat.assists>0||stat.yellowCards>0||stat.redCards>0
 }
-function buildLivePlayerProps(scorecard:Scorecard|null,elapsed:number,liveStats:Map<string,LivePlayerStat>){
+function buildLivePlayerProps(scorecard:Scorecard|null,elapsed:number,liveStats:Map<string,LivePlayerStat>,referee:RefereeLiveContext|null=null){
   if(!scorecard?.ok)return []
   const candidates:any[]=[]
   const teamTotals=new Map<string,{fc:number;fd:number}>()
@@ -1090,7 +1098,11 @@ function buildLivePlayerProps(scorecard:Scorecard|null,elapsed:number,liveStats:
         const overall=player.yellowConditionals?.overall
         const disciplineHeat=Math.max(0,Math.min(1,Number(stat.disciplineHeat??0)))
         const recentBurst=Math.min(.34,Number(stat.recentFouls10??0)*.17+Math.max(0,Number(stat.recentFouls15??0)-Number(stat.recentFouls10??0))*.07)
-        let delta=Math.min(1.05,.14*fouls+Math.max(0,oppDrawRate-7)*.010+disciplineHeat*.52+recentBurst)
+        const refHistorical=Math.max(-.18,Math.min(.18,Number(referee?.historicalModifier??0)))
+        const refLive=Math.max(-.34,Math.min(.34,Number(referee?.liveDecisionModifier??0)))
+        const refDelta=Math.max(-.30,Math.min(.30,refHistorical*.45+refLive))
+        const refInteraction=refDelta*(.72+disciplineHeat*.45+Math.min(.18,fouls*.035))
+        let delta=Math.min(1.18,.14*fouls+Math.max(0,oppDrawRate-7)*.010+disciplineHeat*.52+recentBurst+refInteraction)
         if(cond?.rate!=null&&Number(overall?.rate)>0&&Number(cond.matches??0)>=2){
           const reliability=Math.min(1,Number(cond.matches??0)/10)
           const observed=logit(Number(cond.rate))-logit(Math.max(.02,Number(overall!.rate)))
@@ -1105,6 +1117,13 @@ function buildLivePlayerProps(scorecard:Scorecard|null,elapsed:number,liveStats:
         if(Number(stat.recentFouls10??0)>0)pressureNote+=(pressureNote?" ":"")+`${stat.recentFouls10} new foul${stat.recentFouls10===1?"":"s"} in the recent 10-minute window.`
         if(liveSignals.length)pressureNote+=(pressureNote?" ":"")+`Live discipline signal: ${liveSignals.join(", ")}.`
         pressureNote+=(pressureNote?" ":"")+`Discipline heat ${Math.round(disciplineHeat*100)}/100; opponent fouls drawn ${oppDrawRate.toFixed(1)}/90.`
+        if(referee?.name){
+          pressureNote+=` Referee ${referee.name}: ${referee.strictnessLabel} live profile`
+          if(referee.historicalYellowsPerGame!=null)pressureNote+=`, historical ${Number(referee.historicalYellowsPerGame).toFixed(1)} yellows/game`
+          if(referee.liveYellowsPer90!=null)pressureNote+=`, running ${Number(referee.liveYellowsPer90).toFixed(1)} yellows/90`
+          if(referee.liveFoulsPer90!=null)pressureNote+=` from ${Number(referee.liveFoulsPer90).toFixed(1)} fouls/90`
+          pressureNote+="."
+        }
       }else if(marketKey==="foul1"&&stat){
         const delta=Math.min(.58,stat.foulsCommitted*.12+Math.max(0,oppDrawRate-7)*.012)
         probability=logistic(logit(probability)+delta)
@@ -1149,6 +1168,7 @@ function buildLivePlayerProps(scorecard:Scorecard|null,elapsed:number,liveStats:
         currentYellowCards:stat?.yellowCards??null,currentRedCards:stat?.redCards??null,
         disciplineHeat:stat?.disciplineHeat??0,recentFouls10:stat?.recentFouls10??0,recentFouls15:stat?.recentFouls15??0,
         aggressionSignals:stat?.aggressionSignals??[],lastAggressionMinute:stat?.lastAggressionMinute??null,
+        referee:referee?{name:referee.name,strictnessScore:referee.strictnessScore,strictnessLabel:referee.strictnessLabel,historicalYellowsPerGame:referee.historicalYellowsPerGame,liveYellowsPer90:referee.liveYellowsPer90,liveFoulsPer90:referee.liveFoulsPer90}:null,
         reason:"Remaining-match estimate from the active-player model and current match events. "+pressureNote,
       })
     }
@@ -1361,7 +1381,7 @@ export async function GET(request:Request){
             const kickoffMs=new Date(f.kickoff).getTime()
             const inferredElapsed=Number.isFinite(kickoffMs)?Math.max(0,Math.min(96,Math.floor((Date.now()-kickoffMs)/60000))):0
             const elapsed=Math.max(0,Math.min(96,Number(liveStatData.elapsed??f.elapsed??inferredElapsed)))
-            const rawLivePlayerProps=buildLivePlayerProps(scorecard,elapsed,liveStatData.players)
+            const rawLivePlayerProps=buildLivePlayerProps(scorecard,elapsed,liveStatData.players,liveStatData.referee)
             const livePlayerProps=overlayBet365OnLiveProps(rawLivePlayerProps,bet365Live)
             const score=liveStatData.score??f.score??null
             return {
@@ -1370,7 +1390,7 @@ export async function GET(request:Request){
               home:f.home.name,away:f.away.name,homeCrest:f.home.crest??null,awayCrest:f.away.crest??null,
               probabilities:null,winnerPick:null,bttsPick:null,
               bttsSettled:Boolean(Number(score?.home??0)>0&&Number(score?.away??0)>0),
-              livePlayerProps,livePlayerStatsSource:liveStatData.source,
+              livePlayerProps,livePlayerStatsSource:liveStatData.source,referee:liveStatData.referee,
               reasons:["Live player intelligence uses the active roster, current event counts and the same remaining-match logic as Match Builder."],
             }
           }catch{
@@ -1468,7 +1488,7 @@ export async function GET(request:Request){
         const [liveStatData,primaryScorecard]=await Promise.all([livePlayerStatsForFixture(f),scorecardFor(f,refresh)])
         let scorecard=primaryScorecard
         if(!scorecard?.ok)scorecard=await fallbackScorecard(f)
-        const livePlayerProps=buildLivePlayerProps(scorecard,elapsed,liveStatData.players)
+        const livePlayerProps=buildLivePlayerProps(scorecard,elapsed,liveStatData.players,liveStatData.referee)
         if(model)return {...model,homeCrest:f.home.crest??model.homeCrest??null,awayCrest:f.away.crest??model.awayCrest??null,livePlayerProps,livePlayerStatsSource:liveStatData.source}
         const home=Number(f.score?.home),away=Number(f.score?.away)
         const hasScore=Number.isFinite(home)&&Number.isFinite(away)
@@ -1493,7 +1513,7 @@ export async function GET(request:Request){
           score:f.score??null,home:f.home.name,away:f.away.name,homeCrest:f.home.crest??null,awayCrest:f.away.crest??null,
           probabilities:null,winnerPick:null,bttsPick:null,
           bttsSettled:Boolean((f.score?.home??0)>0&&(f.score?.away??0)>0),
-          livePlayerProps:buildLivePlayerProps(scorecard,elapsed,liveStatData.players),
+          livePlayerProps:buildLivePlayerProps(scorecard,elapsed,liveStatData.players,liveStatData.referee),
           livePlayerStatsSource:liveStatData.source,
           reasons:["Live score available while the live probability refresh is temporarily unavailable."],
         }
