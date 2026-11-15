@@ -129,6 +129,17 @@ function hasRemainingGames(data:FixturesResponse|null){
   return competitionOrder.some(c=>(data.leagues?.[c]??[]).some(f=>!isFinished(f)))
 }
 
+function fixturesCacheKey(date:string){return "match-edge:fixtures:"+date}
+function availabilityCacheKey(date:string){return "match-edge:availability:"+date}
+function readJsonCache<T>(key:string):T|null{
+  try{
+    const raw=window.localStorage.getItem(key)
+    return raw?JSON.parse(raw) as T:null
+  }catch{return null}
+}
+function writeJsonCache(key:string,value:any){
+  try{window.localStorage.setItem(key,JSON.stringify(value))}catch{}
+}
 export default function MatchesPage(){
   const router=useRouter()
   const[selectedDate,setSelectedDate]=useState(londonDate)
@@ -149,14 +160,22 @@ export default function MatchesPage(){
   const totalRemaining=grouped.reduce((sum,g)=>sum+g.fixtures.length,0)
   const visibleFixtures=useMemo(()=>grouped.flatMap(g=>g.fixtures),[grouped])
 
-  const refreshBet365Availability=useCallback(async(fixtures:Fixture[])=>{
+  const refreshBet365Availability=useCallback(async(fixtures:Fixture[],force=false)=>{
     if(!fixtures.length)return
+    const cacheKey=availabilityCacheKey(resolvedDate||selectedDate)
+    const cached=readJsonCache<Record<string,Bet365Availability>>(cacheKey)??{}
+    if(!force&&Object.keys(cached).length)setBet365Availability(cur=>({...cached,...cur}))
+
+    const pending=fixtures.filter(fixture=>force||isLive(fixture)||!cached[fixture.id])
+    if(!pending.length)return
+
     setBet365Availability(cur=>{
       const next={...cur}
-      for(const fixture of fixtures)next[fixture.id]={...(next[fixture.id]??{priceAvailable:false,marketAvailability:{}}),loading:true}
+      for(const fixture of pending)next[fixture.id]={...(next[fixture.id]??cached[fixture.id]??{priceAvailable:false,marketAvailability:{}}),loading:true}
       return next
     })
-    const results=await Promise.all(fixtures.map(async fixture=>{
+
+    const results=await Promise.all(pending.map(async fixture=>{
       try{
         const response=await fetch(oddsUrl(fixture),{cache:"no-store"})
         if(!response.ok)throw new Error("odds")
@@ -173,28 +192,51 @@ export default function MatchesPage(){
         return [fixture.id,{loading:false,priceAvailable:false,marketAvailability:{},availableBets:[],note:"Unable to verify Bet365 markets right now."}] as const
       }
     }))
-    setBet365Availability(cur=>({...cur,...Object.fromEntries(results)}))
-  },[])
 
-  const fetchDate=useCallback(async(date:string)=>{
-    const r=await fetch("/api/fixtures?"+new URLSearchParams({
-      date,nextIfEmpty:"0",refresh:String(Date.now()),
-    }),{cache:"no-store"})
+    const merged={...cached,...Object.fromEntries(results)}
+    setBet365Availability(cur=>({...cur,...merged}))
+    writeJsonCache(cacheKey,merged)
+  },[resolvedDate,selectedDate])
+
+  const fetchDate=useCallback(async(date:string,force=false)=>{
+    const q=new URLSearchParams({date,nextIfEmpty:"0"})
+    if(force)q.set("refresh",String(Date.now()))
+    const r=await fetch("/api/fixtures?"+q,{cache:"no-store"})
     if(!r.ok)throw new Error("fixtures")
     return await r.json() as FixturesResponse
   },[])
 
-  const refresh=useCallback(async()=>{
+  const refresh=useCallback(async(force=false)=>{
+    if(!force){
+      const cached=readJsonCache<{
+        resolvedDate:string;data:FixturesResponse;autoAdvanced:boolean;savedAt:string
+      }>(fixturesCacheKey(selectedDate))
+      if(cached?.data){
+        setResolvedDate(cached.resolvedDate||selectedDate)
+        setLive(cached.data)
+        setAutoAdvanced(Boolean(cached.autoAdvanced))
+        setLastRefresh(new Date(cached.savedAt))
+        setLoading(false)
+        const avail=readJsonCache<Record<string,Bet365Availability>>(availabilityCacheKey(cached.resolvedDate||selectedDate))
+        if(avail)setBet365Availability(avail)
+        return
+      }
+    }else{
+      try{window.localStorage.removeItem(fixturesCacheKey(selectedDate))}catch{}
+      try{window.localStorage.removeItem(availabilityCacheKey(resolvedDate||selectedDate))}catch{}
+      setBet365Availability({})
+    }
+
     setLoading(true)
     try{
       let date=selectedDate
-      let data=await fetchDate(date)
+      let data=await fetchDate(date,force)
       let advanced=false
 
       if(!hasRemainingGames(data)){
         for(let offset=1;offset<=21;offset++){
           const next=addDays(selectedDate,offset)
-          const candidate=await fetchDate(next)
+          const candidate=await fetchDate(next,force)
           if(hasRemainingGames(candidate)){
             date=next
             data=candidate
@@ -204,10 +246,14 @@ export default function MatchesPage(){
         }
       }
 
+      const savedAt=new Date()
       setResolvedDate(date)
       setLive(data)
       setAutoAdvanced(advanced)
-      setLastRefresh(new Date())
+      setLastRefresh(savedAt)
+      writeJsonCache(fixturesCacheKey(selectedDate),{
+        resolvedDate:date,data,autoAdvanced:advanced,savedAt:savedAt.toISOString()
+      })
     }catch{
       setLive(null)
       setResolvedDate(selectedDate)
@@ -215,15 +261,20 @@ export default function MatchesPage(){
     }finally{
       setLoading(false)
     }
-  },[fetchDate,selectedDate])
+  },[fetchDate,selectedDate,resolvedDate])
 
-  useEffect(()=>{void refresh()},[refresh])
-  useEffect(()=>{const t=window.setInterval(()=>void refresh(),60000);return()=>window.clearInterval(t)},[refresh])
-  useEffect(()=>{void refreshBet365Availability(visibleFixtures)},[visibleFixtures,refreshBet365Availability])
+  useEffect(()=>{void refresh(false)},[refresh])
   useEffect(()=>{
     const liveOnly=visibleFixtures.filter(isLive)
     if(!liveOnly.length)return
-    const t=window.setInterval(()=>void refreshBet365Availability(liveOnly),30000)
+    const t=window.setInterval(()=>void refresh(true),60000)
+    return()=>window.clearInterval(t)
+  },[visibleFixtures,refresh])
+  useEffect(()=>{void refreshBet365Availability(visibleFixtures,false)},[visibleFixtures,refreshBet365Availability])
+  useEffect(()=>{
+    const liveOnly=visibleFixtures.filter(isLive)
+    if(!liveOnly.length)return
+    const t=window.setInterval(()=>void refreshBet365Availability(liveOnly,true),30000)
     return()=>window.clearInterval(t)
   },[visibleFixtures,refreshBet365Availability])
 
@@ -234,9 +285,9 @@ export default function MatchesPage(){
           <div>
             <div className="flex items-center gap-2 text-emerald-300"><Sparkles className="size-4"/><span className="text-[0.62rem] font-black uppercase tracking-[0.16em]">Match Edge</span></div>
             <h1 className="mt-1 text-2xl font-black">Matches</h1>
-            <p className="mt-1 text-xs text-white/45">Choose a game. Bet365 market availability is checked before you open it.</p>
+            <p className="mt-1 text-xs text-white/45">Choose a game. Pre-match fixtures and Bet365 markets stay cached until you refresh; live games update automatically.</p>
           </div>
-          <button onClick={()=>void refresh()} className="rounded-xl bg-emerald-400 p-2.5 text-emerald-950"><RefreshCw className={"size-4 "+(loading?"animate-spin":"")}/></button>
+          <button onClick={()=>void refresh(true)} className="rounded-xl bg-emerald-400 p-2.5 text-emerald-950"><RefreshCw className={"size-4 "+(loading?"animate-spin":"")}/></button>
         </div>
       </div>
     </header>
