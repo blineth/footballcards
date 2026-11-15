@@ -6,6 +6,7 @@ import { gradeHistoricalRecommendations, recommendationTrackingSummary, saveReco
 import recommendationBacktest from "@/data/model/recommendation-backtest.json"
 import calibrationSnapshot from "@/data/model/calibration.json"
 import { snapshotPlayersForFixture, internationalPlayersForFixture } from "@/lib/current-season-snapshot"
+import { buildSnapshotScorecard } from "@/lib/snapshot-scorecard"
 
 export const dynamic="force-dynamic"
 export const revalidate=120
@@ -41,9 +42,10 @@ type ScorecardPlayer={
   }
 }
 type Scorecard={
-  ok:boolean;lineupsConfirmed?:boolean;eligibleBooks?:string[];
-  marketAvailability?:{card:MarketStatus;foul:MarketStatus;fouled:MarketStatus;shot:MarketStatus;sot:MarketStatus};
+  ok:boolean;lineupsConfirmed?:boolean;lineupMode?:"confirmed"|"predicted"|"squad";eligibleBooks?:string[];
+  marketAvailability?:{goal?:MarketStatus;assist?:MarketStatus;card:MarketStatus;foul:MarketStatus;fouled:MarketStatus;shot:MarketStatus;sot:MarketStatus};
   slips?:BetSlip[];previewSlips?:BetSlip[];foulTargetSlips?:FoulTargetSlip[];previewFoulTargetSlips?:FoulTargetSlip[];
+  riskBuilders?:Array<{id:string;title:string;risk:string;legs:SlipLeg[];averageLegProbability:number|null;referenceProductOdds?:number|null;modelAllHitProbability?:number|null}>;
   players?:ScorecardPlayer[]
 }
 type Recommendation={
@@ -481,95 +483,9 @@ function calibrateSnapshot(market:"foul1"|"card",raw:number){
 }
 async function fallbackScorecard(f:Fixture):Promise<Scorecard|null>{
   try{
-    const officialLineup=await officialLineupForFixture(f)
-    if(!officialLineup.confirmed){
-      return {
-        ok:true,
-        lineupsConfirmed:false,
-        eligibleBooks:[],
-        marketAvailability:{card:"unknown",foul:"unknown",fouled:"unknown",shot:"unknown",sot:"unknown"},
-        slips:[],previewSlips:[],foulTargetSlips:[],previewFoulTargetSlips:[],
-      }
-    }
-    if(f.competition==="International"){
-      const profiles=(await internationalPlayersForFixture(f.home.name,f.away.name))
-        .filter((p:any)=>officialLineup.starters.has(normName(String(p?.name??""))))
-      if(!profiles.length)return null
-      const scored=profiles.map((p:any)=>{
-        const intl=p?.international??{}
-        const current=p?.domesticCurrent??null
-        const previous=p?.domesticPrevious??null
-        const appearances=Number(current?.appearances??0)+Number(intl?.matches??0)
-        const starts=Number(current?.starts??0)+Number(intl?.starts??0)
-        const expectedMinutes=Math.max(45,Math.min(90,appearances>0?60+30*(starts/appearances):65))
-        const foulRate=Math.max(0,Number(p?.blended?.fouls90??current?.fouls90??intl?.fouls90??0))
-        const cardRateParts=[
-          current?Number(current.cards90??0):null,
-          Number(intl.cards90??0),
-          previous?Number(previous.cards90??0):null,
-        ].filter((v:any)=>Number.isFinite(v)&&v!=null) as number[]
-        const cardRate=cardRateParts.length?cardRateParts.reduce((a,b)=>a+b,0)/cardRateParts.length:0
-        const rawFoul=1-Math.exp(-foulRate*(expectedMinutes/90))
-        const rawCard=1-Math.exp(-cardRate*(expectedMinutes/90))
-        const foul=calibrateSnapshot("foul1",Math.max(.01,Math.min(.99,rawFoul)))
-        const card=calibrateSnapshot("card",Math.max(.01,Math.min(.99,rawCard)))
-        const confidence:SlipLeg["confidence"]=appearances>=12&&expectedMinutes>=65?"B":appearances>=6?"C":"D"
-        return {p,foul,card,confidence,expectedMinutes}
-      }).filter((x:any)=>x.confidence!=="D")
-      const foulLegs=scored.sort((a:any,b:any)=>b.foul-a.foul).slice(0,4).map((x:any)=>({
-        player:String(x.p.name),dbPlayerName:String(x.p.name),team:String(x.p.nationalTeam),market:"foul1",
-        label:"1+ foul committed",probability:Math.round(x.foul*1000)/1000,fairOdds:Math.round((1/x.foul)*100)/100,
-        bookmakerOdds:null,bookmakerName:null,edge:null,confidence:x.confidence,
-        reason:"International snapshot fallback: blended current domestic + international foul rate",priceSource:null,
-      } as SlipLeg))
-      const cardLegs=scored.sort((a:any,b:any)=>b.card-a.card).slice(0,3).map((x:any)=>({
-        player:String(x.p.name),dbPlayerName:String(x.p.name),team:String(x.p.nationalTeam),market:"card",
-        label:"Yellow card",probability:Math.round(x.card*1000)/1000,fairOdds:Math.round((1/x.card)*100)/100,
-        bookmakerOdds:null,bookmakerName:null,edge:null,confidence:x.confidence,
-        reason:"International snapshot fallback: blended current domestic + international card rate",priceSource:null,
-      } as SlipLeg))
-      const slips:BetSlip[]=[]
-      if(foulLegs.length>=2)slips.push({id:"intl-snapshot-fouls",title:"International foul picks",risk:"model-only",legs:foulLegs,averageLegProbability:foulLegs.reduce((s,l)=>s+l.probability,0)/foulLegs.length,placeable:false,marketAvailability:foulLegs.map(l=>({player:l.player,market:l.market,status:"unknown" as MarketStatus}))})
-      if(cardLegs.length>=2)slips.push({id:"intl-snapshot-cards",title:"International card picks",risk:"model-only",legs:cardLegs,averageLegProbability:cardLegs.reduce((s,l)=>s+l.probability,0)/cardLegs.length,placeable:false,marketAvailability:cardLegs.map(l=>({player:l.player,market:l.market,status:"unknown" as MarketStatus}))})
-      return {ok:true,lineupsConfirmed:true,eligibleBooks:[],marketAvailability:{card:"unknown",foul:"unknown",fouled:"unknown",shot:"unknown",sot:"unknown"},slips,previewSlips:[],foulTargetSlips:[],previewFoulTargetSlips:[]}
-    }
-
-    const snapshot=await snapshotPlayersForFixture(f.competition,f.home.name,f.away.name)
-    const players=snapshot.players.filter(p=>officialLineup.starters.has(normName(p.player_name)))
-    const rows=snapshot.rows
-    const before=rows.filter(r=>r.match_date<fixtureDate(f))
-    if(!players.length||!before.length)return null
-    const scored=players.map(p=>{
-      const history=before.filter(r=>r.player_name===p.player_name)
-      if(history.length<3)return null
-      const recent=history.slice(-5)
-      const foulHits=history.filter(r=>r.fouls_committed>=1).length
-      const cardHits=history.filter(r=>r.yellow_card).length
-      const recentFoul=recent.filter(r=>r.fouls_committed>=1).length
-      const recentCard=recent.filter(r=>r.yellow_card).length
-      const rawFoul=beta(foulHits,history.length,.50,6)*.72+beta(recentFoul,recent.length,.50,4)*.28
-      const rawCard=beta(cardHits,history.length,.20,7)*.72+beta(recentCard,recent.length,.20,4)*.28
-      const foul=calibrateSnapshot("foul1",Math.max(.01,Math.min(.99,rawFoul)))
-      const card=calibrateSnapshot("card",Math.max(.01,Math.min(.99,rawCard)))
-      const confidence:SlipLeg["confidence"]=history.length>=10&&p.minutes>=600?"B":history.length>=5?"C":"D"
-      return {p,history,foul,card,confidence}
-    }).filter(Boolean) as Array<{p:any;history:any[];foul:number;card:number;confidence:SlipLeg["confidence"]}>
-    const foulLegs=scored.sort((a,b)=>b.foul-a.foul).slice(0,4).map(x=>({
-      player:x.p.player_name,dbPlayerName:x.p.player_name,team:x.p.team,market:"foul1",
-      label:"1+ foul committed",probability:Math.round(x.foul*1000)/1000,fairOdds:Math.round((1/x.foul)*100)/100,
-      bookmakerOdds:null,bookmakerName:null,edge:null,confidence:x.confidence,
-      reason:"Repository snapshot fallback: season + recent foul history",priceSource:null,
-    } as SlipLeg))
-    const cardLegs=scored.sort((a,b)=>b.card-a.card).slice(0,3).map(x=>({
-      player:x.p.player_name,dbPlayerName:x.p.player_name,team:x.p.team,market:"card",
-      label:"Yellow card",probability:Math.round(x.card*1000)/1000,fairOdds:Math.round((1/x.card)*100)/100,
-      bookmakerOdds:null,bookmakerName:null,edge:null,confidence:x.confidence,
-      reason:"Repository snapshot fallback: season + recent booking history",priceSource:null,
-    } as SlipLeg))
-    const slips:BetSlip[]=[]
-    if(foulLegs.length>=2)slips.push({id:"snapshot-fouls",title:"Snapshot foul picks",risk:"model-only",legs:foulLegs,averageLegProbability:foulLegs.reduce((s,l)=>s+l.probability,0)/foulLegs.length,placeable:false,marketAvailability:foulLegs.map(l=>({player:l.player,market:l.market,status:"unknown" as MarketStatus}))})
-    if(cardLegs.length>=2)slips.push({id:"snapshot-cards",title:"Snapshot card picks",risk:"model-only",legs:cardLegs,averageLegProbability:cardLegs.reduce((s,l)=>s+l.probability,0)/cardLegs.length,placeable:false,marketAvailability:cardLegs.map(l=>({player:l.player,market:l.market,status:"unknown" as MarketStatus}))})
-    return {ok:true,lineupsConfirmed:officialLineup.confirmed,eligibleBooks:[],marketAvailability:{card:"unknown",foul:"unknown",fouled:"unknown",shot:"unknown",sot:"unknown"},slips:officialLineup.confirmed?slips:[],previewSlips:officialLineup.confirmed?[]:slips,foulTargetSlips:[],previewFoulTargetSlips:[]}
+    return await buildSnapshotScorecard({
+      date:fixtureDate(f),home:f.home.name,away:f.away.name,competition:f.competition,
+    }) as Scorecard
   }catch{return null}
 }
 
@@ -589,13 +505,35 @@ export async function GET(request:Request){
       ? Math.max(.82,Math.min(1.05,liveTopHit/liveTopModel))
       : 1
 
-    const dates=[londonDate(0)]
-    const fixtureResponses=await Promise.all(dates.map(date=>fixturesFor(date,refresh)))
+    let resolvedDate=londonDate(0)
+    let autoAdvanced=false
+    let fixtureData=await fixturesFor(resolvedDate,refresh)
+    const hasUsable=(data:any)=>{
+      if(!data)return false
+      return competitions.some(competition=>(data.leagues?.[competition]??[]).some((f:Fixture)=>{
+        const status=String(f.status??"").toLowerCase()
+        const blocked=["finished","ft","full time","postponed","cancelled","canceled","abandoned","suspended"].includes(status)
+        if(blocked)return false
+        const kick=new Date(f.kickoff).getTime()
+        return Number.isFinite(kick)&&kick>Date.now()-3*60*60*1000
+      }))
+    }
+    if(!hasUsable(fixtureData)){
+      for(let offset=1;offset<=21;offset++){
+        const candidateDate=londonDate(offset)
+        const candidate=await fixturesFor(candidateDate,refresh)
+        if(hasUsable(candidate)){
+          resolvedDate=candidateDate
+          fixtureData=candidate
+          autoAdvanced=true
+          break
+        }
+      }
+    }
     const fixtureMap=new Map<string,Fixture>()
-    for(const data of fixtureResponses){
-      if(!data)continue
+    if(fixtureData){
       for(const competition of competitions){
-        for(const f of data.leagues?.[competition]??[])fixtureMap.set(String(f.id),f)
+        for(const f of fixtureData.leagues?.[competition]??[])fixtureMap.set(String(f.id),f)
       }
     }
 
@@ -616,7 +554,7 @@ export async function GET(request:Request){
 
     let liveMatches:any[]=[]
     try{
-      const liveResponse=await matchAccaGET(new Request("http://local/api/match-acca?date="+londonDate(0)+(refresh?"&refresh="+Date.now():"")))
+      const liveResponse=await matchAccaGET(new Request("http://local/api/match-acca?date="+resolvedDate+(refresh?"&refresh="+Date.now():"")))
       const liveData=liveResponse.ok?await liveResponse.json():null
       const livePredictions=(liveData?.predictions??[]).filter((p:any)=>p?.inPlay)
       const byId=new Map<string,any>(livePredictions.map((p:any)=>[String(p.id),p]))
@@ -676,10 +614,20 @@ export async function GET(request:Request){
         const minutesToKickoff=(new Date(fixture.kickoff).getTime()-Date.now())/60000
         const officialLineup=minutesToKickoff<=120?await officialLineupForFixture(fixture):{confirmed:false,starters:new Set<string>()}
         const confirmed=officialLineup.confirmed||Boolean(scorecard.lineupsConfirmed)
-        // Recommended is confirmed-XI only. Never promote preview/expected-player
-        // slips into the betting feed.
-        if(!confirmed)return [] as Recommendation[]
-        const rawStandards=scorecard.slips??[]
+        const predicted=!confirmed&&scorecard.lineupMode==="predicted"
+        if(!confirmed&&!predicted)return [] as Recommendation[]
+        const builderSlips:BetSlip[]=(scorecard.riskBuilders??[])
+          .filter(b=>b.legs?.length)
+          .map(b=>({
+            id:b.id,title:b.title,risk:b.risk,legs:b.legs,
+            averageLegProbability:b.averageLegProbability,
+            placeable:false,
+            marketAvailability:b.legs.map(leg=>({player:leg.player,market:leg.market,status:"unknown" as MarketStatus})),
+          }))
+        // Use the target builders as the primary Picks recommendation source because
+        // they compare market families per player. Fall back to legacy slips only
+        // when a scorecard cannot build a target combination.
+        const rawStandards=builderSlips.length?builderSlips:(scorecard.slips??[])
         const rawFouls=scorecard.foulTargetSlips??[]
         const standards=officialLineup.confirmed?rawStandards.map(s=>filterSlipToOfficialStarters(s,officialLineup)).filter(Boolean) as BetSlip[]:rawStandards
         const fouls=officialLineup.confirmed?rawFouls.map(s=>filterSlipToOfficialStarters(s,officialLineup)).filter(Boolean) as FoulTargetSlip[]:rawFouls
@@ -742,6 +690,8 @@ export async function GET(request:Request){
     const payload={
       ok:true,
       updatedAt:new Date().toISOString(),
+      date:resolvedDate,
+      autoAdvanced,
       fixturesScanned:upcoming.length+liveFixtures.length,
       recommendations,
       liveMatches,
@@ -750,8 +700,8 @@ export async function GET(request:Request){
       staleFallback:false,
       methodology:{
         recommendationCalibration:"Final ranking uses a second walk-forward calibration layer built from historical recommendations that survived the selection process.",
-        cache:"Recommended scans today only and is served from one server endpoint with a five-minute shared-cache target; manual refresh bypasses the normal scan cadence.",
-        tracking:"Recommendations are saved before kickoff and graded later from imported player-match data. Model-only recommendations remain visible when bookmaker verification is missing; only verified same-bookmaker markets are marked placeable.",
+        cache:"Recommended scans the current matchday and automatically advances to the next available matchday when no usable fixtures remain. Manual refresh bypasses the normal scan cadence.",
+        tracking:"Predicted-XI recommendations remain visible before official teams. As soon as confirmed lineups arrive, the scorecard is rebuilt and benched players disappear. Recommendations are saved before kickoff and graded later from imported player-match data.",
         targetOdds:"Select a match, then 5/1 through 50/1 same-game targets search the strongest recommended legs for that fixture only. Exact individual same-bookmaker prices are preferred as a reference, but the final Bet Builder quote can differ because of correlation.",
         liveRecommended:"Matches remain on Recommended after kick-off. Live rows use the current score and minute plus current player event counts. Confirmed-XI card, foul, fouled, shot and SOT models become next-threshold remaining-match probabilities; already-carded players are removed from the card market, and stale pre-match bookmaker prices are never relabelled as live prices.",
         liveFeedback:liveTopSample>=50
