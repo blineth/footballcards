@@ -270,7 +270,7 @@ export default function RecommendedPage(){
         <div className="mt-3 flex flex-wrap gap-1.5 text-[0.46rem] font-black uppercase">
           {["Cards","Fouls committed","Fouls drawn","Shots","SOT"].map(x=><span key={x} className="rounded-full bg-emerald-300/10 px-2 py-1 text-emerald-200">{x}</span>)}
         </div>
-        <p className="mt-2 text-[0.52rem] text-white/30">Only verified Bet365 player markets are used. Safe avoids cards/scorers; Balanced expands the route; Risky can anchor on the strongest evidence-backed card candidate. From 120 minutes before kickoff, Multi force-checks lineups every 30 seconds; once both XIs are confirmed, only those starters remain eligible.</p>
+        <p className="mt-2 text-[0.52rem] text-white/30">Only verified Bet365 player markets are used in the automatic Multi: fouls committed, fouls drawn, shots and SOT. Safe, Balanced and Risky all stay probability-first; the higher tiers raise the target odds rather than forcing a scorer or card. From 120 minutes before kickoff, Multi force-checks lineups every 30 seconds; once both XIs are confirmed, only those starters remain eligible.</p>
       </div>
     </header>
 
@@ -294,7 +294,7 @@ export default function RecommendedPage(){
           return <button key={tier.id} onClick={()=>setMultiTier(tier.id)} className={"rounded-2xl border px-3 py-3 text-left transition "+(active?"border-violet-300/35 bg-violet-300 text-violet-950":"border-white/8 bg-white/[0.035] text-white")}>
             <p className="text-xs font-black">{label}</p>
             <p className={"mt-1 font-mono text-sm font-black "+(active?"text-violet-950":"text-emerald-200")}>{tier.targetFractionalPerMatch}</p>
-            <p className={"mt-1 text-[0.46rem] "+(active?"text-violet-950/65":"text-white/30")}>{tier.id==="safe"?"Low variance":tier.id==="balanced"?"Less safe":"Higher risk"}</p>
+            <p className={"mt-1 text-[0.46rem] "+(active?"text-violet-950/65":"text-white/30")}>{tier.id==="safe"?"Low variance":tier.id==="balanced"?"Higher target":"Highest target"}</p>
           </button>
         })}
       </section>:null}
