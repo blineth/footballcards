@@ -122,15 +122,26 @@ export default function RecommendedPage(){
 
   const refresh=useCallback(async(force=false)=>{
     setLoading(true)
+    const controller=new AbortController()
+    const timeout=window.setTimeout(()=>controller.abort(),force?25000:8000)
     try{
       const url="/api/recommended"+(force?"?refresh=1":"")
-      const r=await fetch(url,{cache:"no-store"})
+      const r=await fetch(url,{cache:"no-store",signal:controller.signal})
       const next=r.ok?await r.json() as Response:{ok:false,error:"Multi-match scan failed"}
       setData(next)
       if(next.ok)writeMultiCache(next)
-    }catch{
-      setData(cur=>cur??{ok:false,error:"Multi-match scan failed"})
-    }finally{setLoading(false)}
+    }catch(error){
+      const timedOut=error instanceof DOMException&&error.name==="AbortError"
+      setData(cur=>cur??{
+        ok:false,
+        error:timedOut
+          ?"No cached Multi build is available yet. Tap refresh to build it once; after that it stays cached until you refresh again."
+          :"Multi-match scan failed"
+      })
+    }finally{
+      window.clearTimeout(timeout)
+      setLoading(false)
+    }
   },[])
 
   useEffect(()=>{
@@ -177,7 +188,7 @@ export default function RecommendedPage(){
     <div className="mx-auto max-w-3xl space-y-5 px-4 py-4">
       {data?.staleFallback?<div className="rounded-2xl border border-amber-300/15 bg-amber-300/[0.06] px-4 py-3 text-xs text-amber-100">{data.warning??"Showing the last successful cached build."}</div>:null}
 
-      {loading&&!data?<section className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center"><RefreshCw className="mx-auto mb-3 size-5 animate-spin text-violet-300"/><p className="font-black">Scanning fully-covered matches…</p></section>:null}
+      {loading&&!data?<section className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center"><RefreshCw className="mx-auto mb-3 size-5 animate-spin text-violet-300"/><p className="font-black">Loading cached Multi build…</p><p className="mt-1 text-xs text-white/30">If there is no cache yet, this will stop automatically rather than scan forever.</p></section>:null}
       {!loading&&data&&!data.ok?<section className="rounded-3xl border border-rose-300/15 bg-rose-400/5 p-6 text-center"><p className="font-black">Multi-match scan unavailable</p><p className="mt-1 text-sm text-white/40">{data.error??"Try a manual refresh."}</p></section>:null}
 
       {data?.ok?<section className="grid grid-cols-2 gap-2 sm:grid-cols-4">
