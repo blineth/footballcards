@@ -55,12 +55,12 @@ type Recommendation={
 type TargetOddsLeg={
   fixtureId:string;competition:Competition;kickoff:string;home:string;away:string;
   player:string;team:string;market:string;label:string;probability:number;
-  price:number;priceSource:"exact"|"model";bookmaker:string|null;confidence:SlipLeg["confidence"]
+  price:number;priceSource:"exact";bookmaker:"Bet365";confidence:SlipLeg["confidence"]
 }
 type TargetOddsSlip={
   id:string;targetFractional:string;targetDecimal:number;available:boolean;
   referenceOdds:number|null;modelAllHitProbability:number|null;bookmaker:string|null;
-  priceSource:"bookmaker-singles"|"model"|null;marketsVerified:boolean;legs:TargetOddsLeg[];
+  priceSource:"bookmaker-singles"|null;marketsVerified:boolean;legs:TargetOddsLeg[];
   note:string
 }
 type TargetOddsGame={
@@ -245,12 +245,12 @@ const TARGET_ODDS=[
   {fractional:"40/1",decimal:41},
   {fractional:"50/1",decimal:51},
 ] as const
-const TARGET_BOOKS=["Bet365","Sky Bet","William Hill","Paddy Power"] as const
+const TARGET_BOOKS=["Bet365"] as const
 
 function buildTargetOddsSlips(recommendations:Recommendation[],fixtureId:string):TargetOddsSlip[]{
   type Candidate={
     fixture:Fixture;leg:SlipLeg;bookmaker:string|null;exactPrice:number|null;
-    fairPrice:number;marketVerified:boolean
+    marketVerified:boolean
   }
   const candidates:Candidate[]=[]
   const seen=new Set<string>()
@@ -259,27 +259,26 @@ function buildTargetOddsSlips(recommendations:Recommendation[],fixtureId:string)
     for(const leg of rec.slip.legs??[]){
       const p=Math.max(.01,Math.min(.99,Number(leg.probability??0)))
       if(p<.12||leg.confidence==="D")continue
-      const fair=Number(leg.fairOdds??(1/p))
-      if(!Number.isFinite(fair)||fair<=1)continue
       const book=leg.bookmakerName??rec.slip.bookmaker??null
-      const exact=leg.bookmakerOdds!=null&&leg.priceSource!=="estimated"?Number(leg.bookmakerOdds):null
-      const key=[leg.player,leg.market,leg.label,book??"model"].join("|")
+      const exact=book==="Bet365"&&leg.bookmakerOdds!=null&&leg.priceSource!=="estimated"?Number(leg.bookmakerOdds):null
+      if(exact==null||!Number.isFinite(exact)||exact<=1)continue
+      const key=[leg.player,leg.market,leg.label,"Bet365"].join("|")
       if(seen.has(key))continue
       seen.add(key)
       candidates.push({
-        fixture:rec.fixture,leg,bookmaker:book,exactPrice:exact,fairPrice:fair,
-        marketVerified:Boolean(rec.placeable&&book&&exact),
+        fixture:rec.fixture,leg,bookmaker:"Bet365",exactPrice:exact,
+        marketVerified:true,
       })
     }
   }
 
   const family=(market:string)=>market.startsWith("goal")?"goal":market.startsWith("assist")?"assist":market.startsWith("fouled")?"fouled":market.startsWith("foul")?"foul":market.startsWith("sot")?"sot":market.startsWith("shot")?"shot":"card"
-  function search(targetDecimal:number,bookmaker:string|null){
+  function search(targetDecimal:number,bookmaker:"Bet365"){
     const minFamilies=targetDecimal>=16?3:2
     type State={legs:Candidate[];odds:number;prob:number;players:Set<string>;families:Record<string,number>}
     let states:State[]=[{legs:[],odds:1,prob:1,players:new Set(),families:{}}]
     const pool=candidates
-      .filter(x=>bookmaker?x.bookmaker===bookmaker&&x.exactPrice!=null:true)
+      .filter(x=>x.bookmaker===bookmaker&&x.exactPrice!=null)
       .sort((a,b)=>b.leg.probability-a.leg.probability)
       .slice(0,24)
 
@@ -290,7 +289,7 @@ function buildTargetOddsSlips(recommendations:Recommendation[],fixtureId:string)
         const fam=family(option.leg.market)
         const familyCount=state.families[fam]??0
         if(familyCount>=2)continue
-        const price=bookmaker?option.exactPrice:option.fairPrice
+        const price=option.exactPrice
         if(price==null)continue
         const odds=state.odds*price
         if(odds>targetDecimal*1.65&&state.legs.length>=1)continue
@@ -324,19 +323,9 @@ function buildTargetOddsSlips(recommendations:Recommendation[],fixtureId:string)
   }
 
   return TARGET_ODDS.map(target=>{
-    let chosen:{legs:Candidate[];odds:number;prob:number;players:Set<string>}|null=null
-    let chosenBook:string|null=null
-    for(const book of TARGET_BOOKS){
-      const result=search(target.decimal,book)
-      if(!result)continue
-      if(!chosen||result.prob>chosen.prob){chosen=result;chosenBook=book}
-    }
-    let source:"bookmaker-singles"|"model"|null=chosen?"bookmaker-singles":null
-    if(!chosen){
-      chosen=search(target.decimal,null)
-      chosenBook=null
-      source=chosen?"model":null
-    }
+    let chosen:{legs:Candidate[];odds:number;prob:number;players:Set<string>}|null=search(target.decimal,"Bet365")
+    const chosenBook:"Bet365"="Bet365"
+    const source:"bookmaker-singles"|null=chosen?"bookmaker-singles":null
     if(!chosen)return {
       id:"target-"+fixtureId+"-"+target.fractional.replace("/","-"),
       targetFractional:target.fractional,targetDecimal:target.decimal,
@@ -345,25 +334,23 @@ function buildTargetOddsSlips(recommendations:Recommendation[],fixtureId:string)
       note:"No strong, market-diverse combination actually reaches this target. A lower-priced slip is never labelled as this target.",
     }
     const legs:TargetOddsLeg[]=chosen.legs.map(x=>{
-      const price=source==="bookmaker-singles"?Number(x.exactPrice):x.fairPrice
+      const price=Number(x.exactPrice)
       return {
         fixtureId:x.fixture.id,competition:x.fixture.competition,kickoff:x.fixture.kickoff,
         home:x.fixture.home.name,away:x.fixture.away.name,player:x.leg.player,team:x.leg.team,
         market:x.leg.market,label:x.leg.label,probability:x.leg.probability,
-        price:Math.round(price*100)/100,priceSource:source==="bookmaker-singles"?"exact":"model",
-        bookmaker:chosenBook,confidence:x.leg.confidence,
+        price:Math.round(price*1000)/1000,priceSource:"exact" as const,
+        bookmaker:"Bet365" as const,confidence:x.leg.confidence,
       }
     })
-    const marketsVerified=source==="bookmaker-singles"&&chosen.legs.every(x=>x.marketVerified&&x.bookmaker===chosenBook)
+    const marketsVerified=chosen.legs.every(x=>x.marketVerified&&x.bookmaker==="Bet365"&&x.exactPrice!=null)
     return {
       id:"target-"+fixtureId+"-"+target.fractional.replace("/","-"),
       targetFractional:target.fractional,targetDecimal:target.decimal,available:true,
       referenceOdds:Math.round(chosen.odds*100)/100,
       modelAllHitProbability:Math.round(chosen.prob*10000)/10000,
       bookmaker:chosenBook,priceSource:source,marketsVerified,legs,
-      note:source==="bookmaker-singles"
-        ? "Uses exact individual "+chosenBook+" prices as a reference. The final same-game Bet Builder price can differ because the bookmaker applies correlation."
-        : "Uses model fair prices as a guide and only displays this target when the reference product actually reaches it. The final same-game Builder price can still differ because of correlation.",
+      note:"Uses verified Bet365 individual leg prices only. No model/fair odds are allowed into Target Odds. The displayed product reaches the target using those Bet365 singles; Bet365 can still apply correlation when quoting the final same-game Bet Builder.",
     }
   })
 }
@@ -709,7 +696,7 @@ export async function GET(request:Request){
         recommendationCalibration:"Final ranking uses a second walk-forward calibration layer built from historical recommendations that survived the selection process.",
         cache:"Recommended scans the current matchday and automatically advances to the next available matchday when no usable fixtures remain. Manual refresh bypasses the normal scan cadence.",
         tracking:"Predicted-XI recommendations remain visible before official teams. As soon as confirmed lineups arrive, the scorecard is rebuilt and benched players disappear. Recommendations are saved before kickoff and graded later from imported player-match data.",
-        targetOdds:"Select a match, then 5/1 through 50/1 same-game targets search the strongest recommended legs for that fixture only. Exact individual same-bookmaker prices are preferred as a reference, but the final Bet Builder quote can differ because of correlation.",
+        targetOdds:"Select a match, then 5/1 through 50/1 targets use verified Bet365 individual leg prices only. If Bet365 prices are missing, the target is unavailable; model/fair odds are never substituted. The final Bet365 Bet Builder quote can still differ because of correlation.",
         liveRecommended:"Matches remain on Recommended after kick-off. Live rows use the current score and minute plus current player event counts. Confirmed-XI card, foul, fouled, shot and SOT models become next-threshold remaining-match probabilities; already-carded players are removed from the card market, and stale pre-match bookmaker prices are never relabelled as live prices.",
         liveFeedback:liveTopSample>=50
           ? "Live top-pick calibration is active. Current 30-day reliability multiplier: "+liveReliabilityFactor.toFixed(3)
