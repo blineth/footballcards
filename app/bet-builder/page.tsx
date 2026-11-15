@@ -515,16 +515,17 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
 
     const runSearch=(candidateRows:typeof allCandidateRows)=>{
       // Exact objective: maximise joint hit probability subject to reaching the
-      // requested odds. We group by player so at most one market from each player
-      // can be used, then dynamic-program over odds buckets. This avoids a 9%
+      // requested odds. We group by player + market family, so one player may
+      // contribute different high-probability events (e.g. 1+ shot and 1+ foul)
+      // but never nested thresholds from the same family. This avoids a 9%
       // long-shot leg surviving merely because it reaches the target faster.
       const minLegProbability=cfg.risk==="Safe"?.34:cfg.risk==="Balanced"?.24:.18
-      const byPlayer=new Map<string,typeof candidateRows>()
+      const byPlayerFamily=new Map<string,typeof candidateRows>()
       for(const option of candidateRows){
         if(option.row.probability<Math.max(cfg.min,minLegProbability))continue
-        const key=normPlayer(option.row.player)
-        if(!byPlayer.has(key))byPlayer.set(key,[])
-        byPlayer.get(key)!.push(option)
+        const key=normPlayer(option.row.player)+"|"+option.family
+        if(!byPlayerFamily.has(key))byPlayerFamily.set(key,[])
+        byPlayerFamily.get(key)!.push(option)
       }
 
       type State={
@@ -539,7 +540,7 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
       let states=new Map<number,State>()
       states.set(0,{legs:[],product:1,prob:1,conservative:1,families:{}})
 
-      for(const options of byPlayer.values()){
+      for(const options of byPlayerFamily.values()){
         const next=new Map(states)
         for(const state of states.values()){
           if(state.legs.length>=cfg.max)continue
