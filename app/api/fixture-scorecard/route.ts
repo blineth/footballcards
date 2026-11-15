@@ -426,28 +426,36 @@ function oddsKind(market: SlipMarketKey) {
   return "shot"
 }
 function playerInLabel(selection: OddSelection, player: string, allPlayers:string[] = []) {
-  const hay = norm(selection.market + " " + selection.label)
-  const p = norm(player)
+  const p=norm(player)
   if(!p)return false
-  if(hay.includes(p))return true
+  const label=norm(selection.label)
+  if(label.includes(p))return true
 
   const parts=p.split(" ")
+  const first=parts[0]??""
   const surname=parts.at(-1)??p
-  if(surname.length<4||!hay.includes(surname))return false
+  if(surname.length<4||!label.includes(surname))return false
 
-  // Only permit surname fallback when that surname is unique in the fixture.
+  // Surname fallback is only safe when that surname is unique among eligible
+  // players AND the bookmaker did not provide a conflicting full first name.
   const sameSurname=allPlayers.filter(name=>{
     const n=norm(name)
     return (n.split(" ").at(-1)??n)===surname
   })
   if(sameSurname.length!==1)return false
 
-  // If an initial is present in the bookmaker label, it must agree too.
-  const first=parts[0]??""
-  const initial=first.slice(0,1)
-  const tokens=hay.split(" ")
+  const tokens=label.split(" ")
   const surnameIndex=tokens.indexOf(surname)
-  if(surnameIndex>0 && tokens[surnameIndex-1]?.length===1 && initial && tokens[surnameIndex-1]!==initial)return false
+  if(surnameIndex<0)return false
+  if(surnameIndex===0)return true // genuine surname-only bookmaker label
+
+  const preceding=tokens[surnameIndex-1]??""
+  const initial=first.slice(0,1)
+  if(preceding.length===1)return Boolean(initial&&preceding===initial)
+
+  // If Bet365 supplied a full first name, it must actually match. This blocks
+  // Jude Bellingham from inheriting Jobe Bellingham's price (and equivalents).
+  if(/^[a-z]+$/.test(preceding)&&preceding!==first)return false
   return true
 }
 function selectionThreshold(selection: OddSelection) {
@@ -977,7 +985,7 @@ function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
 
   return configs.map(config=>{
     const sourceCandidates=config.risk==="Safe"?safeCandidates:preferredCandidates
-    const safeFloors=config.risk==="Safe"?[.60]:[0]
+    const safeFloors=config.risk==="Safe"?[.78,.74,.70,.66,.62,.60]:[0]
     type State={legs:SlipLeg[];product:number;quality:number;prob:number;conservative:number;players:Set<string>;families:Record<string,number>}
     let best:State|undefined
     let usedSafeFloor:number|null=null
@@ -1073,7 +1081,7 @@ function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
       legs:[],referenceProductOdds:null,averageLegProbability:null,minimumLegProbability:null,modelAllHitProbability:null,conservativeAllHitProbability:null,safetyScore:null,
       exactPriced:false,bookmaker:null,verifiedBet365LegPrices:false,exactBet365BuilderPrice:false,pricingBasis:"none" as const,
       note:config.risk==="Safe"
-        ?"No combination of verified Bet365 legs with at least 60% consensus safety reaches 3/1."
+        ?"No combination of verified Bet365 legs with at least 60% consensus safety reaches the 3/1 target."
         :"No combination of verified Bet365 player prices reaches this target with the required model strength yet."
     }
     const avg=best.legs.reduce((sum,leg)=>sum+leg.probability,0)/best.legs.length
@@ -1093,7 +1101,7 @@ function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
       exactBet365BuilderPrice:false,
       pricingBasis:"bet365_singles_product" as const,
       note:config.risk==="Safe"
-        ?"Every leg has a verified Bet365 price and at least 60% consensus safety. Safe then chooses the combination with the highest conservative joint hit probability that still reaches 3/1; leg count is only a tie-breaker. Several short-priced fouls/shots are used only when their combined chance is genuinely better than a shorter route. Large model-vs-Bet365 disagreements are capped."
+        ?"Every leg has a verified Bet365 price. Safe first tries to reach the target using only 78%+ consensus-safety legs, then 74%, 70%, 66%, 62% and finally 60% only if necessary. Within the highest tier that can reach the target it maximises conservative joint hit probability; leg count is only a tie-breaker. This allows several short-priced fouls/shots to beat a speculative two-leg shortcut. Large model-vs-Bet365 disagreements are capped."
         :"Every displayed leg price is a verified Bet365 price. The target is built from live Bet365 singles ("+families.join(", ")+") and ranked by conservative all-hit probability. Bet365 can reprice correlated legs inside Bet Builder, so this is not labelled as the final Builder quote."
     }
   })
