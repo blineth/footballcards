@@ -133,7 +133,7 @@ function parseFixture():Fixture|null{
   const competition=(p.get("competition")??"") as Competition,home=p.get("home")??"",away=p.get("away")??""
   return id&&date&&competition&&home&&away?{id,date,kickoff,competition,home,away}:null
 }
-function scorecardUrl(f:Fixture){return "/api/fixture-scorecard?"+new URLSearchParams({date:f.date,home:f.home,away:f.away,competition:f.competition,refresh:String(Date.now())})}
+function scorecardUrl(f:Fixture,force=false){const q=new URLSearchParams({date:f.date,home:f.home,away:f.away,competition:f.competition});if(force)q.set("refresh",String(Date.now()));return "/api/fixture-scorecard?"+q}
 function time(kickoff:string){return kickoff?new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/London",weekday:"short",day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit",hour12:false}).format(new Date(kickoff)):""}
 function keyOf(s:Pick<Selection,"player"|"market"|"label">){return [s.player,s.market,s.label].join("|").toLowerCase()}
 function verifiedBet365Odd(s:Selection){
@@ -623,6 +623,18 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
   })
 }
 
+function scorecardCacheKey(f:Fixture){return "match-edge:scorecard:"+[f.date,f.competition,f.home,f.away].join("|").toLowerCase()}
+function readScorecardCache(f:Fixture):Scorecard|null{
+  try{
+    const raw=window.localStorage.getItem(scorecardCacheKey(f))
+    if(!raw)return null
+    const parsed=JSON.parse(raw)
+    return parsed?.data?.ok?parsed.data as Scorecard:null
+  }catch{return null}
+}
+function writeScorecardCache(f:Fixture,data:Scorecard){
+  try{if(data?.ok)window.localStorage.setItem(scorecardCacheKey(f),JSON.stringify({savedAt:new Date().toISOString(),data}))}catch{}
+}
 export default function BetBuilderPage(){
   const router=useRouter()
   const[fixture,setFixture]=useState<Fixture|null>(null)
@@ -640,9 +652,27 @@ export default function BetBuilderPage(){
   const[builderMode,setBuilderMode]=useState<"all"|"player"|"discipline">("all")
 
   useEffect(()=>{setFixture(parseFixture())},[])
-  const load=useCallback(async(f:Fixture)=>{setLoading(true);try{const r=await fetch(scorecardUrl(f),{cache:"no-store"});setData(await r.json().catch(()=>({ok:false,error:"Unable to load match model."})))}finally{setLoading(false)}},[])
-  useEffect(()=>{if(fixture)void load(fixture)},[fixture,load])
-  useEffect(()=>{if(!fixture)return;const t=window.setInterval(()=>void load(fixture),60000);return()=>window.clearInterval(t)},[fixture,load])
+  const load=useCallback(async(f:Fixture,force=false)=>{
+    const kickoff=new Date(f.kickoff).getTime()
+    const preMatch=!Number.isFinite(kickoff)||Date.now()<kickoff
+    if(!force&&preMatch){
+      const cached=readScorecardCache(f)
+      if(cached){setData(cached);setLoading(false);return}
+    }
+    setLoading(true)
+    try{
+      const r=await fetch(scorecardUrl(f,force),{cache:"no-store"})
+      const next=await r.json().catch(()=>({ok:false,error:"Unable to load match model."})) as Scorecard
+      setData(next)
+      if(preMatch&&next?.ok)writeScorecardCache(f,next)
+    }finally{setLoading(false)}
+  },[])
+  useEffect(()=>{if(fixture)void load(fixture,false)},[fixture,load])
+  useEffect(()=>{
+    if(!fixture||!(live?.status==="live"||live?.status==="halftime"))return
+    const t=window.setInterval(()=>void load(fixture,false),60000)
+    return()=>window.clearInterval(t)
+  },[fixture,live?.status,load])
   const loadLive=useCallback(async(f:Fixture)=>{
     const kickoff=new Date(f.kickoff).getTime()
     const now=Date.now()
@@ -803,9 +833,9 @@ export default function BetBuilderPage(){
       <div className="mx-auto max-w-3xl px-4 pb-4 pt-[max(1rem,env(safe-area-inset-top))]">
         <div className="flex items-center gap-3">
           <button onClick={()=>router.push("/")} className="rounded-xl bg-white/7 p-2.5 text-white/70"><ArrowLeft className="size-4"/></button>
-          <div className="min-w-0 flex-1"><div className="flex items-center gap-2 text-emerald-300"><Target className="size-4"/><span className="text-[0.6rem] font-black uppercase tracking-[0.15em]">Match Builder</span></div><h1 className="mt-1 truncate text-xl font-black">{fixture.home} <span className="text-white/25">v</span> {fixture.away}</h1><p className="mt-0.5 text-[0.58rem] text-white/35">{inPlay&&live?<span className="font-black text-rose-300">LIVE {live.elapsed}' · {live.score.home??"-"}-{live.score.away??"-"} · </span>:null}{fixture.competition} · {time(fixture.kickoff)}</p></div>
+          <div className="min-w-0 flex-1"><div className="flex items-center gap-2 text-emerald-300"><Target className="size-4"/><span className="text-[0.6rem] font-black uppercase tracking-[0.15em]">Match Builder</span></div><h1 className="mt-1 truncate text-xl font-black">{fixture.home} <span className="text-white/25">v</span> {fixture.away}</h1><p className="mt-0.5 text-[0.58rem] text-white/35">{inPlay&&live?<span className="font-black text-rose-300">LIVE {live.elapsed}' · {live.score.home??"-"}-{live.score.away??"-"} · </span>:null}{fixture.competition} · {time(fixture.kickoff)}{!inPlay?<span className="text-white/20"> · cached until refresh</span>:null}</p></div>
           <button onClick={()=>void toggleH2H()} className={"rounded-xl border px-3 py-2.5 text-[0.55rem] font-black "+(h2hOpen?"border-emerald-300/30 bg-emerald-300 text-emerald-950":"border-white/10 bg-white/6 text-white/55")}>H2H</button>
-          <button onClick={()=>void load(fixture)} className="rounded-xl bg-emerald-400 p-2.5 text-emerald-950"><RefreshCw className={"size-4 "+(loading?"animate-spin":"")}/></button>
+          <button onClick={()=>void load(fixture,true)} className="rounded-xl bg-emerald-400 p-2.5 text-emerald-950"><RefreshCw className={"size-4 "+(loading?"animate-spin":"")}/></button>
         </div>
       </div>
     </header>
