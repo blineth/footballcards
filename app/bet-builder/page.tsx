@@ -661,7 +661,7 @@ export default function BetBuilderPage(){
   if(!fixture)return <main className="min-h-screen bg-[#07120e] px-4 py-10 text-white"><div className="mx-auto max-w-xl rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center"><p className="font-black">Choose a match first</p><p className="mt-2 text-sm text-white/40">Open a fixture from Matches to build it.</p><button onClick={()=>router.push("/")} className="mt-5 rounded-xl bg-emerald-400 px-4 py-2.5 text-sm font-black text-emerald-950">Matches</button></div></main>
 
   function toggle(row:Selection){
-    if(inPlay&&(bet365MarketStatus(row.market)!=="available"||verifiedBet365Odd(row)==null))return
+    if(bet365MarketStatus(row.market)==="unavailable"||verifiedBet365Odd(row)==null)return
     setSelected(cur=>{
       const next={...cur}
       if(next[row.id]){delete next[row.id];return next}
@@ -715,8 +715,8 @@ export default function BetBuilderPage(){
 
       {inPlay&&live?<section className="rounded-3xl border border-rose-300/15 bg-rose-400/[0.055] p-4"><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-black text-rose-200">Live recommendations adapting</p><p className="mt-1 text-[0.58rem] leading-relaxed text-white/40">Settled thresholds are removed automatically. If a player commits their first foul, 1+ disappears and the next available foul line moves up the ranking.</p></div><span className="shrink-0 rounded-full bg-rose-300 px-2 py-1 text-[0.45rem] font-black text-rose-950">{live.elapsed}'</span></div><p className="mt-2 text-[0.46rem] text-white/25">{live.source??"Live feed"} · refreshes every 30 seconds</p></section>:null}
 
-      {inPlay?<section className="rounded-2xl border border-white/10 bg-white/[0.035] p-3">
-        <div className="flex items-start justify-between gap-3"><div><p className="text-[0.52rem] font-black uppercase tracking-wide text-white/55">Bet365 live market availability</p><p className="mt-1 text-[0.5rem] leading-relaxed text-white/30">Only markets returned by the verified Bet365 live feed can be added to a bet or used in 3/1, 10/1 and 20/1 target slips.</p></div><span className="rounded-full bg-white/6 px-2 py-1 text-[0.42rem] font-black text-white/35">LIVE</span></div>
+      {(Object.keys(activeMarketAvailability??{}).length>0)?<section className="rounded-2xl border border-white/10 bg-white/[0.035] p-3">
+        <div className="flex items-start justify-between gap-3"><div><p className="text-[0.52rem] font-black uppercase tracking-wide text-white/55">Bet365 live market availability</p><p className="mt-1 text-[0.5rem] leading-relaxed text-white/30">Only markets with a verified Bet365 price can be added to a bet or used in target slips. Other markets may still show model analysis, but they are not presented as bets.</p></div><span className="rounded-full bg-white/6 px-2 py-1 text-[0.42rem] font-black text-white/35">{inPlay?"LIVE":"BET365"}</span></div>
         {availableBet365Markets.length?<div className="mt-2"><p className="text-[0.42rem] font-black uppercase text-emerald-300/80">Available</p><div className="mt-1 flex flex-wrap gap-1.5">{availableBet365Markets.map(kind=><span key={kind} className="rounded-full bg-emerald-300/10 px-2 py-1 text-[0.42rem] font-black text-emerald-200">{marketLabel(kind)}</span>)}</div></div>:null}
         {unavailableBet365Markets.length?<div className="mt-2"><p className="text-[0.42rem] font-black uppercase text-rose-300/80">Not available in verified Bet365 feed</p><div className="mt-1 flex flex-wrap gap-1.5">{unavailableBet365Markets.map(kind=><span key={kind} className="rounded-full bg-rose-300/10 px-2 py-1 text-[0.42rem] font-black text-rose-200">{marketLabel(kind)}</span>)}</div></div>:null}
       </section>:null}
@@ -894,7 +894,7 @@ function MiniStat({label,value}:{label:string;value:string}){return <div classNa
 
 function SelectionRow({row,selected,onToggle,rank,traffic,bestAction=false,liveBet365=false,marketStatus="unknown",inPlay=false}:{row:Selection;selected:boolean;onToggle:()=>void;rank:number;traffic:Traffic;bestAction?:boolean;liveBet365?:boolean;marketStatus?:MarketStatus;inPlay?:boolean}){
   const exact=row.bookmakerOdds!=null
-  const actionable=!inPlay||(marketStatus==="available"&&exact)
+  const actionable=exact&&marketStatus!=="unavailable"
   const trafficText=traffic==="high"?"HIGH":traffic==="average"?"AVERAGE":"LOW"
   const trafficClass=traffic==="high"?"bg-emerald-300/15 text-emerald-200 border-emerald-300/20":traffic==="average"?"bg-amber-300/12 text-amber-100 border-amber-300/20":"bg-rose-300/10 text-rose-100/75 border-rose-300/15"
   const probabilityClass=traffic==="high"?"text-emerald-200":traffic==="average"?"text-amber-100":"text-rose-100/80"
