@@ -251,7 +251,6 @@ function buildTargetOddsSlips(recommendations:Recommendation[],fixtureId:string)
 
   const family=(market:string)=>market.startsWith("goal")?"goal":market.startsWith("assist")?"assist":market.startsWith("fouled")?"fouled":market.startsWith("foul")?"foul":market.startsWith("sot")?"sot":market.startsWith("shot")?"shot":"card"
   const baseMarket=(market:string)=>market==="goal1"||market==="assist1"||market==="foul1"||market==="fouled1"||market==="card"||market==="shot1"||market==="sot1"
-  const baseMarket=(market:string)=>market==="goal1"||market==="assist1"||market==="foul1"||market==="fouled1"||market==="card"||market==="shot1"||market==="sot1"
   function search(targetDecimal:number,bookmaker:"Bet365"){
     const minFamilies=targetDecimal>=16?3:2
     type State={legs:Candidate[];odds:number;prob:number;players:Set<string>;families:Record<string,number>}
@@ -469,6 +468,7 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
   const eligible=scans.filter(x=>x.scorecard?.ok&&fullPlayerMarketSet(x.scorecard.marketAvailability))
 
   const family=(market:string)=>market.startsWith("goal")?"goal":market.startsWith("assist")?"assist":market.startsWith("fouled")?"fouled":market.startsWith("foul")?"foul":market.startsWith("sot")?"sot":market.startsWith("shot")?"shot":"card"
+  const baseMarket=(market:string)=>market==="goal1"||market==="assist1"||market==="foul1"||market==="fouled1"||market==="card"||market==="shot1"||market==="sot1"
   const confidenceReliability=(leg:SlipLeg)=>leg.confidence==="A"?1:leg.confidence==="B"?.96:leg.confidence==="C"?.88:.74
   const marketReliability=(leg:SlipLeg)=>{
     const f=family(leg.market)
