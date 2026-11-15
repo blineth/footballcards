@@ -22,7 +22,7 @@ CACHE.mkdir(parents=True, exist_ok=True)
 
 TODAY = date.today()
 DOMESTIC_START = date(2025, 7, 1)
-INTERNATIONAL_START = date(2024, 6, 1)
+INTERNATIONAL_START = date(2022, 1, 1)
 
 DOMESTIC = [
     ("eng.1", "Premier League"),
@@ -34,9 +34,15 @@ DOMESTIC = [
 ]
 INTERNATIONAL = [
     ("uefa.euro", "UEFA European Championship"),
+    ("uefa.euroq", "UEFA European Championship Qualifying"),
     ("uefa.nations", "UEFA Nations League"),
-    ("fifa.worldq.uefa", "FIFA World Cup Qualifying - UEFA"),
     ("fifa.world", "FIFA World Cup"),
+    ("fifa.worldq.uefa", "FIFA World Cup Qualifying - UEFA"),
+    ("fifa.worldq.conmebol", "FIFA World Cup Qualifying - CONMEBOL"),
+    ("fifa.worldq.concacaf", "FIFA World Cup Qualifying - CONCACAF"),
+    ("fifa.worldq.afc", "FIFA World Cup Qualifying - AFC"),
+    ("fifa.worldq.caf", "FIFA World Cup Qualifying - CAF"),
+    ("fifa.worldq.ofc", "FIFA World Cup Qualifying - OFC"),
     ("fifa.friendly", "International Friendly"),
 ]
 
@@ -285,10 +291,11 @@ def main() -> int:
         all_rows.extend(rows)
         reports.append(report)
 
-    # The user specifically wants England's recent tournament cycle in the preloaded database.
-    # Other international H2H can still be fetched on demand by /api/team-h2h.
+    # Preload the full senior international tournament cycle for every nation.
+    # Competition labels are retained so the model can distinguish major tournaments,
+    # qualifiers, Nations League and friendlies while still treating them as national-team evidence.
     for slug, label in INTERNATIONAL:
-        rows, report = collect_competition(slug, label, INTERNATIONAL_START, england_only=True)
+        rows, report = collect_competition(slug, label, INTERNATIONAL_START, england_only=False)
         all_rows.extend(rows)
         reports.append(report)
 
@@ -310,7 +317,7 @@ def main() -> int:
     report = {
         "generatedAt": __import__("datetime").datetime.utcnow().isoformat() + "Z",
         "domesticScope": "2025/26 + 2026/27 to date, Premier League/Championship/League One/League Two + FA Cup + League Cup",
-        "internationalScope": "England from Euro 2024 onward: Euro 2024, Nations League, 2026 World Cup qualifying, 2026 World Cup, relevant friendlies",
+        "internationalScope": "All senior national teams from 2022 onward: Euros, Euro qualifying, Nations League, World Cup, all regional World Cup qualifying feeds and friendlies",
         "rows": len(rows),
         "yellowCards": sum(int(r["yellow_card"]) for r in rows),
         "goals": sum(int(r["goals"]) for r in rows),
