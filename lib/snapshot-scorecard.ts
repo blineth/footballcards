@@ -69,42 +69,90 @@ export async function confirmedStartersForFixture(input:{
     try{
       const scoreboard=await fetch(
         "https://site.api.espn.com/apis/site/v2/sports/soccer/"+slug+"/scoreboard?dates="+ymd+"&limit=300",
-        {cache:"no-store",signal:AbortSignal.timeout(5000),headers:{accept:"application/json"}},
+        {next:{revalidate:300},signal:AbortSignal.timeout(5000),headers:{accept:"application/json"}},
       )
       if(!scoreboard.ok)continue
       const data=await scoreboard.json()
       const event=(data?.events??[]).find((e:any)=>{
         const competitors=e?.competitions?.[0]?.competitors??[]
-        const home=competitors.find((x:any)=>x.homeAway==="home")
-        const away=competitors.find((x:any)=>x.homeAway==="away")
-        return sameTeamName(String(home?.team?.displayName??""),input.home)
-          && sameTeamName(String(away?.team?.displayName??""),input.away)
+        const h=competitors.find((x:any)=>x.homeAway==="home")
+        const a=competitors.find((x:any)=>x.homeAway==="away")
+        return sameTeamName(String(h?.team?.displayName??""),input.home)
+          && sameTeamName(String(a?.team?.displayName??""),input.away)
       })
       if(!event?.id)continue
 
+      const competitionRow=event?.competitions?.[0]
+      const competitors=competitionRow?.competitors??[]
+      const homeCompetitor=competitors.find((x:any)=>x.homeAway==="home")
+      const awayCompetitor=competitors.find((x:any)=>x.homeAway==="away")
+
       const summaryResponse=await fetch(
         "https://site.api.espn.com/apis/site/v2/sports/soccer/"+slug+"/summary?event="+event.id,
-        {cache:"no-store",signal:AbortSignal.timeout(5000),headers:{accept:"application/json"}},
+        {next:{revalidate:180},signal:AbortSignal.timeout(5000),headers:{accept:"application/json"}},
       )
-      if(!summaryResponse.ok)continue
-      const summary=await summaryResponse.json()
+      const summary=summaryResponse.ok?await summaryResponse.json():null
+
       const starters=new Set<string>()
+      const homeSquad=new Set<string>()
+      const awaySquad=new Set<string>()
       let homeCount=0,awayCount=0
 
       for(const section of summary?.rosters??[]){
+        const target=section.homeAway==="home"?homeSquad:section.homeAway==="away"?awaySquad:null
+        if(!target)continue
         for(const row of section?.roster??[]){
-          if(row?.starter!==true)continue
           const name=String(row?.athlete?.displayName??row?.athlete?.fullName??"")
           if(!name)continue
-          starters.add(normName(name))
-          if(section.homeAway==="home")homeCount++
-          else if(section.homeAway==="away")awayCount++
+          target.add(normName(name))
+          if(row?.starter===true){
+            starters.add(normName(name))
+            if(section.homeAway==="home")homeCount++
+            else awayCount++
+          }
         }
       }
-      return {confirmed:homeCount>=11&&awayCount>=11,starters,source:"ESPN"}
+
+      const fetchRoster=async(teamId:any,target:Set<string>)=>{
+        if(!teamId||target.size>=15)return
+        try{
+          const response=await fetch(
+            "https://site.api.espn.com/apis/site/v2/sports/soccer/"+slug+"/teams/"+teamId+"/roster",
+            {next:{revalidate:900},signal:AbortSignal.timeout(5000),headers:{accept:"application/json"}},
+          )
+          if(!response.ok)return
+          const roster=await response.json()
+          for(const athlete of roster?.athletes??[]){
+            const name=String(athlete?.displayName??athlete?.fullName??"")
+            if(name)target.add(normName(name))
+          }
+        }catch{}
+      }
+      await Promise.all([
+        fetchRoster(homeCompetitor?.team?.id,homeSquad),
+        fetchRoster(awayCompetitor?.team?.id,awaySquad),
+      ])
+
+      return {
+        confirmed:homeCount>=11&&awayCount>=11,
+        starters,
+        source:"ESPN",
+        eventId:String(event.id),
+        slug,
+        squads:{home:homeSquad,away:awaySquad},
+        squadCounts:{home:homeSquad.size,away:awaySquad.size},
+      }
     }catch{}
   }
-  return {confirmed:false,starters:new Set<string>(),source:null}
+  return {
+    confirmed:false,
+    starters:new Set<string>(),
+    source:null,
+    eventId:null,
+    slug:null,
+    squads:{home:new Set<string>(),away:new Set<string>()},
+    squadCounts:{home:0,away:0},
+  }
 }
 
 function leg(input:{
@@ -400,12 +448,32 @@ function probableDomestic(players:any[],home:string,away:string,date:string){
   }
   return [...choose(home),...choose(away)]
 }
-function probableInternational(profiles:any[],home:string,away:string){
-  const choose=(team:string)=>profiles
-    .filter(p=>sameTeamName(String(p?.nationalTeam??""),team))
-    .sort((a,b)=>startScore(b)-startScore(a))
-    .slice(0,11)
-  return [...choose(home),...choose(away)]
+function probableInternational(
+  profiles:any[],
+  home:string,
+  away:string,
+  squads?:{home:Set<string>;away:Set<string>},
+){
+  const choose=(team:string,squad:Set<string>|undefined)=>{
+    let pool=profiles.filter(p=>sameTeamName(String(p?.nationalTeam??""),team))
+    // A current senior squad is a hard eligibility gate. Club form only ranks
+    // eligible internationals; it can never promote an uncapped/out-of-squad player.
+    if(squad&&squad.size>=12){
+      pool=pool.filter(p=>{
+        const name=normName(String(p?.name??""))
+        return [...squad].some(current=>current===name||current.includes(name)||name.includes(current))
+      })
+    }else{
+      // Provider roster unavailable: require actual senior international usage.
+      pool=pool.filter(p=>Number(p?.international?.matches??0)>0&&Number(p?.international?.minutes??0)>0)
+    }
+    return pool.sort((a,b)=>{
+      const aIntl=Number(a?.international?.starts??0)*3+Number(a?.international?.matches??0)+Math.min(20,Number(a?.international?.minutes??0)/90)
+      const bIntl=Number(b?.international?.starts??0)*3+Number(b?.international?.matches??0)+Math.min(20,Number(b?.international?.minutes??0)/90)
+      return bIntl-aIntl||startScore(b)-startScore(a)
+    }).slice(0,11)
+  }
+  return [...choose(home,squads?.home),...choose(away,squads?.away)]
 }
 
 export async function buildSnapshotScorecard(input:{
@@ -417,7 +485,7 @@ export async function buildSnapshotScorecard(input:{
     const allProfiles=await internationalPlayersForFixture(input.home,input.away)
     const profiles=official.confirmed
       ? allProfiles.filter((p:any)=>official.starters.has(normName(String(p?.name??""))))
-      : probableInternational(allProfiles,input.home,input.away)
+      : probableInternational(allProfiles,input.home,input.away,official.squads)
 
     const scored=profiles.map((p:any)=>{
       const intl=p?.international??{}
@@ -521,11 +589,18 @@ export async function buildSnapshotScorecard(input:{
     }))
     return {
       ...baseResponse(official.confirmed?"confirmed":"predicted"),
-      lineupSource:official.confirmed?"Official starting XI":"Probable international XI from recent starts/minutes snapshot",
+      lineupSource:official.confirmed?"Official starting XI":"Probable international XI restricted to current ESPN senior squad/roster",
       playerCount:profiles.length,
+      squadEligibility:{
+        source:official.source,
+        eventId:official.eventId,
+        homeSquadCount:official.squadCounts.home,
+        awaySquadCount:official.squadCounts.away,
+        rule:"Only current senior-squad players are eligible when ESPN roster coverage is available.",
+      },
       players:playerRows,
       slips,
-      riskBuilders:buildSnapshotRiskBuilders(playerRows),
+      riskBuilders:[],
     }
   }
 
@@ -616,6 +691,6 @@ export async function buildSnapshotScorecard(input:{
     playerCount:players.length,
     players:playerRows,
     slips,
-    riskBuilders:buildSnapshotRiskBuilders(playerRows),
+    riskBuilders:[],
   }
 }
