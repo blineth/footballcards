@@ -86,6 +86,50 @@ async function findEventForCompetition(competition: Competition, date: string, h
   return null
 }
 
+async function apiFootball(path:string,params:Record<string,string>,ttl=600){
+  const key=process.env.API_FOOTBALL_KEY
+  if(!key)return null
+  try{
+    const url=new URL("https://v3.football.api-sports.io"+path)
+    for(const [k,v] of Object.entries(params))url.searchParams.set(k,v)
+    const response=await fetch(url,{
+      headers:{"x-apisports-key":key,accept:"application/json"},
+      next:{revalidate:ttl},
+      signal:AbortSignal.timeout(8000),
+    })
+    if(!response.ok)return null
+    const json=await response.json()
+    return Array.isArray(json?.response)?json.response:null
+  }catch{return null}
+}
+async function apiFootballInternationalSquads(date:string,home:string,away:string){
+  const fixtures=await apiFootball("/fixtures",{date,timezone:"Europe/London"},300)??[]
+  const hit=fixtures.find((f:any)=>teamMatch(f?.teams?.home?.name,home)&&teamMatch(f?.teams?.away?.name,away))
+  const homeId=hit?.teams?.home?.id
+  const awayId=hit?.teams?.away?.id
+  if(!homeId||!awayId)return {players:[] as CurrentPlayer[],usable:false}
+  const [homeRows,awayRows]=await Promise.all([
+    apiFootball("/players/squads",{team:String(homeId)},21600),
+    apiFootball("/players/squads",{team:String(awayId)},21600),
+  ])
+  const parse=(rows:any[]|null,teamName:string)=>{
+    const block=Array.isArray(rows)?rows[0]:null
+    return (block?.players??[]).map((p:any)=>({
+      id:String(p?.id??""),
+      name:String(p?.name??"").trim(),
+      position:String(p?.position??"")||undefined,
+      currentTeam:teamName,
+    })).filter((p:CurrentPlayer)=>p.name)
+  }
+  const homePlayers=parse(homeRows,home)
+  const awayPlayers=parse(awayRows,away)
+  return {
+    players:[...homePlayers,...awayPlayers],
+    usable:homePlayers.length>=12&&awayPlayers.length>=12,
+    counts:{home:homePlayers.length,away:awayPlayers.length},
+  }
+}
+
 async function currentRoster(league: string, teamId: string | number | undefined, teamName: string): Promise<CurrentPlayer[]> {
   if (!teamId) return []
   try {
@@ -137,15 +181,19 @@ export async function GET(request: Request) {
   const official = startersFromSummary(summary, home, away)
   const confirmed = official.confirmed
   const matchdaySquad = matchdaySquadFromSummary(summary, home, away)
+  const apiInternationalSquad = !confirmed && competition==="International" && !matchdaySquad.usable
+    ? await apiFootballInternationalSquads(date,home,away)
+    : {players:[] as CurrentPlayer[],usable:false,counts:{home:0,away:0}}
 
-  // International team roster endpoints can contain a very broad national-team
-  // player pool rather than the players called up for this window. Never use that
-  // broad pool to manufacture a predicted XI. Prefer the matchday squad embedded
-  // in the fixture summary; if it is not available yet, fall back to recent senior
-  // international appearances below.
+  // International team roster endpoints can contain a broad national-team pool.
+  // Prefer the fixture's own matchday squad. When ESPN has not published it yet,
+  // API-Football's current squad is the second verifier. If neither verifier is
+  // available, the outer radar blocks player recommendations rather than guessing.
   let currentPlayers: CurrentPlayer[] = confirmed ? official.players : []
   if (!confirmed && matchdaySquad.usable) {
     currentPlayers = matchdaySquad.players
+  } else if (!confirmed && competition==="International" && apiInternationalSquad.usable) {
+    currentPlayers = apiInternationalSquad.players
   } else if (!confirmed && competition !== "International" && eventInfo && league) {
     const [homeRoster, awayRoster] = await Promise.all([
       currentRoster(league, eventInfo.homeCompetitor?.team?.id, home),
@@ -280,10 +328,18 @@ export async function GET(request: Request) {
     ? "ESPN confirmed starting XI + historical database"
     : matchdaySquad.usable
       ? "ESPN matchday squad + historical database"
-      : competition === "International"
-        ? "Recent senior international appearances + historical database"
-        : eventInfo
-          ? "ESPN current squad + historical database"
-          : "historical database fallback"
-  return NextResponse.json({ connected: true, source, liveProviderOk: Boolean(eventInfo), eventId: eventInfo?.event?.id ?? null, competition, date, home, away, lineupsConfirmed: confirmed, squadVerified: confirmed || matchdaySquad.usable, referee, candidates: ranked.slice(0, confirmed ? 24 : 50) })
+      : apiInternationalSquad.usable
+        ? "API-Football current senior squad + historical database"
+        : competition === "International"
+          ? "Recent senior international appearances + historical database"
+          : eventInfo
+            ? "ESPN current squad + historical database"
+            : "historical database fallback"
+  const squadVerified=confirmed||matchdaySquad.usable||apiInternationalSquad.usable
+  return NextResponse.json({
+    connected:true,source,liveProviderOk:Boolean(eventInfo),eventId:eventInfo?.event?.id??null,
+    competition,date,home,away,lineupsConfirmed:confirmed,squadVerified,
+    squadVerification:confirmed?"confirmed-lineup":matchdaySquad.usable?"espn-matchday":apiInternationalSquad.usable?"api-football-current":null,
+    referee,candidates:ranked.slice(0,confirmed?24:50),
+  })
 }
