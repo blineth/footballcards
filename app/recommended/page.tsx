@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { AlertTriangle, BadgeCheck, RefreshCw, Sparkles, Trophy, Activity, Target, TrendingUp, Users, Zap, BarChart3 } from "lucide-react"
 
-type Fixture={id:string;competition:string;kickoff:string;home:{name:string};away:{name:string}}
+type Fixture={id:string;competition:string;kickoff:string;home:{name:string;shortName?:string;crest?:string|null};away:{name:string;shortName?:string;crest?:string|null}}
 type SlipLeg={
   player:string;dbPlayerName?:string|null;team:string;market:string;label:string;
   probability:number;fairOdds:number|null;bookmakerOdds:number|null;bookmakerName?:string|null;
@@ -53,7 +53,7 @@ type LivePlayerProp={
 }
 type LiveMatch={
   id:string;competition:string;kickoff:string;status?:string;inPlay?:boolean;elapsed?:number|null;
-  score?:{home:number;away:number}|null;home:string;away:string;
+  score?:{home:number;away:number}|null;home:string;away:string;homeCrest?:string|null;awayCrest?:string|null;
   probabilities?:{homeWin:number;draw:number;awayWin:number;bttsYes:number;bttsNo:number}|null;
   winnerPick?:{side:string;team:string;loser:string;probability:number;grade:string}|null;
   bttsPick?:{selection:string;probability:number;grade:string}|null;bttsSettled?:boolean;
@@ -69,7 +69,7 @@ type MultiMatchLeg={
   bookmakerOdds:number;bookmaker:"Bet365";confidence:"A"|"B"|"C"|"D"
 }
 type MultiMatchGameBuilder={
-  fixtureId:string;competition:string;kickoff:string;home:string;away:string;
+  fixtureId:string;competition:string;kickoff:string;home:string;away:string;homeCrest?:string|null;awayCrest?:string|null;
   targetFractional:"3/1";referenceOdds:number;modelAllHitProbability:number;
   conservativeAllHitProbability:number;legs:MultiMatchLeg[]
 }
@@ -79,7 +79,7 @@ type MultiMatchBuild={
   combinedBet365Odds:number|null;modelAllHitProbability:number|null;note:string
 }
 type YellowCardWatchRow={
-  fixtureId:string;competition:string;kickoff:string;home:string;away:string;
+  fixtureId:string;competition:string;kickoff:string;home:string;away:string;homeCrest?:string|null;awayCrest?:string|null;
   player:string;team:string;probability:number;bookmakerOdds:number;confidence:"A"|"B"|"C"|"D";reason:string;
   probabilityBasis?:"model"|"bet365-implied"
 }
@@ -90,6 +90,37 @@ type Response={
 }
 
 function percent(v:number|null|undefined){return v==null?"—":Math.round(v*100)+"%"}
+const TEAM_CODES:Record<string,string>={
+  england:"ENG",spain:"ESP",germany:"GER",france:"FRA",italy:"ITA",portugal:"POR",netherlands:"NED",
+  belgium:"BEL",brazil:"BRA",argentina:"ARG",croatia:"CRO",denmark:"DEN",sweden:"SWE",norway:"NOR",
+  finland:"FIN",albania:"ALB","san marino":"SMR",belarus:"BLR",scotland:"SCO",wales:"WAL",
+  ireland:"IRL","northern ireland":"NIR",poland:"POL",switzerland:"SUI",austria:"AUT",turkey:"TUR",
+  greece:"GRE",serbia:"SRB","czech republic":"CZE",czechia:"CZE",slovakia:"SVK",slovenia:"SVN",
+  ukraine:"UKR",romania:"ROU",hungary:"HUN",georgia:"GEO",iceland:"ISL","bosnia and herzegovina":"BIH",
+  montenegro:"MNE","north macedonia":"MKD",kosovo:"KOS",israel:"ISR",mexico:"MEX",usa:"USA",
+  "united states":"USA",canada:"CAN",japan:"JPN","south korea":"KOR",australia:"AUS"
+}
+function simpleNorm(v:string){return v.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim()}
+function teamCode(team:string){
+  const n=simpleNorm(team)
+  if(TEAM_CODES[n])return TEAM_CODES[n]
+  const words=n.split(" ").filter(Boolean)
+  if(words.length>=2)return (words[0].slice(0,1)+words[1].slice(0,2)).toUpperCase()
+  return n.slice(0,3).toUpperCase()
+}
+function sameTeam(a:string,b:string){
+  const x=simpleNorm(a).replace(/\b(afc|fc)\b/g,"").trim()
+  const y=simpleNorm(b).replace(/\b(afc|fc)\b/g,"").trim()
+  return Boolean(x&&y&&(x===y||x.includes(y)||y.includes(x)))
+}
+function TeamBadge({team,home,away,homeCrest,awayCrest}:{team:string;home?:string;away?:string;homeCrest?:string|null;awayCrest?:string|null}){
+  const crest=home&&sameTeam(team,home)?homeCrest:away&&sameTeam(team,away)?awayCrest:null
+  const code=teamCode(team)
+  return <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.055] px-2 py-1 text-[0.46rem] font-black text-white/65">
+    {crest?<img src={crest} alt="" className="size-4 rounded-full object-contain"/>:<span className="grid size-4 place-items-center rounded-full bg-white/10 text-[0.38rem]">{code.slice(0,2)}</span>}
+    <span>{code}</span>
+  </span>
+}
 function fractionalOdds(decimal:number|null|undefined){
   if(decimal==null||!Number.isFinite(decimal)||decimal<=1)return "—"
   const target=decimal-1
@@ -226,7 +257,7 @@ export default function RecommendedPage(){
           <div className="flex items-start justify-between gap-3"><div><p className="text-[0.46rem] font-black uppercase text-violet-200/70">Match {matchIndex+1} · Safe {builder.targetFractional}</p><p className="mt-1 text-sm font-black">{builder.home} <span className="text-white/25">v</span> {builder.away}</p><p className="mt-1 text-[0.46rem] text-white/30">{builder.competition} · {builder.legs.length} selections</p></div><div className="text-right"><p className="font-mono text-base font-black text-emerald-200">{fractionalOdds(builder.referenceOdds)}</p><p className="text-[0.42rem] text-white/30">{percent(builder.conservativeAllHitProbability)} est. · Bet365 ref</p></div></div>
           <div className="mt-3 space-y-1.5">{builder.legs.map((leg,i)=><div key={leg.player+"|"+leg.market+"|"+i} className="grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-xl bg-white/[0.045] px-2.5 py-2">
             <span className="text-[0.46rem] font-black text-white/25">{i+1}</span>
-            <div className="min-w-0"><p className="truncate text-[0.62rem] font-black">{leg.player} · {leg.label}</p><p className="mt-0.5 text-[0.42rem] text-white/25">Grade {leg.confidence} · verified Bet365</p></div>
+            <div className="min-w-0"><div className="flex flex-wrap items-center gap-1.5"><p className="truncate text-[0.62rem] font-black">{leg.player} · {leg.label}</p><TeamBadge team={leg.team} home={builder.home} away={builder.away} homeCrest={builder.homeCrest} awayCrest={builder.awayCrest}/></div><p className="mt-0.5 text-[0.42rem] text-white/25">Grade {leg.confidence} · verified Bet365</p></div>
             <div className="text-right"><p className="font-mono text-[0.62rem] font-black text-emerald-200">{fractionalOdds(leg.bookmakerOdds)}</p><p className="text-[0.4rem] text-white/25">{percent(leg.probability)}</p></div>
           </div>)}</div>
         </div>)}</div>:<div className="mt-4 rounded-2xl border border-dashed border-white/10 bg-black/15 p-6 text-center"><p className="font-black">Not enough fully-covered Safe 3/1 matches</p><p className="mt-1 text-xs text-white/35">Predicted XIs are used before official lineups. Limited-market fixtures remain excluded.</p></div>}
@@ -235,7 +266,7 @@ export default function RecommendedPage(){
       {data?.ok?<section className="space-y-3">
         <div className="px-1"><div className="flex items-center gap-2 text-amber-200"><BadgeCheck className="size-4"/><p className="font-black">Yellow Card Watch</p></div><p className="mt-1 text-[0.6rem] text-white/35">Visible whenever Bet365 has a verified player-card market and Match Edge has a priced card candidate.</p></div>
         {cards.length?<div className="space-y-2">{cards.map((row,i)=><div key={row.fixtureId+"|"+row.player} className="rounded-2xl border border-amber-300/12 bg-amber-300/[0.045] p-3">
-          <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-[0.46rem] font-black uppercase text-white/25">{row.home} v {row.away}</p><div className="mt-1 flex flex-wrap items-center gap-2"><p className="truncate text-sm font-black">{i+1}. {row.player} · To be booked</p><span className={"rounded-full px-1.5 py-0.5 text-[0.38rem] font-black "+(row.probabilityBasis==="model"?"bg-emerald-300/10 text-emerald-200":"bg-amber-300/10 text-amber-200")}>{row.probabilityBasis==="model"?"MATCH EDGE MODEL":"BET365 IMPLIED"}</span></div><p className="mt-1 line-clamp-2 text-[0.5rem] leading-relaxed text-white/30">{row.reason}</p></div><div className="text-right"><p className="font-mono text-base font-black text-amber-200">{fractionalOdds(row.bookmakerOdds)}</p><p className="text-[0.46rem] font-black text-white/40">{percent(row.probability)}</p></div></div>
+          <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-[0.46rem] font-black uppercase text-white/25">{row.home} v {row.away}</p><div className="mt-1 flex flex-wrap items-center gap-2"><p className="truncate text-sm font-black">{i+1}. {row.player} · To be booked</p><TeamBadge team={row.team} home={row.home} away={row.away} homeCrest={row.homeCrest} awayCrest={row.awayCrest}/><span className={"rounded-full px-1.5 py-0.5 text-[0.38rem] font-black "+(row.probabilityBasis==="model"?"bg-emerald-300/10 text-emerald-200":"bg-amber-300/10 text-amber-200")}>{row.probabilityBasis==="model"?"MATCH EDGE MODEL":"BET365 IMPLIED"}</span></div><p className="mt-1 line-clamp-2 text-[0.5rem] leading-relaxed text-white/30">{row.reason}</p></div><div className="text-right"><p className="font-mono text-base font-black text-amber-200">{fractionalOdds(row.bookmakerOdds)}</p><p className="text-[0.46rem] font-black text-white/40">{percent(row.probability)}</p></div></div>
         </div>)}</div>:<div className="rounded-2xl border border-dashed border-amber-300/12 bg-amber-300/[0.025] p-5 text-center"><p className="text-sm font-black text-amber-100">No verified yellow-card picks right now</p><p className="mt-1 text-[0.56rem] text-white/30">This section stays visible so you can tell the card market was checked rather than missing from the app.</p></div>}
       </section>:null}
     </div>
@@ -301,7 +332,7 @@ function PlayerPropsBoard({rows}:{rows:PropBoardRow[]}){
     <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]">
       <div className="grid grid-cols-[1fr_auto_auto] gap-3 border-b border-white/8 px-3 py-2 text-[0.46rem] font-black uppercase text-white/25"><span>Player / market</span><span>Projection</span><span>Edge</span></div>
       <div>{shown.length?shown.map((row,i)=><div key={row.recId+"|"+row.leg.player+"|"+row.leg.market} className={"grid grid-cols-[1fr_auto_auto] items-center gap-3 px-3 py-3 "+(i?"border-t border-white/[0.055]":"")}>
-        <div className="min-w-0"><p className="truncate text-xs font-black">{row.leg.player} · {row.leg.label}</p><p className="mt-0.5 truncate text-[0.46rem] text-white/30">{row.leg.team} · {row.fixture.home.name} v {row.fixture.away.name} · Grade {row.leg.confidence}</p></div>
+        <div className="min-w-0"><div className="flex flex-wrap items-center gap-1.5"><p className="truncate text-xs font-black">{row.leg.player} · {row.leg.label}</p><TeamBadge team={row.leg.team} home={row.fixture.home.name} away={row.fixture.away.name} homeCrest={row.fixture.home.crest} awayCrest={row.fixture.away.crest}/></div><p className="mt-0.5 truncate text-[0.46rem] text-white/30">{row.fixture.home.name} v {row.fixture.away.name} · Grade {row.leg.confidence}</p></div>
         <div className="text-right"><p className="font-mono text-sm font-black">{percent(row.leg.probability)}</p><p className="text-[0.4rem] text-white/20">{row.leg.fairOdds?.toFixed(2)??"—"} fair</p></div>
         <div className="min-w-[3.1rem] text-right">{row.edge!=null?<><p className={"font-mono text-xs font-black "+(row.edge>0?"text-emerald-300":"text-rose-300")}>{row.edge>=0?"+":""}{(row.edge*100).toFixed(1)}pp</p><p className="text-[0.38rem] text-white/20">{row.leg.bookmakerOdds?.toFixed(2)}</p></>:<><p className="text-xs font-black text-white/25">—</p><p className="text-[0.38rem] text-white/20">no exact price</p></>}</div>
       </div>):<p className="px-4 py-8 text-center text-sm text-white/35">No qualified props in this market yet.</p>}</div>
@@ -365,9 +396,9 @@ function LiveMatchCard({match}:{match:LiveMatch}){
     {playerProps.length?<div className="mt-3 rounded-2xl border border-cyan-300/15 bg-cyan-400/[0.045] p-3">
       <div className="flex items-start justify-between gap-3"><div><p className="text-[0.52rem] font-black uppercase tracking-[0.12em] text-cyan-300">Live player props</p><p className="mt-0.5 text-[0.5rem] text-white/30">Chance from the current minute to full time{match.livePlayerStatsSource?" · live event counts on":""}</p></div><span className="rounded-full bg-cyan-300/10 px-2 py-1 text-[0.44rem] font-black text-cyan-200">CONFIRMED XI</span></div>
 
-      {suggestedProps.length>=2?<div className="mt-3 rounded-2xl bg-black/25 p-3"><p className="text-[0.48rem] font-black uppercase text-white/30">Suggested in-play player slip</p><div className="mt-2 space-y-1.5">{suggestedProps.map(prop=><div key={"slip|"+prop.player+"|"+prop.market} className="flex items-center justify-between gap-3"><div><p className="text-xs font-black">{prop.player} · {prop.label}</p><p className="text-[0.46rem] text-white/25">{prop.team} · Grade {prop.confidence}</p></div><p className="font-mono text-sm font-black">{percent(prop.probability)}</p></div>)}</div><p className="mt-2 text-[0.46rem] leading-relaxed text-white/25">Model shortlist only — check that each live market is still offered before adding it to a builder.</p></div>:null}
+      {suggestedProps.length>=2?<div className="mt-3 rounded-2xl bg-black/25 p-3"><p className="text-[0.48rem] font-black uppercase text-white/30">Suggested in-play player slip</p><div className="mt-2 space-y-1.5">{suggestedProps.map(prop=><div key={"slip|"+prop.player+"|"+prop.market} className="flex items-center justify-between gap-3"><div><div className="flex flex-wrap items-center gap-1.5"><p className="text-xs font-black">{prop.player} · {prop.label}</p><TeamBadge team={prop.team} home={match.home} away={match.away} homeCrest={match.homeCrest} awayCrest={match.awayCrest}/></div><p className="text-[0.46rem] text-white/25">Grade {prop.confidence}</p></div><p className="font-mono text-sm font-black">{percent(prop.probability)}</p></div>)}</div><p className="mt-2 text-[0.46rem] leading-relaxed text-white/25">Model shortlist only — check that each live market is still offered before adding it to a builder.</p></div>:null}
 
-      <div className="mt-3 space-y-3">{propGroups.map(group=><div key={group.market}><div className="mb-1.5 flex items-center justify-between"><p className="text-[0.5rem] font-black uppercase text-white/35">{group.title}</p><p className="text-[0.42rem] text-white/20">top {group.picks.length}</p></div><div className="space-y-1.5">{group.picks.map(prop=><div key={prop.player+"|"+prop.market} className="flex items-center justify-between gap-3 rounded-xl bg-white/[0.045] px-3 py-2"><div><p className="text-xs font-black">{prop.player} · {prop.label}</p><p className="mt-0.5 text-[0.46rem] text-white/25">{prop.team} · Grade {prop.confidence}{prop.liveStatsAvailable?" · live count "+String(prop.currentCount??0):""}{prop.marketStatus==="available"?" · market seen":prop.marketStatus==="unavailable"?" · market unavailable":" · check live market"}</p></div><div className="text-right"><p className="font-mono text-sm font-black">{percent(prop.probability)}</p><p className="text-[0.4rem] text-white/20">remaining</p></div></div>)}</div></div>)}</div>
+      <div className="mt-3 space-y-3">{propGroups.map(group=><div key={group.market}><div className="mb-1.5 flex items-center justify-between"><p className="text-[0.5rem] font-black uppercase text-white/35">{group.title}</p><p className="text-[0.42rem] text-white/20">top {group.picks.length}</p></div><div className="space-y-1.5">{group.picks.map(prop=><div key={prop.player+"|"+prop.market} className="flex items-center justify-between gap-3 rounded-xl bg-white/[0.045] px-3 py-2"><div><div className="flex flex-wrap items-center gap-1.5"><p className="text-xs font-black">{prop.player} · {prop.label}</p><TeamBadge team={prop.team} home={match.home} away={match.away} homeCrest={match.homeCrest} awayCrest={match.awayCrest}/></div><p className="mt-0.5 text-[0.46rem] text-white/25">Grade {prop.confidence}{prop.liveStatsAvailable?" · live count "+String(prop.currentCount??0):""}{prop.marketStatus==="available"?" · market seen":prop.marketStatus==="unavailable"?" · market unavailable":" · check live market"}</p></div><div className="text-right"><p className="font-mono text-sm font-black">{percent(prop.probability)}</p><p className="text-[0.4rem] text-white/20">remaining</p></div></div>)}</div></div>)}</div>
       <p className="mt-3 text-[0.48rem] leading-relaxed text-white/25">These are remaining-match model probabilities, recalculated as time runs down. They do not reuse stale pre-match prices or claim a live bookmaker price where none has been verified.</p>
     </div>:null}
   </article>
@@ -385,11 +416,11 @@ function TargetOddsSection({games,selectedId,onSelect}:{games:TargetOddsGame[];s
       </button>)}
     </div>
     <div className="rounded-2xl border border-violet-300/10 bg-violet-400/[0.035] px-4 py-3"><p className="text-[0.5rem] font-black uppercase text-violet-300">Selected match</p><p className="mt-1 font-black">{selected.fixture.home.name} v {selected.fixture.away.name}</p><p className="mt-1 text-[0.56rem] text-white/35">{selected.fixture.competition} · {time(selected.fixture)}</p></div>
-    <div className="grid gap-3 sm:grid-cols-2">{selected.targets.map(s=><TargetOddsCard key={s.id} slip={s}/>)}</div>
+    <div className="grid gap-3 sm:grid-cols-2">{selected.targets.map(s=><TargetOddsCard key={s.id} slip={s} fixture={selected.fixture}/>)}</div>
   </section>
 }
 
-function TargetOddsCard({slip}:{slip:TargetOddsSlip}){
+function TargetOddsCard({slip,fixture}:{slip:TargetOddsSlip;fixture:Fixture}){
   const[open,setOpen]=useState(slip.targetFractional==="3/1")
   if(!slip.available)return <article className="rounded-3xl border border-white/10 bg-white/[0.035] p-4">
     <div className="flex items-center justify-between gap-3"><div><p className="text-[0.5rem] font-black uppercase tracking-[0.14em] text-white/30">Target</p><h3 className="mt-1 text-xl font-black">{slip.targetFractional}</h3></div><span className="rounded-full bg-white/7 px-2.5 py-1 text-[0.48rem] font-black text-white/35">NO STRONG BUILD</span></div>
@@ -406,7 +437,7 @@ function TargetOddsCard({slip}:{slip:TargetOddsSlip}){
     </button>
     {open?<div className="border-t border-white/8 bg-black/20 p-4">
       <div className="space-y-2">{slip.legs.map((leg,i)=><div key={leg.player+"|"+leg.market+"|"+i} className="rounded-2xl bg-white/[0.055] p-3">
-        <div className="flex items-start justify-between gap-3"><div><p className="text-sm font-black">{leg.player} · {leg.label}</p><p className="mt-0.5 text-[0.56rem] text-white/35">{leg.team} · Grade {leg.confidence}{leg.bookmaker?" · "+leg.bookmaker:""}</p></div><div className="text-right"><p className="font-mono text-base font-black">{percent(leg.probability)}</p><p className="text-[0.44rem] text-white/25">{leg.price.toFixed(2)} {leg.priceSource==="exact"?"single":"fair"}</p></div></div>
+        <div className="flex items-start justify-between gap-3"><div><div className="flex flex-wrap items-center gap-1.5"><p className="text-sm font-black">{leg.player} · {leg.label}</p><TeamBadge team={leg.team} home={fixture.home.name} away={fixture.away.name} homeCrest={fixture.home.crest} awayCrest={fixture.away.crest}/></div><p className="mt-0.5 text-[0.56rem] text-white/35">Grade {leg.confidence}{leg.bookmaker?" · "+leg.bookmaker:""}</p></div><div className="text-right"><p className="font-mono text-base font-black">{percent(leg.probability)}</p><p className="text-[0.44rem] text-white/25">{leg.price.toFixed(2)} {leg.priceSource==="exact"?"single":"fair"}</p></div></div>
       </div>)}</div>
       <p className="mt-3 rounded-xl bg-amber-300/[0.06] px-3 py-2 text-[0.56rem] leading-relaxed text-amber-100/75">{slip.note}</p>
     </div>:null}
@@ -486,7 +517,7 @@ function RecommendationCard({rec,hero=false}:{rec:Recommendation;hero?:boolean})
     </button>
 
     {open?<div className="border-t border-white/8 bg-black/20 p-4"><div className="space-y-2">{legs.map((leg,i)=><div key={leg.player+"|"+leg.market+"|"+i} className="rounded-2xl bg-white/[0.055] p-3">
-      <div className="flex items-center justify-between gap-3"><div><p className="text-sm font-black">{leg.player} · {leg.label}</p><p className="mt-0.5 text-[0.56rem] text-white/35">{leg.team} · Grade {leg.confidence}{leg.bookmakerName?" · "+leg.bookmakerName:""}{leg.priceSource==="estimated"?" · ESTIMATED PRICE":""}</p></div><p className="font-mono text-base font-black">{percent(leg.probability)}</p></div>
+      <div className="flex items-center justify-between gap-3"><div><div className="flex flex-wrap items-center gap-1.5"><p className="text-sm font-black">{leg.player} · {leg.label}</p><TeamBadge team={leg.team} home={rec.fixture.home.name} away={rec.fixture.away.name} homeCrest={rec.fixture.home.crest} awayCrest={rec.fixture.away.crest}/></div><p className="mt-0.5 text-[0.56rem] text-white/35">Grade {leg.confidence}{leg.bookmakerName?" · "+leg.bookmakerName:""}{leg.priceSource==="estimated"?" · ESTIMATED PRICE":""}</p></div><p className="font-mono text-base font-black">{percent(leg.probability)}</p></div>
       {leg.bookmakerOdds!=null&&leg.priceSource!=="estimated"?<div className="mt-2 grid grid-cols-3 gap-1.5"><Stat label="Model" value={percent(leg.probability)}/><Stat label="Price implies" value={percent(1/leg.bookmakerOdds)}/><Stat label="Gap" value={((leg.probability-(1/leg.bookmakerOdds))*100>=0?"+":"")+((leg.probability-(1/leg.bookmakerOdds))*100).toFixed(1)+"pp"}/></div>:null}
       <p className="mt-2 text-[0.62rem] leading-relaxed text-white/45">{leg.reason}</p>
       {leg.bookmakerOdds!=null?<p className="mt-2 text-[0.56rem] text-white/35">{leg.priceSource==="estimated"?"Likely":"Bookmaker"} price: <span className="font-mono font-black text-white/70">{fractionalOdds(leg.bookmakerOdds)}</span></p>:null}
