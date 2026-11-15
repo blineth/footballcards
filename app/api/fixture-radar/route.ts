@@ -95,7 +95,7 @@ async function mergeInternationalProfiles(data:any,home:string,away:string){
     ))
     const profilePosition=String(profile?.position??"")
     const position=norm(profilePosition)==="sub"
-      ? String(current?.position??profilePosition||"")
+      ? String(current?.position ?? profilePosition ?? "")
       : (profilePosition||String(current?.position??""))
     const base=existing.get(key)??{}
     merged.push({
@@ -103,7 +103,7 @@ async function mergeInternationalProfiles(data:any,home:string,away:string){
       name:base?.name??name,
       dbName:base?.dbName??name,
       team:base?.team??team,
-      position:position||base?.position??null,
+      position:position || base?.position || null,
       appearances:intlMatches,
       starts:intlStarts,
       minutes:intlMinutes,
