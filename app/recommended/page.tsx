@@ -74,7 +74,7 @@ type MultiMatchGameBuilder={
   conservativeAllHitProbability:number;legs:MultiMatchLeg[]
 }
 type MultiMatchBuild={
-  available:boolean;targetFractionalPerMatch:"3/1";maxLegs:number;eligibleFixtureCount:number;
+  available:boolean;targetFractionalPerMatch:"3/1";maxMatches:number;eligibleFixtureCount:number;
   matchBuilders:MultiMatchGameBuilder[];legs:MultiMatchLeg[];
   combinedBet365Odds:number|null;modelAllHitProbability:number|null;note:string
 }
@@ -97,6 +97,10 @@ function fractionalOdds(decimal:number|null|undefined){
     [1,20],[1,16],[1,14],[1,12],[1,10],[1,8],[1,7],[1,6],[1,5],[2,9],[1,4],[2,7],[3,10],[1,3],[4,11],[2,5],[4,9],[1,2],[8,15],[4,7],[8,13],[4,6],[8,11],[4,5],[5,6],[10,11],
     [1,1],[11,10],[6,5],[5,4],[11,8],[3,2],[13,8],[7,4],[15,8],[2,1],[9,4],[5,2],[11,4],[3,1],[10,3],[7,2],[15,4],[4,1],[9,2],[5,1],[11,2],[6,1],[13,2],[7,1],[15,2],[8,1],[9,1],[10,1],[11,1],[12,1],[14,1],[16,1],[18,1],[20,1],[25,1],[33,1],[40,1],[50,1]
   ]
+  if(target>20){
+    const rounded=Math.max(21,Math.round(target))
+    return rounded+"/1"
+  }
   let best=common[0],diff=Infinity
   for(const pair of common){
     const d=Math.abs(pair[0]/pair[1]-target)
@@ -188,7 +192,7 @@ export default function RecommendedPage(){
           <div>
             <div className="flex items-center gap-2 text-violet-300"><Trophy className="size-4"/><span className="text-[0.62rem] font-black uppercase tracking-[0.16em]">Match Edge</span></div>
             <h1 className="mt-1 text-2xl font-black">Multi-Match Builder</h1>
-            <p className="mt-1 text-xs text-white/45">Safest same-game builder per fully-covered match, then combine them · 10 selections maximum.</p>
+            <p className="mt-1 text-xs text-white/45">Safest same-game builder per fully-covered match, then combine them · up to 10 matches.</p>
           </div>
           <button onClick={()=>void refresh(true)} className="rounded-xl bg-violet-300 p-2.5 text-violet-950"><RefreshCw className={"size-4 "+(loading?"animate-spin":"")}/></button>
         </div>
@@ -208,7 +212,7 @@ export default function RecommendedPage(){
       {data?.ok?<section className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <DecisionMetric label="Eligible matches" value={String(multi?.eligibleFixtureCount??0)} sub="all 5 prop markets"/>
         <DecisionMetric label="Match builders" value={String(matchBuilders.length)} sub="Safe 3/1 routes"/>
-        <DecisionMetric label="Total selections" value={String(legs.length)} sub="10 maximum"/>
+        <DecisionMetric label="Total selections" value={String(legs.length)} sub="inside match builders"/>
         <DecisionMetric label="Combined chance" value={percent(multi?.modelAllHitProbability)} sub="conservative estimate"/>
       </section>:null}
 
