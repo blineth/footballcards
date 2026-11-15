@@ -499,7 +499,7 @@ type MultiMatchRiskTier="safe"|"balanced"|"risky"
 type MultiMatchGameBuilder={
   fixtureId:string;competition:Competition;kickoff:string;home:string;away:string;homeCrest?:string|null;awayCrest?:string|null;
   riskTier:MultiMatchRiskTier;targetFractional:string;targetDecimal:number;referenceOdds:number;modelAllHitProbability:number;
-  conservativeAllHitProbability:number;includesCard:boolean;cardPick:string|null;lineupsConfirmed:boolean;legs:MultiMatchLeg[]
+  conservativeAllHitProbability:number;includesCard:boolean;cardPick:string|null;lineupsConfirmed:boolean;preMatchSnapshot:boolean;legs:MultiMatchLeg[]
 }
 type MultiMatchTier={
   id:MultiMatchRiskTier;title:string;description:string;targetFractionalPerMatch:string;targetDecimalPerMatch:number;
@@ -843,7 +843,8 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
       referenceOdds:Math.round(best.product*100)/100,
       modelAllHitProbability:Math.round(best.raw*10000)/10000,
       conservativeAllHitProbability:Math.round(best.conservative*10000)/10000,
-      includesCard:Boolean(cardLeg),cardPick:cardLeg?cardLeg.player:null,lineupsConfirmed:Boolean(scan.scorecard?.lineupsConfirmed),legs,
+      includesCard:Boolean(cardLeg),cardPick:cardLeg?cardLeg.player:null,lineupsConfirmed:Boolean(scan.scorecard?.lineupsConfirmed),
+      preMatchSnapshot:new Date(scan.fixture.kickoff).getTime()<=Date.now(),legs,
     }
   }
 
@@ -1116,11 +1117,15 @@ export async function GET(request:Request){
     }
 
     if(multiOnly){
+      const nowMs=Date.now()
       const upcoming=[...fixtureMap.values()]
         .filter(f=>{
           const status=String(f.status??"").toLowerCase()
-          const blocked=["postponed","cancelled","canceled","finished","halftime","in progress","live"]
-          return new Date(f.kickoff).getTime()>Date.now()&&!blocked.includes(status)
+          const blocked=["postponed","cancelled","canceled","finished","ft","full time","after extra time","aet","abandoned","suspended"]
+          const kickoffMs=new Date(f.kickoff).getTime()
+          // Keep a verified pre-match Multi visible after kickoff instead of
+          // deleting it the instant the clock passes the scheduled start.
+          return Number.isFinite(kickoffMs)&&kickoffMs>nowMs-180*60*1000&&!blocked.includes(status)
         })
         .sort((a,b)=>a.kickoff.localeCompare(b.kickoff))
         .slice(0,maxFixtures)
@@ -1166,7 +1171,7 @@ export async function GET(request:Request){
         liveMatches:[],
         staleFallback:false,
         methodology:{
-          multiMatch:"Fast path: Bet365 coverage is checked first. Full scorecards are built for every fixture with at least two usable verified player-prop families. Once both official XIs are confirmed, the scorecard is hard-filtered to those 22 starters before Safe, Balanced or Risky candidates are generated; bench players cannot remain eligible. Multi snapshots are kept very short near lineup time so fresh XI data replaces pre-lineup builds quickly.",
+          multiMatch:"Fast path: Bet365 coverage is checked first. Full scorecards are built for every fixture with at least two usable verified player-prop families. Once both official XIs are confirmed, the scorecard is hard-filtered to those 22 starters before Safe, Balanced or Risky candidates are generated; bench players cannot remain eligible. A verified pre-match Multi remains visible for up to three hours after kickoff as a reference snapshot instead of disappearing immediately; it is not relabelled as a fresh live Bet365 price.",
         },
       }
       lastGoodMulti=payload
