@@ -977,7 +977,7 @@ function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
 
   return configs.map(config=>{
     const sourceCandidates=config.risk==="Safe"?safeCandidates:preferredCandidates
-    const safeFloors=config.risk==="Safe"?[.70,.65,.62,.60]:[0]
+    const safeFloors=config.risk==="Safe"?[.60]:[0]
     type State={legs:SlipLeg[];product:number;quality:number;prob:number;conservative:number;players:Set<string>;families:Record<string,number>}
     let best:State|undefined
     let usedSafeFloor:number|null=null
@@ -1024,7 +1024,25 @@ function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
           }
           return distance*1.15+under*.8-state.conservative*2.1-avg*.18-weakest*.08-diversity*.05+state.legs.length*.015
         }
-        states=next.sort((a,b)=>score(a)-score(b)).slice(0,config.risk==="Safe"?2400:650)
+        if(config.risk==="Safe"){
+          // Preserve a probability frontier across the whole odds range rather than
+          // globally pruning to the few states closest to 4.00. This lets a
+          // 3-6 leg combination beat a shorter route when its joint hit chance is better.
+          const buckets=new Map<string,State[]>()
+          for(const state of next){
+            const oddsBucket=Math.floor(Math.log(Math.max(1,state.product))*120)
+            const key=oddsBucket+"|"+state.legs.length
+            const rows=buckets.get(key)??[]
+            rows.push(state)
+            rows.sort((a,b)=>b.conservative-a.conservative||score(a)-score(b))
+            buckets.set(key,rows.slice(0,10))
+          }
+          states=[...buckets.values()].flat()
+            .sort((a,b)=>score(a)-score(b))
+            .slice(0,6000)
+        }else{
+          states=next.sort((a,b)=>score(a)-score(b)).slice(0,650)
+        }
       }
 
       const valid=states.filter(state=>
@@ -1075,7 +1093,7 @@ function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
       exactBet365BuilderPrice:false,
       pricingBasis:"bet365_singles_product" as const,
       note:config.risk==="Safe"
-        ?"Every leg has a verified Bet365 price. Safe used the highest minimum consensus-safety floor that could still reach 3/1 ("+Math.round(Number(usedSafeFloor??.60)*100)+"%+ per leg), then selected the highest conservative all-hit route. Several very likely fouls/shots can therefore beat a shorter slip containing one speculative leg. Large model-vs-Bet365 disagreements are capped."
+        ?"Every leg has a verified Bet365 price and at least 60% consensus safety. Safe then chooses the combination with the highest conservative joint hit probability that still reaches 3/1; leg count is only a tie-breaker. Several short-priced fouls/shots are used only when their combined chance is genuinely better than a shorter route. Large model-vs-Bet365 disagreements are capped."
         :"Every displayed leg price is a verified Bet365 price. The target is built from live Bet365 singles ("+families.join(", ")+") and ranked by conservative all-hit probability. Bet365 can reprice correlated legs inside Bet Builder, so this is not labelled as the final Builder quote."
     }
   })
