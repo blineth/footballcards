@@ -30,7 +30,9 @@ type Selection={
   id:string;player:string;team:string;market:string;label:string;probability:number;fairOdds:number|null;
   bookmakerOdds:number|null;bookmakerName?:string|null;edge:number|null;confidence:"A"|"B"|"C"|"D";reason:string;
   currentCount?:number|null;liveAdjusted?:boolean;yellowConditionals?:YellowConditionals;position?:string|null;recommendationScore?:number;
-  tackles?:number;interceptions?:number;blocks?:number;duelsTotal?:number;duelsWon?:number;defensiveInterventions?:number
+  tackles?:number;interceptions?:number;blocks?:number;duelsTotal?:number;duelsWon?:number;defensiveInterventions?:number;
+  livePressureScore?:number;liveRankScore?:number;preMarketProbability?:number;
+  referenceBookmakerOdds?:number|null;referenceImpliedProbability?:number|null;referenceOddsLive?:boolean
 }
 type LivePlayerStat={
   player:string;team:string;minutes:number|null;foulsCommitted:number;foulsDrawn:number;shots:number;shotsOnTarget:number;
@@ -48,7 +50,7 @@ type AvailableBet={
 }
 type LiveOddsData={
   connected?:boolean;bookmaker?:string|null;source?:string|null;capturedAt?:string|null;
-  priceAvailable?:boolean;liveVerified?:boolean;selections?:LiveOddSelection[];note?:string|null;
+  priceAvailable?:boolean;liveVerified?:boolean;lastGoodReference?:boolean;cached?:boolean;selections?:LiveOddSelection[];note?:string|null;
   marketAvailability?:Record<string,MarketStatus>;bookmakerAvailability?:Record<string,Record<string,MarketStatus>>;
   availableBets?:AvailableBet[]
 }
@@ -242,17 +244,59 @@ function applyLive(rows:Selection[],live:LiveData|null,scorecard:Scorecard|null=
     if(row.market!==familyOneMarket(row.market))continue
     oneProb.set(normPlayer(row.player)+"|"+familyOneMarket(row.market),row.probability)
   }
-  const remaining=Math.max(.03,Math.min(1,(96-Math.max(0,Math.min(96,live.elapsed)))/96))
+
+  const elapsed=Math.max(1,Number(live.elapsed??0))
+  const remaining=Math.max(.03,Math.min(1,(96-Math.max(0,Math.min(96,elapsed)))/96))
   const adjusted:Selection[]=[]
   const logit=(p:number)=>Math.log(Math.max(.001,Math.min(.999,p))/(1-Math.max(.001,Math.min(.999,p))))
   const logistic=(x:number)=>1/(1+Math.exp(-x))
+
+  const teamTotals=new Map<string,{fc:number;fd:number;shots:number;sot:number;cards:number;duels:number;tackles:number}>()
+  for(const stat of live.players){
+    if(stat.starter===false&&Number(stat.minutes??0)<=0)continue
+    const key=teamNorm(stat.team)
+    const cur=teamTotals.get(key)??{fc:0,fd:0,shots:0,sot:0,cards:0,duels:0,tackles:0}
+    cur.fc+=Number(stat.foulsCommitted??0)
+    cur.fd+=Number(stat.foulsDrawn??0)
+    cur.shots+=Number(stat.shots??0)
+    cur.sot+=Number(stat.shotsOnTarget??0)
+    cur.cards+=Number(stat.yellowCards??0)+Number(stat.redCards??0)
+    cur.duels+=Number(stat.duelsTotal??0)
+    cur.tackles+=Number(stat.tackles??0)
+    teamTotals.set(key,cur)
+  }
+  const teamKeys=[...teamTotals.keys()]
+  const opponentKey=(team:string)=>{
+    const key=teamNorm(team)
+    return teamKeys.find(x=>x!==key)??""
+  }
+  const per90=(value:number)=>value*90/Math.max(12,elapsed)
+
   const defensivePressure=(stat:LivePlayerStat,position?:string|null)=>{
     const pos=String(position??"").toLowerCase()
-    const role=pos.includes("def")?1.08:pos.includes("mid")?1.04:pos.includes("forward")||pos.includes("att")?.88:pos.includes("goal")?.45:1
+    const role=pos.includes("def")?1.10:pos.includes("mid")?1.05:pos.includes("forward")||pos.includes("att")?.88:pos.includes("goal")?.42:1
     const raw=Number(stat.tackles??0)*.07+Number(stat.interceptions??0)*.045+Number(stat.blocks??0)*.025+
       Number(stat.duelsTotal??0)*.009+Number(stat.duelsWon??0)*.006+Number(stat.defensiveInterventions??0)*.025
-    return Math.max(0,Math.min(.48,raw*role))
+    return Math.max(0,Math.min(.50,raw*role))
   }
+  const matchPressure=(stat:LivePlayerStat,position?:string|null)=>{
+    const own=teamTotals.get(teamNorm(stat.team))??{fc:0,fd:0,shots:0,sot:0,cards:0,duels:0,tackles:0}
+    const opp=teamTotals.get(opponentKey(stat.team))??{fc:0,fd:0,shots:0,sot:0,cards:0,duels:0,tackles:0}
+    // Opponent fouls drawn are effectively the fouls this player's team is being
+    // forced to commit. Cap the signal so one frantic opening spell cannot swamp history.
+    const oppDrawRate=per90(opp.fd)
+    const ownCommitRate=per90(own.fc)
+    const teamFoulIntensity=Math.max(0,Math.min(.34,(oppDrawRate-7)*.012+(ownCommitRate-7)*.009))
+    const personalAggression=Math.min(.42,Number(stat.foulsCommitted??0)*.13)
+    const personalTargeting=Math.min(.24,Number(stat.foulsDrawn??0)*.06)
+    return {
+      foul:Math.max(0,Math.min(.62,defensivePressure(stat,position)+teamFoulIntensity+personalAggression)),
+      card:Math.max(0,Math.min(.72,defensivePressure(stat,position)*.55+teamFoulIntensity*.75+personalAggression*1.15)),
+      fouled:Math.max(0,Math.min(.42,personalTargeting+Math.max(0,per90(own.fd)-7)*.008)),
+      oppDrawRate,ownCommitRate,
+    }
+  }
+
   for(const row of rows){
     const stat=stats.get(normPlayer(row.player))
     if(!stat){adjusted.push(row);continue}
@@ -260,55 +304,66 @@ function applyLive(rows:Selection[],live:LiveData|null,scorecard:Scorecard|null=
     const current=countForMarket(stat,row.market)
     const threshold=thresholdForMarket(row.market)
     if(current>=threshold)continue
+
     const base=oneProb.get(normPlayer(row.player)+"|"+familyOneMarket(row.market))??row.probability
     const need=Math.max(1,threshold-current)
+    const pressure=matchPressure(stat,row.position)
     let probability:number
     let liveReason=""
+
     if(row.market==="card"){
-      probability=remainingOneProbability(base,live.elapsed)
+      probability=remainingOneProbability(base,elapsed)
       const fouls=Math.max(0,Number(stat.foulsCommitted??0))
       const yc=row.yellowConditionals
       const conditional=fouls>=3?yc?.after3PlusFouls:fouls>=2?yc?.after2PlusFouls:fouls>=1?yc?.after1PlusFouls:null
       const overall=yc?.overall?.rate
-      if(fouls>0){
-        let delta=Math.min(.65,.14*fouls)
-        if(conditional?.rate!=null&&overall!=null&&conditional.matches>=2){
-          const reliability=Math.min(1,conditional.matches/10)
-          const observedDelta=logit(Number(conditional.rate))-logit(Math.max(.02,Number(overall)))
-          delta=Math.max(-.10,Math.min(.90,observedDelta*.72*reliability+.10*fouls))
-          liveReason=`${fouls} foul${fouls===1?"":"s"} already committed · historical booking rate after this foul load ${Math.round(Number(conditional.rate)*100)}% (${conditional.matches} matches)`
-        }else{
-          liveReason=`${fouls} foul${fouls===1?"":"s"} already committed · live foul-pressure uplift applied`
-        }
-        probability=logistic(logit(probability)+delta)
+      let cardDelta=pressure.card
+      if(fouls>0&&conditional?.rate!=null&&overall!=null&&conditional.matches>=2){
+        const reliability=Math.min(1,conditional.matches/10)
+        const observedDelta=logit(Number(conditional.rate))-logit(Math.max(.02,Number(overall)))
+        cardDelta=Math.max(cardDelta,Math.max(-.10,Math.min(.95,observedDelta*.72*reliability+.11*fouls)))
+        liveReason=`${fouls} foul${fouls===1?"":"s"} committed · historical booking rate after this foul load ${Math.round(Number(conditional.rate)*100)}% (${conditional.matches} matches)`
+      }else if(fouls>0){
+        liveReason=`${fouls} foul${fouls===1?"":"s"} committed already`
       }
-      const pressure=defensivePressure(stat,row.position)
-      if(pressure>0){
-        const cardPressure=Math.min(.30,pressure*.55)
-        probability=logistic(logit(probability)+cardPressure)
-        liveReason+=(liveReason?" · ":"")+"defensive workload "+Number(stat.tackles??0)+" tackles, "+Number(stat.interceptions??0)+" interceptions, "+Number(stat.duelsTotal??0)+" duels"
-      }
+      probability=logistic(logit(probability)+cardDelta)
+      liveReason+=(liveReason?" · ":"")+`opponent drawing fouls at ${pressure.oppDrawRate.toFixed(1)}/90`
       const refYellows=Number(scorecard?.referee?.yellowsPerGame??0)
       if(refYellows>0){
         probability=logistic(logit(probability)+Math.max(-.18,Math.min(.22,(refYellows-4.2)*.055)))
-        liveReason+=(liveReason?" · ":"")+scorecard?.referee?.name+" "+refYellows.toFixed(1)+" yellows/game"
+        liveReason+=` · ${scorecard?.referee?.name} ${refYellows.toFixed(1)} yellows/game`
       }
       probability=Math.max(.001,Math.min(.95,probability))
     }else if(row.market.startsWith("goal")||row.market.startsWith("assist")){
-      probability=remainingOneProbability(base,live.elapsed)
+      probability=remainingOneProbability(base,elapsed)
+      if(row.market.startsWith("goal")&&Number(stat.shots??0)>0){
+        probability=logistic(logit(probability)+Math.min(.32,Number(stat.shots??0)*.08+Number(stat.shotsOnTarget??0)*.13))
+        liveReason=`${stat.shots} shot${stat.shots===1?"":"s"} already · ${stat.shotsOnTarget} on target`
+      }
     }else{
       const lambdaFull=-Math.log(1-Math.max(.001,Math.min(.995,base)))
       probability=poissonAtLeast(lambdaFull*remaining,need)
       if(row.market.startsWith("foul")&&!row.market.startsWith("fouled")){
-        const pressure=defensivePressure(stat,row.position)
-        if(pressure>0){
-          probability=logistic(logit(probability)+pressure)
-          liveReason=`Defensive workload: ${Number(stat.tackles??0)} tackles · ${Number(stat.interceptions??0)} interceptions · ${Number(stat.blocks??0)} blocks · ${Number(stat.duelsTotal??0)} duels; future foul probability increased`
-        }
+        probability=logistic(logit(probability)+pressure.foul)
+        liveReason=`${current} foul${current===1?"":"s"} committed · team foul pressure ${pressure.ownCommitRate.toFixed(1)}/90 · opponent fouls drawn ${pressure.oppDrawRate.toFixed(1)}/90`
+      }else if(row.market.startsWith("fouled")){
+        probability=logistic(logit(probability)+pressure.fouled)
+        liveReason=`${current} fouls drawn · live targeting pressure applied`
+      }else if(row.market.startsWith("shot")){
+        const attacking=Math.min(.34,Number(stat.shots??0)*.08+Number(stat.shotsOnTarget??0)*.12)
+        if(attacking>0)probability=logistic(logit(probability)+attacking)
+        liveReason=`${stat.shots} shots · ${stat.shotsOnTarget} SOT already`
       }
     }
+
+    const livePressureScore=row.market==="card"?pressure.card:
+      row.market.startsWith("fouled")?pressure.fouled:
+      row.market.startsWith("foul")?pressure.foul:
+      row.market.startsWith("shot")||row.market.startsWith("sot")?Math.min(.45,Number(stat.shots??0)*.08+Number(stat.shotsOnTarget??0)*.12):0
+
     adjusted.push({
       ...row,
+      preMarketProbability:probability,
       probability,
       fairOdds:probability>0?Math.round((1/probability)*100)/100:null,
       bookmakerOdds:null,
@@ -316,9 +371,11 @@ function applyLive(rows:Selection[],live:LiveData|null,scorecard:Scorecard|null=
       edge:null,
       currentCount:current,
       liveAdjusted:true,
+      livePressureScore,
+      liveRankScore:probability+livePressureScore*.08,
       tackles:Number(stat.tackles??0),interceptions:Number(stat.interceptions??0),blocks:Number(stat.blocks??0),
       duelsTotal:Number(stat.duelsTotal??0),duelsWon:Number(stat.duelsWon??0),defensiveInterventions:Number(stat.defensiveInterventions??0),
-      reason:liveReason||`Live: ${current} already recorded; ${Math.round(probability*100)}% model chance of reaching ${row.label} from ${live.elapsed}'`,
+      reason:liveReason||`Live: ${current} already recorded; ${Math.round(probability*100)}% remaining-match chance of reaching ${row.label} from ${elapsed}'`,
     })
   }
   return adjusted
@@ -365,10 +422,18 @@ function sameLivePlayer(a:string,b:string){
   return xt.length>1&&yt.length>1&&xt[xt.length-1]===yt[yt.length-1]&&(x.includes(yt[0])||y.includes(xt[0]))
 }
 function overlayVerifiedLiveBet365(rows:Selection[],odds:LiveOddsData|null){
-  if(!odds?.priceAvailable||odds.liveVerified!==true||odds.bookmaker!=="Bet365"||odds.source!=="Odds-API.io")return rows
-  const captured=odds.capturedAt?new Date(odds.capturedAt).getTime():Number.NaN
-  if(!Number.isFinite(captured)||Date.now()-captured>45_000)return rows
+  if(!odds||odds.bookmaker!=="Bet365")return rows
   const selections=Array.isArray(odds.selections)?odds.selections:[]
+  if(!selections.length)return rows
+
+  const captured=odds.capturedAt?new Date(odds.capturedAt).getTime():Number.NaN
+  const freshLive=Boolean(
+    odds.priceAvailable&&odds.liveVerified===true&&String(odds.source??"").startsWith("Odds-API.io")&&
+    Number.isFinite(captured)&&Date.now()-captured<=45_000
+  )
+  const lastGood=odds.lastGoodReference===true||(!freshLive&&odds.cached===true)
+  if(!freshLive&&!lastGood)return rows
+
   return rows.map(row=>{
     const kind=liveKindForMarket(row.market)
     const threshold=thresholdForMarket(row.market)
@@ -378,13 +443,33 @@ function overlayVerifiedLiveBet365(rows:Selection[],odds:LiveOddsData|null){
       const playerPart=label.split("·")[0]?.trim()??""
       return sameLivePlayer(playerPart,row.player)&&liveOddThreshold(label)===threshold
     })
-    if(!match)return {...row,bookmakerOdds:null,bookmakerName:null,edge:null}
+    if(!match){
+      return freshLive?{...row,bookmakerOdds:null,bookmakerName:null,edge:null}:row
+    }
+
     const price=Number(match.odd)
+    const implied=Math.max(.001,Math.min(.95,1/price))
+    const modelP=Math.max(.001,Math.min(.99,row.probability))
+    // Bet365 is a market signal, not the model. Fresh live prices receive a modest
+    // weight; an older retained price is only a weak prior.
+    const weight=freshLive?.22:.08
+    const calibrated=Math.max(.001,Math.min(.99,modelP*(1-weight)+implied*weight))
+    const marketRankBoost=Math.max(-.06,Math.min(.06,(implied-modelP)*.18))
     return {
       ...row,
-      bookmakerOdds:price,
-      bookmakerName:"Bet365",
-      edge:Math.round((row.probability-1/price)*1000)/1000,
+      preMarketProbability:modelP,
+      probability:calibrated,
+      fairOdds:Math.round((1/calibrated)*100)/100,
+      bookmakerOdds:freshLive?price:null,
+      bookmakerName:freshLive?"Bet365":null,
+      referenceBookmakerOdds:price,
+      referenceImpliedProbability:implied,
+      referenceOddsLive:freshLive,
+      edge:freshLive?Math.round((modelP-implied)*1000)/1000:null,
+      liveRankScore:Math.max(.001,Math.min(.999,(row.liveRankScore??modelP)+marketRankBoost)),
+      reason:row.reason+(freshLive
+        ?` · fresh Bet365 ${price.toFixed(2)} (${Math.round(implied*100)}% implied) used as market calibration`
+        :` · last captured Bet365 ${price.toFixed(2)} used as a light market prior`),
     }
   })
 }
@@ -586,7 +671,7 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
       ).map(r=>{
         const t=trafficFor(r,rows)
         const trafficScore=t==="high"?1:t==="average"?.58:.18
-        const modelScore=r.market==="card"?Number(r.recommendationScore??r.probability):r.probability
+        const modelScore=Number(r.liveRankScore??(r.market==="card"?Number(r.recommendationScore??r.probability):r.probability))
         const rankScore=trafficScore+modelScore*.22+Math.max(0,r.edge??0)*.15
         return {family:family(r.market),score:rankScore}
       }).sort((a,b)=>b.score-a.score)
@@ -598,8 +683,8 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
       .filter(r=>r.market!=="card"||Number(r.recommendationScore??r.probability)>=.145)
       .map(r=>({row:r,family:family(r.market),signal:preferred.get(normPlayer(r.player))?.score??0}))
       .sort((a,b)=>{
-        const ap=a.row.market==="card"?Number(a.row.recommendationScore??a.row.probability):a.row.probability
-        const bp=b.row.market==="card"?Number(b.row.recommendationScore??b.row.probability):b.row.probability
+        const ap=Number(a.row.liveRankScore??(a.row.market==="card"?Number(a.row.recommendationScore??a.row.probability):a.row.probability))
+        const bp=Number(b.row.liveRankScore??(b.row.market==="card"?Number(b.row.recommendationScore??b.row.probability):b.row.probability))
         return (bp-ap)||
         ((baseMarket(a.row.market)?0:1)-(baseMarket(b.row.market)?0:1))||
         (b.signal-a.signal)
@@ -720,8 +805,8 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
       .filter(r=>r.confidence!=="D"&&Number(r.probability)>0&&Number(r.fairOdds??0)>1)
       .filter(r=>r.market!=="card"||Number(r.recommendationScore??r.probability)>=.145)
       .sort((a,b)=>{
-        const ap=a.market==="card"?Number(a.recommendationScore??a.probability):a.probability
-        const bp=b.market==="card"?Number(b.recommendationScore??b.probability):b.probability
+        const ap=Number(a.liveRankScore??(a.market==="card"?Number(a.recommendationScore??a.probability):a.probability))
+        const bp=Number(b.liveRankScore??(b.market==="card"?Number(b.recommendationScore??b.probability):b.probability))
         return bp-ap
       })
     const legs:Selection[]=[]
@@ -1064,10 +1149,11 @@ export default function BetBuilderPage(){
     const score=(row:Selection)=>{
       const t=trafficFor(row,allRows)
       const traffic=t==="high"?1:t==="average"?.58:.18
-      const model=row.market==="card"
+      const model=Number(row.liveRankScore??(row.market==="card"
         ? (row.liveAdjusted?row.probability:Number(row.recommendationScore??row.probability))
-        : row.probability
-      return traffic+model*.22+Math.max(0,row.edge??0)*.15
+        : row.probability))
+      const marketSignal=row.referenceImpliedProbability!=null?Math.min(.08,Math.max(-.04,(row.referenceImpliedProbability-row.probability)*.12)):0
+      return traffic+model*.22+Math.max(0,row.edge??0)*.15+marketSignal
     }
     const best=new Map<string,Selection>()
     for(const row of rows){
@@ -1410,7 +1496,7 @@ function SelectionRow({row,selected,onToggle,rank,traffic,bestAction=false,liveB
   const probabilityClass=traffic==="high"?"text-emerald-200":traffic==="average"?"text-amber-100":"text-rose-100/80"
   return <button disabled={!actionable} onClick={actionable?onToggle:undefined} className={"grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 px-3 py-3 text-left transition "+(rank>1?"border-t border-white/[0.055] ":"")+(selected?"bg-emerald-400/[0.08]":actionable?"hover:bg-white/[0.025]":"opacity-55 cursor-not-allowed")}>
     <span className={"flex size-7 items-center justify-center rounded-full text-[0.56rem] font-black "+(traffic==="high"?"bg-emerald-400/12 text-emerald-300":traffic==="average"?"bg-amber-300/10 text-amber-200":"bg-rose-300/8 text-rose-200/65")}>{rank}</span>
-    <div className="min-w-0"><div className="flex flex-wrap items-center gap-1.5"><p className="truncate text-sm font-black">{row.player}</p><TeamBadge team={row.team} fixture={fixture}/>{bestAction?<span className="rounded-full bg-cyan-300/10 px-1.5 py-0.5 text-[0.36rem] font-black text-cyan-200">BEST ACTION</span>:null}{selected?<BadgeCheck className="size-3.5 shrink-0 text-emerald-300"/>:null}</div><p className="mt-0.5 truncate text-[0.54rem] font-bold text-white/55">{row.label}</p><p className="mt-0.5 truncate text-[0.46rem] text-white/25">Grade {row.confidence}{row.liveAdjusted?" · live count "+(row.currentCount??0):row.edge!=null?" · "+(row.edge>=0?"+":"")+(row.edge*100).toFixed(1)+"pp vs price":""}</p></div>
+    <div className="min-w-0"><div className="flex flex-wrap items-center gap-1.5"><p className="truncate text-sm font-black">{row.player}</p><TeamBadge team={row.team} fixture={fixture}/>{bestAction?<span className="rounded-full bg-cyan-300/10 px-1.5 py-0.5 text-[0.36rem] font-black text-cyan-200">BEST ACTION</span>:null}{selected?<BadgeCheck className="size-3.5 shrink-0 text-emerald-300"/>:null}</div><p className="mt-0.5 truncate text-[0.54rem] font-bold text-white/55">{row.label}</p><p className="mt-0.5 truncate text-[0.46rem] text-white/25">Grade {row.confidence}{row.liveAdjusted?" · live count "+(row.currentCount??0)+(row.livePressureScore!=null?" · pressure "+Math.round(row.livePressureScore*100):""):row.edge!=null?" · "+(row.edge>=0?"+":"")+(row.edge*100).toFixed(1)+"pp vs price":""}{row.referenceBookmakerOdds&&!row.referenceOddsLive?" · last Bet365 "+row.referenceBookmakerOdds.toFixed(2):""}</p></div>
     <div className="min-w-[5rem] text-right"><div className="mb-1 flex justify-end"><span className={"rounded-full border px-1.5 py-0.5 text-[0.38rem] font-black "+trafficClass}>{trafficText}</span></div><p className={"font-mono text-base font-black "+probabilityClass}>{percent(row.probability)}</p><p className={"text-[0.42rem] font-black "+(exact?"text-emerald-200/70":marketStatus==="unavailable"?"text-rose-200/70":"text-white/20")}>{exact?(row.bookmakerOdds!.toFixed(3)+" · "+(liveBet365?"LIVE BET365":"VERIFIED BET365")):marketStatus==="unavailable"?"NOT OFFERED IN VERIFIED BET365 FEED":"NO VERIFIED BET365 PRICE"}</p>{actionable?<span className={"mt-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[0.4rem] font-black "+(selected?"bg-emerald-300 text-emerald-950":"bg-white/6 text-white/30")}>{selected?<X className="size-2.5"/>:<CirclePlus className="size-2.5"/>}{selected?"REMOVE":"ADD"}</span>:<span className="mt-1 inline-flex rounded-full bg-rose-300/10 px-1.5 py-0.5 text-[0.4rem] font-black text-rose-200">MODEL ONLY</span>}</div>
   </button>
 }
