@@ -180,7 +180,7 @@ function parseFixture():Fixture|null{
   const homeCrest=p.get("homeCrest")??"",awayCrest=p.get("awayCrest")??""
   return id&&date&&competition&&home&&away?{id,date,kickoff,competition,home,away,homeCrest,awayCrest}:null
 }
-function scorecardUrl(f:Fixture,force=false){const q=new URLSearchParams({date:f.date,home:f.home,away:f.away,competition:f.competition});if(force)q.set("refresh",String(Date.now()));return "/api/fixture-scorecard?"+q}
+function scorecardUrl(f:Fixture,force=false){const q=new URLSearchParams({date:f.date,home:f.home,away:f.away,competition:f.competition,view:"builder"});if(force)q.set("refresh",String(Date.now()));return "/api/fixture-scorecard?"+q}
 function time(kickoff:string){return kickoff?new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/London",weekday:"short",day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit",hour12:false}).format(new Date(kickoff)):""}
 function keyOf(s:Pick<Selection,"player"|"market"|"label">){return [s.player,s.market,s.label].join("|").toLowerCase()}
 function verifiedBet365Odd(s:Selection){
