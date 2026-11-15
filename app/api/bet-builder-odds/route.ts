@@ -273,7 +273,7 @@ async function oddsApiIo(path:string,params:Record<string,string>,key:string){
   for(const[k,v]of Object.entries(params))url.searchParams.set(k,v)
   // Persist successful provider responses in Vercel/Next's data cache.
   // Odds refresh quickly; fixture/bookmaker metadata can live longer.
-  const revalidateSeconds=path==="/odds"?30:path==="/events"?120:600
+  const revalidateSeconds=path==="/odds"?20:path==="/events"?120:600
   const response=await fetch(url,{
     next:{revalidate:revalidateSeconds},
     signal:AbortSignal.timeout(10000),
@@ -389,13 +389,18 @@ async function fromOddsApiIo(input:{date:string;home:string;away:string;competit
   const books=[...new Set(selections.map(s=>s.bookmaker).filter(Boolean))] as string[]
   if(!selections.length)return null
   const updatedTimes=Object.values(payload?.bookmakers??{}).flatMap((markets:any)=>Array.isArray(markets)?markets.map((m:any)=>String(m?.updatedAt??"")).filter(Boolean):[])
-  const capturedAt=updatedTimes.sort().reverse()[0]??new Date().toISOString()
+  const providerUpdatedAt=updatedTimes.sort().reverse()[0]??null
+  // capturedAt means when Match Edge verified this board from the provider.
+  // providerUpdatedAt is retained separately because a bookmaker may not move
+  // a price for several minutes even though we have just re-verified it.
+  const capturedAt=new Date().toISOString()
   return {
     connected:true,
     bookmaker:"Bet365",
     bookmakers:["Bet365"],
     source:"Odds-API.io",
     capturedAt,
+    providerUpdatedAt,
     eventId:id,
     selections,
     bookmakerUrls:payload?.urls??{},
@@ -693,7 +698,7 @@ export async function GET(request: Request) {
             ...primary,selections,priceAvailable:true,freeTier:false,cached:false,maxUsableAgeSeconds:300,
             marketAvailability:marketAvailability(selections,true),
             bookmakerAvailability:bookmakerAvailability(selections,["Bet365"]),
-            cacheLayer:{provider:"Vercel Data Cache",oddsTtlSeconds:30,eventTtlSeconds:120,lastGoodDatabase:"oddsSnapshots when database is available"},
+            cacheLayer:{provider:"Vercel Data Cache",oddsTtlSeconds:20,eventTtlSeconds:120,lastGoodDatabase:"oddsSnapshots when database is available"},
           })
         }
       }catch(error){
