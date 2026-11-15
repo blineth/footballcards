@@ -1221,6 +1221,23 @@ export async function GET(request: Request) {
   if (!radarResponse.ok) return radarResponse
   const radar = await radarResponse.json()
   const candidates: any[] = Array.isArray(radar?.candidates) ? radar.candidates : []
+
+  // International confirmed XIs can be much better covered by the dedicated
+  // national-team snapshot than by club-baseline matching. If the live research
+  // path only matches a small portion of the 22 starters, use the confirmed-XI
+  // snapshot as the probability layer and then overlay verified Bet365 prices.
+  if(competition==="International"&&radar?.lineupsConfirmed===true&&candidates.length<18){
+    try{
+      const expanded:any=await buildVerifiedBet365SnapshotFallback({request,date,home,away,competition})
+      if(expanded?.lineupsConfirmed===true&&Number(expanded?.playerCount??0)>candidates.length){
+        return NextResponse.json({
+          ...expanded,
+          fallbackReason:"Confirmed international XI coverage expanded with the national-team snapshot; verified Bet365 prices remain the only bookmaker prices shown.",
+        })
+      }
+    }catch{}
+  }
+
   const names = Array.from(new Set(candidates.map(c => String(c.dbName ?? "")).filter(Boolean))) as string[]
 
   let odds: any = { selections: [], priceAvailable: false }
