@@ -469,15 +469,29 @@ function buildLivePlayerProps(scorecard:Scorecard|null,elapsed:number,liveStats:
       let pressureNote=""
       if(market==="card"&&stat&&stat.foulsCommitted>0){
         const player=(scorecard.players??[]).find(p=>normName(p.name)===normName(leg.player)||normName(String(p.dbName??""))===normName(leg.player))
-        const cond=stat.foulsCommitted>=3?player?.yellowConditionals?.after3PlusFouls
-          :stat.foulsCommitted>=2?player?.yellowConditionals?.after2PlusFouls
+        const fouls=Math.max(0,Number(stat.foulsCommitted??0))
+        const cond=fouls>=3?player?.yellowConditionals?.after3PlusFouls
+          :fouls>=2?player?.yellowConditionals?.after2PlusFouls
           :player?.yellowConditionals?.after1PlusFouls
         const overall=player?.yellowConditionals?.overall
-        if(cond?.rate!=null&&Number(overall?.rate)>0&&Number(cond.matches??0)>=4){
-          const multiplier=Math.max(.75,Math.min(1.8,Number(cond.rate)/Number(overall!.rate)))
-          probability=Math.max(.001,Math.min(.99,probability*multiplier))
-          pressureNote=" Live foul pressure adjusted from the player's historical card-after-foul profile."
+        const logit=(p:number)=>Math.log(Math.max(.001,Math.min(.999,p))/(1-Math.max(.001,Math.min(.999,p))))
+        const logistic=(x:number)=>1/(1+Math.exp(-x))
+        let delta=Math.min(.65,.14*fouls)
+        if(cond?.rate!=null&&Number(overall?.rate)>0&&Number(cond.matches??0)>=2){
+          const reliability=Math.min(1,Number(cond.matches??0)/10)
+          const observed=logit(Number(cond.rate))-logit(Math.max(.02,Number(overall!.rate)))
+          delta=Math.max(-.10,Math.min(.90,observed*.72*reliability+.10*fouls))
+          pressureNote=` Live: ${fouls} foul${fouls===1?"":"s"} committed; historical booking rate after this foul load ${Math.round(Number(cond.rate)*100)}% (${cond.matches} matches).`
+        }else{
+          pressureNote=` Live: ${fouls} foul${fouls===1?"":"s"} committed; foul-pressure uplift applied.`
         }
+        probability=logistic(logit(probability)+delta)
+        const refYellows=Number(scorecard?.referee?.yellowsPerGame??0)
+        if(refYellows>0){
+          probability=logistic(logit(probability)+Math.max(-.18,Math.min(.22,(refYellows-4.2)*.055)))
+          pressureNote+=` Referee context ${refYellows.toFixed(1)} yellows/game.`
+        }
+        probability=Math.max(.001,Math.min(.95,probability))
       }
 
       const marketGroup=market==="card"?"card":market==="foul1"?"foul":market==="fouled1"?"fouled":market==="shot1"?"shot":"sot"
