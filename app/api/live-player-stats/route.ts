@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { getRefereeByName } from "@/lib/historical"
 
 export const dynamic="force-dynamic"
 export const revalidate=0
@@ -11,9 +12,16 @@ type LivePlayerStat={
   recentFouls10:number;recentFouls15:number;recentFouled10:number;disciplineHeat:number;
   aggressionScore:number;aggressionSignals:string[];lastAggressionMinute:number|null
 }
+type RefereeLiveContext={
+  name:string|null;source:string|null;matches:number|null;historicalYellowsPerGame:number|null;historicalFoulsPerGame:number|null;
+  liveFouls:number;liveYellows:number;liveReds:number;liveFoulsPer90:number|null;liveYellowsPer90:number|null;
+  liveCardPerFoul:number|null;historicalCardPerFoul:number|null;strictnessScore:number;strictnessLabel:"strict"|"average"|"lenient";
+  historicalModifier:number;liveDecisionModifier:number
+}
 type LivePayload={
   ok:boolean;source:string|null;status:"scheduled"|"live"|"halftime"|"finished"|"unknown";elapsed:number;
-  score:{home:number|null;away:number|null};players:LivePlayerStat[];fixtureId?:string|null;updatedAt:string
+  score:{home:number|null;away:number|null};players:LivePlayerStat[];fixtureId?:string|null;updatedAt:string;
+  referee?:RefereeLiveContext|null
 }
 
 const ESPN:Record<Competition,string[]>={
@@ -29,6 +37,7 @@ const API_LEAGUES:Record<string,string>={
 const cache=new Map<string,{expires:number,payload:LivePayload}>()
 type LiveHistorySnapshot={capturedAt:number;elapsed:number;players:Record<string,{fc:number;fd:number}>}
 const liveHistory=new Map<string,LiveHistorySnapshot[]>()
+const refereeProfileCache=new Map<string,{expires:number;profile:any|null}>()
 
 function norm(v:string|null|undefined){
   return String(v??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase()
@@ -148,6 +157,81 @@ function elapsedFrom(event:any){
   const m=raw.match(/(\d{1,3})/)
   return m?Math.max(0,Math.min(130,Number(m[1]))):0
 }
+function refereeNameFromEspn(summary:any,event:any){
+  const pools=[
+    summary?.gameInfo?.officials,
+    summary?.header?.competitions?.[0]?.officials,
+    summary?.officials,
+    event?.competitions?.[0]?.officials,
+  ].filter(Array.isArray)
+  for(const officials of pools){
+    const preferred=officials.find((o:any)=>{
+      const role=String(o?.position?.displayName??o?.position?.name??o?.role??o?.type??"").toLowerCase()
+      return role==="referee"||role.includes("main referee")||role.includes("match referee")
+    })??officials[0]
+    const name=String(preferred?.fullName??preferred?.displayName??preferred?.name??preferred?.athlete?.displayName??"").trim()
+    if(name)return name
+  }
+  return null
+}
+async function cachedRefereeProfile(name:string){
+  const key=norm(name)
+  const cached=refereeProfileCache.get(key)
+  if(cached&&cached.expires>Date.now())return cached.profile
+  let profile:any=null
+  try{profile=await getRefereeByName(name)}catch{}
+  refereeProfileCache.set(key,{expires:Date.now()+6*60*60*1000,profile})
+  return profile
+}
+function clamp01(v:number){return Math.max(0,Math.min(1,v))}
+async function enrichRefereeContext(payload:LivePayload){
+  const name=payload.referee?.name??null
+  const historical=name?await cachedRefereeProfile(name):null
+  const histY=Number.isFinite(Number(historical?.yellowsPerGame))?Number(historical.yellowsPerGame):null
+  const histF=Number.isFinite(Number(historical?.foulsPerGame))?Number(historical.foulsPerGame):null
+  const liveFouls=payload.players.reduce((s,p)=>s+Number(p.foulsCommitted??0),0)
+  const liveYellows=payload.players.reduce((s,p)=>s+Number(p.yellowCards??0),0)
+  const liveReds=payload.players.reduce((s,p)=>s+Number(p.redCards??0),0)
+  const elapsed=Math.max(1,Number(payload.elapsed??0))
+  const liveFoulsPer90=liveFouls>0?liveFouls*90/elapsed:0
+  const liveYellowsPer90=(liveYellows+liveReds*.55)*90/elapsed
+  const liveCardPerFoul=liveFouls>0?(liveYellows+liveReds*.55)/liveFouls:null
+  const historicalCardPerFoul=histY!=null&&histF!=null&&histF>0?histY/histF:null
+
+  // Historical temperament establishes the prior. The live modifier is relative
+  // to that referee's own norm, so we do not simply double-count a naturally strict ref.
+  const historicalModifier=Math.max(-.18,Math.min(.18,
+    (histY==null?0:(histY-4.2)*.055)+(histF==null?0:(histF-22)*.006)
+  ))
+  const reliability=Math.min(1,elapsed/50)*Math.min(1,.25+liveFouls/14+(liveYellows+liveReds)/6)
+  const yellowBase=histY??4.2
+  const foulBase=histF??22
+  const paceDelta=Math.max(-1.4,Math.min(1.4,(liveYellowsPer90-yellowBase)/Math.max(2.5,yellowBase)))
+  const whistleDelta=Math.max(-1.2,Math.min(1.2,(liveFoulsPer90-foulBase)/Math.max(14,foulBase)))
+  const conversionBase=historicalCardPerFoul??(.19)
+  const conversionDelta=liveCardPerFoul==null?0:Math.max(-1.2,Math.min(1.2,(liveCardPerFoul-conversionBase)/Math.max(.10,conversionBase)))
+  const liveDecisionModifier=Math.max(-.34,Math.min(.34,
+    reliability*(paceDelta*.18+conversionDelta*.12+whistleDelta*.06)
+  ))
+  const historicalStrictness=clamp01(.5+historicalModifier*1.25)
+  const strictnessScore=clamp01(historicalStrictness+liveDecisionModifier*.95)
+  const strictnessLabel:RefereeLiveContext["strictnessLabel"]=strictnessScore>=.64?"strict":strictnessScore<=.38?"lenient":"average"
+
+  payload.referee={
+    name,source:payload.referee?.source??(name?"live fixture feed":null),
+    matches:Number.isFinite(Number(historical?.matchesRefereed))?Number(historical.matchesRefereed):null,
+    historicalYellowsPerGame:histY,historicalFoulsPerGame:histF,
+    liveFouls,liveYellows,liveReds,
+    liveFoulsPer90:Math.round(liveFoulsPer90*10)/10,
+    liveYellowsPer90:Math.round(liveYellowsPer90*10)/10,
+    liveCardPerFoul:liveCardPerFoul==null?null:Math.round(liveCardPerFoul*1000)/1000,
+    historicalCardPerFoul:historicalCardPerFoul==null?null:Math.round(historicalCardPerFoul*1000)/1000,
+    strictnessScore:Math.round(strictnessScore*1000)/1000,strictnessLabel,
+    historicalModifier:Math.round(historicalModifier*1000)/1000,
+    liveDecisionModifier:Math.round(liveDecisionModifier*1000)/1000,
+  }
+  return payload
+}
 async function espnLive(input:{date:string;home:string;away:string;competition:Competition}):Promise<LivePayload|null>{
   for(const slug of ESPN[input.competition]??[]){
     try{
@@ -264,10 +348,16 @@ async function espnLive(input:{date:string;home:string;away:string;competition:C
       }
       const cs=event?.competitions?.[0]?.competitors??[]
       const h=cs.find((x:any)=>x.homeAway==="home"),a=cs.find((x:any)=>x.homeAway==="away")
+      const refereeName=refereeNameFromEspn(summary,event)
       return {
         ok:true,source:"ESPN live",status:espnStatus(event),elapsed:elapsedFrom(event),
         score:{home:Number.isFinite(Number(h?.score))?Number(h.score):null,away:Number.isFinite(Number(a?.score))?Number(a.score):null},
         players:[...map.values()],fixtureId:String(event.id),updatedAt:new Date().toISOString(),
+        referee:refereeName?{
+          name:refereeName,source:"ESPN",matches:null,historicalYellowsPerGame:null,historicalFoulsPerGame:null,
+          liveFouls:0,liveYellows:0,liveReds:0,liveFoulsPer90:null,liveYellowsPer90:null,liveCardPerFoul:null,historicalCardPerFoul:null,
+          strictnessScore:.5,strictnessLabel:"average",historicalModifier:0,liveDecisionModifier:0,
+        }:null,
       }
     }catch{}
   }
@@ -324,6 +414,7 @@ function mergeLivePlayers(primary:LivePayload,secondary:LivePayload|null){
     ...primary,
     players:merged,
     source:secondary.source?primary.source+" + defensive stats "+secondary.source:primary.source,
+    referee:primary.referee?.name?primary.referee:(secondary.referee??null),
   }
 }
 
@@ -383,10 +474,16 @@ async function apiFootballLive(input:{date:string;home:string;away:string;compet
       }
     }
     const st=String(fixture?.fixture?.status?.short??"")
+    const refereeName=String(fixture?.fixture?.referee??"").trim()||null
     return {
       ok:true,source:"API-Football live players",status:apiStatus(st),elapsed:Number(fixture?.fixture?.status?.elapsed??0)||0,
       score:{home:fixture?.goals?.home==null?null:Number(fixture.goals.home),away:fixture?.goals?.away==null?null:Number(fixture.goals.away)},
       players,fixtureId:id,updatedAt:new Date().toISOString(),
+      referee:refereeName?{
+        name:refereeName,source:"API-Football",matches:null,historicalYellowsPerGame:null,historicalFoulsPerGame:null,
+        liveFouls:0,liveYellows:0,liveReds:0,liveFoulsPer90:null,liveYellowsPer90:null,liveCardPerFoul:null,historicalCardPerFoul:null,
+        strictnessScore:.5,strictnessLabel:"average",historicalModifier:0,liveDecisionModifier:0,
+      }:null,
     }
   }catch{return null}
 }
@@ -410,6 +507,7 @@ export async function GET(request:Request){
     payload={ok:true,source:null,status:"unknown",elapsed:0,score:{home:null,away:null},players:[],updatedAt:new Date().toISOString()}
   }
   if(payload.players.length)applyRollingDiscipline(key,payload)
+  payload=await enrichRefereeContext(payload)
   const ttl=payload.status==="live"||payload.status==="halftime"?45_000:payload.status==="scheduled"?120_000:300_000
   cache.set(key,{expires:Date.now()+ttl,payload})
   return NextResponse.json(payload)
