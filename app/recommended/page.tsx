@@ -64,7 +64,7 @@ type LiveMatch={
 type ViewMode="all"|"live"|"value"|"props"|"targets"
 type PropBoardRow={recId:string;fixture:Fixture;leg:SlipLeg;placeable:boolean;marketProbability:number|null;edge:number|null}
 type Response={
-  ok:boolean;updatedAt?:string;fixturesScanned?:number;recommendations?:Recommendation[];
+  ok:boolean;updatedAt?:string;date?:string;autoAdvanced?:boolean;fixturesScanned?:number;recommendations?:Recommendation[];
   liveMatches?:LiveMatch[];targetOddsGames?:TargetOddsGame[];tracking?:Tracking;error?:string;staleFallback?:boolean;warning?:string
 }
 
@@ -127,18 +127,20 @@ export default function RecommendedPage(){
           <div>
             <div className="flex items-center gap-2 text-violet-300"><Trophy className="size-4"/><span className="text-[0.62rem] font-black uppercase tracking-[0.16em]">Match Edge</span></div>
             <h1 className="mt-1 text-2xl font-black">Picks</h1>
-            <p className="mt-1 text-xs text-white/45">One decision board for today's strongest model signals.</p>
+            <p className="mt-1 text-xs text-white/45">Strongest model signals from the current or next available matchday.</p>
           </div>
           <button onClick={()=>void refresh(true)} className="rounded-xl bg-violet-300 p-2.5 text-violet-950"><RefreshCw className={"size-4 "+(loading?"animate-spin":"")}/></button>
         </div>
         <p className="mt-3 text-[0.58rem] text-white/30">
           Premier League · Championship · League One · League Two · International · {data?.fixturesScanned??0} fixtures scanned
+          {data?.date?" · "+new Intl.DateTimeFormat("en-GB",{weekday:"short",day:"2-digit",month:"short"}).format(new Date(data.date+"T12:00:00Z")):""}
           {data?.updatedAt?" · updated "+new Date(data.updatedAt).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}):""}
         </p>
       </div>
     </header>
 
     <div className="mx-auto max-w-3xl space-y-4 px-4 py-4">
+      {data?.autoAdvanced&&data.date?<div className="rounded-2xl border border-violet-300/15 bg-violet-300/[0.05] px-4 py-3"><p className="text-xs font-black text-violet-100">No usable picks left today</p><p className="mt-1 text-[0.56rem] text-white/40">Showing the next available matchday automatically.</p></div>:null}
       {data?.staleFallback?<div className="rounded-2xl border border-amber-300/15 bg-amber-300/[0.06] px-4 py-3 text-xs text-amber-100">{data.warning??"Showing the last successful cached recommendations."}</div>:null}
 
       {data?.ok?<section className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -158,7 +160,7 @@ export default function RecommendedPage(){
 
       {loading&&!best?<div className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center"><RefreshCw className="mx-auto mb-3 size-5 animate-spin text-violet-300"/><p className="font-black">Scanning upcoming matches…</p></div>:null}
       {!loading&&data&&!data.ok?<div className="rounded-3xl border border-rose-300/15 bg-rose-400/5 p-6 text-center"><p className="font-black">Recommended scan unavailable</p><p className="mt-1 text-sm text-white/40">{data?.error??"Try a manual refresh."}</p></div>:null}
-      {!loading&&data?.ok&&!best?<div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.03] p-8 text-center"><p className="font-black">No recommendation ready yet</p><p className="mt-1 text-sm text-white/35">Recommended only publishes player slips after both starting XIs are confirmed. Matches still waiting for official lineups are withheld.</p></div>:null}
+      {!loading&&data?.ok&&!best?<div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.03] p-8 text-center"><p className="font-black">No recommendation ready yet</p><p className="mt-1 text-sm text-white/35">No strong player slip is available from the predicted or confirmed lineups on this matchday.</p></div>:null}
 
       {view==="all"&&best?<RecommendationCard rec={best} hero/>:null}
 
