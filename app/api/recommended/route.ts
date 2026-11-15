@@ -423,7 +423,7 @@ type MultiMatchGameBuilder={
   conservativeAllHitProbability:number;legs:MultiMatchLeg[]
 }
 type MultiMatchBuild={
-  available:boolean;targetFractionalPerMatch:"3/1";maxLegs:number;eligibleFixtureCount:number;
+  available:boolean;targetFractionalPerMatch:"3/1";maxMatches:number;eligibleFixtureCount:number;
   matchBuilders:MultiMatchGameBuilder[];legs:MultiMatchLeg[];
   combinedBet365Odds:number|null;modelAllHitProbability:number|null;note:string
 }
@@ -565,16 +565,9 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
   const built=eligible.map(safestThreeToOne).filter(Boolean) as MultiMatchGameBuilder[]
   built.sort((a,b)=>b.conservativeAllHitProbability-a.conservativeAllHitProbability||a.referenceOdds-b.referenceOdds)
 
-  // Keep the whole multi at 10 underlying player selections maximum.
-  const matchBuilders:MultiMatchGameBuilder[]=[]
-  let legCount=0
-  for(const builder of built){
-    if(matchBuilders.length>=10)break
-    if(legCount+builder.legs.length>10)continue
-    matchBuilders.push(builder)
-    legCount+=builder.legs.length
-  }
-
+  // A Bet Builder Acca is capped by matches here, not by the number of
+  // underlying player selections inside each same-game builder.
+  const matchBuilders=built.slice(0,10)
   const legs=matchBuilders.flatMap(x=>x.legs)
   const combined=matchBuilders.length?matchBuilders.reduce((v,x)=>v*x.referenceOdds,1):null
   const allHit=matchBuilders.length?matchBuilders.reduce((v,x)=>v*x.conservativeAllHitProbability,1):null
@@ -582,7 +575,7 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
   return {
     available:matchBuilders.length>=2,
     targetFractionalPerMatch:"3/1",
-    maxLegs:10,
+    maxMatches:10,
     eligibleFixtureCount:eligible.length,
     matchBuilders,
     legs,
@@ -590,7 +583,7 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
     modelAllHitProbability:allHit==null?null:Math.round(allHit*10000)/10000,
     note:matchBuilders.length
       ?"Each included match uses the safest verified Bet365 route that reaches roughly 3/1 using the same probability-first player-prop logic as the individual Match Builder. The overall number is the product of verified Bet365 leg prices; Bet365 can reprice correlated same-game selections in the final Bet Builder Acca."
-      :"No two fully-covered matches currently have a verified Safe 3/1 player-prop route within the 10-selection cap.",
+      :"No two fully-covered matches currently have a verified Safe 3/1 player-prop route.",
   }
 }
 
@@ -1069,7 +1062,7 @@ export async function GET(request:Request){
         cache:"Recommended scans today's matchday only. It never silently advances to tomorrow. Manual refresh bypasses the normal scan cadence, while provider and last-good caches protect against temporary source failures.",
         tracking:"Predicted-XI recommendations remain visible before official teams. As soon as confirmed lineups arrive, the scorecard is rebuilt and benched players disappear. Recommendations are saved before kickoff and graded later from imported player-match data.",
         targetOdds:"Select a match, then 5/1 through 50/1 targets use verified Bet365 individual leg prices only. If Bet365 prices are missing, the target is unavailable; model/fair odds are never substituted. The final Bet365 Bet Builder quote can still differ because of correlation.",
-        multiMatch:"The Multi-Match Builder only admits fixtures where Bet365 has Cards, Fouls Committed, Fouls Drawn, Shots and Shots on Target all available. It builds the safest verified same-game route to roughly 3/1 in each included match using the same probability-first logic as the individual Match Builder, then combines those match builders while capping the total at 10 underlying selections.",
+        multiMatch:"The Multi-Match Builder only admits fixtures where Bet365 has Cards, Fouls Committed, Fouls Drawn, Shots and Shots on Target all available. It builds the safest verified same-game route to roughly 3/1 in each included match using the same probability-first logic as the individual Match Builder, then combines up to 10 match builders. Each match can contain multiple underlying player selections.",
         liveRecommended:"Matches remain on Recommended after kick-off. Live rows use the current score and minute plus current player event counts. Confirmed-XI card, foul, fouled, shot and SOT models become next-threshold remaining-match probabilities; already-carded players are removed from the card market, and stale pre-match bookmaker prices are never relabelled as live prices.",
         liveFeedback:liveTopSample>=50
           ? "Live top-pick calibration is active. Current 30-day reliability multiplier: "+liveReliabilityFactor.toFixed(3)
