@@ -647,255 +647,161 @@ function buildBroadTargetBuilders(rows:Selection[]):RiskBuilder[]{
 }
 function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuilder[]{
   const configs=[
-    {id:"safe-3-1",title:"Safe 3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4,min:.32,max:12,minFamilies:1,maxPerFamily:12},
-    {id:"balanced-10-1",title:"Balanced 10/1",risk:"Balanced" as const,targetFractional:"10/1",targetDecimal:11,min:.12,max:12,minFamilies:1,maxPerFamily:12},
-    {id:"high-20-1",title:"High Risk 20/1+",risk:"High Risk" as const,targetFractional:"20/1+",targetDecimal:21,min:.08,max:12,minFamilies:1,maxPerFamily:12},
+    {id:"safe-3-1",title:"Safe 3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4},
+    {id:"balanced-10-1",title:"Balanced 10/1",risk:"Balanced" as const,targetFractional:"10/1",targetDecimal:11},
+    {id:"high-20-1",title:"High Risk 20/1+",risk:"High Risk" as const,targetFractional:"20/1+",targetDecimal:21},
   ]
   const family=(market:string)=>market.startsWith("goal")?"goal":market.startsWith("assist")?"assist":market.startsWith("fouled")?"fouled":market.startsWith("foul")?"foul":market.startsWith("sot")?"sot":market.startsWith("shot")?"shot":"card"
   const baseMarket=(market:string)=>market==="goal1"||market==="assist1"||market==="foul1"||market==="fouled1"||market==="card"||market==="shot1"||market==="sot1"
   const confidenceReliability=(row:Selection)=>row.confidence==="A"?1:row.confidence==="B"?.96:row.confidence==="C"?.88:.74
   const marketReliability=(row:Selection)=>{
     const f=family(row.market)
-    if(f==="foul")return .99
-    if(f==="fouled")return .985
-    if(f==="shot")return .98
+    if(f==="foul")return .995
+    if(f==="fouled")return .99
+    if(f==="shot")return .985
     if(f==="sot")return .95
-    if(f==="card")return .93
-    if(f==="goal")return .92
-    if(f==="assist")return .90
-    return .95
+    if(f==="card")return .91
+    if(f==="goal")return .89
+    if(f==="assist")return .87
+    return .94
   }
   const conservativeJoint=(legs:Selection[],raw:number)=>{
-    const counts:Record<string,number>={}
     let reliability=1
+    const counts:Record<string,number>={}
     for(const leg of legs){
       const f=family(leg.market)
       counts[f]=(counts[f]??0)+1
       reliability*=confidenceReliability(leg)*marketReliability(leg)
     }
     let concentration=1
-    for(const count of Object.values(counts))if(count>1)concentration*=Math.pow(.965,count-1)
-    return Math.max(0,Math.min(.99,raw*reliability*concentration*Math.pow(.985,Math.max(0,legs.length-2))))
+    for(const count of Object.values(counts))if(count>1)concentration*=Math.pow(.975,count-1)
+    return Math.max(0,Math.min(.99,raw*reliability*concentration*Math.pow(.99,Math.max(0,legs.length-2))))
+  }
+  const stability=(row:Selection)=>{
+    const f=family(row.market)
+    if(row.market==="foul1")return 1.10
+    if(row.market==="fouled1")return 1.07
+    if(row.market==="shot1")return 1.04
+    if(row.market==="sot1")return .99
+    if(f==="foul")return .98
+    if(f==="fouled")return .97
+    if(f==="shot")return .96
+    if(f==="sot")return .93
+    if(f==="card")return .84
+    if(f==="goal")return .80
+    if(f==="assist")return .77
+    return .90
+  }
+  const likelihoodScore=(row:Selection)=>{
+    const live=Number(row.liveRankScore??row.probability)
+    const p=Number(row.probability)
+    const baseBonus=baseMarket(row.market)?.035:0
+    return p*.72+live*.20+stability(row)*.08+baseBonus
   }
 
-  function buildOne(cfg:(typeof configs)[number],verifiedOnly:boolean,referenceOnly=false):RiskBuilder{
-    const preferred=new Map<string,{family:string;score:number}>()
-    const playerNames=[...new Set(rows.map(r=>normPlayer(r.player)))]
-    for(const player of playerNames){
-      const options=rows.filter(r=>
-        normPlayer(r.player)===player&&baseMarket(r.market)&&
-        (verifiedOnly?verifiedBet365Odd(r)!=null:referenceOnly?displayedBet365Odd(r)!=null:Number(r.fairOdds??0)>1)
-      ).map(r=>{
-        const t=trafficFor(r,rows)
-        const trafficScore=t==="high"?1:t==="average"?.58:.18
-        const modelScore=Number(r.liveRankScore??(r.market==="card"?Number(r.recommendationScore??r.probability):r.probability))
-        const rankScore=trafficScore+modelScore*.22+Math.max(0,r.edge??0)*.15
-        return {family:family(r.market),score:rankScore}
-      }).sort((a,b)=>b.score-a.score)
-      if(options[0])preferred.set(player,options[0])
-    }
-
-    const allCandidateRows=rows
-      .filter(r=>(verifiedOnly?verifiedBet365Odd(r)!=null:referenceOnly?displayedBet365Odd(r)!=null:Number(r.fairOdds??0)>1))
-      .filter(r=>r.market!=="card"||Number(r.recommendationScore??r.probability)>=.145)
-      .map(r=>({row:r,family:family(r.market),signal:preferred.get(normPlayer(r.player))?.score??0}))
-      .sort((a,b)=>{
-        const ap=Number(a.row.liveRankScore??(a.row.market==="card"?Number(a.row.recommendationScore??a.row.probability):a.row.probability))
-        const bp=Number(b.row.liveRankScore??(b.row.market==="card"?Number(b.row.recommendationScore??b.row.probability):b.row.probability))
-        return (bp-ap)||
-        ((baseMarket(a.row.market)?0:1)-(baseMarket(b.row.market)?0:1))||
-        (b.signal-a.signal)
-      })
-
-    const runSearch=(candidateRows:typeof allCandidateRows)=>{
-      // Exact objective: maximise joint hit probability subject to reaching the
-      // requested odds and Bet365's real limits. Use at most one selection per
-      // player, up to six players from either team and up to 12 selections total.
-      // This deliberately allows a longer list of safer 1+ events to beat a short
-      // slip containing a speculative card, scorer or high threshold.
-      const minLegProbability=cfg.risk==="Safe"?.30:cfg.risk==="Balanced"?.10:.08
-      const byPlayer=new Map<string,typeof candidateRows>()
-      for(const option of candidateRows){
-        if(option.row.probability<Math.max(cfg.min,minLegProbability))continue
-        const key=normPlayer(option.row.player)
-        if(!key)continue
-        if(!byPlayer.has(key))byPlayer.set(key,[])
-        byPlayer.get(key)!.push(option)
-      }
-
-      type State={
-        legs:Selection[];product:number;prob:number;conservative:number;
-        families:Record<string,number>;teamCounts:Record<string,number>
-      }
-      const maxProduct=cfg.targetDecimal*1.45
-      const maxLog=Math.log(maxProduct)
-      const buckets=700
-      const bucketFor=(product:number)=>Math.max(0,Math.min(buckets,Math.round(Math.log(Math.max(1,product))/maxLog*buckets)))
-
-      let states=new Map<number,State>()
-      states.set(0,{legs:[],product:1,prob:1,conservative:1,families:{},teamCounts:{}})
-
-      for(const options of byPlayer.values()){
-        const next=new Map(states)
-        for(const state of states.values()){
-          if(state.legs.length>=cfg.max)continue
-          for(const option of options){
-            const count=state.families[option.family]??0
-            if(count>=cfg.maxPerFamily)continue
-            const teamKey=teamNorm(option.row.team)
-            const teamCount=state.teamCounts[teamKey]??0
-            if(teamCount>=6)continue
-            const odd=verifiedOnly
-              ?referenceOdd(option.row)
-              :referenceOnly
-                ?Number(displayedBet365Odd(option.row)?.odd??0)
-                :Number(option.row.fairOdds??0)
-            if(!(odd>1))continue
-            const product=state.product*odd
-            if(product>maxProduct)continue
-            const legs=[...state.legs,option.row]
-            const prob=state.prob*option.row.probability
-            const candidate:State={
-              legs,product,prob,conservative:conservativeJoint(legs,prob),
-              families:{...state.families,[option.family]:count+1},
-              teamCounts:{...state.teamCounts,[teamKey]:teamCount+1},
-            }
-            const bucket=bucketFor(product)
-            const existing=next.get(bucket)
-            if(!existing||
-              candidate.prob>existing.prob+.000001||
-              (Math.abs(candidate.prob-existing.prob)<=.000001&&candidate.conservative>existing.conservative)
-            )next.set(bucket,candidate)
-          }
-        }
-
-        // Keep the globally strongest target-reaching states plus the strongest
-        // probability state in each odds bucket. This preserves slower, safer
-        // routes made from several likely 1+ events.
-        const ordered=[...next.entries()].sort(([,a],[,b])=>{
-          const aHit=a.product>=cfg.targetDecimal,bHit=b.product>=cfg.targetDecimal
-          if(aHit!==bHit)return aHit?-1:1
-          if(Math.abs(a.prob-b.prob)>.000001)return b.prob-a.prob
-          if(Math.abs(a.conservative-b.conservative)>.000001)return b.conservative-a.conservative
-          return Math.abs(a.product-cfg.targetDecimal)-Math.abs(b.product-cfg.targetDecimal)
-        })
-        states=new Map(ordered.slice(0,Math.min(900,ordered.length)))
-      }
-
-      return [...states.values()]
-        .filter(s=>s.legs.length>=2&&s.product>=cfg.targetDecimal&&Object.keys(s.families).length>=cfg.minFamilies)
-        .sort((a,b)=>{
-          if(Math.abs(a.prob-b.prob)>.000001)return b.prob-a.prob
-          if(Math.abs(a.conservative-b.conservative)>.000001)return b.conservative-a.conservative
-          return Math.abs(a.product-cfg.targetDecimal)-Math.abs(b.product-cfg.targetDecimal)
-        })[0]
-    }
-
-    // Every target first tries only low-threshold 1+ markets across different
-    // players. Higher thresholds are fallback-only if the simple lines cannot
-    // reach the requested price within the leg cap.
-    const baseRows=allCandidateRows.filter(x=>baseMarket(x.row.market))
-    let best=runSearch(baseRows)
-    if(!best)best=runSearch(allCandidateRows)
-
-    if(!best)return {
-      id:cfg.id,title:cfg.title,risk:cfg.risk,targetFractional:cfg.targetFractional,targetDecimal:cfg.targetDecimal,
-      legs:[],referenceProductOdds:null,averageLegProbability:null,minimumLegProbability:null,
-      modelAllHitProbability:null,conservativeAllHitProbability:null,safetyScore:null,
-      exactPriced:false,bookmaker:null,verifiedBet365LegPrices:false,exactBet365BuilderPrice:false,pricingBasis:"none" as const,
-      note:verifiedOnly?"No combination of fresh Bet365 prices reaches this target yet.":referenceOnly?"No combination of captured Bet365 player prices reaches this target yet.":"No model combination reaches this target yet."
-    }
-
-    return {
-      id:cfg.id,title:cfg.title,risk:cfg.risk,targetFractional:cfg.targetFractional,targetDecimal:cfg.targetDecimal,
-      legs:best.legs,referenceProductOdds:Math.round(best.product*100)/100,
-      averageLegProbability:best.legs.reduce((s,x)=>s+x.probability,0)/best.legs.length,
-      minimumLegProbability:Math.min(...best.legs.map(x=>x.probability)),
-      modelAllHitProbability:best.prob,conservativeAllHitProbability:best.conservative,safetyScore:best.conservative,
-      exactPriced:verifiedOnly,bookmaker:(verifiedOnly||referenceOnly)?"Bet365":null,
-      verifiedBet365LegPrices:verifiedOnly,referenceBet365LegPrices:referenceOnly,exactBet365BuilderPrice:false,
-      pricingBasis:verifiedOnly?"bet365_singles_product" as const:referenceOnly?"bet365_reference_product" as const:"none" as const,
-      note:verifiedOnly
-        ?"Every leg uses a fresh verified Bet365 price. The displayed combined number is the product of those Bet365 singles; Bet365 can reprice correlated legs in Bet Builder, so it is not claimed as the final Builder quote."
-        :referenceOnly
-          ?"Every leg uses the last captured Bet365 price for that exact player line. This keeps the target grounded in Bet365 rather than model fair odds, but these prices are references until Bet365 returns a fresh live board."
-          :"Model-target route only. The displayed product is derived from model fair odds, not a Bet365 price. Check the actual live Bet365 markets before placing."
-    }
+  type PriceMode="live"|"reference"|"model"
+  const oddFor=(row:Selection,mode:PriceMode)=>{
+    if(mode==="live")return Number(verifiedBet365Odd(row)??0)
+    if(mode==="reference")return Number(displayedBet365Odd(row)?.odd??0)
+    return Number(row.fairOdds??0)
+  }
+  const validFor=(row:Selection,mode:PriceMode)=>{
+    const odd=oddFor(row,mode)
+    if(!(odd>1))return false
+    if(row.confidence==="D")return false
+    // Low-threshold events are preferred. Speculative cards/scorers only enter
+    // after the safer live-ranked events have been exhausted.
+    if(row.market==="card"&&row.probability<.16)return false
+    if((row.market.startsWith("goal")||row.market.startsWith("assist"))&&row.probability<.14)return false
+    return true
   }
 
-  function guaranteedModelTarget(cfg:(typeof configs)[number]):RiskBuilder{
-    const pool=[...rows]
-      .filter(r=>r.confidence!=="D"&&Number(r.probability)>0&&Number(r.fairOdds??0)>1)
-      .filter(r=>r.market!=="card"||Number(r.recommendationScore??r.probability)>=.145)
-      .sort((a,b)=>{
-        const ap=Number(a.liveRankScore??(a.market==="card"?Number(a.recommendationScore??a.probability):a.probability))
-        const bp=Number(b.liveRankScore??(b.market==="card"?Number(b.recommendationScore??b.probability):b.probability))
-        return bp-ap
-      })
-    const legs:Selection[]=[]
-    const usedPlayers=new Set<string>()
-    const familyCounts:Record<string,number>={}
-    let product=1
-    let raw=1
+  const choosePool=(mode:PriceMode)=>{
+    const candidates=rows.filter(r=>validFor(r,mode))
+    // One strongest event per player. This deliberately favours several distinct
+    // players on likely 1+ events over stacking thresholds on one player.
+    const bestByPlayer=new Map<string,Selection>()
+    for(const row of candidates){
+      const key=normPlayer(row.player)
+      if(!key)continue
+      const current=bestByPlayer.get(key)
+      if(!current||likelihoodScore(row)>likelihoodScore(current))bestByPlayer.set(key,row)
+    }
+    return [...bestByPlayer.values()].sort((a,b)=>{
+      const aBase=baseMarket(a.market)?1:0,bBase=baseMarket(b.market)?1:0
+      if(aBase!==bBase)return bBase-aBase
+      const scoreDiff=likelihoodScore(b)-likelihoodScore(a)
+      if(Math.abs(scoreDiff)>.0001)return scoreDiff
+      return b.probability-a.probability
+    })
+  }
 
+  const canReach=(pool:Selection[],mode:PriceMode,target:number)=>{
+    let product=1,count=0
     for(const row of pool){
-      const playerKey=normPlayer(row.player)
-      const f=family(row.market)
-      if(usedPlayers.has(playerKey))continue
-      if((familyCounts[f]??0)>=cfg.maxPerFamily)continue
-      // Safe should never be forced by a speculative low-probability leg.
-      const floor=cfg.risk==="Safe"?.34:cfg.risk==="Balanced"?.16:.08
-      if(row.probability<floor)continue
-      legs.push(row)
-      usedPlayers.add(playerKey)
-      familyCounts[f]=(familyCounts[f]??0)+1
-      product*=Number(row.fairOdds)
-      raw*=Number(row.probability)
-      if(product>=cfg.targetDecimal&&legs.length>=2)break
-      if(legs.length>=cfg.max)break
+      const odd=oddFor(row,mode)
+      if(!(odd>1))continue
+      product*=odd
+      count++
+      if(product>=target&&count>=2)return true
+      if(count>=12)break
+    }
+    return false
+  }
+
+  let mode:PriceMode="model"
+  const livePool=choosePool("live")
+  const refPool=choosePool("reference")
+  if(canReach(livePool,"live",21))mode="live"
+  else if(canReach(refPool,"reference",21))mode="reference"
+  else if(canReach(livePool,"live",11))mode="live"
+  else if(canReach(refPool,"reference",11))mode="reference"
+
+  const pool=choosePool(mode)
+  const chosen:Selection[]=[]
+  let product=1
+  let raw=1
+
+  return configs.map(cfg=>{
+    // All targets extend the same probability-ranked route. 10/1 cannot replace
+    // the 3/1 legs; 20/1 cannot replace the 10/1 legs.
+    while(product<cfg.targetDecimal&&chosen.length<12){
+      const next=pool[chosen.length]
+      if(!next)break
+      chosen.push(next)
+      product*=oddFor(next,mode)
+      raw*=next.probability
     }
 
-    if(product<cfg.targetDecimal||legs.length<2)return {
-      id:cfg.id,title:cfg.title,risk:cfg.risk,targetFractional:cfg.targetFractional,targetDecimal:cfg.targetDecimal,
-      legs:[],referenceProductOdds:null,averageLegProbability:null,minimumLegProbability:null,
-      modelAllHitProbability:null,conservativeAllHitProbability:null,safetyScore:null,
-      exactPriced:false,bookmaker:null,verifiedBet365LegPrices:false,exactBet365BuilderPrice:false,pricingBasis:"none" as const,
-      note:"No remaining live model route reaches this target."
+    const legs=[...chosen]
+    if(product<cfg.targetDecimal||legs.length<2){
+      return {
+        id:cfg.id,title:cfg.title,risk:cfg.risk,targetFractional:cfg.targetFractional,targetDecimal:cfg.targetDecimal,
+        legs:[],referenceProductOdds:null,averageLegProbability:null,minimumLegProbability:null,
+        modelAllHitProbability:null,conservativeAllHitProbability:null,safetyScore:null,
+        exactPriced:false,bookmaker:null,verifiedBet365LegPrices:false,referenceBet365LegPrices:false,
+        exactBet365BuilderPrice:false,pricingBasis:"none" as const,
+        note:"Not enough remaining high-likelihood player events reach this target."
+      }
     }
+
     const conservative=conservativeJoint(legs,raw)
+    const livePriced=mode==="live"
+    const refPriced=mode==="reference"
     return {
       id:cfg.id,title:cfg.title,risk:cfg.risk,targetFractional:cfg.targetFractional,targetDecimal:cfg.targetDecimal,
       legs,referenceProductOdds:Math.round(product*100)/100,
       averageLegProbability:legs.reduce((s,x)=>s+x.probability,0)/legs.length,
       minimumLegProbability:Math.min(...legs.map(x=>x.probability)),
       modelAllHitProbability:raw,conservativeAllHitProbability:conservative,safetyScore:conservative,
-      exactPriced:false,bookmaker:null,verifiedBet365LegPrices:false,exactBet365BuilderPrice:false,pricingBasis:"none" as const,
-      note:"Live probability-first model route. Current match events are removed/adjusted first. This is not a Bet365 price; check the actual Bet365 live builder before placing."
-    }
-  }
-
-  return configs.map(cfg=>{
-    const verified=buildOne(cfg,true,false)
-    if(verified.legs.length)return verified
-
-    const reference=buildOne(cfg,false,true)
-    if(reference.legs.length)return reference
-
-    // Bet365 pricing is an overlay, not an eligibility gate for the model.
-    // If neither fresh nor retained Bet365 prices cover enough legs, keep ranking
-    // the remaining events from our model + current match state.
-    const model=buildOne(cfg,false,false)
-    if(model.legs.length)return {
-      ...model,
-      note:strictVerifiedLive
-        ?"Live model route using the current match state. Bet365 has not returned enough fresh or retained player prices for this target, so these are model fair odds only until the next successful Bet365 refresh."
-        :model.note,
-    }
-    const guaranteed=guaranteedModelTarget(cfg)
-    if(guaranteed.legs.length)return guaranteed
-    return {
-      ...verified,
-      note:"No remaining model combination reaches this target at the required probability level."
+      exactPriced:livePriced,bookmaker:(livePriced||refPriced)?"Bet365":null,
+      verifiedBet365LegPrices:livePriced,referenceBet365LegPrices:refPriced,exactBet365BuilderPrice:false,
+      pricingBasis:livePriced?"bet365_singles_product" as const:refPriced?"bet365_reference_product" as const:"none" as const,
+      note:livePriced
+        ?"Nested probability-first route using fresh Bet365 singles. Each higher target keeps every safer leg from the previous target and adds the next most likely player event."
+        :refPriced
+          ?"Nested probability-first route using the last captured Bet365 singles as price references. 10/1 keeps the 3/1 legs; 20/1 keeps the 10/1 legs and adds only the next safest events."
+          :"Nested probability-first model route. Each higher target keeps the previous target's legs and adds the next safest remaining player event."
     }
   })
 }
