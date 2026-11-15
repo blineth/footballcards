@@ -68,9 +68,15 @@ type MultiMatchLeg={
   player:string;team:string;market:string;label:string;probability:number;
   bookmakerOdds:number;bookmaker:"Bet365";confidence:"A"|"B"|"C"|"D"
 }
+type MultiMatchGameBuilder={
+  fixtureId:string;competition:string;kickoff:string;home:string;away:string;
+  targetFractional:"3/1";referenceOdds:number;modelAllHitProbability:number;
+  conservativeAllHitProbability:number;legs:MultiMatchLeg[]
+}
 type MultiMatchBuild={
-  available:boolean;targetLegProbability:number;maxLegs:number;eligibleFixtureCount:number;
-  legs:MultiMatchLeg[];combinedBet365Odds:number|null;modelAllHitProbability:number|null;note:string
+  available:boolean;targetFractionalPerMatch:"3/1";maxLegs:number;eligibleFixtureCount:number;
+  matchBuilders:MultiMatchGameBuilder[];legs:MultiMatchLeg[];
+  combinedBet365Odds:number|null;modelAllHitProbability:number|null;note:string
 }
 type YellowCardWatchRow={
   fixtureId:string;competition:string;kickoff:string;home:string;away:string;
@@ -117,7 +123,7 @@ export default function RecommendedPage(){
   const multi=data?.multiMatchBuild
   const cards=data?.yellowCardWatch??[]
   const legs=multi?.legs??[]
-  const highConfidence=legs.filter(l=>l.probability>=.90).length
+  const matchBuilders=multi?.matchBuilders??[]
 
   return <main className="min-h-screen bg-[#07120e] pb-24 text-white">
     <header className="sticky top-0 z-30 border-b border-white/10 bg-[#07120e]/95 backdrop-blur-xl">
@@ -126,14 +132,14 @@ export default function RecommendedPage(){
           <div>
             <div className="flex items-center gap-2 text-violet-300"><Trophy className="size-4"/><span className="text-[0.62rem] font-black uppercase tracking-[0.16em]">Match Edge</span></div>
             <h1 className="mt-1 text-2xl font-black">Multi-Match Builder</h1>
-            <p className="mt-1 text-xs text-white/45">One strongest verified Bet365 selection per fully-covered match · maximum 10 legs.</p>
+            <p className="mt-1 text-xs text-white/45">Safest same-game builder per fully-covered match, then combine them · 10 selections maximum.</p>
           </div>
           <button onClick={()=>void refresh(true)} className="rounded-xl bg-violet-300 p-2.5 text-violet-950"><RefreshCw className={"size-4 "+(loading?"animate-spin":"")}/></button>
         </div>
         <div className="mt-3 flex flex-wrap gap-1.5 text-[0.46rem] font-black uppercase">
           {["Cards","Fouls committed","Fouls drawn","Shots","SOT"].map(x=><span key={x} className="rounded-full bg-emerald-300/10 px-2 py-1 text-emerald-200">{x}</span>)}
         </div>
-        <p className="mt-2 text-[0.52rem] text-white/30">A match is excluded unless Bet365 has every market above available. The chosen leg itself must also have a verified Bet365 price.</p>
+        <p className="mt-2 text-[0.52rem] text-white/30">A match is excluded unless Bet365 has every market above. Each included match then gets its own safest verified route to roughly 3/1 using the same logic as the individual Match Builder.</p>
       </div>
     </header>
 
@@ -145,24 +151,25 @@ export default function RecommendedPage(){
 
       {data?.ok?<section className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <DecisionMetric label="Eligible matches" value={String(multi?.eligibleFixtureCount??0)} sub="all 5 prop markets"/>
-        <DecisionMetric label="Recommended legs" value={String(legs.length)} sub="10 maximum"/>
-        <DecisionMetric label="90%+ legs" value={String(highConfidence)} sub="preferred threshold"/>
-        <DecisionMetric label="Combined chance" value={percent(multi?.modelAllHitProbability)} sub="model estimate"/>
+        <DecisionMetric label="Match builders" value={String(matchBuilders.length)} sub="Safe 3/1 routes"/>
+        <DecisionMetric label="Total selections" value={String(legs.length)} sub="10 maximum"/>
+        <DecisionMetric label="Combined chance" value={percent(multi?.modelAllHitProbability)} sub="conservative estimate"/>
       </section>:null}
 
       {data?.ok?<section className="rounded-3xl border border-violet-300/20 bg-gradient-to-br from-violet-400/[0.13] to-black/30 p-4">
         <div className="flex items-start justify-between gap-3">
-          <div><div className="flex items-center gap-2 text-violet-200"><Sparkles className="size-4"/><p className="text-[0.54rem] font-black uppercase tracking-[0.13em]">Recommended multi</p></div><h2 className="mt-1 text-xl font-black">{legs.length?legs.length+"-Fold Bet":"No qualifying multi yet"}</h2><p className="mt-1 text-[0.58rem] leading-relaxed text-white/40">{multi?.note??"Waiting for enough fully-covered matches with verified Bet365 prices."}</p></div>
-          <div className="text-right"><p className="font-mono text-xl font-black">{multi?.combinedBet365Odds!=null?multi.combinedBet365Odds.toFixed(2):"—"}</p><p className="text-[0.42rem] font-black uppercase text-emerald-300/75">{multi?.combinedBet365Odds!=null?"verified Bet365 leg product":"no complete price"}</p></div>
+          <div><div className="flex items-center gap-2 text-violet-200"><Sparkles className="size-4"/><p className="text-[0.54rem] font-black uppercase tracking-[0.13em]">Recommended Bet Builder Multi</p></div><h2 className="mt-1 text-xl font-black">{matchBuilders.length?matchBuilders.length+" matches · "+legs.length+" selections":"No qualifying multi yet"}</h2><p className="mt-1 text-[0.58rem] leading-relaxed text-white/40">{multi?.note??"Waiting for enough fully-covered matches with verified Bet365 prices."}</p></div>
+          <div className="text-right"><p className="font-mono text-xl font-black">{multi?.combinedBet365Odds!=null?multi.combinedBet365Odds.toFixed(2):"—"}</p><p className="text-[0.42rem] font-black uppercase text-emerald-300/75">{multi?.combinedBet365Odds!=null?"verified singles reference":"no complete price"}</p></div>
         </div>
 
-        {legs.length?<div className="mt-4 space-y-2">{legs.map((leg,i)=><div key={leg.fixtureId+"|"+leg.market+"|"+leg.player} className="rounded-2xl border border-white/7 bg-black/20 p-3">
-          <div className="grid grid-cols-[auto_1fr_auto] items-start gap-3">
-            <span className="flex size-7 items-center justify-center rounded-full bg-violet-300/10 text-[0.52rem] font-black text-violet-200">{i+1}</span>
-            <div className="min-w-0"><p className="truncate text-[0.48rem] font-black uppercase text-white/30">{leg.competition} · {leg.home} v {leg.away}</p><p className="mt-1 truncate text-sm font-black">{leg.player} · {leg.label}</p><p className="mt-1 text-[0.48rem] text-white/30">Grade {leg.confidence} · verified Bet365</p></div>
-            <div className="text-right"><p className="font-mono text-base font-black text-emerald-200">{leg.bookmakerOdds.toFixed(2)}</p><p className={"text-[0.46rem] font-black "+(leg.probability>=.90?"text-emerald-300":"text-amber-200")}>{percent(leg.probability)}</p></div>
-          </div>
-        </div>)}</div>:<div className="mt-4 rounded-2xl border border-dashed border-white/10 bg-black/15 p-6 text-center"><p className="font-black">Not enough fully-covered matches</p><p className="mt-1 text-xs text-white/35">Limited-market fixtures are deliberately excluded from this builder.</p></div>}
+        {matchBuilders.length?<div className="mt-4 space-y-3">{matchBuilders.map((builder,matchIndex)=><div key={builder.fixtureId} className="rounded-2xl border border-white/8 bg-black/20 p-3">
+          <div className="flex items-start justify-between gap-3"><div><p className="text-[0.46rem] font-black uppercase text-violet-200/70">Match {matchIndex+1} · Safe {builder.targetFractional}</p><p className="mt-1 text-sm font-black">{builder.home} <span className="text-white/25">v</span> {builder.away}</p><p className="mt-1 text-[0.46rem] text-white/30">{builder.competition} · {builder.legs.length} selections</p></div><div className="text-right"><p className="font-mono text-base font-black text-emerald-200">{builder.referenceOdds.toFixed(2)}</p><p className="text-[0.42rem] text-white/30">{percent(builder.conservativeAllHitProbability)} est.</p></div></div>
+          <div className="mt-3 space-y-1.5">{builder.legs.map((leg,i)=><div key={leg.player+"|"+leg.market+"|"+i} className="grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-xl bg-white/[0.045] px-2.5 py-2">
+            <span className="text-[0.46rem] font-black text-white/25">{i+1}</span>
+            <div className="min-w-0"><p className="truncate text-[0.62rem] font-black">{leg.player} · {leg.label}</p><p className="mt-0.5 text-[0.42rem] text-white/25">Grade {leg.confidence} · verified Bet365</p></div>
+            <div className="text-right"><p className="font-mono text-[0.62rem] font-black text-emerald-200">{leg.bookmakerOdds.toFixed(2)}</p><p className="text-[0.4rem] text-white/25">{percent(leg.probability)}</p></div>
+          </div>)}</div>
+        </div>)}</div>:<div className="mt-4 rounded-2xl border border-dashed border-white/10 bg-black/15 p-6 text-center"><p className="font-black">Not enough fully-covered Safe 3/1 matches</p><p className="mt-1 text-xs text-white/35">Predicted XIs are used before official lineups. Limited-market fixtures remain excluded.</p></div>}
       </section>:null}
 
       {data?.ok?<section className="space-y-3">
