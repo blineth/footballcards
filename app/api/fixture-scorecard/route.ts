@@ -1258,7 +1258,17 @@ async function buildVerifiedBet365SnapshotFallback(input:{request:Request;date:s
   const maxAge=Math.max(300,Number(odds?.maxUsableAgeSeconds??300))
   const freshness=ageSeconds==null?"UNKNOWN":ageSeconds<120?"LIVE":ageSeconds<maxAge?(odds?.cached?"CACHED":"SLIGHTLY STALE"):"STALE"
   const usable=freshness==="STALE"?[]:selections.filter(s=>s.bookmaker==="Bet365")
-  const fallbackPlayers:Array<any>=Array.isArray(fallback?.players)?fallback.players:[]
+  let fallbackPlayers:Array<any>=Array.isArray(fallback?.players)?fallback.players:[]
+  const allFallbackNames=fallbackPlayers.map(p=>String(p?.name??"")).filter(Boolean)
+  if(fallback?.lineupsConfirmed!==true){
+    fallbackPlayers=fallbackPlayers.filter(player=>
+      usable.some(selection=>
+        ["goal","assist","card","foul","fouled","shot","sot"].includes(String(selection.kind??""))&&
+        selection.odd!=null&&Number(selection.odd)>1&&
+        playerInLabel(selection,String(player?.name??""),allFallbackNames)
+      )
+    )
+  }
   const names=fallbackPlayers.map(p=>String(p?.name??"")).filter(Boolean)
   for(const player of fallbackPlayers){
     for(const [marketKey,marketRow] of Object.entries(player?.markets??{}) as Array<[MarketKey,any]>){
@@ -1296,7 +1306,10 @@ async function buildVerifiedBet365SnapshotFallback(input:{request:Request;date:s
     bookmakerAvailability,
     eligibleBooks,
     priceAvailable:Boolean(odds?.priceAvailable)&&freshness!=="STALE",
+    playerEligibilitySource:fallback?.lineupsConfirmed===true?"official-starting-xi":"bet365-player-board",
+    bet365ListedPlayerCount:fallback?.lineupsConfirmed===true?usable.length:fallbackPlayers.length,
     players:fallbackPlayers,
+    playerCount:fallbackPlayers.length,
     riskBuilders:buildRiskBuilders(fallbackPlayers as ScorePlayer[]),
     foulCardBuilders:buildRiskBuilders(fallbackPlayers as ScorePlayer[],"discipline"),
     fallbackReason:"Live research database is temporarily unavailable; snapshot probabilities are combined with verified Bet365 prices.",
@@ -1430,7 +1443,18 @@ export async function GET(request: Request) {
     } catch (error) {
       try {
         const fallback:any=await buildSnapshotScorecard({date,home,away,competition:competition as any})
-        const fallbackPlayers:Array<any>=Array.isArray(fallback?.players)?fallback.players:[]
+        let fallbackPlayers:Array<any>=Array.isArray(fallback?.players)?fallback.players:[]
+        const allFallbackNames=fallbackPlayers.map(p=>String(p?.name??"")).filter(Boolean)
+        if(fallback?.lineupsConfirmed!==true){
+          fallbackPlayers=fallbackPlayers.filter(player=>
+            usableSelections.some(selection=>
+              selection.bookmaker==="Bet365"&&
+              ["goal","assist","card","foul","fouled","shot","sot"].includes(String(selection.kind??""))&&
+              selection.odd!=null&&Number(selection.odd)>1&&
+              playerInLabel(selection,String(player?.name??""),allFallbackNames)
+            )
+          )
+        }
         const fallbackNames=fallbackPlayers.map(p=>String(p?.name??"")).filter(Boolean)
         for(const player of fallbackPlayers){
           for(const [marketKey,marketRow] of Object.entries(player?.markets??{}) as Array<[MarketKey,any]>){
@@ -1465,7 +1489,10 @@ export async function GET(request: Request) {
           bookmakerAvailability,
           eligibleBooks,
           priceAvailable:Boolean(odds?.priceAvailable)&&oddsFreshness!=="STALE",
+          playerEligibilitySource:fallback?.lineupsConfirmed===true?"official-starting-xi":"bet365-player-board",
+          bet365ListedPlayerCount:fallback?.lineupsConfirmed===true?usableSelections.length:fallbackPlayers.length,
           players:fallbackPlayers,
+          playerCount:fallbackPlayers.length,
           riskBuilders:verifiedRiskBuilders,
           foulCardBuilders:buildRiskBuilders(fallbackPlayers as ScorePlayer[],"discipline"),
           fallbackReason:"Live history database is temporarily unavailable; snapshot probabilities are being combined with verified Bet365 prices.",
