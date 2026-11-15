@@ -68,15 +68,22 @@ type MultiMatchLeg={
   player:string;team:string;market:string;label:string;probability:number;
   bookmakerOdds:number;bookmaker:"Bet365";confidence:"A"|"B"|"C"|"D"
 }
+type MultiMatchRiskTier="safe"|"balanced"|"risky"
 type MultiMatchGameBuilder={
   fixtureId:string;competition:string;kickoff:string;home:string;away:string;homeCrest?:string|null;awayCrest?:string|null;
-  targetFractional:"3/1";referenceOdds:number;modelAllHitProbability:number;
-  conservativeAllHitProbability:number;legs:MultiMatchLeg[]
+  riskTier?:MultiMatchRiskTier;targetFractional:string;targetDecimal?:number;referenceOdds:number;modelAllHitProbability:number;
+  conservativeAllHitProbability:number;includesCard?:boolean;cardPick?:string|null;legs:MultiMatchLeg[]
+}
+type MultiMatchTier={
+  id:MultiMatchRiskTier;title:string;description:string;targetFractionalPerMatch:string;targetDecimalPerMatch:number;
+  available:boolean;matchBuilders:MultiMatchGameBuilder[];legs:MultiMatchLeg[];
+  combinedBet365Odds:number|null;conservativeAllHitProbability:number|null;note:string
 }
 type MultiMatchBuild={
-  available:boolean;targetFractionalPerMatch:"3/1";maxMatches:number;eligibleFixtureCount:number;
+  available:boolean;targetFractionalPerMatch:string;maxMatches:number;eligibleFixtureCount:number;
   matchBuilders:MultiMatchGameBuilder[];legs:MultiMatchLeg[];
-  combinedBet365Odds:number|null;modelAllHitProbability:number|null;note:string
+  combinedBet365Odds:number|null;modelAllHitProbability:number|null;conservativeAllHitProbability?:number|null;
+  tiers?:MultiMatchTier[];defaultTier?:MultiMatchRiskTier;note:string
 }
 type YellowCardWatchRow={
   fixtureId:string;competition:string;kickoff:string;home:string;away:string;homeCrest?:string|null;awayCrest?:string|null;
@@ -168,6 +175,7 @@ function writeMultiCache(data:Response){
 export default function RecommendedPage(){
   const[loading,setLoading]=useState(false)
   const[data,setData]=useState<Response|null>(null)
+  const[multiTier,setMultiTier]=useState<MultiMatchRiskTier>("safe")
 
   const refresh=useCallback(async(force=false)=>{
     setLoading(true)
@@ -213,8 +221,16 @@ export default function RecommendedPage(){
 
   const multi=data?.multiMatchBuild
   const cards=data?.yellowCardWatch??[]
-  const legs=multi?.legs??[]
-  const matchBuilders=multi?.matchBuilders??[]
+  const legacySafeTier:MultiMatchTier|null=multi?{
+    id:"safe",title:"Safe",description:"Safest available route",targetFractionalPerMatch:multi.targetFractionalPerMatch||"3/1",targetDecimalPerMatch:4,
+    available:multi.available,matchBuilders:multi.matchBuilders??[],legs:multi.legs??[],
+    combinedBet365Odds:multi.combinedBet365Odds??null,conservativeAllHitProbability:multi.conservativeAllHitProbability??multi.modelAllHitProbability??null,
+    note:multi.note,
+  }:null
+  const tiers=(multi?.tiers?.length?multi.tiers:(legacySafeTier?[legacySafeTier]:[]))
+  const activeTier=tiers.find(t=>t.id===multiTier)??tiers[0]??null
+  const legs=activeTier?.legs??[]
+  const matchBuilders=activeTier?.matchBuilders??[]
 
   return <main className="min-h-screen bg-[#07120e] pb-24 text-white">
     <header className="sticky top-0 z-30 border-b border-white/10 bg-[#07120e]/95 backdrop-blur-xl">
@@ -223,14 +239,14 @@ export default function RecommendedPage(){
           <div>
             <div className="flex items-center gap-2 text-violet-300"><Trophy className="size-4"/><span className="text-[0.62rem] font-black uppercase tracking-[0.16em]">Match Edge</span></div>
             <h1 className="mt-1 text-2xl font-black">Multi-Match Builder</h1>
-            <p className="mt-1 text-xs text-white/45">Safest same-game builder per fully-covered match, then combine them · up to 10 matches.</p>
+            <p className="mt-1 text-xs text-white/45">Three probability-led Multi builds: Safe, Balanced and Risky · up to 10 matches.</p>
           </div>
           <button onClick={()=>void refresh(true)} className="rounded-xl bg-violet-300 p-2.5 text-violet-950"><RefreshCw className={"size-4 "+(loading?"animate-spin":"")}/></button>
         </div>
         <div className="mt-3 flex flex-wrap gap-1.5 text-[0.46rem] font-black uppercase">
           {["Cards","Fouls committed","Fouls drawn","Shots","SOT"].map(x=><span key={x} className="rounded-full bg-emerald-300/10 px-2 py-1 text-emerald-200">{x}</span>)}
         </div>
-        <p className="mt-2 text-[0.52rem] text-white/30">A match is excluded unless Bet365 has every market above. Pre-match results are cached on this device until you press refresh; in-play matches can refresh automatically.</p>
+        <p className="mt-2 text-[0.52rem] text-white/30">Only verified Bet365 player markets are used. Safe avoids cards/scorers; Balanced expands the route; Risky can anchor on the strongest evidence-backed card candidate. Confirmed lineups automatically replace predicted XIs.</p>
       </div>
     </header>
 
@@ -241,26 +257,40 @@ export default function RecommendedPage(){
       {!loading&&data&&!data.ok?<section className="rounded-3xl border border-rose-300/15 bg-rose-400/5 p-6 text-center"><p className="font-black">Multi-match scan unavailable</p><p className="mt-1 text-sm text-white/40">{data.error??"Try a manual refresh."}</p></section>:null}
 
       {data?.ok?<section className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <DecisionMetric label="Eligible matches" value={String(multi?.eligibleFixtureCount??0)} sub="all 5 prop markets"/>
-        <DecisionMetric label="Match builders" value={String(matchBuilders.length)} sub="Safe 3/1 routes"/>
-        <DecisionMetric label="Total selections" value={String(legs.length)} sub="inside match builders"/>
-        <DecisionMetric label="Combined chance" value={percent(multi?.modelAllHitProbability)} sub="conservative estimate"/>
+        <DecisionMetric label="Eligible matches" value={String(multi?.eligibleFixtureCount??0)} sub="verified player-prop coverage"/>
+        <DecisionMetric label="Match builders" value={String(matchBuilders.length)} sub={(activeTier?.title??"Safe")+" · "+(activeTier?.targetFractionalPerMatch??"3/1")+" each"}/>
+        <DecisionMetric label="Total selections" value={String(legs.length)} sub="inside selected tier"/>
+        <DecisionMetric label="Combined chance" value={percent(activeTier?.conservativeAllHitProbability)} sub="conservative estimate"/>
+      </section>:null}
+
+      {data?.ok&&tiers.length?<section className="grid grid-cols-3 gap-2">
+        {tiers.map(tier=>{
+          const active=activeTier?.id===tier.id
+          const label=tier.id==="safe"?"Safe":tier.id==="balanced"?"Balanced":"Risky"
+          return <button key={tier.id} onClick={()=>setMultiTier(tier.id)} className={"rounded-2xl border px-3 py-3 text-left transition "+(active?"border-violet-300/35 bg-violet-300 text-violet-950":"border-white/8 bg-white/[0.035] text-white")}>
+            <p className="text-xs font-black">{label}</p>
+            <p className={"mt-1 font-mono text-sm font-black "+(active?"text-violet-950":"text-emerald-200")}>{tier.targetFractionalPerMatch}</p>
+            <p className={"mt-1 text-[0.46rem] "+(active?"text-violet-950/65":"text-white/30")}>{tier.id==="safe"?"Low variance":tier.id==="balanced"?"Less safe":"Higher risk"}</p>
+          </button>
+        })}
       </section>:null}
 
       {data?.ok?<section className="rounded-3xl border border-violet-300/20 bg-gradient-to-br from-violet-400/[0.13] to-black/30 p-4">
         <div className="flex items-start justify-between gap-3">
-          <div><div className="flex items-center gap-2 text-violet-200"><Sparkles className="size-4"/><p className="text-[0.54rem] font-black uppercase tracking-[0.13em]">Recommended Bet Builder Multi</p></div><h2 className="mt-1 text-xl font-black">{matchBuilders.length?matchBuilders.length+" matches · "+legs.length+" selections":"No qualifying multi yet"}</h2><p className="mt-1 text-[0.58rem] leading-relaxed text-white/40">{multi?.note??"Waiting for enough fully-covered matches with verified Bet365 prices."}</p></div>
-          <div className="text-right"><p className="font-mono text-xl font-black">{fractionalOdds(multi?.combinedBet365Odds)}</p><p className="text-[0.42rem] font-black uppercase text-emerald-300/75">{multi?.combinedBet365Odds!=null?"Bet365 singles reference":"no complete price"}</p></div>
+          <div><div className="flex items-center gap-2 text-violet-200"><Sparkles className="size-4"/><p className="text-[0.54rem] font-black uppercase tracking-[0.13em]">{activeTier?.title??"Safe"} Bet Builder Multi</p></div><h2 className="mt-1 text-xl font-black">{matchBuilders.length?matchBuilders.length+" matches · "+legs.length+" selections":"No qualifying multi yet"}</h2><p className="mt-1 text-[0.58rem] leading-relaxed text-white/40">{activeTier?.note??multi?.note??"Waiting for enough matches with verified Bet365 prices."}</p></div>
+          <div className="text-right"><p className="font-mono text-xl font-black">{fractionalOdds(activeTier?.combinedBet365Odds)}</p><p className="text-[0.42rem] font-black uppercase text-emerald-300/75">{activeTier?.combinedBet365Odds!=null?"Bet365 singles reference":"no complete price"}</p></div>
         </div>
 
-        {matchBuilders.length?<div className="mt-4 space-y-3">{matchBuilders.map((builder,matchIndex)=><div key={builder.fixtureId} className="rounded-2xl border border-white/8 bg-black/20 p-3">
-          <div className="flex items-start justify-between gap-3"><div><p className="text-[0.46rem] font-black uppercase text-violet-200/70">Match {matchIndex+1} · Safe {builder.targetFractional}</p><p className="mt-1 text-sm font-black">{builder.home} <span className="text-white/25">v</span> {builder.away}</p><p className="mt-1 text-[0.46rem] text-white/30">{builder.competition} · {builder.legs.length} selections</p></div><div className="text-right"><p className="font-mono text-base font-black text-emerald-200">{fractionalOdds(builder.referenceOdds)}</p><p className="text-[0.42rem] text-white/30">{percent(builder.conservativeAllHitProbability)} est. · Bet365 ref</p></div></div>
-          <div className="mt-3 space-y-1.5">{builder.legs.map((leg,i)=><div key={leg.player+"|"+leg.market+"|"+i} className="grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-xl bg-white/[0.045] px-2.5 py-2">
+        {activeTier?.description?<div className="mt-3 rounded-2xl border border-white/8 bg-black/15 px-3 py-2 text-[0.56rem] leading-relaxed text-white/45">{activeTier.description}</div>:null}
+
+        {matchBuilders.length?<div className="mt-4 space-y-3">{matchBuilders.map((builder,matchIndex)=><div key={(builder.riskTier??activeTier?.id??"safe")+"|"+builder.fixtureId} className="rounded-2xl border border-white/8 bg-black/20 p-3">
+          <div className="flex items-start justify-between gap-3"><div><p className="text-[0.46rem] font-black uppercase text-violet-200/70">Match {matchIndex+1} · {activeTier?.title??"Safe"} {builder.targetFractional}</p><p className="mt-1 text-sm font-black">{builder.home} <span className="text-white/25">v</span> {builder.away}</p><p className="mt-1 text-[0.46rem] text-white/30">{builder.competition} · {builder.legs.length} selections{builder.includesCard&&builder.cardPick?" · card: "+builder.cardPick:""}</p></div><div className="text-right"><p className="font-mono text-base font-black text-emerald-200">{fractionalOdds(builder.referenceOdds)}</p><p className="text-[0.42rem] text-white/30">{percent(builder.conservativeAllHitProbability)} est. · Bet365 ref</p></div></div>
+          <div className="mt-3 space-y-1.5">{builder.legs.map((leg,i)=><div key={leg.player+"|"+leg.market+"|"+i} className={"grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-xl px-2.5 py-2 "+(leg.market==="card"?"border border-amber-300/15 bg-amber-300/[0.06]":"bg-white/[0.045]")}>
             <span className="text-[0.46rem] font-black text-white/25">{i+1}</span>
-            <div className="min-w-0"><div className="flex flex-wrap items-center gap-1.5"><p className="truncate text-[0.62rem] font-black">{leg.player} · {leg.label}</p><TeamBadge team={leg.team} home={builder.home} away={builder.away} homeCrest={builder.homeCrest} awayCrest={builder.awayCrest}/></div><p className="mt-0.5 text-[0.42rem] text-white/25">Grade {leg.confidence} · verified Bet365</p></div>
+            <div className="min-w-0"><div className="flex flex-wrap items-center gap-1.5"><p className="truncate text-[0.62rem] font-black">{leg.player} · {leg.label}</p><TeamBadge team={leg.team} home={builder.home} away={builder.away} homeCrest={builder.homeCrest} awayCrest={builder.awayCrest}/>{leg.market==="card"?<span className="rounded-full bg-amber-300/10 px-1.5 py-0.5 text-[0.38rem] font-black text-amber-200">TOP CARD PICK</span>:null}</div><p className="mt-0.5 text-[0.42rem] text-white/25">Grade {leg.confidence} · verified Bet365</p></div>
             <div className="text-right"><p className="font-mono text-[0.62rem] font-black text-emerald-200">{fractionalOdds(leg.bookmakerOdds)}</p><p className="text-[0.4rem] text-white/25">{percent(leg.probability)}</p></div>
           </div>)}</div>
-        </div>)}</div>:<div className="mt-4 rounded-2xl border border-dashed border-white/10 bg-black/15 p-6 text-center"><p className="font-black">Not enough fully-covered Safe 3/1 matches</p><p className="mt-1 text-xs text-white/35">Predicted XIs are used before official lineups. Limited-market fixtures remain excluded.</p></div>}
+        </div>)}</div>:<div className="mt-4 rounded-2xl border border-dashed border-white/10 bg-black/15 p-6 text-center"><p className="font-black">No {activeTier?.title??"selected"} multi available yet</p><p className="mt-1 text-xs text-white/35">The builder will not manufacture a card or weak player prop just to reach the target price.</p></div>}
       </section>:null}
 
       {data?.ok?<section className="space-y-3">
