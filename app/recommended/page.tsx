@@ -45,7 +45,7 @@ type TargetOddsGame={
 }
 type LivePlayerProp={
   player:string;team:string;market:"card"|"foul1"|"fouled1"|"shot1"|"sot1"|"goal1"|"assist1";label:string;
-  probability:number;fullMatchProbability:number;fairOdds:number;
+  probability:number;rankScore?:number;fullMatchProbability:number;fairOdds:number;
   confidence:"A"|"B"|"C"|"D";marketStatus:"available"|"unavailable"|"unknown";
   bookmakerOdds?:number|null;bookmakerName?:string|null;bookmakerPriceState?:"live"|"reference"|null;reason?:string;
   currentCount?:number;liveStatsAvailable?:boolean;
@@ -280,7 +280,7 @@ export default function RecommendedPage(){
         <div className="mt-3 flex flex-wrap gap-1.5 text-[0.46rem] font-black uppercase">
           {["Goals","Assists","Cards","Fouls committed","Fouls drawn","Shots","SOT"].map(x=><span key={x} className="rounded-full bg-emerald-300/10 px-2 py-1 text-emerald-200">{x}</span>)}
         </div>
-        <p className="mt-2 text-[0.52rem] text-white/30">{liveMode?"Live games use current fouls committed, fouls drawn, shots, SOT, cards, goals, assists and substitutions alongside each player's history. Top 3 are shown for every market in every live game.":"Automatic Multi uses verified Bet365 player markets only: goals, assists, cards, fouls committed, fouls drawn, shots and SOT. Match/team markets such as corners, BTTS, total goals, match winner and double chance are excluded. Safe, Balanced and Risky stay probability-first, so repeated 1+ events are preferred when they are more likely. Once both XIs are confirmed, only those starters remain eligible."}</p>
+        <p className="mt-2 text-[0.52rem] text-white/30">{liveMode?"Live games use current fouls committed, fouls drawn, shots, SOT, cards, goals, assists and substitutions alongside each player's history. Choose a category and see the top 5 for that market in every live game.":"Automatic Multi uses verified Bet365 player markets only: goals, assists, cards, fouls committed, fouls drawn, shots and SOT. Match/team markets such as corners, BTTS, total goals, match winner and double chance are excluded. Safe, Balanced and Risky stay probability-first, so repeated 1+ events are preferred when they are more likely. Once both XIs are confirmed, only those starters remain eligible."}</p>
       </div>
     </header>
 
@@ -475,9 +475,22 @@ function MiniPerformance({tracking}:{tracking:Tracking}){
 }
 
 function LiveNowSection({matches}:{matches:LiveMatch[]}){
+  const[market,setMarket]=useState<LivePlayerProp["market"]>("card")
+  const categories:Array<{market:LivePlayerProp["market"];label:string}>=[
+    {market:"card",label:"Yellow cards"},
+    {market:"foul1",label:"Fouls"},
+    {market:"fouled1",label:"Fouled"},
+    {market:"shot1",label:"Shots"},
+    {market:"sot1",label:"SOT"},
+    {market:"goal1",label:"Goals"},
+    {market:"assist1",label:"Assists"},
+  ]
+  const active=categories.find(x=>x.market===market)??categories[0]
   return <section className="space-y-3">
-    <div className="px-1"><p className="font-black">Live games</p><p className="text-[0.6rem] text-white/35">Each live match uses the same engine as the individual Match Builder. Top 3 are recalculated from current match events plus player history.</p></div>
-    <div className="space-y-3">{matches.map(match=><LiveMatchCard key={match.id} match={match}/>)}</div>
+    <div className="px-1"><p className="font-black">Live most likely</p><p className="text-[0.6rem] text-white/35">Choose one market. Every live game then shows its top 5 players for that category using current match events plus player history.</p></div>
+    <div className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none]"><div className="flex min-w-max gap-2 pb-1">{categories.map(item=><button key={item.market} onClick={()=>setMarket(item.market)} className={"rounded-full border px-3.5 py-2.5 text-xs font-black "+(market===item.market?"border-violet-300/35 bg-violet-300 text-violet-950":"border-white/8 bg-white/[0.04] text-white/50")}>{item.label}</button>)}</div></div>
+    <div className="rounded-2xl border border-violet-300/10 bg-violet-300/[0.035] px-3 py-2"><p className="text-[0.5rem] font-black uppercase tracking-wide text-violet-200">{active.label} · top 5 in each live game</p></div>
+    <div className="space-y-3">{matches.map(match=><LiveMatchCard key={match.id} match={match} market={market} title={active.label}/>)}</div>
   </section>
 }
 
@@ -492,45 +505,34 @@ function liveCountBadge(prop:LivePlayerProp){
   return {label:"LIVE",value:Number(prop.currentCount??0),secondary:null}
 }
 
-function LiveMatchCard({match}:{match:LiveMatch}){
+function LiveMatchCard({match,market,title}:{match:LiveMatch;market:LivePlayerProp["market"];title:string}){
   const score=match.score
-  const probs=match.probabilities
   const playerProps=match.livePlayerProps??[]
-  const propGroups=[
-    {market:"card" as const,title:"Cards",selection:"to be carded"},
-    {market:"foul1" as const,title:"Fouls",selection:"1+ foul"},
-    {market:"fouled1" as const,title:"Fouled",selection:"1+ foul drawn"},
-    {market:"shot1" as const,title:"Shots",selection:"1+ shot"},
-    {market:"sot1" as const,title:"Shots on target",selection:"1+ SOT"},
-    {market:"goal1" as const,title:"Goals",selection:"to score"},
-    {market:"assist1" as const,title:"Assists",selection:"to assist"},
-  ].map(group=>({...group,picks:playerProps.filter(p=>p.market===group.market).sort((a,b)=>b.probability-a.probability).slice(0,3)})).filter(group=>group.picks.length)
-  const suggestedProps:LivePlayerProp[]=[]
-  const usedPlayers=new Set<string>()
-  for(const group of propGroups){
-    const pick=group.picks.find(p=>!usedPlayers.has(p.player.toLowerCase()))
-    if(!pick)continue
-    suggestedProps.push(pick)
-    usedPlayers.add(pick.player.toLowerCase())
-    if(suggestedProps.length>=4)break
-  }
-  const liveLegs=[
-    !match.bttsSettled&&match.bttsPick?{label:"BTTS "+(match.bttsPick.selection==="yes"?"Yes":"No"),probability:match.bttsPick.probability,grade:match.bttsPick.grade}:null,
-  ].filter(Boolean) as Array<{label:string;probability:number;grade:string}>
+  const picks=playerProps
+    .filter(p=>p.market===market)
+    .sort((a,b)=>Number(b.rankScore??b.probability)-Number(a.rankScore??a.probability)||b.probability-a.probability)
+    .slice(0,5)
+
   return <article className="rounded-3xl border border-rose-300/15 bg-rose-400/[0.045] p-4">
     <div className="flex items-start justify-between gap-3">
       <div>
         <div className="flex items-center gap-2"><span className="rounded-full bg-rose-300 px-2 py-1 text-[0.48rem] font-black text-rose-950">LIVE {match.elapsed??"?"}'</span><span className="text-[0.5rem] font-black uppercase text-white/30">{match.competition}</span></div>
         <h3 className="mt-2 text-lg font-black">{match.home} <span className="text-white/25">{score?score.home:"—"}–{score?score.away:"—"}</span> {match.away}</h3>
       </div>
+      <span className="rounded-full bg-violet-300/10 px-2 py-1 text-[0.44rem] font-black text-violet-200">TOP {picks.length}</span>
     </div>
 
-    {playerProps.length?<div className="mt-3 rounded-2xl border border-cyan-300/15 bg-cyan-400/[0.045] p-3">
-      <div className="flex items-start justify-between gap-3"><div><p className="text-[0.52rem] font-black uppercase tracking-[0.12em] text-cyan-300">Live player likelihoods</p><p className="mt-0.5 text-[0.5rem] text-white/30">Top 3 per market from the current minute to full time{match.livePlayerStatsSource?" · live event counts connected":""}</p></div><span className="rounded-full bg-cyan-300/10 px-2 py-1 text-[0.44rem] font-black text-cyan-200">ACTIVE PLAYERS</span></div>
+    <div className="mt-3 rounded-2xl border border-cyan-300/15 bg-cyan-400/[0.045] p-3">
+      <div className="flex items-start justify-between gap-3"><div><p className="text-[0.52rem] font-black uppercase tracking-[0.12em] text-cyan-300">{title}</p><p className="mt-0.5 text-[0.5rem] text-white/30">Most likely from the current minute to full time{match.livePlayerStatsSource?" · live counts connected":""}</p></div><span className="rounded-full bg-cyan-300/10 px-2 py-1 text-[0.44rem] font-black text-cyan-200">ACTIVE PLAYERS</span></div>
 
-      <div className="mt-3 space-y-3">{propGroups.map(group=><div key={group.market}><div className="mb-1.5 flex items-center justify-between"><p className="text-[0.5rem] font-black uppercase text-white/35">{group.title}</p><p className="text-[0.42rem] text-white/20">top {group.picks.length}</p></div><div className="space-y-1.5">{group.picks.map(prop=>{const count=liveCountBadge(prop);return <div key={prop.player+"|"+prop.market} className="grid grid-cols-[1fr_auto] gap-3 rounded-xl bg-white/[0.045] px-3 py-2.5"><div className="min-w-0"><div className="flex flex-wrap items-center gap-1.5"><p className="text-xs font-black">{prop.player} · {prop.label}</p><TeamBadge team={prop.team} home={match.home} away={match.away} homeCrest={match.homeCrest} awayCrest={match.awayCrest}/></div><div className="mt-1.5 flex flex-wrap items-center gap-1.5"><span className="rounded-full bg-cyan-300/12 px-2 py-1 text-[0.44rem] font-black text-cyan-100">{count.label} {count.value}</span>{count.secondary?<span className="rounded-full bg-white/6 px-2 py-1 text-[0.42rem] font-black text-white/45">{count.secondary}</span>:null}<span className="text-[0.42rem] text-white/20">Grade {prop.confidence}</span></div></div><div className="text-right"><p className="font-mono text-sm font-black">{percent(prop.probability)}</p><p className="text-[0.4rem] text-white/20">remaining</p>{prop.bookmakerOdds?<p className={"mt-0.5 text-[0.4rem] font-black "+(prop.bookmakerPriceState==="live"?"text-emerald-200":"text-amber-200/75")}>B365 {fractionalOdds(prop.bookmakerOdds)}{prop.bookmakerPriceState==="reference"?" ref":""}</p>:null}</div></div>})}</div></div>)}</div>
-      <p className="mt-3 text-[0.48rem] leading-relaxed text-white/25">These are remaining-match probabilities recalculated from the live game state. Substitutes who come on are included once active; players who go off are removed.</p>
-    </div>:null}
+      {picks.length?<div className="mt-3 space-y-1.5">{picks.map((prop,index)=>{const count=liveCountBadge(prop);return <div key={prop.player+"|"+prop.market} className="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-xl bg-white/[0.045] px-3 py-2.5">
+        <span className={"flex size-7 items-center justify-center rounded-full font-mono text-[0.55rem] font-black "+(index===0?"bg-cyan-300 text-cyan-950":"bg-white/7 text-white/45")}>{index+1}</span>
+        <div className="min-w-0"><div className="flex flex-wrap items-center gap-1.5"><p className="text-xs font-black">{prop.player} · {prop.label}</p><TeamBadge team={prop.team} home={match.home} away={match.away} homeCrest={match.homeCrest} awayCrest={match.awayCrest}/></div><div className="mt-1.5 flex flex-wrap items-center gap-1.5"><span className="rounded-full bg-cyan-300/12 px-2 py-1 text-[0.44rem] font-black text-cyan-100">{count.label} {count.value}</span>{count.secondary?<span className="rounded-full bg-white/6 px-2 py-1 text-[0.42rem] font-black text-white/45">{count.secondary}</span>:null}<span className="text-[0.42rem] text-white/20">Grade {prop.confidence}</span></div></div>
+        <div className="text-right"><p className="font-mono text-sm font-black">{percent(prop.probability)}</p><p className="text-[0.4rem] text-white/20">remaining</p>{prop.bookmakerOdds?<p className={"mt-0.5 text-[0.4rem] font-black "+(prop.bookmakerPriceState==="live"?"text-emerald-200":"text-amber-200/75")}>B365 {fractionalOdds(prop.bookmakerOdds)}{prop.bookmakerPriceState==="reference"?" ref":""}</p>:null}</div>
+      </div>})}</div>:<p className="mt-3 rounded-xl bg-white/[0.035] px-3 py-5 text-center text-xs text-white/30">No qualifying active players in this market right now.</p>}
+
+      <p className="mt-3 text-[0.48rem] leading-relaxed text-white/25">{market==="card"?"Yellow-card order uses card-specific history/evidence, current fouls committed and fouls drawn, conditional booking behaviour after foul load, and Bet365 card price as a secondary signal where available.":"Remaining-match probabilities are recalculated from the live game state. Substitutes who come on are included once active; players who go off are removed."}</p>
+    </div>
   </article>
 }
 
