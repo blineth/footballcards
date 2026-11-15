@@ -17,14 +17,19 @@ type ScoreMarket={
   bookmakerOdds:number|null;bookmakerName:string|null;edge:number|null;expectedValue:number|null;
   recent5HitRate:number;seasonHitRate:number;h2hHitRate:number|null;reasons:string[]
 }
+type YellowConditional={matches:number;yellows:number;rate:number|null}
+type YellowConditionals={
+  overall:YellowConditional;zeroFouls:YellowConditional;exactly1Foul:YellowConditional;exactly2Fouls:YellowConditional;
+  threePlusFouls:YellowConditional;after1PlusFouls:YellowConditional;after2PlusFouls:YellowConditional;after3PlusFouls:YellowConditional
+}
 type ScorePlayer={
   name:string;dbName?:string;team:string;position?:string|null;expectedMinutes?:number;
-  markets?:Partial<Record<MarketKey,ScoreMarket>>
+  markets?:Partial<Record<MarketKey,ScoreMarket>>;yellowConditionals?:YellowConditionals
 }
 type Selection={
   id:string;player:string;team:string;market:string;label:string;probability:number;fairOdds:number|null;
   bookmakerOdds:number|null;bookmakerName?:string|null;edge:number|null;confidence:"A"|"B"|"C"|"D";reason:string;
-  currentCount?:number|null;liveAdjusted?:boolean
+  currentCount?:number|null;liveAdjusted?:boolean;yellowConditionals?:YellowConditionals
 }
 type LivePlayerStat={
   player:string;team:string;minutes:number|null;foulsCommitted:number;foulsDrawn:number;shots:number;shotsOnTarget:number;
@@ -160,7 +165,7 @@ function remainingOneProbability(full:number,elapsed:number){
   const lambda=-Math.log(1-p)
   return Math.max(.001,Math.min(.99,1-Math.exp(-lambda*remaining)))
 }
-function applyLive(rows:Selection[],live:LiveData|null){
+function applyLive(rows:Selection[],live:LiveData|null,scorecard:Scorecard|null=null){
   if(!live||!(live.status==="live"||live.status==="halftime")||!live.players?.length)return rows
   const stats=new Map(live.players.map(p=>[normPlayer(p.player),p]))
   const oneProb=new Map<string,number>()
@@ -170,6 +175,8 @@ function applyLive(rows:Selection[],live:LiveData|null){
   }
   const remaining=Math.max(.03,Math.min(1,(96-Math.max(0,Math.min(96,live.elapsed)))/96))
   const adjusted:Selection[]=[]
+  const logit=(p:number)=>Math.log(Math.max(.001,Math.min(.999,p))/(1-Math.max(.001,Math.min(.999,p))))
+  const logistic=(x:number)=>1/(1+Math.exp(-x))
   for(const row of rows){
     const stat=stats.get(normPlayer(row.player))
     if(!stat){adjusted.push(row);continue}
@@ -180,7 +187,32 @@ function applyLive(rows:Selection[],live:LiveData|null){
     const base=oneProb.get(normPlayer(row.player)+"|"+familyOneMarket(row.market))??row.probability
     const need=Math.max(1,threshold-current)
     let probability:number
-    if(row.market==="card"||row.market.startsWith("goal")){
+    let liveReason=""
+    if(row.market==="card"){
+      probability=remainingOneProbability(base,live.elapsed)
+      const fouls=Math.max(0,Number(stat.foulsCommitted??0))
+      const yc=row.yellowConditionals
+      const conditional=fouls>=3?yc?.after3PlusFouls:fouls>=2?yc?.after2PlusFouls:fouls>=1?yc?.after1PlusFouls:null
+      const overall=yc?.overall?.rate
+      if(fouls>0){
+        let delta=Math.min(.65,.14*fouls)
+        if(conditional?.rate!=null&&overall!=null&&conditional.matches>=2){
+          const reliability=Math.min(1,conditional.matches/10)
+          const observedDelta=logit(Number(conditional.rate))-logit(Math.max(.02,Number(overall)))
+          delta=Math.max(-.10,Math.min(.90,observedDelta*.72*reliability+.10*fouls))
+          liveReason=`${fouls} foul${fouls===1?"":"s"} already committed · historical booking rate after this foul load ${Math.round(Number(conditional.rate)*100)}% (${conditional.matches} matches)`
+        }else{
+          liveReason=`${fouls} foul${fouls===1?"":"s"} already committed · live foul-pressure uplift applied`
+        }
+        probability=logistic(logit(probability)+delta)
+      }
+      const refYellows=Number(scorecard?.referee?.yellowsPerGame??0)
+      if(refYellows>0){
+        probability=logistic(logit(probability)+Math.max(-.18,Math.min(.22,(refYellows-4.2)*.055)))
+        liveReason+=(liveReason?" · ":"")+scorecard?.referee?.name+" "+refYellows.toFixed(1)+" yellows/game"
+      }
+      probability=Math.max(.001,Math.min(.95,probability))
+    }else if(row.market.startsWith("goal")||row.market.startsWith("assist")){
       probability=remainingOneProbability(base,live.elapsed)
     }else{
       const lambdaFull=-Math.log(1-Math.max(.001,Math.min(.995,base)))
@@ -195,7 +227,7 @@ function applyLive(rows:Selection[],live:LiveData|null){
       edge:null,
       currentCount:current,
       liveAdjusted:true,
-      reason:`Live: ${current} already recorded; ${Math.round(probability*100)}% model chance of reaching ${row.label} from ${live.elapsed}'`,
+      reason:liveReason||`Live: ${current} already recorded; ${Math.round(probability*100)}% model chance of reaching ${row.label} from ${live.elapsed}'`,
     })
   }
   return adjusted
@@ -215,7 +247,7 @@ function selectionsFrom(data:Scorecard|null){
   for(const p of data?.players??[]){
     for(const m of Object.values(p.markets??{})){
       if(!m)continue
-      const row:Selection={id:"",player:p.name,team:p.team,market:m.key,label:m.label,probability:m.probability,fairOdds:m.fairOdds,bookmakerOdds:m.bookmakerOdds,bookmakerName:m.bookmakerName,edge:m.edge,confidence:m.confidence,reason:m.reasons?.[0]??"Player history and current matchup model"}
+      const row:Selection={id:"",player:p.name,team:p.team,market:m.key,label:m.label,probability:m.probability,fairOdds:m.fairOdds,bookmakerOdds:m.bookmakerOdds,bookmakerName:m.bookmakerName,edge:m.edge,confidence:m.confidence,reason:m.reasons?.[0]??"Player history and current matchup model",yellowConditionals:p.yellowConditionals}
       row.id=keyOf(row)
       if(seen.has(row.id))continue
       seen.add(row.id);out.push(row)
@@ -452,7 +484,7 @@ export default function BetBuilderPage(){
   },[fixture,h2hOpen,h2hData])
 
   const preMatchRows=useMemo(()=>selectionsFrom(data),[data])
-  const allRows=useMemo(()=>applyLive(preMatchRows,live),[preMatchRows,live])
+  const allRows=useMemo(()=>applyLive(preMatchRows,live,data),[preMatchRows,live,data])
   const visible=useMemo(()=>{
     const allowed=new Set(categories.find(x=>x.id===category)?.markets??[])
     const rows=allRows.filter(x=>allowed.has(x.market as MarketKey))
