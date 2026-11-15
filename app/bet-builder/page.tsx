@@ -29,11 +29,13 @@ type ScorePlayer={
 type Selection={
   id:string;player:string;team:string;market:string;label:string;probability:number;fairOdds:number|null;
   bookmakerOdds:number|null;bookmakerName?:string|null;edge:number|null;confidence:"A"|"B"|"C"|"D";reason:string;
-  currentCount?:number|null;liveAdjusted?:boolean;yellowConditionals?:YellowConditionals
+  currentCount?:number|null;liveAdjusted?:boolean;yellowConditionals?:YellowConditionals;position?:string|null;
+  tackles?:number;interceptions?:number;blocks?:number;duelsTotal?:number;duelsWon?:number
 }
 type LivePlayerStat={
   player:string;team:string;minutes:number|null;foulsCommitted:number;foulsDrawn:number;shots:number;shotsOnTarget:number;
-  goals:number;assists:number;yellowCards:number;redCards:number;subbedOff:boolean
+  goals:number;assists:number;yellowCards:number;redCards:number;subbedOff:boolean;
+  tackles:number;interceptions:number;blocks:number;duelsTotal:number;duelsWon:number
 }
 type LiveData={
   ok:boolean;source:string|null;status:"scheduled"|"live"|"halftime"|"finished"|"unknown";elapsed:number;
@@ -177,6 +179,13 @@ function applyLive(rows:Selection[],live:LiveData|null,scorecard:Scorecard|null=
   const adjusted:Selection[]=[]
   const logit=(p:number)=>Math.log(Math.max(.001,Math.min(.999,p))/(1-Math.max(.001,Math.min(.999,p))))
   const logistic=(x:number)=>1/(1+Math.exp(-x))
+  const defensivePressure=(stat:LivePlayerStat,position?:string|null)=>{
+    const pos=String(position??"").toLowerCase()
+    const role=pos.includes("def")?1.08:pos.includes("mid")?1.04:pos.includes("forward")||pos.includes("att")?.88:pos.includes("goal")?.45:1
+    const raw=Number(stat.tackles??0)*.07+Number(stat.interceptions??0)*.045+Number(stat.blocks??0)*.025+
+      Number(stat.duelsTotal??0)*.009+Number(stat.duelsWon??0)*.006
+    return Math.max(0,Math.min(.48,raw*role))
+  }
   for(const row of rows){
     const stat=stats.get(normPlayer(row.player))
     if(!stat){adjusted.push(row);continue}
@@ -206,6 +215,12 @@ function applyLive(rows:Selection[],live:LiveData|null,scorecard:Scorecard|null=
         }
         probability=logistic(logit(probability)+delta)
       }
+      const pressure=defensivePressure(stat,row.position)
+      if(pressure>0){
+        const cardPressure=Math.min(.30,pressure*.55)
+        probability=logistic(logit(probability)+cardPressure)
+        liveReason+=(liveReason?" · ":"")+"defensive workload "+Number(stat.tackles??0)+" tackles, "+Number(stat.interceptions??0)+" interceptions, "+Number(stat.duelsTotal??0)+" duels"
+      }
       const refYellows=Number(scorecard?.referee?.yellowsPerGame??0)
       if(refYellows>0){
         probability=logistic(logit(probability)+Math.max(-.18,Math.min(.22,(refYellows-4.2)*.055)))
@@ -217,6 +232,13 @@ function applyLive(rows:Selection[],live:LiveData|null,scorecard:Scorecard|null=
     }else{
       const lambdaFull=-Math.log(1-Math.max(.001,Math.min(.995,base)))
       probability=poissonAtLeast(lambdaFull*remaining,need)
+      if(row.market.startsWith("foul")&&!row.market.startsWith("fouled")){
+        const pressure=defensivePressure(stat,row.position)
+        if(pressure>0){
+          probability=logistic(logit(probability)+pressure)
+          liveReason=`Defensive workload: ${Number(stat.tackles??0)} tackles · ${Number(stat.interceptions??0)} interceptions · ${Number(stat.blocks??0)} blocks · ${Number(stat.duelsTotal??0)} duels; future foul probability increased`
+        }
+      }
     }
     adjusted.push({
       ...row,
@@ -227,6 +249,8 @@ function applyLive(rows:Selection[],live:LiveData|null,scorecard:Scorecard|null=
       edge:null,
       currentCount:current,
       liveAdjusted:true,
+      tackles:Number(stat.tackles??0),interceptions:Number(stat.interceptions??0),blocks:Number(stat.blocks??0),
+      duelsTotal:Number(stat.duelsTotal??0),duelsWon:Number(stat.duelsWon??0),
       reason:liveReason||`Live: ${current} already recorded; ${Math.round(probability*100)}% model chance of reaching ${row.label} from ${live.elapsed}'`,
     })
   }
@@ -247,7 +271,7 @@ function selectionsFrom(data:Scorecard|null){
   for(const p of data?.players??[]){
     for(const m of Object.values(p.markets??{})){
       if(!m)continue
-      const row:Selection={id:"",player:p.name,team:p.team,market:m.key,label:m.label,probability:m.probability,fairOdds:m.fairOdds,bookmakerOdds:m.bookmakerOdds,bookmakerName:m.bookmakerName,edge:m.edge,confidence:m.confidence,reason:m.reasons?.[0]??"Player history and current matchup model",yellowConditionals:p.yellowConditionals}
+      const row:Selection={id:"",player:p.name,team:p.team,market:m.key,label:m.label,probability:m.probability,fairOdds:m.fairOdds,bookmakerOdds:m.bookmakerOdds,bookmakerName:m.bookmakerName,edge:m.edge,confidence:m.confidence,reason:m.reasons?.[0]??"Player history and current matchup model",yellowConditionals:p.yellowConditionals,position:p.position}
       row.id=keyOf(row)
       if(seen.has(row.id))continue
       seen.add(row.id);out.push(row)
