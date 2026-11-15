@@ -14,7 +14,7 @@ type Competition=typeof COMPETITIONS[number]
 const LEAGUE_IDS:Partial<Record<Competition,string>>={
   "Premier League":"39",Championship:"40","League One":"41","League Two":"42",
 }
-const BOOKS=["Bet365","Sky Bet","William Hill","Paddy Power"] as const
+const BOOKS=["Bet365"] as const
 
 type MatchRow={date:string;team:string;opponent:string;venue:"home"|"away"|"";gf:number;ga:number;result:"W"|"D"|"L";btts:boolean}
 type Metrics={team:string;position:number;teams:number;played:number;points:number;ppg:number;winRate:number;drawRate:number;lossRate:number;gd:number;gfPerGame:number;gaPerGame:number;recentForm:string;recentPPG:number;streak:string;venueWinRate:number;venuePPG:number;venueGFPerGame:number;venueGAPerGame:number;venueBttsRate:number;venueScoreRate:number;venueConcedeRate:number;bttsRate:number}
@@ -174,6 +174,92 @@ function inPlayProbabilities(input:{
 }
 function grade(certainty:number,reliability:number){const s=certainty*.72+reliability*.28;return s>=.72?"A":s>=.60?"B":s>=.49?"C":"D"}
 function preferredBook(name:string){const n=norm(name);if(n.includes("bet365"))return "Bet365";if(n.includes("sky bet")||n.includes("skybet"))return "Sky Bet";if(n.includes("william hill"))return "William Hill";if(n.includes("paddy power"))return "Paddy Power";return null}
+
+
+const ODDS_API_IO_BASE="https://api.odds-api.io/v3"
+const ODDS_IO_LEAGUES:Partial<Record<Competition,string>>={
+  "Premier League":"england-premier-league",
+  Championship:"england-championship",
+  "League One":"england-league-one",
+  "League Two":"england-league-two",
+}
+const oddsIoEventCache=new Map<string,{expires:number,rows:any[]}>()
+const oddsIoPriceCache=new Map<string,{expires:number,value:{prices:PriceSet;capturedAt:string|null;eventId:string}|null}>()
+
+async function oddsIoJson(path:string,params:Record<string,string>,key:string,revalidateSeconds:number){
+  const url=new URL(ODDS_API_IO_BASE+path)
+  url.searchParams.set("apiKey",key)
+  for(const[k,v]of Object.entries(params))url.searchParams.set(k,v)
+  const r=await fetch(url,{
+    next:{revalidate:revalidateSeconds},
+    signal:AbortSignal.timeout(10000),
+    headers:{accept:"application/json"},
+  })
+  if(!r.ok)throw new Error("Odds-API.io "+path+" "+r.status)
+  return r.json()
+}
+async function oddsIoEvents(date:string,competition:Competition,key:string){
+  const league=ODDS_IO_LEAGUES[competition]??""
+  const cacheKey=[date,competition].join("|")
+  const cached=oddsIoEventCache.get(cacheKey)
+  if(cached&&cached.expires>Date.now())return cached.rows
+  const base:Record<string,string>={sport:"football",bookmaker:"Bet365",limit:"500"}
+  if(league)base.league=league
+  const statuses=["pending","live"]
+  const boards=await Promise.all(statuses.map(async status=>{
+    try{
+      const payload=await oddsIoJson("/events",{...base,status},key,120)
+      return Array.isArray(payload)?payload:Array.isArray(payload?.events)?payload.events:[]
+    }catch{return []}
+  }))
+  const rows=[...new Map(boards.flat().map((row:any)=>[String(row?.id??""),row])).values()]
+  oddsIoEventCache.set(cacheKey,{expires:Date.now()+2*60*1000,rows})
+  return rows
+}
+function oddsIoDateDistance(value:any,date:string){
+  const a=new Date(String(value??"")).getTime()
+  const b=new Date(date+"T12:00:00Z").getTime()
+  return Number.isFinite(a)&&Number.isFinite(b)?Math.abs(a-b):Number.POSITIVE_INFINITY
+}
+async function bet365MatchPrices(input:{date:string;competition:Competition;home:string;away:string;key:string}){
+  const cacheKey=[input.date,input.competition,norm(input.home),norm(input.away)].join("|")
+  const cached=oddsIoPriceCache.get(cacheKey)
+  if(cached&&cached.expires>Date.now())return cached.value
+  try{
+    const events=await oddsIoEvents(input.date,input.competition,input.key)
+    const event=events
+      .filter((row:any)=>same(row?.home,input.home)&&same(row?.away,input.away))
+      .sort((a:any,b:any)=>oddsIoDateDistance(a?.date,input.date)-oddsIoDateDistance(b?.date,input.date))[0]
+    const eventId=String(event?.id??"")
+    if(!eventId){oddsIoPriceCache.set(cacheKey,{expires:Date.now()+60*1000,value:null});return null}
+    const payload=await oddsIoJson("/odds",{eventId,bookmakers:"Bet365",markets:"ML,Both Teams To Score"},input.key,30)
+    const markets=Array.isArray(payload?.bookmakers?.Bet365)?payload.bookmakers.Bet365:[]
+    const prices:PriceSet={}
+    let capturedAt:string|null=null
+    for(const market of markets){
+      const name=String(market?.name??"")
+      const updated=String(market?.updatedAt??"")
+      if(updated&&(!capturedAt||updated>capturedAt))capturedAt=updated
+      const row=Array.isArray(market?.odds)?market.odds[0]:null
+      if(!row)continue
+      if(name==="ML"){
+        const h=Number(row?.home),d=Number(row?.draw),a=Number(row?.away)
+        if(Number.isFinite(h)&&h>1)prices.homeWin=h
+        if(Number.isFinite(d)&&d>1)prices.draw=d
+        if(Number.isFinite(a)&&a>1)prices.awayWin=a
+      }else if(name==="Both Teams To Score"){
+        const yes=Number(row?.yes)
+        if(Number.isFinite(yes)&&yes>1)prices.bttsYes=yes
+      }
+    }
+    const value=Object.keys(prices).length?{prices,capturedAt,eventId}:null
+    oddsIoPriceCache.set(cacheKey,{expires:Date.now()+30*1000,value})
+    return value
+  }catch{
+    const stale=oddsIoPriceCache.get(cacheKey)
+    return stale?.value??null
+  }
+}
 
 const internationalPredictionCache=new Map<string,{expires:number,value:any}>()
 const internationalTeamFormCache=new Map<string,{expires:number,value:any}>()
@@ -423,7 +509,7 @@ function priceMap(rows:any[],home:string,away:string){
     }out[book]=p
   }return out
 }
-function exactPrice(pred:any,market:string,book:string){if(pred?.inPlay)return null;const p=pred.oddsByBook?.[book];if(!p)return null;return market==="homeWin"?p.homeWin??null:market==="awayWin"?p.awayWin??null:market==="draw"?p.draw??null:market==="bttsYes"?p.bttsYes??null:market==="bttsNo"?p.bttsNo??null:null}
+function exactPrice(pred:any,market:string,book:string){const p=pred.oddsByBook?.[book];if(!p)return null;return market==="homeWin"?p.homeWin??null:market==="awayWin"?p.awayWin??null:market==="draw"?p.draw??null:market==="bttsYes"?p.bttsYes??null:market==="bttsNo"?p.bttsNo??null:null}
 function buildSlip(id:string,title:string,subtitle:string,legs:any[],structureKey:"fold5"|"fold7"|"fold10",requiredLegs:number){
   const xs=legs.filter(Boolean)
   const uniqueByFixture:any[]=[]
@@ -448,13 +534,17 @@ function buildSlip(id:string,title:string,subtitle:string,legs:any[],structureKe
   const ratio=historicalModel>0?clamp(observed/historicalModel,.35,1.10):1
   const adjustedAllHit=rawAllHit==null?null:containsLive?clamp(rawAllHit,.001,.99):clamp(rawAllHit*(1-reliability+reliability*ratio),.001,.99)
   const fair=adjustedAllHit==null?null:1/adjustedAllHit
-  let book:string|null=null,exact:number|null=null
-  for(const b of BOOKS){const prices=selected.map(l=>exactPrice(l.prediction,l.market,b));if(!prices.length||prices.some(x=>x==null))continue;const combined=prices.reduce((v,x)=>v*Number(x),1);if(exact==null||combined>exact){book=b;exact=combined}}
+  const bet365Prices=selected.map(l=>exactPrice(l.prediction,l.market,"Bet365"))
+  const allBet365Priced=selected.length>0&&bet365Prices.length===selected.length&&bet365Prices.every(x=>x!=null&&Number(x)>1)
+  const book:string|null=allBet365Priced?"Bet365":null
+  const exact:number|null=allBet365Priced?bet365Prices.reduce((v,x)=>v*Number(x),1):null
+  const verifiedTimes=selected.map(l=>String(l.prediction?.bet365OddsCapturedAt??"")).filter(Boolean).sort()
+  const oddsCapturedAt=verifiedTimes.length?verifiedTimes[0]:null
   const avgLeg=selected.length?selected.reduce((s,l)=>s+Number(l.probability??0),0)/selected.length:0
   const actualTitle=selected.length&&selected.length!==requiredLegs?selected.length+"-Fold Risky Acca":title
   const qualityNote=avgLeg>=.58?"Strong average leg confidence":avgLeg>=.48?"Moderate average leg confidence":"Lower-confidence matchday — review each leg"
   const actualSubtitle=(selected.length&&selected.length!==requiredLegs?"Risky target is 10 legs, reduced to "+selected.length+" because this matchday only has "+uniqueByFixture.length+" usable fixtures. ":"")+qualityNote+"."
-  return {id,title:actualTitle,subtitle:actualSubtitle,structureKey,requiredLegs:selected.length||requiredLegs,targetLegs:requiredLegs,available:enough,containsLive,legs:selected.map(l=>({fixtureId:l.prediction.id,competition:l.prediction.competition,kickoff:l.prediction.kickoff,home:l.prediction.home,away:l.prediction.away,inPlay:Boolean(l.prediction.inPlay),elapsed:l.prediction.elapsed??null,score:l.prediction.score??null,market:l.market,label:l.label,probability:pct(l.probability),fairOdds:Math.round((1/Math.max(.05,l.probability))*100)/100,bookmakerOdds:book?exactPrice(l.prediction,l.market,book):null,bookmaker:book,grade:l.grade,reasons:l.reasons})),modelAllHitProbability:rawAllHit==null?null:pct(rawAllHit),adjustedAllHitProbability:adjustedAllHit==null?null:pct(adjustedAllHit),historicalStructureSample:containsLive?0:sample,historicalStructureHitRate:containsLive?null:(sample?observed:null),fairCombinedOdds:fair==null?null:Math.round(fair*100)/100,bookmaker:book,exactCombinedOdds:exact==null?null:Math.round(exact*100)/100,exactPriced:Boolean(book&&exact),combinedProbabilityNote:containsLive?"Contains live legs: combined probability uses the current live model product and is not pre-match structure-calibrated.":"Pre-match combined probability is adjusted against the historical hit-rate of the same fold size."}
+  return {id,title:actualTitle,subtitle:actualSubtitle,structureKey,requiredLegs:selected.length||requiredLegs,targetLegs:requiredLegs,available:enough,containsLive,legs:selected.map(l=>({fixtureId:l.prediction.id,competition:l.prediction.competition,kickoff:l.prediction.kickoff,home:l.prediction.home,away:l.prediction.away,inPlay:Boolean(l.prediction.inPlay),elapsed:l.prediction.elapsed??null,score:l.prediction.score??null,market:l.market,label:l.label,probability:pct(l.probability),fairOdds:Math.round((1/Math.max(.05,l.probability))*100)/100,bookmakerOdds:book?exactPrice(l.prediction,l.market,book):null,bookmaker:book,grade:l.grade,reasons:l.reasons})),modelAllHitProbability:rawAllHit==null?null:pct(rawAllHit),adjustedAllHitProbability:adjustedAllHit==null?null:pct(adjustedAllHit),historicalStructureSample:containsLive?0:sample,historicalStructureHitRate:containsLive?null:(sample?observed:null),fairCombinedOdds:fair==null?null:Math.round(fair*100)/100,bookmaker:book,exactCombinedOdds:exact==null?null:Math.round(exact*100)/100,exactPriced:Boolean(book&&exact),confirmedBet365Odds:Boolean(book==="Bet365"&&exact),oddsSource:book?"Odds-API.io":null,oddsCapturedAt,combinedProbabilityNote:containsLive?"Contains live legs: combined probability uses the current live model product and is not pre-match structure-calibrated.":"Pre-match combined probability is adjusted against the historical hit-rate of the same fold size."}
 }
 
 const responseCache=new Map<string,{at:number,payload:any}>()
@@ -473,8 +563,30 @@ export async function GET(request:Request){
     if(!fixtureRes.ok)return fixtureRes
     const fixtureData=await fixtureRes.json()
     const internationalFallbacks=await internationalApiPredictions(date,fixtureData?.leagues?.International??[])
-    const packs=new Map<Competition,{season:MatchRow[];history:MatchRow[];odds:any[]}>()
-    await Promise.all(COMPETITIONS.map(async c=>{const [s,h,o]=await Promise.all([matches(c,seasonStart(date),date),matches(c,historyStart(date),date),oddsRows(c,date)]);packs.set(c,{season:s,history:h,odds:o})}))
+    const packs=new Map<Competition,{season:MatchRow[];history:MatchRow[]}>()
+    await Promise.all(COMPETITIONS.map(async competition=>{
+      const [season,history]=await Promise.all([matches(competition,seasonStart(date),date),matches(competition,historyStart(date),date)])
+      packs.set(competition,{season,history})
+    }))
+    const bet365ByFixture=new Map<string,{prices:PriceSet;capturedAt:string|null;eventId:string}>()
+    const oddsApiIoKey=process.env.ODDS_API_IO_KEY
+    if(oddsApiIoKey){
+      const priceJobs:Promise<void>[]=[]
+      for(const competition of COMPETITIONS){
+        for(const fixture of fixtureData?.leagues?.[competition]??[]){
+          priceJobs.push((async()=>{
+            const price=await bet365MatchPrices({
+              date,competition,
+              home:String(fixture?.home?.name??""),
+              away:String(fixture?.away?.name??""),
+              key:oddsApiIoKey,
+            })
+            if(price)bet365ByFixture.set(String(fixture.id),price)
+          })())
+        }
+      }
+      await Promise.all(priceJobs)
+    }
     const predictions:any[]=[]
     for(const competition of COMPETITIONS){const pack=packs.get(competition)!,tbl=table(pack.season)
       for(const f of fixtureData?.leagues?.[competition]??[]){const home=canonical(String(f.home?.name??""),tbl.teams),away=canonical(String(f.away?.name??""),tbl.teams),hm=metrics(home,pack.season,tbl.positions,tbl.teams.length||24,"home"),am=metrics(away,pack.season,tbl.positions,tbl.teams.length||24,"away"),hh=h2h(home,away,pack.history),wp=resultProb(hm,am,hh),bp=bttsProb(hm,am,hh)
@@ -546,7 +658,10 @@ export async function GET(request:Request){
           const state=scoreHome===scoreAway?"level":scoreHome>scoreAway?String(f.home.name)+" leading":String(f.away.name)+" leading"
           reasons.unshift("LIVE "+elapsed+"' · "+String(scoreHome)+"-"+String(scoreAway)+" · "+state+" · probabilities recalculated from score, time remaining and scoring rates")
         }
-        predictions.push({id:String(f.id),competition,kickoff:String(f.kickoff),status,inPlay,finished,bttsSettled,elapsed:inPlay?elapsed:null,score:hasScore?{home:scoreHome,away:scoreAway}:null,home:String(f.home.name),away:String(f.away.name),homeCrest:f.home?.crest??null,awayCrest:f.away?.crest??null,homeStats:hm,awayStats:am,h2h:hh,preMatchProbabilities:{homeWin:pct(homeP),draw:pct(drawP),awayWin:pct(awayP),bttsYes:pct(bttsYes),bttsNo:pct(bttsNo)},probabilities:{homeWin:pct(currentHome),draw:pct(currentDraw),awayWin:pct(currentAway),bttsYes:pct(currentBttsYes),bttsNo:pct(currentBttsNo)},inPlayModel:liveModel,winnerPick:side&&!finished?{side,team:side==="home"?String(f.home.name):String(f.away.name),loser:side==="home"?String(f.away.name):String(f.home.name),probability:pct(winnerP),grade:grade(winnerP,rel)}:null,drawPick:drawEligible?{probability:pct(currentDraw),grade:grade(.5+Math.max(0,currentDraw-.24),Math.max(rel,.55))}:null,bttsPick:bpick&&!finished?{selection:bpick,probability:pct(bprob),grade:grade(.5+Math.abs(currentBttsYes-.5),rel)}:null,reasons,oddsByBook:priceMap(pack.odds,String(f.home.name),String(f.away.name))})
+        predictions.push({id:String(f.id),competition,kickoff:String(f.kickoff),status,inPlay,finished,bttsSettled,elapsed:inPlay?elapsed:null,score:hasScore?{home:scoreHome,away:scoreAway}:null,home:String(f.home.name),away:String(f.away.name),homeCrest:f.home?.crest??null,awayCrest:f.away?.crest??null,homeStats:hm,awayStats:am,h2h:hh,preMatchProbabilities:{homeWin:pct(homeP),draw:pct(drawP),awayWin:pct(awayP),bttsYes:pct(bttsYes),bttsNo:pct(bttsNo)},probabilities:{homeWin:pct(currentHome),draw:pct(currentDraw),awayWin:pct(currentAway),bttsYes:pct(currentBttsYes),bttsNo:pct(currentBttsNo)},inPlayModel:liveModel,winnerPick:side&&!finished?{side,team:side==="home"?String(f.home.name):String(f.away.name),loser:side==="home"?String(f.away.name):String(f.home.name),probability:pct(winnerP),grade:grade(winnerP,rel)}:null,drawPick:drawEligible?{probability:pct(currentDraw),grade:grade(.5+Math.max(0,currentDraw-.24),Math.max(rel,.55))}:null,bttsPick:bpick&&!finished?{selection:bpick,probability:pct(bprob),grade:grade(.5+Math.abs(currentBttsYes-.5),rel)}:null,reasons,oddsByBook:bet365ByFixture.has(String(f.id))?{"Bet365":bet365ByFixture.get(String(f.id))!.prices}:{},
+          bet365OddsCapturedAt:bet365ByFixture.get(String(f.id))?.capturedAt??null,
+          bet365OddsEventId:bet365ByFixture.get(String(f.id))?.eventId??null,
+          bet365OddsSource:bet365ByFixture.has(String(f.id))?"Odds-API.io":null})
       }
     }
     const wins=predictions.filter(p=>!p.finished&&p.winnerPick&&p.winnerPick.grade!=="D").map(p=>({prediction:p,market:p.winnerPick.side==="home"?"homeWin":"awayWin",label:p.winnerPick.team+" to win",probability:p.winnerPick.probability,grade:p.winnerPick.grade,reasons:p.reasons})).sort((a,b)=>b.probability-a.probability)
@@ -574,7 +689,7 @@ export async function GET(request:Request){
       buildSlip("fold-5","5-Fold Acca","Five strongest selections from five different matches.",mixed,"fold5",5),
       buildSlip("fold-7","7-Fold Acca","Seven strongest selections from seven different matches.",mixed,"fold7",7),
       buildSlip("fold-10","10-Fold Acca","Ten strongest selections from ten different matches.",mixed,"fold10",10)
-    ],cached:false,staleFallback:false,methodology:{resultModel:"Premier League through League Two use league position, PPG, recent five-match form, streaks, home/away PPG and win rate, goal difference and recent H2H with sample shrinkage, followed by walk-forward calibration. Internationals use available local history first, then API-Football where available, and finally ESPN recent competition form using the actual country team IDs. Neutral identical priors are not used to build suggested Accas when recent team form can be recovered.",bttsModel:"Home/away BTTS, scoring and conceding rates, overall BTTS and H2H BTTS. Once both teams have already scored in-play, BTTS is treated as settled and removed from betting recommendations.",pricing:"Each fold uses one selection per fixture. Acca recommendations never use double-chance markets; eligible legs are direct home/away wins, selective draws when the match is genuinely even, and BTTS Yes only. BTTS No is deliberately excluded from automatic Acca recommendations. Exact combined odds are shown only when one preferred bookmaker prices every leg. Model fair combined odds are adjusted using the historical hit-rate of the same fold size rather than naive probability multiplication alone.",inPlay:"Live matches are recalculated from the current score, match minute, remaining-time goal rates and the calibrated pre-match strength. Pre-match bookmaker prices are never reused as if they were live prices.",fallback:"Team history uses the live database when available and automatically falls back to the checked-in daily current-season snapshot if database quota or connectivity fails.",caution:"Model estimates, not guarantees. Team news, red cards, injuries and other in-play events can materially change outcomes."}}
+    ],cached:false,staleFallback:false,methodology:{resultModel:"Premier League through League Two use league position, PPG, recent five-match form, streaks, home/away PPG and win rate, goal difference and recent H2H with sample shrinkage, followed by walk-forward calibration. Internationals use available local history first, then API-Football where available, and finally ESPN recent competition form using the actual country team IDs. Neutral identical priors are not used to build suggested Accas when recent team form can be recovered.",bttsModel:"Home/away BTTS, scoring and conceding rates, overall BTTS and H2H BTTS. Once both teams have already scored in-play, BTTS is treated as settled and removed from betting recommendations.",pricing:"Each fold uses one selection per fixture. Acca recommendations never use double-chance markets; eligible legs are direct home/away wins, selective draws when the match is genuinely even, and BTTS Yes only. BTTS No is deliberately excluded from automatic Acca recommendations. Displayed Acca odds are Bet365-only. Match Edge pulls Bet365 ML and Both Teams To Score prices from Odds-API.io and labels a combined price confirmed only when every leg has a verified Bet365 price. Model fair combined odds remain separate and are never presented as the Bet365 Acca price.",inPlay:"Live matches are recalculated from the current score, match minute, remaining-time goal rates and the calibrated pre-match strength. Pre-match bookmaker prices are never reused as if they were live prices.",fallback:"Team history uses the live database when available and automatically falls back to the checked-in daily current-season snapshot if database quota or connectivity fails.",caution:"Model estimates, not guarantees. Team news, red cards, injuries and other in-play events can materially change outcomes."}}
     responseCache.set(date,{at:Date.now(),payload})
     return NextResponse.json(payload,{headers:{"Cache-Control":activePredictions.some(p=>p.inPlay)?"public, s-maxage=20, stale-while-revalidate=120":"public, s-maxage=300, stale-while-revalidate=1800"}})
   }catch(error){
