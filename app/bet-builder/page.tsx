@@ -434,64 +434,114 @@ function broadBetToSelection(bet:AvailableBet,fixture:Fixture):Selection{
 }
 function buildBroadTargetBuilders(rows:Selection[]):RiskBuilder[]{
   const configs=[
-    {id:"broad-safe-3-1",title:"Safe 3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4,minP:.46,max:6},
-    {id:"broad-balanced-10-1",title:"Balanced 10/1",risk:"Balanced" as const,targetFractional:"10/1",targetDecimal:11,minP:.24,max:7},
-    {id:"broad-high-20-1",title:"High Risk 20/1+",risk:"High Risk" as const,targetFractional:"20/1+",targetDecimal:21,minP:.13,max:8},
+    {id:"broad-safe-3-1",title:"Safe 3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4,minP:.34},
+    {id:"broad-balanced-10-1",title:"Balanced 10/1",risk:"Balanced" as const,targetFractional:"10/1",targetDecimal:11,minP:.18},
+    {id:"broad-high-20-1",title:"High Risk 20/1+",risk:"High Risk" as const,targetFractional:"20/1+",targetDecimal:21,minP:.10},
   ]
   const candidates=rows
-    .filter(r=>verifiedBet365Odd(r)!=null&&r.probability>0&&Number(r.bookmakerOdds)<8&&Number(r.bookmakerOdds)>=1.12)
-    .sort((a,b)=>b.probability-a.probability)
+    .filter(r=>verifiedBet365Odd(r)!=null&&r.probability>0&&Number(r.bookmakerOdds)<12&&Number(r.bookmakerOdds)>=1.02)
+    .sort((a,b)=>b.probability-a.probability||Number(a.bookmakerOdds)-Number(b.bookmakerOdds))
+
   return configs.map(cfg=>{
-    type State={legs:Selection[];product:number;prob:number;families:Set<string>}
-    let states:State[]=[{legs:[],product:1,prob:1,families:new Set()}]
+    type State={
+      legs:Selection[];product:number;prob:number;players:Set<string>;
+      teamCounts:Record<string,number>;usedBtts:boolean
+    }
+    let states:State[]=[{legs:[],product:1,prob:1,players:new Set(),teamCounts:{},usedBtts:false}]
+
     for(const row of candidates.filter(r=>r.probability>=cfg.minP)){
-      const family=row.market.startsWith("board:")?boardSelectionFamily(row.market.slice(6)):row.market.startsWith("goal")?"scorer":row.market.startsWith("foul")||row.market==="card"?"discipline":row.market
+      const isBoard=row.market.startsWith("board:")
+      const isBtts=row.market==="board:btts"
+      if(isBoard&&!isBtts)continue
       const next=[...states]
       for(const state of states){
-        if(state.legs.length>=cfg.max||state.families.has(family))continue
+        if(state.legs.length>=12)continue
+
+        let playerKey=""
+        let teamKey=""
+        let teamCount=0
+        if(!isBoard){
+          playerKey=normPlayer(row.player)
+          if(!playerKey||state.players.has(playerKey))continue
+          teamKey=teamNorm(row.team)
+          teamCount=state.teamCounts[teamKey]??0
+          if(teamCount>=6)continue
+        }else if(state.usedBtts){
+          continue
+        }
+
         const odd=Number(verifiedBet365Odd(row))
         const product=state.product*odd
         if(product>cfg.targetDecimal*1.55&&state.legs.length>=1)continue
         next.push({
-          legs:[...state.legs,row],product,prob:state.prob*row.probability,
-          families:new Set([...state.families,family]),
+          legs:[...state.legs,row],
+          product,
+          prob:state.prob*row.probability,
+          players:isBoard?state.players:new Set([...state.players,playerKey]),
+          teamCounts:isBoard?state.teamCounts:{...state.teamCounts,[teamKey]:teamCount+1},
+          usedBtts:state.usedBtts||isBtts,
         })
       }
-      states=next.sort((a,b)=>{
-        const ag=a.product>=cfg.targetDecimal,bg=b.product>=cfg.targetDecimal
-        if(ag!==bg)return ag?-1:1
-        if(ag&&bg&&Math.abs(a.prob-b.prob)>.002)return b.prob-a.prob
-        const ad=Math.abs(Math.log(Math.max(1.01,a.product))-Math.log(cfg.targetDecimal))
-        const bd=Math.abs(Math.log(Math.max(1.01,b.product))-Math.log(cfg.targetDecimal))
-        return ad-bd
-      }).slice(0,900)
+
+      const buckets=new Map<string,State[]>()
+      for(const state of next){
+        const bucket=Math.floor(Math.log(Math.max(1,state.product))*140)
+        const key=bucket+"|"+state.legs.length
+        const bucketRows=buckets.get(key)??[]
+        bucketRows.push(state)
+        bucketRows.sort((a,b)=>{
+          if(Math.abs(a.prob-b.prob)>.000001)return b.prob-a.prob
+          const weakA=a.legs.length?Math.min(...a.legs.map(x=>x.probability)):0
+          const weakB=b.legs.length?Math.min(...b.legs.map(x=>x.probability)):0
+          return weakB-weakA
+        })
+        buckets.set(key,bucketRows.slice(0,16))
+      }
+      states=[...buckets.values()].flat()
+        .sort((a,b)=>{
+          const ah=a.product>=cfg.targetDecimal,bh=b.product>=cfg.targetDecimal
+          if(ah!==bh)return ah?-1:1
+          return b.prob-a.prob
+        })
+        .slice(0,5000)
     }
-    const best=states.filter(s=>s.legs.length>=2&&s.product>=cfg.targetDecimal)
-      .sort((a,b)=>Math.abs(a.prob-b.prob)>.002?b.prob-a.prob:Math.abs(a.product-cfg.targetDecimal)-Math.abs(b.product-cfg.targetDecimal))[0]
+
+    const best=states
+      .filter(state=>state.legs.length>=2&&state.product>=cfg.targetDecimal&&state.product<=cfg.targetDecimal*1.35)
+      .sort((a,b)=>{
+        // Once both routes meet the requested price, highest all-hit probability wins.
+        if(Math.abs(a.prob-b.prob)>.000001)return b.prob-a.prob
+        const weakA=Math.min(...a.legs.map(x=>x.probability))
+        const weakB=Math.min(...b.legs.map(x=>x.probability))
+        if(Math.abs(weakA-weakB)>.0001)return weakB-weakA
+        return Math.abs(a.product-cfg.targetDecimal)-Math.abs(b.product-cfg.targetDecimal)
+      })[0]
+
     if(!best)return {
       id:cfg.id,title:cfg.title,risk:cfg.risk,targetFractional:cfg.targetFractional,targetDecimal:cfg.targetDecimal,
       legs:[],referenceProductOdds:null,averageLegProbability:null,minimumLegProbability:null,modelAllHitProbability:null,
       conservativeAllHitProbability:null,safetyScore:null,exactPriced:false,bookmaker:"Bet365",
       verifiedBet365LegPrices:false,exactBet365BuilderPrice:false,pricingBasis:"none" as const,
-      note:"Bet365 has markets available, but there is not a strong enough verified route to this target yet."
+      note:"No verified Bet365 route reaches this target within the 12-selection / six-players-per-team limit at the required evidence level."
     }
+
     return {
       id:cfg.id,title:cfg.title,risk:cfg.risk,targetFractional:cfg.targetFractional,targetDecimal:cfg.targetDecimal,
       legs:best.legs,referenceProductOdds:Math.round(best.product*100)/100,
-      averageLegProbability:best.legs.reduce((s,x)=>s+x.probability,0)/best.legs.length,
+      averageLegProbability:best.legs.reduce((sum,x)=>sum+x.probability,0)/best.legs.length,
       minimumLegProbability:Math.min(...best.legs.map(x=>x.probability)),
       modelAllHitProbability:best.prob,conservativeAllHitProbability:best.prob,safetyScore:best.prob,
       exactPriced:true,bookmaker:"Bet365",verifiedBet365LegPrices:true,exactBet365BuilderPrice:false,
       pricingBasis:"bet365_singles_product" as const,
-      note:"Uses only currently verified Bet365 BTTS and player-prop markets. Match-level BTTS uses de-vigged Bet365 probability where Match Edge has no independent model. The final Bet Builder price can differ because of correlation."
+      note:"Probability first. The target price is a constraint, not the objective. The optimiser can use up to 12 selections and six players per team, including BTTS when it improves the route, and chooses the combination with the highest estimated all-hit chance. Match winner, double chance, total goals and corners are excluded. Final Bet365 Bet Builder pricing can differ because correlated legs are repriced."
     }
   })
 }
 function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuilder[]{
   const configs=[
-    {id:"safe-3-1",title:"Safe 3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4,min:.40,max:8,minFamilies:1,maxPerFamily:8},
-    {id:"balanced-10-1",title:"Balanced 10/1",risk:"Balanced" as const,targetFractional:"10/1",targetDecimal:11,min:.15,max:9,minFamilies:1,maxPerFamily:9},
-    {id:"high-20-1",title:"High Risk 20/1+",risk:"High Risk" as const,targetFractional:"20/1+",targetDecimal:21,min:.09,max:10,minFamilies:1,maxPerFamily:10},
+    {id:"safe-3-1",title:"Safe 3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4,min:.32,max:12,minFamilies:1,maxPerFamily:12},
+    {id:"balanced-10-1",title:"Balanced 10/1",risk:"Balanced" as const,targetFractional:"10/1",targetDecimal:11,min:.12,max:12,minFamilies:1,maxPerFamily:12},
+    {id:"high-20-1",title:"High Risk 20/1+",risk:"High Risk" as const,targetFractional:"20/1+",targetDecimal:21,min:.08,max:12,minFamilies:1,maxPerFamily:12},
   ]
   const family=(market:string)=>market.startsWith("goal")?"goal":market.startsWith("assist")?"assist":market.startsWith("fouled")?"fouled":market.startsWith("foul")?"foul":market.startsWith("sot")?"sot":market.startsWith("shot")?"shot":"card"
   const baseMarket=(market:string)=>market==="goal1"||market==="assist1"||market==="foul1"||market==="fouled1"||market==="card"||market==="shot1"||market==="sot1"
@@ -551,22 +601,23 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
 
     const runSearch=(candidateRows:typeof allCandidateRows)=>{
       // Exact objective: maximise joint hit probability subject to reaching the
-      // requested odds. We group by player + market family, so one player may
-      // contribute different high-probability events (e.g. 1+ shot and 1+ foul)
-      // but never nested thresholds from the same family. This avoids a 9%
-      // long-shot leg surviving merely because it reaches the target faster.
+      // requested odds and Bet365's real limits. Use at most one selection per
+      // player, up to six players from either team and up to 12 selections total.
+      // This deliberately allows a longer list of safer 1+ events to beat a short
+      // slip containing a speculative card, scorer or high threshold.
       const minLegProbability=cfg.risk==="Safe"?.34:cfg.risk==="Balanced"?.24:.18
-      const byPlayerFamily=new Map<string,typeof candidateRows>()
+      const byPlayer=new Map<string,typeof candidateRows>()
       for(const option of candidateRows){
         if(option.row.probability<Math.max(cfg.min,minLegProbability))continue
-        const key=normPlayer(option.row.player)+"|"+option.family
-        if(!byPlayerFamily.has(key))byPlayerFamily.set(key,[])
-        byPlayerFamily.get(key)!.push(option)
+        const key=normPlayer(option.row.player)
+        if(!key)continue
+        if(!byPlayer.has(key))byPlayer.set(key,[])
+        byPlayer.get(key)!.push(option)
       }
 
       type State={
         legs:Selection[];product:number;prob:number;conservative:number;
-        families:Record<string,number>
+        families:Record<string,number>;teamCounts:Record<string,number>
       }
       const maxProduct=cfg.targetDecimal*1.45
       const maxLog=Math.log(maxProduct)
@@ -574,15 +625,18 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
       const bucketFor=(product:number)=>Math.max(0,Math.min(buckets,Math.round(Math.log(Math.max(1,product))/maxLog*buckets)))
 
       let states=new Map<number,State>()
-      states.set(0,{legs:[],product:1,prob:1,conservative:1,families:{}})
+      states.set(0,{legs:[],product:1,prob:1,conservative:1,families:{},teamCounts:{}})
 
-      for(const options of byPlayerFamily.values()){
+      for(const options of byPlayer.values()){
         const next=new Map(states)
         for(const state of states.values()){
           if(state.legs.length>=cfg.max)continue
           for(const option of options){
             const count=state.families[option.family]??0
             if(count>=cfg.maxPerFamily)continue
+            const teamKey=teamNorm(option.row.team)
+            const teamCount=state.teamCounts[teamKey]??0
+            if(teamCount>=6)continue
             const odd=verifiedOnly?referenceOdd(option.row):Number(option.row.fairOdds??0)
             if(!(odd>1))continue
             const product=state.product*odd
@@ -592,6 +646,7 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
             const candidate:State={
               legs,product,prob,conservative:conservativeJoint(legs,prob),
               families:{...state.families,[option.family]:count+1},
+              teamCounts:{...state.teamCounts,[teamKey]:teamCount+1},
             }
             const bucket=bucketFor(product)
             const existing=next.get(bucket)
