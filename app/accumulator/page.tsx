@@ -91,7 +91,7 @@ export default function AccumulatorPage(){
   },[data?.predictions,selectedOutcomes])
   const manualProbability=manualPicks.length?manualPicks.reduce((v,p)=>v*Math.max(.01,p.probability),1):null
   const manualOdds=manualProbability?1/manualProbability:null
-  const manualRisk=manualOdds==null?"":manualOdds<=5?"Safe":manualOdds<=12?"Balanced":"Risky"
+  const manualRisk=manualOdds==null?"":manualOdds>21?"Risky":manualOdds>=11?"Balanced":"Safe"
   function chooseOutcome(fixtureId:string,outcome:Outcome){
     setSelectedOutcomes(cur=>cur[fixtureId]===outcome?Object.fromEntries(Object.entries(cur).filter(([id])=>id!==fixtureId)):{...cur,[fixtureId]:outcome})
   }
