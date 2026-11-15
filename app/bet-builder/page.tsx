@@ -1172,6 +1172,18 @@ export default function BetBuilderPage(){
   const serverBuilders=(data?.riskBuilders??[]).filter(x=>x.legs?.length&&x.verifiedBet365LegPrices===true)
   const disciplineServerBuilders=(data?.foulCardBuilders??[]).filter(x=>x.legs?.length&&x.verifiedBet365LegPrices===true)
   const disciplineRows=allRows.filter(r=>r.market==="card"||r.market.startsWith("foul")||r.market.startsWith("fouled"))
+  const cardRiskRows=useMemo(()=>allRows
+    .filter(r=>r.market==="card")
+    .sort((a,b)=>{
+      // Live card risk is driven first by actual foul involvement in this match.
+      // Fouls committed matter most; fouls drawn are a smaller involvement signal.
+      const aScore=Number(a.probability)+Math.min(.18,Number(a.liveFoulsCommitted??0)*.055)+Math.min(.025,Number(a.liveFoulsDrawn??0)*.008)
+        +(a.referenceImpliedProbability!=null?Math.min(.035,Math.max(-.02,(a.referenceImpliedProbability-a.probability)*.10)):0)
+      const bScore=Number(b.probability)+Math.min(.18,Number(b.liveFoulsCommitted??0)*.055)+Math.min(.025,Number(b.liveFoulsDrawn??0)*.008)
+        +(b.referenceImpliedProbability!=null?Math.min(.035,Math.max(-.02,(b.referenceImpliedProbability-b.probability)*.10)):0)
+      return bScore-aScore||Number(b.liveFoulsCommitted??0)-Number(a.liveFoulsCommitted??0)||b.probability-a.probability
+    })
+    .slice(0,8),[allRows])
   const inPlay=live?.status==="live"||live?.status==="halftime"
   const activeMarketAvailability=inPlay?(liveOdds?.marketAvailability??{}):(data?.marketAvailability??{})
   const bet365MarketStatus=(market:string):MarketStatus=>{
@@ -1316,20 +1328,20 @@ export default function BetBuilderPage(){
         </section>:null}
 
         <section className="rounded-3xl border border-emerald-300/12 bg-gradient-to-br from-emerald-400/[0.09] to-black/25 p-4">
-          <div className="flex items-start justify-between gap-3"><div><div className="flex items-center gap-2 text-emerald-300"><Sparkles className="size-4"/><p className="text-[0.54rem] font-black uppercase tracking-[0.13em]">{inPlay&&!liveBet365?"Suggested live model slips":"Suggested Bet365 slips"}</p></div><h2 className="mt-1 text-lg font-black">{builderMode==="discipline"?"Cards & fouls":builderMode==="player"?"Player markets":"All markets"}</h2><p className="mt-1 text-[0.6rem] leading-relaxed text-white/40">{builderMode==="discipline"?"Only player cards, fouls committed and fouls drawn are considered.":builderMode==="player"?"Only player props are considered: goals, assists, shots, shots on target, cards, fouls committed and fouls drawn.":inPlay?"Everything Bet365 currently offers can be considered, including match result, goals, BTTS, team goals, corners, bookings and verified player props.":"Everything Bet365 offers can be considered, including result, goals, BTTS, team goals, corners, bookings and all verified player props."}</p></div><span className={"rounded-full px-2 py-1 text-[0.46rem] font-black "+(data.lineupMode==="confirmed"?"bg-emerald-400/10 text-emerald-300":"bg-amber-300/10 text-amber-200")}>{data.lineupMode==="confirmed"?"XI CONFIRMED":"PREDICTED XI"}</span></div>
+          <div className="flex items-start justify-between gap-3"><div><div className="flex items-center gap-2 text-emerald-300"><Sparkles className="size-4"/><p className="text-[0.54rem] font-black uppercase tracking-[0.13em]">{inPlay&&!liveBet365?"Suggested live model slips":"Suggested Bet365 slips"}</p></div><h2 className="mt-1 text-lg font-black">{builderMode==="discipline"?"Most likely to be carded":builderMode==="player"?"Player markets":"All markets"}</h2><p className="mt-1 text-[0.6rem] leading-relaxed text-white/40">{builderMode==="discipline"?"One live ranking based mainly on who is committing fouls and who is being fouled right now, combined with each player's normal card risk and Bet365 card price when available.":builderMode==="player"?"Only player props are considered: goals, assists, shots, shots on target, cards, fouls committed and fouls drawn.":inPlay?"Everything Bet365 currently offers can be considered, including match result, goals, BTTS, team goals, corners, bookings and verified player props.":"Everything Bet365 offers can be considered, including result, goals, BTTS, team goals, corners, bookings and all verified player props."}</p></div><span className={"rounded-full px-2 py-1 text-[0.46rem] font-black "+(data.lineupMode==="confirmed"?"bg-emerald-400/10 text-emerald-300":"bg-amber-300/10 text-amber-200")}>{data.lineupMode==="confirmed"?"XI CONFIRMED":"PREDICTED XI"}</span></div>
           <div className="mt-4 grid grid-cols-3 gap-2">
             <button onClick={()=>setBuilderMode("all")} className={"rounded-xl border px-2 py-2.5 text-[0.5rem] font-black "+(builderMode==="all"?"border-emerald-300/30 bg-emerald-300 text-emerald-950":"border-white/8 bg-white/[0.04] text-white/45")}>ALL MARKETS</button>
             <button onClick={()=>setBuilderMode("player")} className={"rounded-xl border px-2 py-2.5 text-[0.5rem] font-black "+(builderMode==="player"?"border-cyan-300/30 bg-cyan-300 text-cyan-950":"border-white/8 bg-white/[0.04] text-white/45")}>PLAYER MARKETS</button>
-            <button onClick={()=>setBuilderMode("discipline")} className={"rounded-xl border px-2 py-2.5 text-[0.5rem] font-black "+(builderMode==="discipline"?"border-amber-300/30 bg-amber-300 text-amber-950":"border-white/8 bg-white/[0.04] text-white/45")}>CARDS & FOULS</button>
+            <button onClick={()=>setBuilderMode("discipline")} className={"rounded-xl border px-2 py-2.5 text-[0.5rem] font-black "+(builderMode==="discipline"?"border-amber-300/30 bg-amber-300 text-amber-950":"border-white/8 bg-white/[0.04] text-white/45")}>CARD RISK</button>
           </div>
-          <div className="mt-4 grid gap-2 sm:grid-cols-3">{builders.length?builders.map(b=><RiskCard key={b.id} build={b} liveBet365={liveBet365} inPlay={inPlay} onTrack={()=>trackBuild(b)} onUse={()=>useBuild(b)} fixture={fixture}/>):<div className="sm:col-span-3 rounded-2xl border border-white/8 bg-black/20 p-4 text-center"><p className="text-xs font-black text-white/55">No verified Bet365 target slip available yet</p><p className="mt-1 text-[0.5rem] text-white/25">{builderMode==="discipline"
-  ?"Bet365 has not priced enough qualifying card/foul legs to build this target safely."
-  :builderMode==="player"
-    ?"Bet365 has not priced enough verified player-prop legs to build this target safely."
-    :"Bet365 has not priced enough verified BTTS + player-prop markets to build this target safely."}</p></div>}</div>
+          {builderMode==="discipline"
+            ?<CardRiskPanel rows={cardRiskRows} fixture={fixture} live={live} liveBet365={liveBet365}/>
+            :<div className="mt-4 grid gap-2 sm:grid-cols-3">{builders.length?builders.map(b=><RiskCard key={b.id} build={b} liveBet365={liveBet365} inPlay={inPlay} onTrack={()=>trackBuild(b)} onUse={()=>useBuild(b)} fixture={fixture}/>):<div className="sm:col-span-3 rounded-2xl border border-white/8 bg-black/20 p-4 text-center"><p className="text-xs font-black text-white/55">No target slip available yet</p><p className="mt-1 text-[0.5rem] text-white/25">{builderMode==="player"
+              ?"Not enough qualifying player-prop legs reach this target yet."
+              :"Not enough qualifying markets reach this target yet."}</p></div>}</div>}
         </section>
 
-        <section className="space-y-3">
+        {builderMode!=="discipline"?<section className="space-y-3">
           <div className="px-1"><p className="font-black">Add your own selections</p><p className="mt-1 text-[0.6rem] text-white/35">{inPlay?"Model probabilities are shown for analysis, but you can only add a player line when that exact market has a fresh verified Bet365 live price.":"Choose the market, then tap the player line you want. The strongest probabilities are shown first and your slip updates at the bottom."}</p></div>
           <div className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none]"><div className="flex min-w-max gap-2 pb-1">{categories.map(x=><button key={x.id} onClick={()=>setCategory(x.id)} className={"rounded-full border px-3.5 py-2.5 text-xs font-black "+(category===x.id?"border-emerald-300/30 bg-emerald-300 text-emerald-950":"border-white/8 bg-white/[0.04] text-white/50")}>{x.label}</button>)}</div></div>
 
@@ -1337,7 +1349,7 @@ export default function BetBuilderPage(){
             <div className="border-b border-white/8 px-3 py-2"><div className="flex items-center justify-between gap-3"><p className="text-[0.48rem] font-black uppercase text-white/25">Most likely first</p><p className="text-[0.48rem] font-black uppercase text-white/25">{visible.length} options</p></div><div className="mt-1.5 flex gap-2 text-[0.4rem] font-black uppercase"><span className="text-emerald-300">● High</span><span className="text-amber-200">● Average</span><span className="text-rose-200/80">● Low</span><span className="text-white/20">relative to this market</span></div></div>
             <div>{visible.length?visible.map((row,i)=><SelectionRow key={row.id} row={row} selected={Boolean(selected[row.id])} onToggle={()=>toggle(row)} rank={i+1} traffic={trafficFor(row,allRows)} bestAction={category==="popular"} liveBet365={liveBet365} marketStatus={bet365MarketStatus(row.market)} inPlay={inPlay} fixture={fixture}/>):<p className="px-4 py-8 text-center text-sm text-white/35">No qualifying selections in this market.</p>}</div>
           </div>
-        </section>
+        </section>:null}
 
         {data.snapshotFallback?<section className="rounded-2xl border border-violet-300/15 bg-violet-400/[0.04] p-3 text-[0.58rem] leading-relaxed text-white/40">Snapshot fallback is active. Probabilities are still ranked, but no price is displayed unless a verified Bet365 price is available.</section>:null}
       </>:null}
@@ -1439,6 +1451,27 @@ function H2HStatCell({value,emphasis}:{value:number;emphasis:"amber"|"cyan"|"eme
 }
 function H2HTeamTotals({label,x}:{label:string;x:{yellow:number;red:number;fouls:number;shots:number;sot:number}}){
   return <div className="rounded-2xl bg-white/[0.045] p-3"><p className="truncate text-[0.5rem] font-black text-white/40">{label}</p><div className="mt-2 grid grid-cols-4 gap-1 text-center"><div><p className="font-mono text-sm font-black">{x.fouls}</p><p className="text-[0.38rem] uppercase text-white/20">Fouls</p></div><div><p className="font-mono text-sm font-black">{x.shots}</p><p className="text-[0.38rem] uppercase text-white/20">Shots</p></div><div><p className="font-mono text-sm font-black">{x.sot}</p><p className="text-[0.38rem] uppercase text-white/20">SOT</p></div><div><p className="font-mono text-sm font-black text-amber-100">{x.yellow}</p><p className="text-[0.38rem] uppercase text-white/20">YC</p></div></div></div>
+}
+
+function CardRiskPanel({rows,fixture,live,liveBet365}:{rows:Selection[];fixture:Fixture;live:LiveData|null;liveBet365:boolean}){
+  return <div className="mt-4 overflow-hidden rounded-2xl border border-amber-300/14 bg-black/20">
+    <div className="border-b border-white/7 px-3 py-3">
+      <div className="flex items-center justify-between gap-3"><div><p className="text-xs font-black text-amber-100">Live card risk</p><p className="mt-1 text-[0.48rem] text-white/30">Ranked from fouls committed + fouls drawn in this game, then normal card history and Bet365 card price.</p></div>{live?<span className="rounded-full bg-rose-300/10 px-2 py-1 text-[0.42rem] font-black text-rose-200">{live.elapsed}' LIVE</span>:null}</div>
+    </div>
+    {rows.length?rows.map((row,i)=><div key={row.id} className={"grid grid-cols-[auto_1fr_auto] items-center gap-3 px-3 py-3 "+(i?"border-t border-white/[0.055]":"")}>
+      <span className={"flex size-8 items-center justify-center rounded-full font-mono text-xs font-black "+(i===0?"bg-amber-300 text-amber-950":"bg-white/6 text-white/45")}>{i+1}</span>
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-1.5"><p className="truncate text-sm font-black">{row.player}</p><TeamBadge team={row.team} fixture={fixture}/></div>
+        <div className="mt-1 flex flex-wrap gap-1.5">
+          <span className="rounded-full bg-rose-300/10 px-2 py-0.5 text-[0.42rem] font-black text-rose-100">FOULS {Number(row.liveFoulsCommitted??0)}</span>
+          <span className="rounded-full bg-cyan-300/10 px-2 py-0.5 text-[0.42rem] font-black text-cyan-100">FOULED {Number(row.liveFoulsDrawn??0)}</span>
+          {row.referenceBookmakerOdds?<span className="rounded-full bg-emerald-300/10 px-2 py-0.5 text-[0.42rem] font-black text-emerald-100">{row.referenceOddsLive?"BET365 LIVE ":"LAST BET365 "}{Number(row.referenceBookmakerOdds).toFixed(2)}</span>:null}
+        </div>
+      </div>
+      <div className="text-right"><p className="font-mono text-lg font-black text-amber-100">{percent(row.probability)}</p><p className="text-[0.4rem] font-black uppercase text-white/25">card chance</p></div>
+    </div>):<p className="px-4 py-8 text-center text-sm text-white/35">No unbooked card candidates available right now.</p>}
+    <div className="border-t border-white/7 px-3 py-2 text-[0.43rem] leading-relaxed text-white/25">Players already booked or substituted off are removed. {liveBet365?"Fresh Bet365 card prices are included in the ranking.":"If Bet365's live board drops, the last captured card price is only a light reference; the live foul counts continue updating."}</div>
+  </div>
 }
 
 function RiskCard({build,onUse,onTrack,liveBet365=false,inPlay=false,fixture}:{build:RiskBuilder;onUse:()=>void;onTrack:()=>void;liveBet365?:boolean;inPlay?:boolean;fixture:Fixture}){
