@@ -56,6 +56,10 @@ type Scorecard={
   availableBets?:Array<{
     market:string;kind:string;label:string;odd:number;bookmaker:string;
     probability:number|null;probabilityBasis:"no-vig"|"implied";line?:number|null;side?:string|null
+  }>;
+  oddsSelections?:Array<{
+    market:string;kind:string;label:string;odd:number|null;underOdd?:number|null;
+    noVigProbability?:number|null;bookmaker?:string|null
   }>
 }
 type Recommendation={
@@ -418,7 +422,8 @@ type MultiMatchBuild={
 }
 type YellowCardWatchRow={
   fixtureId:string;competition:Competition;kickoff:string;home:string;away:string;
-  player:string;team:string;probability:number;bookmakerOdds:number;confidence:SlipLeg["confidence"];reason:string
+  player:string;team:string;probability:number;bookmakerOdds:number;confidence:SlipLeg["confidence"];reason:string;
+  probabilityBasis:"model"|"bet365-implied"
 }
 function fullPlayerMarketSet(status:Scorecard["marketAvailability"]){
   return ["card","foul","fouled","shot","sot"].every(key=>(status as any)?.[key]==="available")
@@ -509,9 +514,12 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
 function buildYellowCardWatchFromScans(scans:FixtureScan[]):YellowCardWatchRow[]{
   const rows:YellowCardWatchRow[]=[]
   const seen=new Set<string>()
+
   for(const scan of scans){
     const scorecard=scan.scorecard
     if(!scorecard?.ok||scorecard.marketAvailability?.card!=="available")continue
+
+    // Prefer Match Edge model probabilities when a current player row exists.
     for(const player of scorecard.players??[]){
       const market=player.markets?.card
       if(!market||market.bookmakerName!=="Bet365"||market.bookmakerOdds==null||Number(market.bookmakerOdds)<=1||market.confidence==="D")continue
@@ -524,10 +532,37 @@ function buildYellowCardWatchFromScans(scans:FixtureScan[]):YellowCardWatchRow[]
         player:player.name,team:player.team,probability:Number(market.probability),
         bookmakerOdds:Number(market.bookmakerOdds),confidence:market.confidence,
         reason:(market.reasons??[]).join(" · ")||"Verified Bet365 player-card market",
+        probabilityBasis:"model",
+      })
+    }
+
+    // If lineups/model rows are not ready yet, keep the Yellow Card Watch visible
+    // using the actual Bet365 card board. This is bookmaker-implied only, not a
+    // Match Edge player prediction.
+    for(const selection of scorecard.oddsSelections??[]){
+      if(selection.kind!=="card"||selection.bookmaker!=="Bet365"||selection.odd==null||Number(selection.odd)<=1)continue
+      const player=String(selection.label??"").split("·")[0]?.trim()
+      if(!player)continue
+      const key=scan.fixture.id+"|"+normName(player)
+      if(seen.has(key))continue
+      seen.add(key)
+      const implied=Math.max(.01,Math.min(.99,1/Number(selection.odd)))
+      rows.push({
+        fixtureId:scan.fixture.id,competition:scan.fixture.competition,kickoff:scan.fixture.kickoff,
+        home:scan.fixture.home.name,away:scan.fixture.away.name,
+        player,team:"",probability:implied,bookmakerOdds:Number(selection.odd),confidence:"C",
+        reason:"Verified Bet365 Player to be Booked price. Match Edge model probability will replace this bookmaker-implied figure when the current player/lineup model is ready.",
+        probabilityBasis:"bet365-implied",
       })
     }
   }
-  return rows.sort((a,b)=>b.probability-a.probability).slice(0,16)
+
+  return rows
+    .sort((a,b)=>{
+      if(a.probabilityBasis!==b.probabilityBasis)return a.probabilityBasis==="model"?-1:1
+      return b.probability-a.probability
+    })
+    .slice(0,16)
 }
 
 const LIVE_PROP_MARKETS=["card","foul1","fouled1","shot1","sot1"] as const
