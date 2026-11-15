@@ -67,7 +67,7 @@ type RiskBuilder={
   id:string;title:string;risk:"Safe"|"Balanced"|"High Risk";targetFractional:string;targetDecimal:number;
   legs:Selection[];referenceProductOdds:number|null;averageLegProbability:number|null;minimumLegProbability:number|null;
   modelAllHitProbability:number|null;conservativeAllHitProbability?:number|null;safetyScore?:number|null;exactPriced:boolean;bookmaker:string|null;
-  verifiedBet365LegPrices?:boolean;exactBet365BuilderPrice?:boolean;pricingBasis?:"bet365_singles_product"|"none";note:string
+  verifiedBet365LegPrices?:boolean;referenceBet365LegPrices?:boolean;exactBet365BuilderPrice?:boolean;pricingBasis?:"bet365_singles_product"|"bet365_reference_product"|"none";note:string
 }
 type FallbackSlip={id:string;title:string;risk:string;legs:Selection[];averageLegProbability:number|null;note?:string}
 type TrackDraft={title:string;fixture:string;legs:Selection[];modelProbability:number|null;suggestedProduct:number|null}
@@ -678,13 +678,13 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
     return Math.max(0,Math.min(.99,raw*reliability*concentration*Math.pow(.985,Math.max(0,legs.length-2))))
   }
 
-  function buildOne(cfg:(typeof configs)[number],verifiedOnly:boolean):RiskBuilder{
+  function buildOne(cfg:(typeof configs)[number],verifiedOnly:boolean,referenceOnly=false):RiskBuilder{
     const preferred=new Map<string,{family:string;score:number}>()
     const playerNames=[...new Set(rows.map(r=>normPlayer(r.player)))]
     for(const player of playerNames){
       const options=rows.filter(r=>
         normPlayer(r.player)===player&&baseMarket(r.market)&&
-        (verifiedOnly?verifiedBet365Odd(r)!=null:Number(r.fairOdds??0)>1)
+        (verifiedOnly?verifiedBet365Odd(r)!=null:referenceOnly?displayedBet365Odd(r)!=null:Number(r.fairOdds??0)>1)
       ).map(r=>{
         const t=trafficFor(r,rows)
         const trafficScore=t==="high"?1:t==="average"?.58:.18
@@ -696,7 +696,7 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
     }
 
     const allCandidateRows=rows
-      .filter(r=>(verifiedOnly?verifiedBet365Odd(r)!=null:Number(r.fairOdds??0)>1))
+      .filter(r=>(verifiedOnly?verifiedBet365Odd(r)!=null:referenceOnly?displayedBet365Odd(r)!=null:Number(r.fairOdds??0)>1))
       .filter(r=>r.market!=="card"||Number(r.recommendationScore??r.probability)>=.145)
       .map(r=>({row:r,family:family(r.market),signal:preferred.get(normPlayer(r.player))?.score??0}))
       .sort((a,b)=>{
@@ -745,7 +745,11 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
             const teamKey=teamNorm(option.row.team)
             const teamCount=state.teamCounts[teamKey]??0
             if(teamCount>=6)continue
-            const odd=verifiedOnly?referenceOdd(option.row):Number(option.row.fairOdds??0)
+            const odd=verifiedOnly
+              ?referenceOdd(option.row)
+              :referenceOnly
+                ?Number(displayedBet365Odd(option.row)?.odd??0)
+                :Number(option.row.fairOdds??0)
             if(!(odd>1))continue
             const product=state.product*odd
             if(product>maxProduct)continue
@@ -799,7 +803,7 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
       legs:[],referenceProductOdds:null,averageLegProbability:null,minimumLegProbability:null,
       modelAllHitProbability:null,conservativeAllHitProbability:null,safetyScore:null,
       exactPriced:false,bookmaker:null,verifiedBet365LegPrices:false,exactBet365BuilderPrice:false,pricingBasis:"none" as const,
-      note:verifiedOnly?"No combination of verified Bet365 prices reaches this target yet.":"No model combination reaches this target yet."
+      note:verifiedOnly?"No combination of fresh Bet365 prices reaches this target yet.":referenceOnly?"No combination of captured Bet365 player prices reaches this target yet.":"No model combination reaches this target yet."
     }
 
     return {
@@ -808,12 +812,14 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
       averageLegProbability:best.legs.reduce((s,x)=>s+x.probability,0)/best.legs.length,
       minimumLegProbability:Math.min(...best.legs.map(x=>x.probability)),
       modelAllHitProbability:best.prob,conservativeAllHitProbability:best.conservative,safetyScore:best.conservative,
-      exactPriced:verifiedOnly,bookmaker:verifiedOnly?"Bet365":null,
-      verifiedBet365LegPrices:verifiedOnly,exactBet365BuilderPrice:false,
-      pricingBasis:verifiedOnly?"bet365_singles_product" as const:"none" as const,
+      exactPriced:verifiedOnly,bookmaker:(verifiedOnly||referenceOnly)?"Bet365":null,
+      verifiedBet365LegPrices:verifiedOnly,referenceBet365LegPrices:referenceOnly,exactBet365BuilderPrice:false,
+      pricingBasis:verifiedOnly?"bet365_singles_product" as const:referenceOnly?"bet365_reference_product" as const:"none" as const,
       note:verifiedOnly
-        ?"Every leg uses a verified Bet365 price. The displayed combined number is the product of those Bet365 singles; Bet365 can reprice correlated legs in Bet Builder, so it is not claimed as the final Builder quote."
-        :"Model-target route only. The displayed product is derived from model fair odds, not a Bet365 price. Check the actual live Bet365 markets before placing."
+        ?"Every leg uses a fresh verified Bet365 price. The displayed combined number is the product of those Bet365 singles; Bet365 can reprice correlated legs in Bet Builder, so it is not claimed as the final Builder quote."
+        :referenceOnly
+          ?"Every leg uses the last captured Bet365 price for that exact player line. This keeps the target grounded in Bet365 rather than model fair odds, but these prices are references until Bet365 returns a fresh live board."
+          :"Model-target route only. The displayed product is derived from model fair odds, not a Bet365 price. Check the actual live Bet365 markets before placing."
     }
   }
 
@@ -869,17 +875,20 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
   }
 
   return configs.map(cfg=>{
-    const verified=buildOne(cfg,true)
+    const verified=buildOne(cfg,true,false)
     if(verified.legs.length)return verified
 
+    const reference=buildOne(cfg,false,true)
+    if(reference.legs.length)return reference
+
     // Bet365 pricing is an overlay, not an eligibility gate for the model.
-    // If the live player board disappears, keep ranking the remaining events from
-    // our model + current match state and clearly mark the route as model-only.
-    const model=buildOne(cfg,false)
+    // If neither fresh nor retained Bet365 prices cover enough legs, keep ranking
+    // the remaining events from our model + current match state.
+    const model=buildOne(cfg,false,false)
     if(model.legs.length)return {
       ...model,
       note:strictVerifiedLive
-        ?"Live model route using the current match state. Bet365 has not returned enough fresh player prices for this target, so these are model fair odds only until the next successful Bet365 refresh."
+        ?"Live model route using the current match state. Bet365 has not returned enough fresh or retained player prices for this target, so these are model fair odds only until the next successful Bet365 refresh."
         :model.note,
     }
     const guaranteed=guaranteedModelTarget(cfg)
@@ -1495,10 +1504,11 @@ function RiskCard({build,onUse,onTrack,liveBet365=false,inPlay=false,fixture}:{b
   const tone=build.risk==="Safe"?"border-emerald-300/18 bg-emerald-400/[0.06]":build.risk==="Balanced"?"border-amber-300/18 bg-amber-300/[0.05]":"border-rose-300/18 bg-rose-400/[0.05]"
   const accent=build.risk==="Safe"?"text-emerald-300":build.risk==="Balanced"?"text-amber-300":"text-rose-300"
   const verified=build.verifiedBet365LegPrices===true
-  const modelOnly=inPlay&&!verified
+  const referenceBet365=build.referenceBet365LegPrices===true
+  const modelOnly=inPlay&&!verified&&!referenceBet365
   return <article className={"rounded-2xl border p-3 "+tone}>
     <div className="flex items-start justify-between gap-2"><div><p className={"text-[0.5rem] font-black uppercase "+accent}>{build.id.startsWith("discipline-")?"FOULS & CARDS · ":""}{build.risk==="High Risk"?"Risky":build.risk}</p><p className="mt-1 text-lg font-black">{build.targetFractional}</p></div><ShieldCheck className={"size-4 "+accent}/></div>
-    {build.legs.length?<><div className="mt-2 flex flex-wrap items-center gap-1.5"><span className={"rounded-full px-2 py-1 text-[0.38rem] font-black "+(verified?(liveBet365?"bg-emerald-300/15 text-emerald-200":"bg-cyan-300/10 text-cyan-100"):"bg-amber-300/10 text-amber-100")}>{verified?(liveBet365?"LIVE BET365 LEGS":"VERIFIED BET365 LEGS"):(inPlay?"LIVE MODEL ROUTE":"MODEL ANALYSIS ONLY")}</span><span className="text-[0.38rem] text-white/25">{verified?"final Bet Builder quote may differ":modelOnly?"Bet365 price unavailable · model still updating from live events":"not an actionable Bet365 bet"}</span></div><div className="mt-2 grid grid-cols-3 gap-1.5"><MiniStat label="Raw chance" value={percent(build.modelAllHitProbability,1)}/><MiniStat label="Safety chance" value={percent(build.conservativeAllHitProbability??build.modelAllHitProbability,1)}/><MiniStat label={verified?"Bet365 leg product":"Model fair product"} value={fractionalOdds(build.referenceProductOdds)}/></div><div className="mt-2 space-y-1.5">{build.legs.map(l=><div key={keyOf(l)} className="flex items-center justify-between gap-2 rounded-lg bg-black/15 px-2 py-1.5"><div className="min-w-0 flex flex-1 items-center gap-1.5"><p className="min-w-0 truncate text-[0.5rem] text-white/65">{l.player} · {l.label}</p><TeamBadge team={l.team} fixture={fixture}/></div><div className="shrink-0 text-right"><p className="font-mono text-[0.48rem] font-black text-white/55">{percent(l.probability)}</p><p className="text-[0.34rem] font-black text-white/20">{l.market==="card"&&l.liveAdjusted
+    {build.legs.length?<><div className="mt-2 flex flex-wrap items-center gap-1.5"><span className={"rounded-full px-2 py-1 text-[0.38rem] font-black "+(verified?(liveBet365?"bg-emerald-300/15 text-emerald-200":"bg-cyan-300/10 text-cyan-100"):"bg-amber-300/10 text-amber-100")}>{verified?(liveBet365?"LIVE BET365 LEGS":"VERIFIED BET365 LEGS"):referenceBet365?"BET365 REFERENCE LEGS":(inPlay?"LIVE MODEL ROUTE":"MODEL ANALYSIS ONLY")}</span><span className="text-[0.38rem] text-white/25">{verified?"final Bet Builder quote may differ":referenceBet365?"last captured Bet365 singles · not current live quotes":modelOnly?"Bet365 price unavailable · model still updating from live events":"not an actionable Bet365 bet"}</span></div><div className="mt-2 grid grid-cols-3 gap-1.5"><MiniStat label="Raw chance" value={percent(build.modelAllHitProbability,1)}/><MiniStat label="Safety chance" value={percent(build.conservativeAllHitProbability??build.modelAllHitProbability,1)}/><MiniStat label={verified?"Bet365 leg product":referenceBet365?"Bet365 ref product":"Model fair product"} value={fractionalOdds(build.referenceProductOdds)}/></div><div className="mt-2 space-y-1.5">{build.legs.map(l=><div key={keyOf(l)} className="flex items-center justify-between gap-2 rounded-lg bg-black/15 px-2 py-1.5"><div className="min-w-0 flex flex-1 items-center gap-1.5"><p className="min-w-0 truncate text-[0.5rem] text-white/65">{l.player} · {l.label}</p><TeamBadge team={l.team} fixture={fixture}/></div><div className="shrink-0 text-right"><p className="font-mono text-[0.48rem] font-black text-white/55">{percent(l.probability)}</p><p className="text-[0.34rem] font-black text-white/20">{l.market==="card"&&l.liveAdjusted
   ?("FC "+Number(l.liveFoulsCommitted??0)+" · FD "+Number(l.liveFoulsDrawn??0)+(l.referenceBookmakerOdds?" · B365 "+Number(l.referenceBookmakerOdds).toFixed(2):""))
   :l.market.startsWith("foul")&&l.liveAdjusted
     ?("FC "+Number(l.liveFoulsCommitted??0)+(l.referenceBookmakerOdds?" · B365 "+Number(l.referenceBookmakerOdds).toFixed(2):""))
@@ -1506,7 +1516,7 @@ function RiskCard({build,onUse,onTrack,liveBet365=false,inPlay=false,fixture}:{b
       ?("FD "+Number(l.liveFoulsDrawn??0)+(l.referenceBookmakerOdds?" · B365 "+Number(l.referenceBookmakerOdds).toFixed(2):""))
       :l.market.startsWith("shot")||l.market.startsWith("sot")
         ?("SH "+Number(l.liveShots??0)+" · SOT "+Number(l.liveShotsOnTarget??0))
-        :l.currentCount!=null?"LIVE "+l.currentCount+" RECORDED":verified&&l.bookmakerOdds?"BET365 "+Number(l.bookmakerOdds).toFixed(2):"MODEL"}</p></div></div>)}</div>{modelOnly?<div className="mt-2 rounded-xl border border-amber-300/12 bg-amber-300/[0.04] px-2.5 py-2"><p className="text-[0.45rem] leading-relaxed text-amber-100/75">These are the most likely remaining player events from the current match state. The target is based on model fair odds until Bet365 returns a fresh live player board.</p></div>:null}<div className="mt-3 grid grid-cols-2 gap-2"><button onClick={onUse} className="rounded-xl bg-white/8 px-3 py-2 text-[0.54rem] font-black text-white/55">{verified?"Use selections":"View selections"}</button><button disabled={!verified} onClick={verified?onTrack:undefined} className={"rounded-xl px-3 py-2 text-[0.58rem] font-black "+(verified?"bg-white text-[#07120e]":"cursor-not-allowed bg-white/8 text-white/25")}>{verified?"Track this bet":"Awaiting Bet365 price"}</button></div></>:<div className="mt-2 rounded-xl border border-rose-300/12 bg-rose-300/[0.045] px-3 py-2"><p className="text-[0.54rem] font-black text-rose-200">{build.note||"No strong route available yet."}</p></div>}
+        :l.currentCount!=null?"LIVE "+l.currentCount+" RECORDED":verified&&l.bookmakerOdds?"BET365 "+Number(l.bookmakerOdds).toFixed(2):"MODEL"}</p></div></div>)}</div>{modelOnly?<div className="mt-2 rounded-xl border border-amber-300/12 bg-amber-300/[0.04] px-2.5 py-2"><p className="text-[0.45rem] leading-relaxed text-amber-100/75">These are the most likely remaining player events from the current match state. The target is based on model fair odds until Bet365 returns a fresh live player board.</p></div>:null}<div className="mt-3 grid grid-cols-2 gap-2"><button onClick={onUse} className="rounded-xl bg-white/8 px-3 py-2 text-[0.54rem] font-black text-white/55">{verified?"Use selections":referenceBet365?"View Bet365 refs":"View selections"}</button><button disabled={!verified} onClick={verified?onTrack:undefined} className={"rounded-xl px-3 py-2 text-[0.58rem] font-black "+(verified?"bg-white text-[#07120e]":"cursor-not-allowed bg-white/8 text-white/25")}>{verified?"Track this bet":referenceBet365?"Bet365 refs only":"Awaiting Bet365 price"}</button></div></>:<div className="mt-2 rounded-xl border border-rose-300/12 bg-rose-300/[0.045] px-3 py-2"><p className="text-[0.54rem] font-black text-rose-200">{build.note||"No strong route available yet."}</p></div>}
   </article>
 }
 function TrackBetModal({draft,fixture,onClose,onSaved}:{draft:TrackDraft;fixture:Fixture;onClose:()=>void;onSaved:()=>void}){
