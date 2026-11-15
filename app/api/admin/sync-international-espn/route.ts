@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { and, eq, gte } from "drizzle-orm"
+import { and, gte, inArray } from "drizzle-orm"
 import { db, isDatabaseConfigured } from "@/lib/db"
 import { ensureResearchSchema } from "@/lib/db/ensure-research-schema"
 import { playerH2H } from "@/lib/db/schema"
@@ -10,7 +10,20 @@ export const maxDuration = 60
 
 const ESPN_ROOT = "https://site.api.espn.com/apis/site/v2/sports/soccer"
 const FORM_START = "2026-01-01"
-const SLUGS = ["uefa.euro","uefa.nations","fifa.friendly","fifa.world","fifa.worldq.uefa","fifa.worldq.conmebol","fifa.worldq.concacaf","fifa.worldq.afc","fifa.worldq.caf"]
+const COMPETITIONS = [
+  {slug:"uefa.euro",label:"UEFA European Championship"},
+  {slug:"uefa.euroq",label:"UEFA European Championship Qualifying"},
+  {slug:"uefa.nations",label:"UEFA Nations League"},
+  {slug:"fifa.world",label:"FIFA World Cup"},
+  {slug:"fifa.worldq.uefa",label:"FIFA World Cup Qualifying - UEFA"},
+  {slug:"fifa.worldq.conmebol",label:"FIFA World Cup Qualifying - CONMEBOL"},
+  {slug:"fifa.worldq.concacaf",label:"FIFA World Cup Qualifying - CONCACAF"},
+  {slug:"fifa.worldq.afc",label:"FIFA World Cup Qualifying - AFC"},
+  {slug:"fifa.worldq.caf",label:"FIFA World Cup Qualifying - CAF"},
+  {slug:"fifa.worldq.ofc",label:"FIFA World Cup Qualifying - OFC"},
+  {slug:"fifa.friendly",label:"International Friendly"},
+] as const
+const INTERNATIONAL_LABELS=["International",...COMPETITIONS.map(c=>c.label)]
 
 function n(value:unknown){const v=Number(value??0);return Number.isFinite(v)?v:0}
 function stat(row:any,name:string){const found=(row?.stats??[]).find((s:any)=>s?.name===name);return n(found?.value??found?.displayValue)}
@@ -48,7 +61,8 @@ function minuteMap(summary:any){
 }
 async function completedEvents(){
   const byId=new Map<string,any>()
-  for(const slug of SLUGS){
+  for(const competition of COMPETITIONS){
+    const slug=competition.slug
     for(const month of months()){
       try{
         const data=await espn(slug,`scoreboard?dates=${month}&limit=500`)
@@ -56,7 +70,7 @@ async function completedEvents(){
           const id=String(event?.id??""),date=String(event?.date??"").slice(0,10)
           const complete=event?.status?.type?.completed===true||String(event?.status?.type?.state??"")==="post"
           if(!id||!complete||date<FORM_START||date>new Date().toISOString().slice(0,10))continue
-          byId.set(`${slug}:${id}`,{...event,__slug:slug})
+          byId.set(`${slug}:${id}`,{...event,__slug:slug,__competition:competition.label})
         }
       }catch{}
     }
@@ -72,10 +86,10 @@ export async function GET(request:Request){
   const limit=Math.max(1,Math.min(12,Number(url.searchParams.get("limit")??"8")||8))
   try{
     const all=await completedEvents()
-    if(offset===0)await db.delete(playerH2H).where(and(eq(playerH2H.competition,"International"),gte(playerH2H.matchDate,FORM_START)))
+    if(offset===0)await db.delete(playerH2H).where(and(inArray(playerH2H.competition,INTERNATIONAL_LABELS),gte(playerH2H.matchDate,FORM_START)))
     const selected=all.slice(offset,offset+limit)
     const results=await Promise.all(selected.map(async(event:any)=>{
-      const id=String(event?.id??""),slug=String(event?.__slug??"fifa.friendly")
+      const id=String(event?.id??""),slug=String(event?.__slug??"fifa.friendly"),competitionLabel=String(event?.__competition??"International Friendly")
       const summary=await espn(slug,`summary?event=${id}`)
       const comp=summary?.header?.competitions?.[0]??event?.competitions?.[0]??{}
       const competitors=comp?.competitors??[]
@@ -96,7 +110,7 @@ export async function GET(request:Request){
           const appeared=row?.starter===true||minutes>0||foulsCommitted>0||foulsDrawn>0||shots>0||shotsOnTarget>0||yellowCards>0||redCards>0||goals>0||assists>0
           if(!appeared)continue
           rows.push({
-            playerName:name,team,opponent,matchDate:date,competition:"International",venue:team===home?"Home":"Away",
+            playerName:name,team,opponent,matchDate:date,competition:competitionLabel,venue:team===home?"Home":"Away",
             position:row?.position?.abbreviation??row?.position?.displayName??row?.athlete?.position?.abbreviation??null,
             starter:row?.starter===true,minutes,
             foulsCommitted,foulsDrawn,shots,shotsOnTarget,
@@ -105,12 +119,12 @@ export async function GET(request:Request){
           })
         }
       }
-      return{id:`${slug}:${id}`,slug,date,home,away,rows}
+      return{id:`${slug}:${id}`,slug,competition:competitionLabel,date,home,away,rows}
     }))
     let rowCount=0
     for(const match of results)for(let i=0;i<match.rows.length;i+=250){const rows=match.rows.slice(i,i+250);if(rows.length){rowCount+=rows.length;await db.insert(playerH2H).values(rows).onConflictDoNothing()}}
     const nextOffset=offset+selected.length
-    return NextResponse.json({ok:true,competition:"International",from:FORM_START,totalFixtures:all.length,offset,processedFixtures:selected.length,playerMatchRowsSeen:rowCount,matches:results.map(x=>({id:x.id,date:x.date,home:x.home,away:x.away,players:x.rows.length})),nextOffset,done:nextOffset>=all.length,refreshedAt:new Date().toISOString()})
+    return NextResponse.json({ok:true,competition:"International",competitionLabels:COMPETITIONS.map(c=>c.label),from:FORM_START,totalFixtures:all.length,offset,processedFixtures:selected.length,playerMatchRowsSeen:rowCount,matches:results.map(x=>({id:x.id,competition:x.competition,date:x.date,home:x.home,away:x.away,players:x.rows.length})),nextOffset,done:nextOffset>=all.length,refreshedAt:new Date().toISOString()})
   }catch(error){
     return NextResponse.json({ok:false,error:error instanceof Error?error.message:"International sync failed"},{status:502})
   }
