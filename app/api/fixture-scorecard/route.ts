@@ -1645,6 +1645,20 @@ async function buildVerifiedBet365SnapshotFallback(input:{request:Request;date:s
   }
 }
 
+function scorecardJson(payload:any,builderView:boolean,status=200){
+  if(!builderView)return NextResponse.json(payload,{status})
+  const compact=compactBuilderScorecard(payload)
+  return NextResponse.json(compact,{
+    status,
+    headers:{
+      // The scorecard is the pre-match/confirmed-XI baseline. Live match events
+      // are fetched separately and applied client-side, so this can be cached.
+      "Cache-Control":"public, max-age=0, s-maxage=21600, stale-while-revalidate=86400",
+      "Vercel-CDN-Cache-Control":"public, s-maxage=21600, stale-while-revalidate=86400",
+    },
+  })
+}
+
 function compactBuilderScorecard(payload:any){
   if(!payload?.ok)return payload
   const compactMarkets=(markets:any)=>{
@@ -1688,7 +1702,7 @@ export async function GET(request: Request) {
   if (!date || !home || !away) return NextResponse.json({ ok: false, error: "Invalid fixture parameters" }, { status: 400 })
   if (!isDatabaseConfigured) {
     try {
-      { const fallback=await buildVerifiedBet365SnapshotFallback({request,date,home,away,competition}); return NextResponse.json(builderView?compactBuilderScorecard(fallback):fallback) }
+      { const fallback=await buildVerifiedBet365SnapshotFallback({request,date,home,away,competition}); return scorecardJson(fallback,builderView) }
     } catch {
       return NextResponse.json({ ok: false, error: "Database not connected and snapshot fallback unavailable" }, { status: 503 })
     }
@@ -1698,7 +1712,7 @@ export async function GET(request: Request) {
     await ensureResearchSchema()
   } catch (error) {
     try {
-      { const fallback=await buildVerifiedBet365SnapshotFallback({request,date,home,away,competition}); return NextResponse.json(builderView?compactBuilderScorecard(fallback):fallback) }
+      { const fallback=await buildVerifiedBet365SnapshotFallback({request,date,home,away,competition}); return scorecardJson(fallback,builderView) }
     } catch {
       return NextResponse.json({
         ok:false,
@@ -1713,7 +1727,7 @@ export async function GET(request: Request) {
     radarResponse = await radarGET(request)
   } catch (error) {
     try {
-      { const fallback=await buildVerifiedBet365SnapshotFallback({request,date,home,away,competition}); return NextResponse.json(builderView?compactBuilderScorecard(fallback):fallback) }
+      { const fallback=await buildVerifiedBet365SnapshotFallback({request,date,home,away,competition}); return scorecardJson(fallback,builderView) }
     } catch {
       return NextResponse.json({
         ok:false,
@@ -1734,10 +1748,10 @@ export async function GET(request: Request) {
     try{
       const expanded:any=await buildVerifiedBet365SnapshotFallback({request,date,home,away,competition})
       if(expanded?.lineupsConfirmed===true&&Number(expanded?.playerCount??0)>candidates.length){
-        return NextResponse.json({
+        return scorecardJson({
           ...expanded,
           fallbackReason:"Confirmed international XI coverage expanded with the national-team snapshot; verified Bet365 prices remain the only bookmaker prices shown.",
-        })
+        },builderView)
       }
     }catch{}
   }
@@ -1845,7 +1859,7 @@ export async function GET(request: Request) {
           }
         }
         const verifiedRiskBuilders=buildRiskBuilders(fallbackPlayers as ScorePlayer[])
-        return NextResponse.json({
+        return scorecardJson({
           ...fallback,
           bookmaker:odds?.bookmaker==="Bet365"?"Bet365":null,
           oddsSource:odds?.source??null,
@@ -1866,7 +1880,7 @@ export async function GET(request: Request) {
           riskBuilders:verifiedRiskBuilders,
           foulCardBuilders:buildRiskBuilders(fallbackPlayers as ScorePlayer[],"discipline"),
           fallbackReason:"Live history database is temporarily unavailable; snapshot probabilities are being combined with verified Bet365 prices.",
-        })
+        },builderView)
       } catch {
         return NextResponse.json({
           ok:false,
@@ -2458,5 +2472,5 @@ export async function GET(request: Request) {
     },
     generatedAt: new Date().toISOString(),
   }
-  return NextResponse.json(builderView?compactBuilderScorecard(payload):payload)
+  return scorecardJson(payload,builderView)
 }
