@@ -790,6 +790,42 @@ function readScorecardCache(f:Fixture):Scorecard|null{
 function writeScorecardCache(f:Fixture,data:Scorecard){
   try{if(data?.ok)window.localStorage.setItem(scorecardCacheKey(f),JSON.stringify({savedAt:new Date().toISOString(),data}))}catch{}
 }
+function liveStateKey(f:Fixture){return "match-edge:live-state:v2:"+[f.date,f.competition,f.home,f.away].join("|").toLowerCase()}
+function liveOddsStateKey(f:Fixture){return "match-edge:live-odds:v2:"+[f.date,f.competition,f.home,f.away].join("|").toLowerCase()}
+function readLiveState(f:Fixture):LiveData|null{
+  try{
+    const raw=window.localStorage.getItem(liveStateKey(f));if(!raw)return null
+    const parsed=JSON.parse(raw)
+    return parsed?.data?.ok&&Array.isArray(parsed?.data?.players)?parsed.data as LiveData:null
+  }catch{return null}
+}
+function writeLiveState(f:Fixture,data:LiveData){
+  try{
+    if(data?.ok&&Array.isArray(data.players)&&data.players.length){
+      window.localStorage.setItem(liveStateKey(f),JSON.stringify({savedAt:new Date().toISOString(),data}))
+    }
+  }catch{}
+}
+function hasUsefulBet365LiveBoard(data:LiveOddsData|null|undefined){
+  if(!data||data.bookmaker!=="Bet365")return false
+  const selections=Array.isArray(data.selections)?data.selections.filter(s=>s.bookmaker==="Bet365"&&s.odd!=null&&Number(s.odd)>1):[]
+  const available=Object.values(data.marketAvailability??{}).some(v=>v==="available")
+  return selections.length>0||available
+}
+function readLiveOddsState(f:Fixture):LiveOddsData|null{
+  try{
+    const raw=window.localStorage.getItem(liveOddsStateKey(f));if(!raw)return null
+    const parsed=JSON.parse(raw)
+    return hasUsefulBet365LiveBoard(parsed?.data)?parsed.data as LiveOddsData:null
+  }catch{return null}
+}
+function writeLiveOddsState(f:Fixture,data:LiveOddsData){
+  try{
+    if(hasUsefulBet365LiveBoard(data)){
+      window.localStorage.setItem(liveOddsStateKey(f),JSON.stringify({savedAt:new Date().toISOString(),data}))
+    }
+  }catch{}
+}
 export default function BetBuilderPage(){
   const router=useRouter()
   const[fixture,setFixture]=useState<Fixture|null>(null)
@@ -808,6 +844,13 @@ export default function BetBuilderPage(){
   const[builderMode,setBuilderMode]=useState<"all"|"player"|"discipline">("all")
 
   useEffect(()=>{setFixture(parseFixture())},[])
+  useEffect(()=>{
+    if(!fixture)return
+    const cachedLive=readLiveState(fixture)
+    const cachedOdds=readLiveOddsState(fixture)
+    if(cachedLive)setLive(cachedLive)
+    if(cachedOdds)setLiveOdds(cachedOdds)
+  },[fixture])
   const load=useCallback(async(f:Fixture,force=false)=>{
     const kickoff=new Date(f.kickoff).getTime()
     const now=Date.now()
@@ -918,11 +961,28 @@ export default function BetBuilderPage(){
     const kickoff=new Date(f.kickoff).getTime()
     const now=Date.now()
     if(Number.isFinite(kickoff)&&(now<kickoff-10*60*1000||now>kickoff+4*60*60*1000))return
-    try{const r=await fetch(liveUrl(f),{cache:"no-store"});if(r.ok)setLive(await r.json())}catch{}
+    try{
+      const r=await fetch(liveUrl(f),{cache:"no-store"})
+      if(!r.ok)return
+      const next=await r.json() as LiveData
+      if(next?.ok&&Array.isArray(next.players)&&next.players.length){
+        setLive(current=>{
+          // Never move the live match backwards because one provider returned an
+          // older snapshot. Keep the newest captured match state.
+          if(current?.ok&&current.status!=="scheduled"&&Number(current.elapsed??0)>Number(next.elapsed??0))return current
+          return next
+        })
+        writeLiveState(f,next)
+      }
+    }catch{
+      // Deliberately keep the previous successful live state.
+    }
   },[])
   useEffect(()=>{if(!fixture)return;void loadLive(fixture);const t=window.setInterval(()=>void loadLive(fixture),30000);return()=>window.clearInterval(t)},[fixture,loadLive])
   const loadLiveBaseline=useCallback(async(f:Fixture,currentLive:LiveData)=>{
     if(!(currentLive.status==="live"||currentLive.status==="halftime")||!currentLive.players?.length)return
+    const starters=currentLive.players.filter(p=>p.starter===true)
+    if(starters.length<20)return
     try{
       const r=await fetch(liveBaselineUrl(f,currentLive),{cache:"default"})
       if(!r.ok)return
@@ -941,11 +1001,21 @@ export default function BetBuilderPage(){
   const loadLiveOdds=useCallback(async(f:Fixture)=>{
     try{
       const r=await fetch(liveOddsUrl(f),{cache:"no-store"})
-      if(r.ok)setLiveOdds(await r.json())
-    }catch{}
+      if(!r.ok)return
+      const next=await r.json() as LiveOddsData
+      // Only replace the saved Bet365 board when the refresh actually captured a
+      // usable player board. A temporary empty/unavailable provider response must
+      // never wipe the last successful live prices and market availability.
+      if(hasUsefulBet365LiveBoard(next)){
+        setLiveOdds(next)
+        writeLiveOddsState(f,next)
+      }
+    }catch{
+      // Keep the last successful Bet365 live board.
+    }
   },[])
   useEffect(()=>{
-    if(!fixture||!(live?.status==="live"||live?.status==="halftime")){setLiveOdds(null);return}
+    if(!fixture||!(live?.status==="live"||live?.status==="halftime"))return
     void loadLiveOdds(fixture)
     const t=window.setInterval(()=>void loadLiveOdds(fixture),15000)
     return()=>window.clearInterval(t)
