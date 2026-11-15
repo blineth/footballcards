@@ -1,3 +1,4 @@
+import { isDatabaseConfigured, pool } from "@/lib/db"
 export type TeamStakesContext={
   team:string
   score:number
@@ -142,30 +143,76 @@ function domesticTeamContext(team:string,row:TableRow,table:TableRow[],cfg:(type
     position:row.position,points:row.points,matchesPlayed:row.played,matchesRemaining:remaining,gapToBoundary:best.gap,
   } satisfies TeamStakesContext
 }
+async function domesticTableFromDatabase(date:string,competition:string){
+  if(!isDatabaseConfigured)return [] as TableRow[]
+  try{
+    const result=await pool.query(
+      `SELECT match_date::text AS date, team, opponent, COALESCE(venue,'') AS venue,
+              SUM(COALESCE(goals,0))::int AS goals
+       FROM player_h2h
+       WHERE competition=$1 AND match_date < $2
+       GROUP BY match_date,team,opponent,venue
+       ORDER BY match_date`,
+      [competition,date],
+    )
+    const rows=(result.rows??[]).map((r:any)=>({
+      date:String(r.date??"").slice(0,10),team:String(r.team??""),opponent:String(r.opponent??""),
+      venue:String(r.venue??"").toLowerCase(),goals:Number(r.goals??0),
+    })).filter((r:any)=>r.date&&r.team&&r.opponent&&Number.isFinite(r.goals))
+    const reverse=new Map<string,any>()
+    for(const r of rows)reverse.set([r.date,canonicalTeam(r.team),canonicalTeam(r.opponent)].join("|"),r)
+    const teams=new Map<string,{team:string;played:number;points:number;gf:number;ga:number}>()
+    const ensure=(team:string)=>{const k=canonicalTeam(team);if(!teams.has(k))teams.set(k,{team,played:0,points:0,gf:0,ga:0});return teams.get(k)!}
+    const seen=new Set<string>()
+    for(const r of rows){
+      const other=reverse.get([r.date,canonicalTeam(r.opponent),canonicalTeam(r.team)].join("|"))
+      if(!other)continue
+      const fixtureKey=[r.date,...[canonicalTeam(r.team),canonicalTeam(r.opponent)].sort()].join("|")
+      if(seen.has(fixtureKey))continue
+      seen.add(fixtureKey)
+      const homeRow=r.venue==="home"?r:other?.venue==="home"?other:r
+      const awayRow=homeRow===r?other:r
+      const h=ensure(homeRow.team),a=ensure(awayRow.team)
+      const hg=Number(homeRow.goals??0),ag=Number(awayRow.goals??0)
+      h.played++;a.played++;h.gf+=hg;h.ga+=ag;a.gf+=ag;a.ga+=hg
+      if(hg>ag)h.points+=3
+      else if(hg<ag)a.points+=3
+      else{h.points++;a.points++}
+    }
+    return [...teams.values()].map(r=>({...r,gd:r.gf-r.ga,position:0}))
+      .sort((a,b)=>b.points-a.points||b.gd-a.gd||b.gf-a.gf)
+      .map((r,i)=>({...r,position:i+1}))
+  }catch{return [] as TableRow[]}
+}
 async function domesticStakes(date:string,competition:string,home:string,away:string){
   const cfg=DOMESTIC_CONFIG[competition]
   if(!cfg)return null
-  const url="https://www.football-data.co.uk/mmz4281/"+seasonCode(date)+"/"+cfg.code+".csv"
-  const response=await fetch(url,{next:{revalidate:300},signal:AbortSignal.timeout(5000)})
-  if(!response.ok)return null
-  const text=await response.text(),lines=text.split(/\r?\n/).filter(Boolean)
-  if(lines.length<2)return null
-  const headers=parseCsvLine(lines[0]).map(x=>x.replace(/^\uFEFF/,"").trim())
-  const idx=(name:string)=>headers.indexOf(name)
-  const hi=idx("HomeTeam"),ai=idx("AwayTeam"),hgi=idx("FTHG"),agi=idx("FTAG"),di=idx("Date")
-  if([hi,ai,hgi,agi,di].some(i=>i<0))return null
-  const map=new Map<string,{team:string;played:number;points:number;gf:number;ga:number}>()
-  const ensure=(team:string)=>{const k=canonicalTeam(team);if(!map.has(k))map.set(k,{team,played:0,points:0,gf:0,ga:0});return map.get(k)!}
-  for(const line of lines.slice(1)){
-    const cells=parseCsvLine(line),matchDate=parseDate(cells[di]??"")
-    if(!matchDate||matchDate>=date)continue
-    const h=String(cells[hi]??"").trim(),a=String(cells[ai]??"").trim(),hg=Number(cells[hgi]),ag=Number(cells[agi])
-    if(!h||!a||!Number.isFinite(hg)||!Number.isFinite(ag))continue
-    const hr=ensure(h),ar=ensure(a)
-    hr.played++;ar.played++;hr.gf+=hg;hr.ga+=ag;ar.gf+=ag;ar.ga+=hg
-    if(hg>ag)hr.points+=3;else if(hg<ag)ar.points+=3;else{hr.points++;ar.points++}
+  let table=await domesticTableFromDatabase(date,competition)
+  let source="Current-season match database"
+  if(!table.length){
+    const url="https://www.football-data.co.uk/mmz4281/"+seasonCode(date)+"/"+cfg.code+".csv"
+    const response=await fetch(url,{next:{revalidate:300},signal:AbortSignal.timeout(5000)})
+    if(!response.ok)return null
+    const text=await response.text(),lines=text.split(/\r?\n/).filter(Boolean)
+    if(lines.length<2)return null
+    const headers=parseCsvLine(lines[0]).map(x=>x.replace(/^\uFEFF/,"").trim())
+    const idx=(name:string)=>headers.indexOf(name)
+    const hi=idx("HomeTeam"),ai=idx("AwayTeam"),hgi=idx("FTHG"),agi=idx("FTAG"),di=idx("Date")
+    if([hi,ai,hgi,agi,di].some(i=>i<0))return null
+    const map=new Map<string,{team:string;played:number;points:number;gf:number;ga:number}>()
+    const ensure=(team:string)=>{const k=canonicalTeam(team);if(!map.has(k))map.set(k,{team,played:0,points:0,gf:0,ga:0});return map.get(k)!}
+    for(const line of lines.slice(1)){
+      const cells=parseCsvLine(line),matchDate=parseDate(cells[di]??"")
+      if(!matchDate||matchDate>=date)continue
+      const h=String(cells[hi]??"").trim(),a=String(cells[ai]??"").trim(),hg=Number(cells[hgi]),ag=Number(cells[agi])
+      if(!h||!a||!Number.isFinite(hg)||!Number.isFinite(ag))continue
+      const hr=ensure(h),ar=ensure(a)
+      hr.played++;ar.played++;hr.gf+=hg;hr.ga+=ag;ar.gf+=ag;ar.ga+=hg
+      if(hg>ag)hr.points+=3;else if(hg<ag)ar.points+=3;else{hr.points++;ar.points++}
+    }
+    table=[...map.values()].map(r=>({...r,gd:r.gf-r.ga,position:0})).sort((a,b)=>b.points-a.points||b.gd-a.gd||b.gf-a.gf).map((r,i)=>({...r,position:i+1}))
+    source="Football-Data current league table"
   }
-  const table=[...map.values()].map(r=>({...r,gd:r.gf-r.ga,position:0})).sort((a,b)=>b.points-a.points||b.gd-a.gd||b.gf-a.gf).map((r,i)=>({...r,position:i+1}))
   const homeRow=table.find(r=>sameTeam(r.team,home)),awayRow=table.find(r=>sameTeam(r.team,away))
   if(!homeRow||!awayRow)return null
   const hc=domesticTeamContext(home,homeRow,table,cfg),ac=domesticTeamContext(away,awayRow,table,cfg)
@@ -173,7 +220,7 @@ async function domesticStakes(date:string,competition:string,home:string,away:st
   const sameBattle=hc.category!=="neutral"&&hc.category===ac.category&&Math.min(hc.score,ac.score)>=.45
   if(sameBattle)matchScore=clamp(matchScore+.12)
   return {
-    available:true,source:"Football-Data current league table",tournament:competition,stage:"League",
+    available:true,source,tournament:competition,stage:"League",
     home:hc,away:ac,matchScore:Math.round(matchScore*1000)/1000,bothHighStakes:hc.score>=.6&&ac.score>=.6,
     reason:sameBattle
       ?"Both teams are directly involved in the "+hc.category+" battle."
