@@ -34,7 +34,7 @@ type Selection={
 }
 type LivePlayerStat={
   player:string;team:string;minutes:number|null;foulsCommitted:number;foulsDrawn:number;shots:number;shotsOnTarget:number;
-  goals:number;assists:number;yellowCards:number;redCards:number;subbedOff:boolean;
+  goals:number;assists:number;yellowCards:number;redCards:number;starter?:boolean;subbedOff:boolean;
   tackles:number;interceptions:number;blocks:number;duelsTotal:number;duelsWon:number;defensiveInterventions:number
 }
 type LiveData={
@@ -188,6 +188,12 @@ function verifiedBet365Odd(s:Selection){
 }
 function referenceOdd(s:Selection){return Number(verifiedBet365Odd(s)??0)}
 function liveUrl(f:Fixture){return "/api/live-player-stats?"+new URLSearchParams({date:f.date,home:f.home,away:f.away,competition:f.competition})}
+function liveBaselineUrl(f:Fixture,live:LiveData){
+  const q=new URLSearchParams({date:f.date,home:f.home,away:f.away,competition:f.competition})
+  const starters=(live.players??[]).filter(p=>p.starter===true)
+  for(const p of starters)q.append("starter",p.player)
+  return "/api/live-player-baseline?"+q.toString()
+}
 function lineupStatusUrl(f:Fixture){return "/api/lineup-status?"+new URLSearchParams({id:f.id,date:f.date,home:f.home,away:f.away,competition:f.competition})}
 function liveOddsUrl(f:Fixture){return "/api/bet-builder-odds?"+new URLSearchParams({date:f.date,home:f.home,away:f.away,competition:f.competition,live:"1",refresh:String(Date.now())})}
 function h2hUrl(f:Fixture){return "/api/team-h2h?"+new URLSearchParams({date:f.date,home:f.home,away:f.away,competition:f.competition})}
@@ -804,18 +810,24 @@ export default function BetBuilderPage(){
   useEffect(()=>{setFixture(parseFixture())},[])
   const load=useCallback(async(f:Fixture,force=false)=>{
     const kickoff=new Date(f.kickoff).getTime()
-    const preMatch=!Number.isFinite(kickoff)||Date.now()<kickoff
+    const now=Date.now()
+    const preMatch=!Number.isFinite(kickoff)||now<kickoff
+    const inPlayWindow=Number.isFinite(kickoff)&&now>=kickoff&&now<=kickoff+4*60*60*1000
     const cached=readScorecardCache(f)
 
-    // Never blank the match page at kickoff. A confirmed pre-match scorecard is
-    // still the correct base model for live remaining-event probabilities; live
-    // stats are applied on top while a fresh scorecard refreshes in the background.
     if(cached){
       setData(current=>current?.ok?current:cached)
       setLoading(false)
-      if(!force&&preMatch)return
+      if(!force)return
     }else{
       setLoading(true)
+    }
+
+    // Once kickoff has passed, never invoke the heavy historical scorecard route.
+    // The fast live baseline endpoint is loaded as soon as live starter data arrives.
+    if(inPlayWindow){
+      setLoading(!cached)
+      return
     }
 
     const controller=new AbortController()
@@ -855,11 +867,6 @@ export default function BetBuilderPage(){
     const t=window.setTimeout(()=>void load(fixture,false),1500)
     return()=>window.clearTimeout(t)
   },[fixture,data?.ok,baselineRetry,load])
-  useEffect(()=>{
-    if(!fixture||!(live?.status==="live"||live?.status==="halftime"))return
-    const t=window.setInterval(()=>void load(fixture,false),60000)
-    return()=>window.clearInterval(t)
-  },[fixture,live?.status,load])
   useEffect(()=>{
     if(!fixture||data?.lineupsConfirmed===true||data?.lineupMode==="confirmed")return
     const kickoff=new Date(fixture.kickoff).getTime()
@@ -914,6 +921,23 @@ export default function BetBuilderPage(){
     try{const r=await fetch(liveUrl(f),{cache:"no-store"});if(r.ok)setLive(await r.json())}catch{}
   },[])
   useEffect(()=>{if(!fixture)return;void loadLive(fixture);const t=window.setInterval(()=>void loadLive(fixture),30000);return()=>window.clearInterval(t)},[fixture,loadLive])
+  const loadLiveBaseline=useCallback(async(f:Fixture,currentLive:LiveData)=>{
+    if(!(currentLive.status==="live"||currentLive.status==="halftime")||!currentLive.players?.length)return
+    try{
+      const r=await fetch(liveBaselineUrl(f,currentLive),{cache:"default"})
+      if(!r.ok)return
+      const next=await r.json() as Scorecard
+      if(next?.ok&&next.players?.length){
+        setData(next)
+        writeScorecardCache(f,next)
+        setLoading(false)
+      }
+    }catch{}
+  },[])
+  useEffect(()=>{
+    if(!fixture||!live||data?.ok)return
+    void loadLiveBaseline(fixture,live)
+  },[fixture,live,data?.ok,loadLiveBaseline])
   const loadLiveOdds=useCallback(async(f:Fixture)=>{
     try{
       const r=await fetch(liveOddsUrl(f),{cache:"no-store"})
@@ -1082,8 +1106,8 @@ export default function BetBuilderPage(){
           <button onClick={()=>void toggleH2H()} className={"rounded-xl border px-3 py-2.5 text-[0.55rem] font-black "+(h2hOpen?"border-emerald-300/30 bg-emerald-300 text-emerald-950":"border-white/10 bg-white/6 text-white/55")}>H2H</button>
           <button onClick={()=>{
             if(inPlay){
-              void load(fixture,false)
               void loadLive(fixture)
+              if(live)void loadLiveBaseline(fixture,live)
               void loadLiveOdds(fixture)
             }else{
               void load(fixture,true)
