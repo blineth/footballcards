@@ -44,7 +44,7 @@ type H2HData={ok:boolean;source?:string;scope?:string;meetings:H2HMeeting[];coun
 type RiskBuilder={
   id:string;title:string;risk:"Safe"|"Balanced"|"High Risk";targetFractional:string;targetDecimal:number;
   legs:Selection[];referenceProductOdds:number|null;averageLegProbability:number|null;minimumLegProbability:number|null;
-  modelAllHitProbability:number|null;exactPriced:boolean;bookmaker:string|null;note:string
+  modelAllHitProbability:number|null;conservativeAllHitProbability?:number|null;safetyScore?:number|null;exactPriced:boolean;bookmaker:string|null;note:string
 }
 type FallbackSlip={id:string;title:string;risk:string;legs:Selection[];averageLegProbability:number|null;note?:string}
 type Scorecard={
@@ -226,12 +226,36 @@ function selectionsFrom(data:Scorecard|null){
 
 function clientRiskBuilders(rows:Selection[]):RiskBuilder[]{
   const configs=[
-    {id:"safe-3-1",title:"Safe 3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4,min:.42,max:5,minFamilies:2,maxPerFamily:2},
-    {id:"balanced-10-1",title:"Balanced 10/1",risk:"Balanced" as const,targetFractional:"10/1",targetDecimal:11,min:.16,max:6,minFamilies:3,maxPerFamily:2},
-    {id:"high-20-1",title:"High Risk 20/1+",risk:"High Risk" as const,targetFractional:"20/1+",targetDecimal:21,min:.10,max:7,minFamilies:3,maxPerFamily:2},
+    {id:"safe-3-1",title:"Safe 3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4,min:.40,max:6,minFamilies:1,maxPerFamily:4},
+    {id:"balanced-10-1",title:"Balanced 10/1",risk:"Balanced" as const,targetFractional:"10/1",targetDecimal:11,min:.15,max:7,minFamilies:2,maxPerFamily:3},
+    {id:"high-20-1",title:"High Risk 20/1+",risk:"High Risk" as const,targetFractional:"20/1+",targetDecimal:21,min:.09,max:8,minFamilies:2,maxPerFamily:3},
   ]
   const family=(market:string)=>market.startsWith("goal")?"goal":market.startsWith("assist")?"assist":market.startsWith("fouled")?"fouled":market.startsWith("foul")?"foul":market.startsWith("sot")?"sot":market.startsWith("shot")?"shot":"card"
   const baseMarket=(market:string)=>market==="goal1"||market==="assist1"||market==="foul1"||market==="fouled1"||market==="card"||market==="shot1"||market==="sot1"
+  const confidenceReliability=(row:Selection)=>row.confidence==="A"?1:row.confidence==="B"?.96:row.confidence==="C"?.88:.74
+  const marketReliability=(row:Selection)=>{
+    const f=family(row.market)
+    if(f==="foul")return .99
+    if(f==="fouled")return .985
+    if(f==="shot")return .98
+    if(f==="sot")return .95
+    if(f==="card")return .93
+    if(f==="goal")return .92
+    if(f==="assist")return .90
+    return .95
+  }
+  const conservativeJoint=(legs:Selection[],raw:number)=>{
+    const counts:Record<string,number>={}
+    let reliability=1
+    for(const leg of legs){
+      const f=family(leg.market)
+      counts[f]=(counts[f]??0)+1
+      reliability*=confidenceReliability(leg)*marketReliability(leg)
+    }
+    let concentration=1
+    for(const count of Object.values(counts))if(count>1)concentration*=Math.pow(.965,count-1)
+    return Math.max(0,Math.min(.99,raw*reliability*concentration*Math.pow(.985,Math.max(0,legs.length-2))))
+  }
 
   const preferred=new Map<string,{family:string;score:number}>()
   const playerNames=[...new Set(rows.map(r=>normPlayer(r.player)))]
@@ -256,8 +280,8 @@ function clientRiskBuilders(rows:Selection[]):RiskBuilder[]{
     .sort((a,b)=>(b.signal-a.signal)||(b.row.probability-a.row.probability))
 
   return configs.map(cfg=>{
-    type State={legs:Selection[];product:number;prob:number;players:Set<string>;quality:number;families:Record<string,number>}
-    let states:State[]=[{legs:[],product:1,prob:1,players:new Set(),quality:0,families:{}}]
+    type State={legs:Selection[];product:number;prob:number;conservative:number;players:Set<string>;quality:number;families:Record<string,number>}
+    let states:State[]=[{legs:[],product:1,prob:1,conservative:1,players:new Set(),quality:0,families:{}}]
     for(const option of candidateRows.filter(x=>x.row.probability>=cfg.min||x.signal>=.88)){
       const leg=option.row
       const next=[...states]
@@ -269,8 +293,10 @@ function clientRiskBuilders(rows:Selection[]):RiskBuilder[]{
         const odd=referenceOdd(leg);if(!(odd>1))continue
         const product=state.product*odd
         if(product>cfg.targetDecimal*1.45&&state.legs.length>=1)continue
+        const legs=[...state.legs,leg]
+        const raw=state.prob*leg.probability
         next.push({
-          legs:[...state.legs,leg],product,prob:state.prob*leg.probability,
+          legs,product,prob:raw,conservative:conservativeJoint(legs,raw),
           players:new Set([...state.players,pkey]),
           quality:state.quality+option.signal+leg.probability*.25,
           families:{...state.families,[option.family]:count+1},
@@ -282,24 +308,32 @@ function clientRiskBuilders(rows:Selection[]):RiskBuilder[]{
           const gap=Math.abs(Math.log(Math.max(1.01,x.product))-Math.log(cfg.targetDecimal))
           const diversity=Object.keys(x.families).length
           const avg=x.quality/Math.max(1,x.legs.length)
-          return gap*2+(x.product<cfg.targetDecimal?.7:0)-avg*.28-diversity*.07+x.legs.length*.025
+          return gap*1.15+(x.product<cfg.targetDecimal?.8:0)-x.conservative*2.1-avg*.18-diversity*(cfg.risk==="Safe"?.01:.05)+x.legs.length*.015
         }
         return score(a)-score(b)
       }).slice(0,650)
     }
     const best=states.filter(s=>s.legs.length>=2&&s.product>=cfg.targetDecimal&&Object.keys(s.families).length>=cfg.minFamilies)
       .sort((a,b)=>{
+        if(Math.abs(a.conservative-b.conservative)>.002)return b.conservative-a.conservative
         const da=Math.abs(Math.log(a.product)-Math.log(cfg.targetDecimal))
         const db=Math.abs(Math.log(b.product)-Math.log(cfg.targetDecimal))
         if(Math.abs(da-db)>.015)return da-db
-        if(a.legs.length!==b.legs.length)return a.legs.length-b.legs.length
-        return b.prob-a.prob
+        return a.legs.length-b.legs.length
       })[0]
-    if(!best)return {id:cfg.id,title:cfg.title,risk:cfg.risk,targetFractional:cfg.targetFractional,targetDecimal:cfg.targetDecimal,legs:[],referenceProductOdds:null,averageLegProbability:null,minimumLegProbability:null,modelAllHitProbability:null,exactPriced:false,bookmaker:null,note:"No strong, market-diverse combination actually reaches this target yet."}
+    if(!best)return {id:cfg.id,title:cfg.title,risk:cfg.risk,targetFractional:cfg.targetFractional,targetDecimal:cfg.targetDecimal,legs:[],referenceProductOdds:null,averageLegProbability:null,minimumLegProbability:null,modelAllHitProbability:null,conservativeAllHitProbability:null,safetyScore:null,exactPriced:false,bookmaker:null,note:"No strong combination actually reaches this target yet."}
     const books=[...new Set(best.legs.map(x=>x.bookmakerName).filter(Boolean))] as string[]
     const exactPriced=best.legs.every(x=>x.bookmakerOdds!=null)&&books.length===1
     const families=[...new Set(best.legs.map(x=>family(x.market)))]
-    return {id:cfg.id,title:cfg.title,risk:cfg.risk,targetFractional:cfg.targetFractional,targetDecimal:cfg.targetDecimal,legs:best.legs,referenceProductOdds:Math.round(best.product*100)/100,averageLegProbability:best.legs.reduce((s,x)=>s+x.probability,0)/best.legs.length,minimumLegProbability:Math.min(...best.legs.map(x=>x.probability)),modelAllHitProbability:best.prob,exactPriced,bookmaker:exactPriced?books[0]:null,note:"Built from each player's strongest market family with market variety ("+families.join(", ")+"). It only shows this target when predicted odds actually reach it; final bookmaker Builder pricing can differ for correlation."}
+    return {
+      id:cfg.id,title:cfg.title,risk:cfg.risk,targetFractional:cfg.targetFractional,targetDecimal:cfg.targetDecimal,
+      legs:best.legs,referenceProductOdds:Math.round(best.product*100)/100,
+      averageLegProbability:best.legs.reduce((s,x)=>s+x.probability,0)/best.legs.length,
+      minimumLegProbability:Math.min(...best.legs.map(x=>x.probability)),
+      modelAllHitProbability:best.prob,conservativeAllHitProbability:best.conservative,safetyScore:best.conservative,
+      exactPriced,bookmaker:exactPriced?books[0]:null,
+      note:"Safety-first build from each player's strongest market family ("+families.join(", ")+"). Confidence and same-market concentration are penalised before choosing the highest conservative hit chance at or above the target odds."
+    }
   })
 }
 
@@ -544,7 +578,7 @@ function RiskCard({build,onUse}:{build:RiskBuilder;onUse:()=>void}){
   const accent=build.risk==="Safe"?"text-emerald-300":build.risk==="Balanced"?"text-amber-300":"text-rose-300"
   return <article className={"rounded-2xl border p-3 "+tone}>
     <div className="flex items-start justify-between gap-2"><div><p className={"text-[0.5rem] font-black uppercase "+accent}>{build.risk==="High Risk"?"Risky":build.risk}</p><p className="mt-1 text-lg font-black">{build.targetFractional}</p></div><ShieldCheck className={"size-4 "+accent}/></div>
-    {build.legs.length?<><div className="mt-2 grid grid-cols-2 gap-1.5"><MiniStat label="Model chance" value={percent(build.modelAllHitProbability,1)}/><MiniStat label="Predicted odds" value={build.referenceProductOdds?.toFixed(2)??"—"}/></div><div className="mt-2 space-y-1.5">{build.legs.map(l=><div key={keyOf(l)} className="flex items-center justify-between gap-2 rounded-lg bg-black/15 px-2 py-1.5"><p className="min-w-0 flex-1 truncate text-[0.5rem] text-white/65">{l.player} · {l.label}</p><span className="shrink-0 font-mono text-[0.48rem] font-black text-white/45">{percent(l.probability)}</span></div>)}</div><button onClick={onUse} className="mt-3 w-full rounded-xl bg-white px-3 py-2 text-[0.58rem] font-black text-[#07120e]">Add this slip</button></>:<p className="mt-2 text-[0.54rem] text-white/30">No strong route available yet.</p>}
+    {build.legs.length?<><div className="mt-2 grid grid-cols-3 gap-1.5"><MiniStat label="Raw chance" value={percent(build.modelAllHitProbability,1)}/><MiniStat label="Safety chance" value={percent(build.conservativeAllHitProbability??build.modelAllHitProbability,1)}/><MiniStat label="Predicted odds" value={build.referenceProductOdds?.toFixed(2)??"—"}/></div><div className="mt-2 space-y-1.5">{build.legs.map(l=><div key={keyOf(l)} className="flex items-center justify-between gap-2 rounded-lg bg-black/15 px-2 py-1.5"><p className="min-w-0 flex-1 truncate text-[0.5rem] text-white/65">{l.player} · {l.label}</p><span className="shrink-0 font-mono text-[0.48rem] font-black text-white/45">{percent(l.probability)}</span></div>)}</div><button onClick={onUse} className="mt-3 w-full rounded-xl bg-white px-3 py-2 text-[0.58rem] font-black text-[#07120e]">Add this slip</button></>:<p className="mt-2 text-[0.54rem] text-white/30">No strong route available yet.</p>}
   </article>
 }
 function MiniStat({label,value}:{label:string;value:string}){return <div className="rounded-xl bg-black/20 px-2 py-1.5"><p className="font-mono text-xs font-black">{value}</p><p className="text-[0.4rem] uppercase text-white/25">{label}</p></div>}
