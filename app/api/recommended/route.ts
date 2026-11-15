@@ -445,13 +445,14 @@ function directPlayerCandidates(scorecard:Scorecard){
       const supported=marketKey==="card"||marketKey.startsWith("foul")||marketKey.startsWith("fouled")||marketKey.startsWith("shot")||marketKey.startsWith("sot")||marketKey.startsWith("goal")||marketKey.startsWith("assist")
       if(!supported)continue
       const exact=market.bookmakerName==="Bet365"&&market.bookmakerOdds!=null&&Number(market.bookmakerOdds)>1
-      if(!exact||market.confidence==="D")continue
+      const probability=Number(market.probability)
+      if(!exact||!Number.isFinite(probability)||probability<.34)continue
       const key=normName(player.name)+"|"+marketKey+"|"+market.label
       if(seen.has(key))continue
       seen.add(key)
       out.push({
         player:player.name,team:player.team,market:marketKey,label:market.label,
-        probability:Number(market.probability),fairOdds:market.fairOdds??null,
+        probability,fairOdds:market.fairOdds??null,
         bookmakerOdds:Number(market.bookmakerOdds),bookmakerName:"Bet365",
         edge:market.edge??null,confidence:market.confidence,
         reason:(market.reasons??[]).join(" · ")||"Verified Bet365 player market",
@@ -495,7 +496,7 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
     const scorecard=scan.scorecard
     if(!scorecard)return null
     const candidates=directPlayerCandidates(scorecard)
-      .filter(leg=>leg.bookmakerName==="Bet365"&&leg.bookmakerOdds!=null&&Number(leg.bookmakerOdds)>1&&leg.probability>=.40&&leg.confidence!=="D")
+      .filter(leg=>leg.bookmakerName==="Bet365"&&leg.bookmakerOdds!=null&&Number(leg.bookmakerOdds)>1&&leg.probability>=.40)
       .sort((a,b)=>b.probability-a.probability||Number(a.bookmakerOdds)-Number(b.bookmakerOdds))
       .slice(0,70)
 
@@ -505,7 +506,7 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
     for(const leg of candidates){
       const next=[...states]
       for(const state of states){
-        if(state.legs.length>=6)continue
+        if(state.legs.length>=7)continue
         const pkey=normName(leg.player)
         if(state.players.has(pkey))continue
         const fam=family(leg.market)
@@ -513,7 +514,7 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
         if(familyCount>=4)continue
         const price=Number(leg.bookmakerOdds)
         const product=state.product*price
-        if(product>5.8&&state.legs.length>=1)continue
+        if(product>6.2&&state.legs.length>=1)continue
         const legs=[...state.legs,leg]
         const raw=state.raw*leg.probability
         next.push({
@@ -535,7 +536,7 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
     }
 
     const best=states
-      .filter(s=>s.legs.length>=2&&s.product>=4&&s.product<=5.4)
+      .filter(s=>s.legs.length>=2&&s.product>=4&&s.product<=5.8)
       .sort((a,b)=>{
         if(Math.abs(a.conservative-b.conservative)>.002)return b.conservative-a.conservative
         const weakA=Math.min(...a.legs.map(x=>x.probability))
