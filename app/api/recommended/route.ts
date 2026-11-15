@@ -121,7 +121,7 @@ async function officialLineupForFixture(f:Fixture):Promise<OfficialLineup>{
 
 type LivePlayerStat={
   player:string;team:string;foulsCommitted:number;foulsDrawn:number;shots:number;shotsOnTarget:number;
-  yellowCards:number;redCards:number;tackles:number;interceptions:number;blocks:number;duelsTotal:number;duelsWon:number
+  yellowCards:number;redCards:number;tackles:number;interceptions:number;blocks:number;duelsTotal:number;duelsWon:number;defensiveInterventions:number
 }
 function espnStat(row:any,name:string){
   const found=(row?.stats??[]).find((s:any)=>String(s?.name??"")===name)
@@ -145,7 +145,7 @@ async function livePlayerStatsForFixture(f:Fixture){
         shots:Number(row.shots??0),shotsOnTarget:Number(row.shotsOnTarget??0),
         yellowCards:Number(row.yellowCards??0),redCards:Number(row.redCards??0),
         tackles:Number(row.tackles??0),interceptions:Number(row.interceptions??0),blocks:Number(row.blocks??0),
-        duelsTotal:Number(row.duelsTotal??0),duelsWon:Number(row.duelsWon??0),
+        duelsTotal:Number(row.duelsTotal??0),duelsWon:Number(row.duelsWon??0),defensiveInterventions:Number(row.defensiveInterventions??0),
       }]))
     }
   }catch{
@@ -431,7 +431,7 @@ function buildLivePlayerProps(scorecard:Scorecard|null,elapsed:number,liveStats:
       let pressureNote=""
       const workload=stat?Math.max(0,Math.min(.48,
         Number(stat.tackles??0)*.07+Number(stat.interceptions??0)*.045+Number(stat.blocks??0)*.025+
-        Number(stat.duelsTotal??0)*.009+Number(stat.duelsWon??0)*.006
+        Number(stat.duelsTotal??0)*.009+Number(stat.duelsWon??0)*.006+Number(stat.defensiveInterventions??0)*.025
       )):0
       const logit=(p:number)=>Math.log(Math.max(.001,Math.min(.999,p))/(1-Math.max(.001,Math.min(.999,p))))
       const logistic=(x:number)=>1/(1+Math.exp(-x))
@@ -480,7 +480,7 @@ function buildLivePlayerProps(scorecard:Scorecard|null,elapsed:number,liveStats:
         currentFouls:stat?.foulsCommitted??null,currentFouled:stat?.foulsDrawn??null,
         currentShots:stat?.shots??null,currentSot:stat?.shotsOnTarget??null,
         currentTackles:stat?.tackles??null,currentInterceptions:stat?.interceptions??null,
-        currentBlocks:stat?.blocks??null,currentDuels:stat?.duelsTotal??null,currentDuelsWon:stat?.duelsWon??null,
+        currentBlocks:stat?.blocks??null,currentDuels:stat?.duelsTotal??null,currentDuelsWon:stat?.duelsWon??null,currentDefensiveInterventions:stat?.defensiveInterventions??null,
         currentYellowCards:stat?.yellowCards??null,currentRedCards:stat?.redCards??null,
         reason:"Remaining-match estimate from the confirmed-XI player model, updated from live match event counts."+pressureNote,
       })
