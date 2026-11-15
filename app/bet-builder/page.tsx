@@ -804,17 +804,41 @@ export default function BetBuilderPage(){
   const load=useCallback(async(f:Fixture,force=false)=>{
     const kickoff=new Date(f.kickoff).getTime()
     const preMatch=!Number.isFinite(kickoff)||Date.now()<kickoff
-    if(!force&&preMatch){
-      const cached=readScorecardCache(f)
-      if(cached){setData(cached);setLoading(false);return}
+    const cached=readScorecardCache(f)
+
+    // Never blank the match page at kickoff. A confirmed pre-match scorecard is
+    // still the correct base model for live remaining-event probabilities; live
+    // stats are applied on top while a fresh scorecard refreshes in the background.
+    if(cached){
+      setData(current=>current?.ok?current:cached)
+      setLoading(false)
+      if(!force&&preMatch)return
+    }else{
+      setLoading(true)
     }
-    setLoading(true)
+
+    const controller=new AbortController()
+    const timeout=window.setTimeout(()=>controller.abort(),force?12_000:8_000)
     try{
-      const r=await fetch(scorecardUrl(f,force),{cache:"no-store"})
+      const r=await fetch(scorecardUrl(f,force),{cache:"no-store",signal:controller.signal})
       const next=await r.json().catch(()=>({ok:false,error:"Unable to load match model."})) as Scorecard
-      setData(next)
-      if(preMatch&&next?.ok)writeScorecardCache(f,next)
-    }finally{setLoading(false)}
+      if(next?.ok){
+        setData(next)
+        writeScorecardCache(f,next)
+      }else if(!cached){
+        setData(next)
+      }
+    }catch(error){
+      if(!cached){
+        const timedOut=error instanceof DOMException&&error.name==="AbortError"
+        setData({ok:false,error:timedOut
+          ?"The fresh match model timed out. Tap refresh to retry; live match data will keep updating."
+          :"Unable to load the match model. Tap refresh to retry."} as Scorecard)
+      }
+    }finally{
+      window.clearTimeout(timeout)
+      setLoading(false)
+    }
   },[])
   useEffect(()=>{if(fixture)void load(fixture,false)},[fixture,load])
   useEffect(()=>{
@@ -1049,7 +1073,8 @@ export default function BetBuilderPage(){
 
     <div className="mx-auto max-w-3xl space-y-5 px-4 py-4">
       {h2hOpen?<H2HPanel data={h2hData} loading={h2hLoading} home={fixture.home} away={fixture.away}/>:null}
-      {loading&&!data?<section className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center"><RefreshCw className="mx-auto mb-3 size-5 animate-spin text-emerald-300"/><p className="font-black">Ranking player markets…</p></section>:null}
+      {loading&&!data&&!inPlay?<section className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center"><RefreshCw className="mx-auto mb-3 size-5 animate-spin text-emerald-300"/><p className="font-black">Ranking player markets…</p></section>:null}
+      {loading&&!data&&inPlay?<section className="rounded-3xl border border-emerald-300/12 bg-emerald-400/[0.045] p-4"><div className="flex items-center gap-3"><RefreshCw className="size-4 animate-spin text-emerald-300"/><div><p className="text-sm font-black">Loading live player model…</p><p className="mt-1 text-[0.54rem] text-white/35">Current score and live events are already connected. Player rankings will appear as soon as the cached or fresh scorecard is available.</p></div></div></section>:null}
       {data&&!data.ok?<section className="rounded-3xl border border-rose-300/15 bg-rose-400/5 p-5"><p className="font-black">Match model unavailable</p><p className="mt-1 text-sm text-white/40">{data.error}</p></section>:null}
 
       {data?.ok&&data.lineupMode==="predicted"?<section className="rounded-3xl border border-amber-300/15 bg-amber-300/[0.05] p-4"><div className="flex items-start gap-3"><Clock3 className="mt-0.5 size-5 shrink-0 text-amber-300"/><div><p className="font-black text-amber-100">Predicted XI active</p><p className="mt-1 text-[0.6rem] leading-relaxed text-white/40">{data.lineupSource??"Probable starters based on recent selection history and minutes."} The page checks for the official XI only between roughly 60 and 45 minutes before kickoff. Once confirmed, anyone benched is removed, all probabilities/slips are rebuilt once, and lineup polling stops for this match.</p></div></div></section>:data?.ok&&data.lineupMode==="squad"?<section className="rounded-3xl border border-amber-300/15 bg-amber-300/[0.05] p-6 text-center"><Clock3 className="mx-auto size-6 text-amber-300"/><p className="mt-3 font-black">No reliable XI yet</p><p className="mx-auto mt-1 max-w-lg text-xs leading-relaxed text-white/40">The match is still available, but player recommendations need a probable or confirmed starting XI.</p></section>:null}
