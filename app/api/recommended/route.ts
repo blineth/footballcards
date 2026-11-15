@@ -85,6 +85,7 @@ type TargetOddsSlip={
 }
 type TargetOddsGame={
   fixture:Fixture
+  lineupsConfirmed:boolean
   targets:TargetOddsSlip[]
 }
 
@@ -430,7 +431,7 @@ function buildTargetOddsGames(scans:FixtureScan[],fixturePool:Fixture[]=[]):Targ
   }
   return [...fixtures.values()]
     .sort((a,b)=>a.kickoff.localeCompare(b.kickoff))
-    .map(fixture=>({fixture,targets:buildTargetOddsSlips(scorecards.get(fixture.id)??null,fixture)}))
+    .map(fixture=>{const scorecard=scorecards.get(fixture.id)??null;return {fixture,lineupsConfirmed:Boolean(scorecard?.lineupsConfirmed),targets:buildTargetOddsSlips(scorecard,fixture)}})
 }
 function selectDiversifiedRecommendations(rows:Recommendation[],limit=8){
   const sorted=[...rows].sort((a,b)=>b.rank-a.rank)
@@ -491,7 +492,7 @@ type MultiMatchRiskTier="safe"|"balanced"|"risky"
 type MultiMatchGameBuilder={
   fixtureId:string;competition:Competition;kickoff:string;home:string;away:string;homeCrest?:string|null;awayCrest?:string|null;
   riskTier:MultiMatchRiskTier;targetFractional:string;targetDecimal:number;referenceOdds:number;modelAllHitProbability:number;
-  conservativeAllHitProbability:number;includesCard:boolean;cardPick:string|null;legs:MultiMatchLeg[]
+  conservativeAllHitProbability:number;includesCard:boolean;cardPick:string|null;lineupsConfirmed:boolean;legs:MultiMatchLeg[]
 }
 type MultiMatchTier={
   id:MultiMatchRiskTier;title:string;description:string;targetFractionalPerMatch:string;targetDecimalPerMatch:number;
@@ -768,7 +769,7 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
       referenceOdds:Math.round(best.product*100)/100,
       modelAllHitProbability:Math.round(best.raw*10000)/10000,
       conservativeAllHitProbability:Math.round(best.conservative*10000)/10000,
-      includesCard:Boolean(cardLeg),cardPick:cardLeg?cardLeg.player:null,legs,
+      includesCard:Boolean(cardLeg),cardPick:cardLeg?cardLeg.player:null,lineupsConfirmed:Boolean(scan.scorecard?.lineupsConfirmed),legs,
     }
   }
 
