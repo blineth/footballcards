@@ -575,7 +575,7 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
     const playerNames=[...new Set(rows.map(r=>normPlayer(r.player)))]
     for(const player of playerNames){
       const options=rows.filter(r=>
-        normPlayer(r.player)===player&&baseMarket(r.market)&&r.confidence!=="D"&&
+        normPlayer(r.player)===player&&baseMarket(r.market)&&
         (verifiedOnly?verifiedBet365Odd(r)!=null:Number(r.fairOdds??0)>1)
       ).map(r=>{
         const t=trafficFor(r,rows)
@@ -588,7 +588,7 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
     }
 
     const allCandidateRows=rows
-      .filter(r=>r.confidence!=="D"&&(verifiedOnly?verifiedBet365Odd(r)!=null:Number(r.fairOdds??0)>1))
+      .filter(r=>(verifiedOnly?verifiedBet365Odd(r)!=null:Number(r.fairOdds??0)>1))
       .filter(r=>r.market!=="card"||Number(r.recommendationScore??r.probability)>=.145)
       .map(r=>({row:r,family:family(r.market),signal:preferred.get(normPlayer(r.player))?.score??0}))
       .sort((a,b)=>{
@@ -605,7 +605,7 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
       // player, up to six players from either team and up to 12 selections total.
       // This deliberately allows a longer list of safer 1+ events to beat a short
       // slip containing a speculative card, scorer or high threshold.
-      const minLegProbability=cfg.risk==="Safe"?.34:cfg.risk==="Balanced"?.24:.18
+      const minLegProbability=cfg.risk==="Safe"?.30:cfg.risk==="Balanced"?.10:.08
       const byPlayer=new Map<string,typeof candidateRows>()
       for(const option of candidateRows){
         if(option.row.probability<Math.max(cfg.min,minLegProbability))continue
