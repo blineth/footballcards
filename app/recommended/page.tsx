@@ -50,7 +50,7 @@ type LivePlayerProp={
   bookmakerOdds?:number|null;bookmakerName?:string|null;bookmakerPriceState?:"live"|"reference"|null;reason?:string;
   currentCount?:number;liveStatsAvailable?:boolean;
   currentFouls?:number|null;currentFouled?:number|null;currentShots?:number|null;currentSot?:number|null;
-  currentYellowCards?:number|null;currentRedCards?:number|null
+  currentGoals?:number|null;currentAssists?:number|null;currentYellowCards?:number|null;currentRedCards?:number|null
 }
 type LiveMatch={
   id:string;competition:string;kickoff:string;status?:string;inPlay?:boolean;elapsed?:number|null;
@@ -481,6 +481,17 @@ function LiveNowSection({matches}:{matches:LiveMatch[]}){
   </section>
 }
 
+function liveCountBadge(prop:LivePlayerProp){
+  if(prop.market==="card")return {label:"FOULS",value:Number(prop.currentFouls??0),secondary:"FOULED "+Number(prop.currentFouled??0)}
+  if(prop.market==="foul1")return {label:"FOULS",value:Number(prop.currentFouls??0),secondary:null}
+  if(prop.market==="fouled1")return {label:"FOULED",value:Number(prop.currentFouled??0),secondary:null}
+  if(prop.market==="shot1")return {label:"SHOTS",value:Number(prop.currentShots??0),secondary:"SOT "+Number(prop.currentSot??0)}
+  if(prop.market==="sot1")return {label:"SOT",value:Number(prop.currentSot??0),secondary:"SHOTS "+Number(prop.currentShots??0)}
+  if(prop.market==="goal1")return {label:"GOALS",value:Number(prop.currentGoals??0),secondary:"SHOTS "+Number(prop.currentShots??0)}
+  if(prop.market==="assist1")return {label:"ASSISTS",value:Number(prop.currentAssists??0),secondary:null}
+  return {label:"LIVE",value:Number(prop.currentCount??0),secondary:null}
+}
+
 function LiveMatchCard({match}:{match:LiveMatch}){
   const score=match.score
   const probs=match.probabilities
@@ -517,7 +528,7 @@ function LiveMatchCard({match}:{match:LiveMatch}){
     {playerProps.length?<div className="mt-3 rounded-2xl border border-cyan-300/15 bg-cyan-400/[0.045] p-3">
       <div className="flex items-start justify-between gap-3"><div><p className="text-[0.52rem] font-black uppercase tracking-[0.12em] text-cyan-300">Live player likelihoods</p><p className="mt-0.5 text-[0.5rem] text-white/30">Top 3 per market from the current minute to full time{match.livePlayerStatsSource?" · live event counts connected":""}</p></div><span className="rounded-full bg-cyan-300/10 px-2 py-1 text-[0.44rem] font-black text-cyan-200">ACTIVE PLAYERS</span></div>
 
-      <div className="mt-3 space-y-3">{propGroups.map(group=><div key={group.market}><div className="mb-1.5 flex items-center justify-between"><p className="text-[0.5rem] font-black uppercase text-white/35">{group.title}</p><p className="text-[0.42rem] text-white/20">top {group.picks.length}</p></div><div className="space-y-1.5">{group.picks.map(prop=><div key={prop.player+"|"+prop.market} className="flex items-center justify-between gap-3 rounded-xl bg-white/[0.045] px-3 py-2"><div><div className="flex flex-wrap items-center gap-1.5"><p className="text-xs font-black">{prop.player} · {prop.label}</p><TeamBadge team={prop.team} home={match.home} away={match.away} homeCrest={match.homeCrest} awayCrest={match.awayCrest}/></div><p className="mt-0.5 text-[0.46rem] text-white/25">Grade {prop.confidence}{prop.market==="card"&&prop.liveStatsAvailable?" · fouls "+String(prop.currentFouls??0)+" · fouled "+String(prop.currentFouled??0):prop.market==="foul1"&&prop.liveStatsAvailable?" · fouls committed "+String(prop.currentFouls??0):prop.market==="fouled1"&&prop.liveStatsAvailable?" · fouled "+String(prop.currentFouled??0):prop.market==="shot1"||prop.market==="sot1"?" · shots "+String(prop.currentShots??0)+" · SOT "+String(prop.currentSot??0):prop.liveStatsAvailable?" · live count "+String(prop.currentCount??0):""}</p></div><div className="text-right"><p className="font-mono text-sm font-black">{percent(prop.probability)}</p><p className="text-[0.4rem] text-white/20">remaining</p>{prop.bookmakerOdds?<p className={"mt-0.5 text-[0.4rem] font-black "+(prop.bookmakerPriceState==="live"?"text-emerald-200":"text-amber-200/75")}>B365 {fractionalOdds(prop.bookmakerOdds)}{prop.bookmakerPriceState==="reference"?" ref":""}</p>:null}</div></div>)}</div></div>)}</div>
+      <div className="mt-3 space-y-3">{propGroups.map(group=><div key={group.market}><div className="mb-1.5 flex items-center justify-between"><p className="text-[0.5rem] font-black uppercase text-white/35">{group.title}</p><p className="text-[0.42rem] text-white/20">top {group.picks.length}</p></div><div className="space-y-1.5">{group.picks.map(prop=>{const count=liveCountBadge(prop);return <div key={prop.player+"|"+prop.market} className="grid grid-cols-[1fr_auto] gap-3 rounded-xl bg-white/[0.045] px-3 py-2.5"><div className="min-w-0"><div className="flex flex-wrap items-center gap-1.5"><p className="text-xs font-black">{prop.player} · {prop.label}</p><TeamBadge team={prop.team} home={match.home} away={match.away} homeCrest={match.homeCrest} awayCrest={match.awayCrest}/></div><div className="mt-1.5 flex flex-wrap items-center gap-1.5"><span className="rounded-full bg-cyan-300/12 px-2 py-1 text-[0.44rem] font-black text-cyan-100">{count.label} {count.value}</span>{count.secondary?<span className="rounded-full bg-white/6 px-2 py-1 text-[0.42rem] font-black text-white/45">{count.secondary}</span>:null}<span className="text-[0.42rem] text-white/20">Grade {prop.confidence}</span></div></div><div className="text-right"><p className="font-mono text-sm font-black">{percent(prop.probability)}</p><p className="text-[0.4rem] text-white/20">remaining</p>{prop.bookmakerOdds?<p className={"mt-0.5 text-[0.4rem] font-black "+(prop.bookmakerPriceState==="live"?"text-emerald-200":"text-amber-200/75")}>B365 {fractionalOdds(prop.bookmakerOdds)}{prop.bookmakerPriceState==="reference"?" ref":""}</p>:null}</div></div>})}</div></div>)}</div>
       <p className="mt-3 text-[0.48rem] leading-relaxed text-white/25">These are remaining-match probabilities recalculated from the live game state. Substitutes who come on are included once active; players who go off are removed.</p>
     </div>:null}
   </article>
