@@ -18,7 +18,9 @@ const ESPN_LEAGUES: Record<Competition, string[]> = {
 
 type FixtureCacheEntry={fixtures:Fixture[];updatedAt:number}
 const fixtureCache=new Map<string,FixtureCacheEntry>()
+const fixtureLastPersist=new Map<string,number>()
 const FIXTURE_CACHE_MS=18*60*60*1000
+const FIXTURE_PERSIST_MS=30*60*1000
 let fixtureCacheTableReady=false
 
 async function ensureFixtureCacheTable(){
@@ -232,7 +234,10 @@ async function fixturesForDate(date: string) {
 
   const hasFresh=espn.length+providerFixtures.length>0
   let cached=fixtureCache.get(date)??null
-  if((!cached||Date.now()-cached.updatedAt>=FIXTURE_CACHE_MS)&&isDatabaseConfigured){
+
+  // When live providers answered, do not read Neon just to rebuild the same fixture
+  // list. Persistent storage is a disaster-recovery fallback, not the hot path.
+  if(!hasFresh&&(!cached||Date.now()-cached.updatedAt>=FIXTURE_CACHE_MS)&&isDatabaseConfigured){
     cached=await readPersistentFixtureCache(date)
   }
   if(cached&&Date.now()-cached.updatedAt<FIXTURE_CACHE_MS){
@@ -244,9 +249,16 @@ async function fixturesForDate(date: string) {
 
   const fixtures=[...merged.values()]
   if(fixtures.length){
-    const entry={fixtures,updatedAt:Date.now()}
+    const now=Date.now()
+    const entry={fixtures,updatedAt:now}
     fixtureCache.set(date,entry)
-    if(hasFresh)await writePersistentFixtureCache(date,fixtures)
+
+    // Persist a last-good copy at most twice an hour per warm instance instead of
+    // writing on every page refresh / scorecard request.
+    if(hasFresh&&isDatabaseConfigured&&now-(fixtureLastPersist.get(date)??0)>=FIXTURE_PERSIST_MS){
+      fixtureLastPersist.set(date,now)
+      await writePersistentFixtureCache(date,fixtures)
+    }
     return fixtures
   }
   if(cached&&Date.now()-cached.updatedAt<FIXTURE_CACHE_MS)return cached.fixtures
