@@ -33,8 +33,13 @@ type FoulTargetSlip={
   id:string;bookmaker?:string|null;targetFractional:string;legs:SlipLeg[];
   averageLegProbability:number|null;placeable?:boolean;marketStatus?:MarketStatus;usesLivePrices?:boolean
 }
+type ScorecardMarket={
+  key?:string;label:string;probability:number;fairOdds?:number|null;bookmakerOdds?:number|null;
+  bookmakerName?:string|null;edge?:number|null;confidence:"A"|"B"|"C"|"D";reasons?:string[]
+}
 type ScorecardPlayer={
   name:string;dbName?:string;team:string;
+  markets?:Record<string,ScorecardMarket>;
   yellowConditionals?:{
     overall?:{matches:number;yellows:number;rate:number};
     after1PlusFouls?:{matches:number;yellows:number;rate:number|null};
@@ -47,7 +52,11 @@ type Scorecard={
   marketAvailability?:{goal?:MarketStatus;assist?:MarketStatus;card:MarketStatus;foul:MarketStatus;fouled:MarketStatus;shot:MarketStatus;sot:MarketStatus};
   slips?:BetSlip[];previewSlips?:BetSlip[];foulTargetSlips?:FoulTargetSlip[];previewFoulTargetSlips?:FoulTargetSlip[];
   riskBuilders?:Array<{id:string;title:string;risk:string;legs:SlipLeg[];averageLegProbability:number|null;referenceProductOdds?:number|null;modelAllHitProbability?:number|null}>;
-  players?:ScorecardPlayer[]
+  players?:ScorecardPlayer[];
+  availableBets?:Array<{
+    market:string;kind:string;label:string;odd:number;bookmaker:string;
+    probability:number|null;probabilityBasis:"no-vig"|"implied";line?:number|null;side?:string|null
+  }>
 }
 type Recommendation={
   id:string;fixture:Fixture;slip:BetSlip|FoulTargetSlip;confirmed:boolean;kind:"standard"|"foul";
@@ -414,59 +423,111 @@ type YellowCardWatchRow={
 function fullPlayerMarketSet(status:Scorecard["marketAvailability"]){
   return ["card","foul","fouled","shot","sot"].every(key=>(status as any)?.[key]==="available")
 }
-function buildMultiMatch(recommendations:Recommendation[]):MultiMatchBuild{
-  const eligible=recommendations.filter(r=>r.fullPlayerMarkets===true)
-  const fixtureBest=new Map<string,{rec:Recommendation;leg:SlipLeg}>()
-  for(const rec of eligible){
-    for(const leg of rec.slip.legs??[]){
-      const exact=leg.bookmakerName==="Bet365"&&leg.bookmakerOdds!=null&&leg.priceSource!=="estimated"&&Number(leg.bookmakerOdds)>1
-      if(!exact||leg.confidence==="D")continue
-      const existing=fixtureBest.get(rec.fixture.id)
-      if(!existing||leg.probability>existing.leg.probability)fixtureBest.set(rec.fixture.id,{rec,leg})
+type FixtureScan={fixture:Fixture;scorecard:Scorecard|null;recommendations:Recommendation[]}
+
+function directPlayerCandidates(scorecard:Scorecard){
+  const out:SlipLeg[]=[]
+  const seen=new Set<string>()
+  for(const player of scorecard.players??[]){
+    for(const [marketKey,market] of Object.entries(player.markets??{})){
+      if(!["card","foul1","fouled1","shot1","sot1","goal1","assist1"].includes(marketKey))continue
+      const exact=market.bookmakerName==="Bet365"&&market.bookmakerOdds!=null&&Number(market.bookmakerOdds)>1
+      if(!exact||market.confidence==="D")continue
+      const key=normName(player.name)+"|"+marketKey+"|"+market.label
+      if(seen.has(key))continue
+      seen.add(key)
+      out.push({
+        player:player.name,team:player.team,market:marketKey,label:market.label,
+        probability:Number(market.probability),fairOdds:market.fairOdds??null,
+        bookmakerOdds:Number(market.bookmakerOdds),bookmakerName:"Bet365",
+        edge:market.edge??null,confidence:market.confidence,
+        reason:(market.reasons??[]).join(" · ")||"Verified Bet365 player market",
+        priceSource:"exact",
+      })
     }
   }
-  const ordered=[...fixtureBest.values()].sort((a,b)=>b.leg.probability-a.leg.probability)
-  const high=ordered.filter(x=>x.leg.probability>=.90)
-  const chosen=(high.length?high:ordered.filter(x=>x.leg.probability>=.80)).slice(0,10)
-  const legs:MultiMatchLeg[]=chosen.map(({rec,leg})=>({
-    fixtureId:rec.fixture.id,competition:rec.fixture.competition,kickoff:rec.fixture.kickoff,
-    home:rec.fixture.home.name,away:rec.fixture.away.name,player:leg.player,team:leg.team,
-    market:leg.market,label:leg.label,probability:leg.probability,
-    bookmakerOdds:Number(leg.bookmakerOdds),bookmaker:"Bet365",confidence:leg.confidence,
-  }))
+  return out
+}
+
+function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
+  const eligible=scans.filter(x=>x.scorecard?.ok&&fullPlayerMarketSet(x.scorecard.marketAvailability))
+  const chosen:MultiMatchLeg[]=[]
+
+  for(const scan of eligible){
+    const scorecard=scan.scorecard!
+    const candidates:Array<{
+      player:string;team:string;market:string;label:string;probability:number;odds:number;confidence:SlipLeg["confidence"]
+    }>=[]
+
+    for(const leg of directPlayerCandidates(scorecard)){
+      if(leg.bookmakerOdds==null||leg.bookmakerName!=="Bet365")continue
+      candidates.push({
+        player:leg.player,team:leg.team,market:leg.market,label:leg.label,
+        probability:leg.probability,odds:Number(leg.bookmakerOdds),confidence:leg.confidence,
+      })
+    }
+
+    for(const bet of scorecard.availableBets??[]){
+      if(bet.bookmaker!=="Bet365"||!(bet.odd>1)||bet.probability==null)continue
+      candidates.push({
+        player:"",team:scan.fixture.home.name+" v "+scan.fixture.away.name,
+        market:"board:"+bet.kind,label:bet.label,probability:Number(bet.probability),
+        odds:Number(bet.odd),confidence:Number(bet.probability)>=.90?"A":Number(bet.probability)>=.80?"B":"C",
+      })
+    }
+
+    // A ~90% leg is the target. Do not pad the multi with materially weaker legs.
+    const best=candidates
+      .filter(x=>x.probability>=.90&&x.odds>=1.02)
+      .sort((a,b)=>b.probability-a.probability||a.odds-b.odds)[0]
+    if(!best)continue
+
+    chosen.push({
+      fixtureId:scan.fixture.id,competition:scan.fixture.competition,kickoff:scan.fixture.kickoff,
+      home:scan.fixture.home.name,away:scan.fixture.away.name,
+      player:best.player,team:best.team,market:best.market,label:best.label,
+      probability:best.probability,bookmakerOdds:best.odds,bookmaker:"Bet365",confidence:best.confidence,
+    })
+  }
+
+  chosen.sort((a,b)=>b.probability-a.probability||a.bookmakerOdds-b.bookmakerOdds)
+  const legs=chosen.slice(0,10)
   const combined=legs.length?legs.reduce((v,l)=>v*l.bookmakerOdds,1):null
   const allHit=legs.length?legs.reduce((v,l)=>v*l.probability,1):null
   return {
     available:legs.length>=2,targetLegProbability:.90,maxLegs:10,
-    eligibleFixtureCount:new Set(eligible.map(r=>r.fixture.id)).size,
-    legs,combinedBet365Odds:combined==null?null:Math.round(combined*100)/100,
+    eligibleFixtureCount:eligible.length,
+    legs,
+    combinedBet365Odds:combined==null?null:Math.round(combined*100)/100,
     modelAllHitProbability:allHit==null?null:Math.round(allHit*10000)/10000,
-    note:high.length
-      ?"Uses one verified Bet365 selection per fully-covered match, prioritising 90%+ model legs. A 90% leg target does not mean the whole multi has a 90% chance."
-      :"No 90%+ verified legs were available across enough fully-covered matches, so the builder shows the strongest 80%+ alternatives rather than pretending they are 90%.",
+    note:legs.length
+      ?"Every leg is 90%+ by the current model/market estimate, has a verified Bet365 price, and comes from a match where Cards, Fouls Committed, Fouls Drawn, Shots and SOT are all available."
+      :"No remaining fixtures currently satisfy both the full-market gate and the 90%+ verified-leg threshold.",
   }
 }
-function buildYellowCardWatch(recommendations:Recommendation[]):YellowCardWatchRow[]{
+
+function buildYellowCardWatchFromScans(scans:FixtureScan[]):YellowCardWatchRow[]{
   const rows:YellowCardWatchRow[]=[]
   const seen=new Set<string>()
-  for(const rec of recommendations){
-    const cardStatus=rec.playerMarketAvailability?.card
-    if(cardStatus!=="available")continue
-    for(const leg of rec.slip.legs??[]){
-      if(leg.market!=="card")continue
-      const exact=leg.bookmakerName==="Bet365"&&leg.bookmakerOdds!=null&&leg.priceSource!=="estimated"&&Number(leg.bookmakerOdds)>1
-      if(!exact)continue
-      const key=rec.fixture.id+"|"+normName(leg.player)
+  for(const scan of scans){
+    const scorecard=scan.scorecard
+    if(!scorecard?.ok||scorecard.marketAvailability?.card!=="available")continue
+    for(const player of scorecard.players??[]){
+      const market=player.markets?.card
+      if(!market||market.bookmakerName!=="Bet365"||market.bookmakerOdds==null||Number(market.bookmakerOdds)<=1||market.confidence==="D")continue
+      const key=scan.fixture.id+"|"+normName(player.name)
       if(seen.has(key))continue
       seen.add(key)
       rows.push({
-        fixtureId:rec.fixture.id,competition:rec.fixture.competition,kickoff:rec.fixture.kickoff,
-        home:rec.fixture.home.name,away:rec.fixture.away.name,player:leg.player,team:leg.team,
-        probability:leg.probability,bookmakerOdds:Number(leg.bookmakerOdds),confidence:leg.confidence,reason:leg.reason,
+        fixtureId:scan.fixture.id,competition:scan.fixture.competition,kickoff:scan.fixture.kickoff,
+        home:scan.fixture.home.name,away:scan.fixture.away.name,
+        player:player.name,team:player.team,probability:Number(market.probability),
+        bookmakerOdds:Number(market.bookmakerOdds),confidence:market.confidence,
+        reason:(market.reasons??[]).join(" · ")||"Verified Bet365 player-card market",
       })
     }
   }
-  return rows.sort((a,b)=>b.probability-a.probability).slice(0,12)
+  return rows.sort((a,b)=>b.probability-a.probability).slice(0,16)
 }
 
 const LIVE_PROP_MARKETS=["card","foul1","fouled1","shot1","sot1"] as const
@@ -710,16 +771,16 @@ export async function GET(request:Request){
       .sort((a,b)=>a.kickoff.localeCompare(b.kickoff))
       .slice(0,maxFixtures)
 
-    const rows=await Promise.all(upcoming.map(async fixture=>{
+    const scans:FixtureScan[]=await Promise.all(upcoming.map(async fixture=>{
       try{
         let scorecard=await scorecardFor(fixture,refresh)
         if(!scorecard?.ok)scorecard=await fallbackScorecard(fixture)
-        if(!scorecard?.ok)return [] as Recommendation[]
+        if(!scorecard?.ok)return {fixture,scorecard:null,recommendations:[]}
         const minutesToKickoff=(new Date(fixture.kickoff).getTime()-Date.now())/60000
         const officialLineup=minutesToKickoff<=120?await officialLineupForFixture(fixture):{confirmed:false,starters:new Set<string>()}
         const confirmed=officialLineup.confirmed||Boolean(scorecard.lineupsConfirmed)
         const predicted=!confirmed&&scorecard.lineupMode==="predicted"
-        if(!confirmed&&!predicted)return [] as Recommendation[]
+        if(!confirmed&&!predicted)return {fixture,scorecard,recommendations:[]}
         const builderSlips:BetSlip[]=(scorecard.riskBuilders??[])
           .filter(b=>b.legs?.length)
           .map(b=>({
@@ -772,15 +833,15 @@ export async function GET(request:Request){
             playerMarketAvailability:scorecard.marketAvailability as Record<string,MarketStatus>,
           })
         }
-        return candidates
-      }catch{return [] as Recommendation[]}
+        return {fixture,scorecard,recommendations:candidates}
+      }catch{return {fixture,scorecard:null,recommendations:[]}}
     }))
 
-    const allRecommendations=rows.flat().sort((a,b)=>b.rank-a.rank)
+    const allRecommendations=scans.flatMap(x=>x.recommendations).sort((a,b)=>b.rank-a.rank)
     const recommendations=selectDiversifiedRecommendations(allRecommendations,8)
     const targetOddsGames=buildTargetOddsGames(allRecommendations,upcoming)
-    const multiMatchBuild=buildMultiMatch(allRecommendations)
-    const yellowCardWatch=buildYellowCardWatch(allRecommendations)
+    const multiMatchBuild=buildMultiMatchFromScans(scans)
+    const yellowCardWatch=buildYellowCardWatchFromScans(scans)
     const nowForSave=Date.now()
     if(nowForSave-lastRecommendationSaveAt>=RECOMMENDATION_SAVE_MS){
       lastRecommendationSaveAt=nowForSave
