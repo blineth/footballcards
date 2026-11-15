@@ -273,9 +273,11 @@ function buildTargetOddsSlips(recommendations:Recommendation[],fixtureId:string)
     }
   }
 
+  const family=(market:string)=>market.startsWith("goal")?"goal":market.startsWith("assist")?"assist":market.startsWith("fouled")?"fouled":market.startsWith("foul")?"foul":market.startsWith("sot")?"sot":market.startsWith("shot")?"shot":"card"
   function search(targetDecimal:number,bookmaker:string|null){
-    type State={legs:Candidate[];odds:number;prob:number;players:Set<string>}
-    let states:State[]=[{legs:[],odds:1,prob:1,players:new Set()}]
+    const minFamilies=targetDecimal>=16?3:2
+    type State={legs:Candidate[];odds:number;prob:number;players:Set<string>;families:Record<string,number>}
+    let states:State[]=[{legs:[],odds:1,prob:1,players:new Set(),families:{}}]
     const pool=candidates
       .filter(x=>bookmaker?x.bookmaker===bookmaker&&x.exactPrice!=null:true)
       .sort((a,b)=>b.leg.probability-a.leg.probability)
@@ -285,6 +287,9 @@ function buildTargetOddsSlips(recommendations:Recommendation[],fixtureId:string)
       const next=[...states]
       for(const state of states){
         if(state.legs.length>=8||state.players.has(option.leg.player))continue
+        const fam=family(option.leg.market)
+        const familyCount=state.families[fam]??0
+        if(familyCount>=2)continue
         const price=bookmaker?option.exactPrice:option.fairPrice
         if(price==null)continue
         const odds=state.odds*price
@@ -294,6 +299,7 @@ function buildTargetOddsSlips(recommendations:Recommendation[],fixtureId:string)
           odds,
           prob:state.prob*option.leg.probability,
           players:new Set([...state.players,option.leg.player]),
+          families:{...state.families,[fam]:familyCount+1},
         })
       }
       const score=(s:State)=>{
@@ -302,11 +308,12 @@ function buildTargetOddsSlips(recommendations:Recommendation[],fixtureId:string)
         const minProb=Math.min(...s.legs.map(x=>x.leg.probability))
         const avgProb=s.legs.reduce((sum,x)=>sum+x.leg.probability,0)/s.legs.length
         const confidence=s.legs.filter(x=>x.leg.confidence==="A"||x.leg.confidence==="B").length/s.legs.length
-        return distance*2.45-avgProb*.48-minProb*.18-confidence*.08+s.legs.length*.01
+        const diversity=Object.keys(s.families).length
+        return distance*2.45-avgProb*.48-minProb*.18-confidence*.08-diversity*.07+s.legs.length*.015
       }
       states=next.sort((a,b)=>score(a)-score(b)).slice(0,420)
     }
-    const acceptable=states.filter(s=>s.legs.length>=2&&s.odds>=targetDecimal*.76&&s.odds<=targetDecimal*1.32)
+    const acceptable=states.filter(s=>s.legs.length>=2&&s.odds>=targetDecimal&&s.odds<=targetDecimal*1.35&&Object.keys(s.families).length>=minFamilies)
     if(!acceptable.length)return null
     return acceptable.sort((a,b)=>{
       const da=Math.abs(Math.log(a.odds)-Math.log(targetDecimal))
@@ -335,7 +342,7 @@ function buildTargetOddsSlips(recommendations:Recommendation[],fixtureId:string)
       targetFractional:target.fractional,targetDecimal:target.decimal,
       available:false,referenceOdds:null,modelAllHitProbability:null,bookmaker:null,
       priceSource:null,marketsVerified:false,legs:[],
-      note:"Not enough strong legs in this match to reach the target without forcing weaker selections.",
+      note:"No strong, market-diverse combination actually reaches this target. A lower-priced slip is never labelled as this target.",
     }
     const legs:TargetOddsLeg[]=chosen.legs.map(x=>{
       const price=source==="bookmaker-singles"?Number(x.exactPrice):x.fairPrice
@@ -356,7 +363,7 @@ function buildTargetOddsSlips(recommendations:Recommendation[],fixtureId:string)
       bookmaker:chosenBook,priceSource:source,marketsVerified,legs,
       note:source==="bookmaker-singles"
         ? "Uses exact individual "+chosenBook+" prices as a reference. The final same-game Bet Builder price can differ because the bookmaker applies correlation."
-        : "Uses model fair prices as a guide. Add these legs in your bookmaker and check the actual same-game Builder price before placing.",
+        : "Uses model fair prices as a guide and only displays this target when the reference product actually reaches it. The final same-game Builder price can still differ because of correlation.",
     }
   })
 }
