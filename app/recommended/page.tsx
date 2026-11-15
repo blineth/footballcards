@@ -29,14 +29,14 @@ type Tracking={
 }
 type TargetOddsLeg={
   fixtureId:string;competition:string;kickoff:string;home:string;away:string;player:string;team:string;
-  market:string;label:string;probability:number;price:number;priceSource:"exact"|"model";
+  market:string;label:string;probability:number;conservativeProbability?:number;price:number;priceSource:"exact"|"model";
   bookmaker:string|null;confidence:"A"|"B"|"C"|"D"
 }
 type TargetOddsSlip={
   id:string;targetFractional:string;targetDecimal:number;available:boolean;referenceOdds:number|null;
-  modelAllHitProbability:number|null;bookmaker:string|null;
+  modelAllHitProbability:number|null;conservativeAllHitProbability?:number|null;safetyScore?:number|null;bookmaker:string|null;
   priceSource:"bookmaker-singles"|"model"|null;marketsVerified:boolean;
-  legs:TargetOddsLeg[];note:string
+  maxSelections?:number;maxPlayersPerTeam?:number;legs:TargetOddsLeg[];note:string
 }
 type TargetOddsGame={
   fixture:Fixture
@@ -432,12 +432,12 @@ function TargetOddsCard({slip,fixture}:{slip:TargetOddsSlip;fixture:Fixture}){
         <div><p className="text-[0.5rem] font-black uppercase tracking-[0.14em] text-violet-300">Target {slip.targetFractional}</p><h3 className="mt-1 text-lg font-black">{slip.legs.length}-leg builder</h3><p className="mt-1 text-[0.56rem] text-white/35">{slip.bookmaker??"Model fair prices"} · same game</p></div>
         <div className="text-right"><p className="font-mono text-xl font-black">{slip.referenceOdds?.toFixed(2)??"—"}</p><p className="text-[0.42rem] uppercase text-white/25">{slip.priceSource==="bookmaker-singles"?"singles reference":"model reference"}</p></div>
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-2"><Stat label="Model all hit" value={percent(slip.modelAllHitProbability)}/><Stat label="Legs" value={String(slip.legs.length)}/></div>
+      <div className="mt-3 grid grid-cols-2 gap-2"><Stat label="Conservative chance" value={percent(slip.conservativeAllHitProbability??slip.modelAllHitProbability)}/><Stat label="Legs" value={String(slip.legs.length)+(slip.maxSelections?" / "+slip.maxSelections:"")}/></div>
       <div className="mt-3 flex items-center justify-between"><span className={"rounded-full px-2.5 py-1 text-[0.5rem] font-black "+(slip.marketsVerified?"bg-emerald-400/15 text-emerald-300":"bg-amber-300/10 text-amber-200")}>{slip.marketsVerified?"MARKETS VERIFIED":"CHECK MARKETS"}</span><span className="text-[0.52rem] font-black text-white/35">{open?"Hide":"Show what to add"}</span></div>
     </button>
     {open?<div className="border-t border-white/8 bg-black/20 p-4">
       <div className="space-y-2">{slip.legs.map((leg,i)=><div key={leg.player+"|"+leg.market+"|"+i} className="rounded-2xl bg-white/[0.055] p-3">
-        <div className="flex items-start justify-between gap-3"><div><div className="flex flex-wrap items-center gap-1.5"><p className="text-sm font-black">{leg.player} · {leg.label}</p><TeamBadge team={leg.team} home={fixture.home.name} away={fixture.away.name} homeCrest={fixture.home.crest} awayCrest={fixture.away.crest}/></div><p className="mt-0.5 text-[0.56rem] text-white/35">Grade {leg.confidence}{leg.bookmaker?" · "+leg.bookmaker:""}</p></div><div className="text-right"><p className="font-mono text-base font-black">{percent(leg.probability)}</p><p className="text-[0.44rem] text-white/25">{leg.price.toFixed(2)} {leg.priceSource==="exact"?"single":"fair"}</p></div></div>
+        <div className="flex items-start justify-between gap-3"><div><div className="flex flex-wrap items-center gap-1.5"><p className="text-sm font-black">{leg.player} · {leg.label}</p><TeamBadge team={leg.team} home={fixture.home.name} away={fixture.away.name} homeCrest={fixture.home.crest} awayCrest={fixture.away.crest}/></div><p className="mt-0.5 text-[0.56rem] text-white/35">Grade {leg.confidence}{leg.bookmaker?" · "+leg.bookmaker:""}</p></div><div className="text-right"><p className="font-mono text-base font-black">{percent(leg.conservativeProbability??leg.probability)}</p><p className="text-[0.44rem] text-white/25">{leg.conservativeProbability!=null&&Math.abs(leg.conservativeProbability-leg.probability)>.005?"model "+percent(leg.probability)+" · ":""}{leg.price.toFixed(2)} {leg.priceSource==="exact"?"single":"fair"}</p></div></div>
       </div>)}</div>
       <p className="mt-3 rounded-xl bg-amber-300/[0.06] px-3 py-2 text-[0.56rem] leading-relaxed text-amber-100/75">{slip.note}</p>
     </div>:null}
