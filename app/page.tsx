@@ -94,18 +94,34 @@ function oddsUrl(f:Fixture){
   return "/api/bet-builder-odds?"+new URLSearchParams(params)
 }
 const marketLabels:Record<string,string>={
-  goal:"Goals",assist:"Assists",card:"Cards",foul:"Fouls",fouled:"Fouled",shot:"Shots",sot:"SOT",
+  goal:"Player to Score",assist:"Assists",card:"Cards",foul:"Fouls",fouled:"Fouled",shot:"Shots",sot:"SOT",
 }
 function availabilitySummary(a:Bet365Availability|undefined){
   if(!a||a.loading)return {tone:"checking",title:"Checking Bet365 markets",detail:""}
-  const available=Object.entries(a.marketAvailability??{}).filter(([,v])=>v==="available").map(([k])=>marketLabels[k]??k)
-  const unavailable=Object.entries(a.marketAvailability??{}).filter(([,v])=>v==="unavailable").map(([k])=>marketLabels[k]??k)
-  if(!available.length&&unavailable.length)return {tone:"none",title:"No Bet365 player markets",detail:"Player props are not currently offered in the verified Bet365 feed."}
+  const entries=Object.entries(a.marketAvailability??{})
+  const availableKeys=entries.filter(([,v])=>v==="available").map(([k])=>k)
+  const unavailableKeys=entries.filter(([,v])=>v==="unavailable").map(([k])=>k)
+  const available=availableKeys.map(k=>marketLabels[k]??k)
+  const unavailable=unavailableKeys.map(k=>marketLabels[k]??k)
+
+  if(!available.length&&unavailable.length)return {
+    tone:"none",
+    title:"No Bet365 player prop markets",
+    detail:"Shots, fouls, cards and other tracked player props are not currently offered in the verified Bet365 feed."
+  }
+
+  if(availableKeys.length===1&&availableKeys[0]==="goal")return {
+    tone:"limited",
+    title:"Bet365: Player to Score only",
+    detail:"Only Player to Score is available. Not offered: "+unavailable.join(", ")
+  }
+
   if(available.length)return {
-    tone:"available",
-    title:"Bet365 player markets available",
+    tone:unavailable.length?"limited":"available",
+    title:unavailable.length?"Limited Bet365 player markets":"Bet365 player markets available",
     detail:"Available: "+available.join(", ")+(unavailable.length?" · Not offered: "+unavailable.join(", "):"")
   }
+
   return {tone:"checking",title:"Bet365 market status unknown",detail:a.note??""}
 }
 function isFinished(raw:LiveFixture|Fixture){
@@ -256,7 +272,7 @@ function CompetitionSection({competition,fixtures,availability,onOpen}:{competit
       const liveNow=isLive(f)
       const confirmed=f.lineupStatus==="confirmed"
       const bet365=availabilitySummary(availability[f.id])
-      const bet365Class=bet365.tone==="available"?"bg-emerald-300/10 text-emerald-200":bet365.tone==="none"?"bg-rose-300/10 text-rose-200":"bg-white/6 text-white/35"
+      const bet365Class=bet365.tone==="available"?"bg-emerald-300/10 text-emerald-200":bet365.tone==="limited"?"bg-amber-300/10 text-amber-200":bet365.tone==="none"?"bg-rose-300/10 text-rose-200":"bg-white/6 text-white/35"
       return <button key={f.id} onClick={()=>onOpen(f)} className={"grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 px-3 py-4 text-left transition hover:bg-white/[0.035] "+(i?"border-t border-white/[0.055]":"")}>
         <div className="w-12 text-center">
           {liveNow?<><p className="text-[0.55rem] font-black text-rose-300">LIVE</p><p className="mt-0.5 font-mono text-xs font-black">{f.elapsed??""}'</p></>:<><p className="font-mono text-sm font-black">{f.time}</p><p className="mt-0.5 text-[0.44rem] text-white/25">{f.day}</p></>}
@@ -265,7 +281,7 @@ function CompetitionSection({competition,fixtures,availability,onOpen}:{competit
           <TeamRow name={f.home} crest={f.homeCrest} score={f.score?.home}/>
           <TeamRow name={f.away} crest={f.awayCrest} score={f.score?.away}/>
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5"><span className={"rounded-full px-1.5 py-0.5 text-[0.4rem] font-black "+(confirmed?"bg-emerald-400/12 text-emerald-300":"bg-amber-300/10 text-amber-200")}>{confirmed?"XI CONFIRMED":"PREDICTED XI"}</span><span className={"rounded-full px-1.5 py-0.5 text-[0.4rem] font-black "+bet365Class}>{bet365.title.toUpperCase()}</span>{f.tournament&&f.tournament!==competition?<span className="truncate text-[0.43rem] text-white/20">{f.tournament}</span>:null}</div>
-          {bet365.detail?<p className={"mt-1 text-[0.43rem] leading-relaxed "+(bet365.tone==="none"?"text-rose-200/65":bet365.tone==="available"?"text-emerald-200/55":"text-white/25")}>{bet365.detail}</p>:null}
+          {bet365.detail?<p className={"mt-1 text-[0.43rem] leading-relaxed "+(bet365.tone==="none"?"text-rose-200/65":bet365.tone==="limited"?"text-amber-200/60":bet365.tone==="available"?"text-emerald-200/55":"text-white/25")}>{bet365.detail}</p>:null}
         </div>
         <ChevronRight className="size-4 text-white/25"/>
       </button>
