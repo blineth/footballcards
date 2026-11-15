@@ -63,9 +63,23 @@ type LiveMatch={
 }
 type ViewMode="all"|"live"|"value"|"props"|"targets"
 type PropBoardRow={recId:string;fixture:Fixture;leg:SlipLeg;placeable:boolean;marketProbability:number|null;edge:number|null}
+type MultiMatchLeg={
+  fixtureId:string;competition:string;kickoff:string;home:string;away:string;
+  player:string;team:string;market:string;label:string;probability:number;
+  bookmakerOdds:number;bookmaker:"Bet365";confidence:"A"|"B"|"C"|"D"
+}
+type MultiMatchBuild={
+  available:boolean;targetLegProbability:number;maxLegs:number;eligibleFixtureCount:number;
+  legs:MultiMatchLeg[];combinedBet365Odds:number|null;modelAllHitProbability:number|null;note:string
+}
+type YellowCardWatchRow={
+  fixtureId:string;competition:string;kickoff:string;home:string;away:string;
+  player:string;team:string;probability:number;bookmakerOdds:number;confidence:"A"|"B"|"C"|"D";reason:string
+}
 type Response={
   ok:boolean;updatedAt?:string;date?:string;autoAdvanced?:boolean;fixturesScanned?:number;recommendations?:Recommendation[];
-  liveMatches?:LiveMatch[];targetOddsGames?:TargetOddsGame[];tracking?:Tracking;error?:string;staleFallback?:boolean;warning?:string
+  liveMatches?:LiveMatch[];targetOddsGames?:TargetOddsGame[];tracking?:Tracking;error?:string;staleFallback?:boolean;warning?:string;
+  multiMatchBuild?:MultiMatchBuild;yellowCardWatch?:YellowCardWatchRow[]
 }
 
 function percent(v:number|null|undefined){return v==null?"—":Math.round(v*100)+"%"}
@@ -80,45 +94,29 @@ function avgProbability(slip:Slip){
 export default function RecommendedPage(){
   const[loading,setLoading]=useState(false)
   const[data,setData]=useState<Response|null>(null)
-  const[selectedTargetFixtureId,setSelectedTargetFixtureId]=useState<string|null>(null)
-  const[view,setView]=useState<ViewMode>("all")
 
   const refresh=useCallback(async(force=false)=>{
     setLoading(true)
     try{
       const url="/api/recommended"+(force?"?refresh=1":"")
       const r=await fetch(url,{cache:force?"no-store":"default"})
-      setData(r.ok?await r.json() as Response:{ok:false,error:"Recommended scan failed"})
+      setData(r.ok?await r.json() as Response:{ok:false,error:"Multi-match scan failed"})
     }catch{
-      setData({ok:false,error:"Recommended scan failed"})
+      setData({ok:false,error:"Multi-match scan failed"})
     }finally{setLoading(false)}
   },[])
 
   useEffect(()=>{void refresh(false)},[refresh])
   useEffect(()=>{
     const live=(data?.liveMatches?.length??0)>0
-    const t=window.setInterval(()=>void refresh(false),live?30000:300000)
+    const t=window.setInterval(()=>void refresh(false),live?30000:180000)
     return()=>window.clearInterval(t)
   },[refresh,data?.liveMatches?.length])
-  useEffect(()=>{
-    const games=data?.targetOddsGames??[]
-    if(!games.length){setSelectedTargetFixtureId(null);return}
-    if(!selectedTargetFixtureId||!games.some(g=>g.fixture.id===selectedTargetFixtureId)){
-      setSelectedTargetFixtureId(games[0].fixture.id)
-    }
-  },[data,selectedTargetFixtureId])
 
-  const liveMatches=data?.liveMatches??[]
-  const recommendations=data?.recommendations??[]
-  const best=recommendations[0]??null
-  const alternatives=useMemo(()=>recommendations.slice(1),[recommendations])
-  const tracking=data?.tracking
-  const targetGames=data?.targetOddsGames??[]
-  const selectedTargetGame=targetGames.find(g=>g.fixture.id===selectedTargetFixtureId)??targetGames[0]??null
-  const propBoard=useMemo(()=>buildPropBoard(recommendations),[recommendations])
-  const valueBoard=useMemo(()=>propBoard.filter(x=>x.edge!=null&&x.edge>.015).sort((a,b)=>(b.edge??0)-(a.edge??0)).slice(0,12),[propBoard])
-  const topModel=recommendations.length?Math.max(...recommendations.map(r=>avgProbability(r.slip))):null
-  const verified=recommendations.filter(r=>r.placeable).length
+  const multi=data?.multiMatchBuild
+  const cards=data?.yellowCardWatch??[]
+  const legs=multi?.legs??[]
+  const highConfidence=legs.filter(l=>l.probability>=.90).length
 
   return <main className="min-h-screen bg-[#07120e] pb-24 text-white">
     <header className="sticky top-0 z-30 border-b border-white/10 bg-[#07120e]/95 backdrop-blur-xl">
@@ -126,46 +124,51 @@ export default function RecommendedPage(){
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-2 text-violet-300"><Trophy className="size-4"/><span className="text-[0.62rem] font-black uppercase tracking-[0.16em]">Match Edge</span></div>
-            <h1 className="mt-1 text-2xl font-black">Picks</h1>
-            <p className="mt-1 text-xs text-white/45">Strongest model signals from today's remaining and live matches.</p>
+            <h1 className="mt-1 text-2xl font-black">Multi-Match Builder</h1>
+            <p className="mt-1 text-xs text-white/45">One strongest verified Bet365 selection per fully-covered match · maximum 10 legs.</p>
           </div>
           <button onClick={()=>void refresh(true)} className="rounded-xl bg-violet-300 p-2.5 text-violet-950"><RefreshCw className={"size-4 "+(loading?"animate-spin":"")}/></button>
         </div>
-        <p className="mt-3 text-[0.58rem] text-white/30">
-          Premier League · Championship · League One · League Two · International · {data?.fixturesScanned??0} fixtures scanned
-          {data?.date?" · "+new Intl.DateTimeFormat("en-GB",{weekday:"short",day:"2-digit",month:"short"}).format(new Date(data.date+"T12:00:00Z")):""}
-          {data?.updatedAt?" · updated "+new Date(data.updatedAt).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}):""}
-        </p>
+        <div className="mt-3 flex flex-wrap gap-1.5 text-[0.46rem] font-black uppercase">
+          {["Cards","Fouls committed","Fouls drawn","Shots","SOT"].map(x=><span key={x} className="rounded-full bg-emerald-300/10 px-2 py-1 text-emerald-200">{x}</span>)}
+        </div>
+        <p className="mt-2 text-[0.52rem] text-white/30">A match is excluded unless Bet365 has every market above available. The chosen leg itself must also have a verified Bet365 price.</p>
       </div>
     </header>
 
-    <div className="mx-auto max-w-3xl space-y-4 px-4 py-4">
-      {data?.staleFallback?<div className="rounded-2xl border border-amber-300/15 bg-amber-300/[0.06] px-4 py-3 text-xs text-amber-100">{data.warning??"Showing the last successful cached recommendations."}</div>:null}
+    <div className="mx-auto max-w-3xl space-y-5 px-4 py-4">
+      {data?.staleFallback?<div className="rounded-2xl border border-amber-300/15 bg-amber-300/[0.06] px-4 py-3 text-xs text-amber-100">{data.warning??"Showing the last successful cached build."}</div>:null}
+
+      {loading&&!data?<section className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center"><RefreshCw className="mx-auto mb-3 size-5 animate-spin text-violet-300"/><p className="font-black">Scanning fully-covered matches…</p></section>:null}
+      {!loading&&data&&!data.ok?<section className="rounded-3xl border border-rose-300/15 bg-rose-400/5 p-6 text-center"><p className="font-black">Multi-match scan unavailable</p><p className="mt-1 text-sm text-white/40">{data.error??"Try a manual refresh."}</p></section>:null}
 
       {data?.ok?<section className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <DecisionMetric label="Best model" value={percent(topModel)} sub="avg leg projection"/>
-        <DecisionMetric label="Live now" value={String(liveMatches.length)} sub="recalculating"/>
-        <DecisionMetric label="Verified slips" value={String(verified)} sub="markets checked"/>
-        <DecisionMetric label="Player props" value={String(propBoard.length)} sub="qualified legs"/>
+        <DecisionMetric label="Eligible matches" value={String(multi?.eligibleFixtureCount??0)} sub="all 5 prop markets"/>
+        <DecisionMetric label="Recommended legs" value={String(legs.length)} sub="10 maximum"/>
+        <DecisionMetric label="90%+ legs" value={String(highConfidence)} sub="preferred threshold"/>
+        <DecisionMetric label="Combined chance" value={percent(multi?.modelAllHitProbability)} sub="model estimate"/>
       </section>:null}
 
-      {data?.ok?<DecisionTabs view={view} setView={setView} liveCount={liveMatches.length} valueCount={valueBoard.length} propCount={propBoard.length}/>:null}
+      {data?.ok?<section className="rounded-3xl border border-violet-300/20 bg-gradient-to-br from-violet-400/[0.13] to-black/30 p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div><div className="flex items-center gap-2 text-violet-200"><Sparkles className="size-4"/><p className="text-[0.54rem] font-black uppercase tracking-[0.13em]">Recommended multi</p></div><h2 className="mt-1 text-xl font-black">{legs.length?legs.length+"-Fold Bet":"No qualifying multi yet"}</h2><p className="mt-1 text-[0.58rem] leading-relaxed text-white/40">{multi?.note??"Waiting for enough fully-covered matches with verified Bet365 prices."}</p></div>
+          <div className="text-right"><p className="font-mono text-xl font-black">{multi?.combinedBet365Odds!=null?multi.combinedBet365Odds.toFixed(2):"—"}</p><p className="text-[0.42rem] font-black uppercase text-emerald-300/75">{multi?.combinedBet365Odds!=null?"verified Bet365 leg product":"no complete price"}</p></div>
+        </div>
 
-      {(view==="all"||view==="live")&&liveMatches.length?<LiveNowSection matches={liveMatches}/>:null}
-      {(view==="all"||view==="value")&&valueBoard.length?<ValueBoard rows={valueBoard}/>:null}
-      {(view==="all"||view==="props")&&propBoard.length?<PlayerPropsBoard rows={propBoard}/>:null}
-      {(view==="all"||view==="targets")&&targetGames.length?<TargetOddsSection games={targetGames} selectedId={selectedTargetGame?.fixture.id??null} onSelect={setSelectedTargetFixtureId}/>:null}
-      {view==="all"&&tracking?.available?<MiniPerformance tracking={tracking}/>:null}
+        {legs.length?<div className="mt-4 space-y-2">{legs.map((leg,i)=><div key={leg.fixtureId+"|"+leg.market+"|"+leg.player} className="rounded-2xl border border-white/7 bg-black/20 p-3">
+          <div className="grid grid-cols-[auto_1fr_auto] items-start gap-3">
+            <span className="flex size-7 items-center justify-center rounded-full bg-violet-300/10 text-[0.52rem] font-black text-violet-200">{i+1}</span>
+            <div className="min-w-0"><p className="truncate text-[0.48rem] font-black uppercase text-white/30">{leg.competition} · {leg.home} v {leg.away}</p><p className="mt-1 truncate text-sm font-black">{leg.player} · {leg.label}</p><p className="mt-1 text-[0.48rem] text-white/30">Grade {leg.confidence} · verified Bet365</p></div>
+            <div className="text-right"><p className="font-mono text-base font-black text-emerald-200">{leg.bookmakerOdds.toFixed(2)}</p><p className={"text-[0.46rem] font-black "+(leg.probability>=.90?"text-emerald-300":"text-amber-200")}>{percent(leg.probability)}</p></div>
+          </div>
+        </div>)}</div>:<div className="mt-4 rounded-2xl border border-dashed border-white/10 bg-black/15 p-6 text-center"><p className="font-black">Not enough fully-covered matches</p><p className="mt-1 text-xs text-white/35">Limited-market fixtures are deliberately excluded from this builder.</p></div>}
+      </section>:null}
 
-      {loading&&!best?<div className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center"><RefreshCw className="mx-auto mb-3 size-5 animate-spin text-violet-300"/><p className="font-black">Scanning today's matches…</p></div>:null}
-      {!loading&&data&&!data.ok?<div className="rounded-3xl border border-rose-300/15 bg-rose-400/5 p-6 text-center"><p className="font-black">Recommended scan unavailable</p><p className="mt-1 text-sm text-white/40">{data?.error??"Try a manual refresh."}</p></div>:null}
-      {!loading&&data?.ok&&!best?<div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.03] p-8 text-center"><p className="font-black">Waiting for a verified recommendation</p><p className="mt-1 text-sm text-white/35">No qualified player slip is available yet. For internationals, Match Edge will wait for a verified current senior squad or confirmed XI rather than guess from an old player pool.</p></div>:null}
-
-      {view==="all"&&best?<RecommendationCard rec={best} hero/>:null}
-
-      {view==="all"&&alternatives.length?<section className="space-y-3">
-        <div className="px-1"><p className="font-black">Other strong options</p><p className="text-[0.6rem] text-white/35">Ranked below the main pick after market calibration, recommendation-level calibration, price source and lineup certainty.</p></div>
-        {alternatives.map(r=><RecommendationCard key={r.id} rec={r}/>)}
+      {data?.ok?<section className="space-y-3">
+        <div className="px-1"><div className="flex items-center gap-2 text-amber-200"><BadgeCheck className="size-4"/><p className="font-black">Yellow Card Watch</p></div><p className="mt-1 text-[0.6rem] text-white/35">Visible whenever Bet365 has a verified player-card market and Match Edge has a priced card candidate.</p></div>
+        {cards.length?<div className="space-y-2">{cards.map((row,i)=><div key={row.fixtureId+"|"+row.player} className="rounded-2xl border border-amber-300/12 bg-amber-300/[0.045] p-3">
+          <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-[0.46rem] font-black uppercase text-white/25">{row.home} v {row.away}</p><p className="mt-1 truncate text-sm font-black">{i+1}. {row.player} · To be booked</p><p className="mt-1 line-clamp-2 text-[0.5rem] leading-relaxed text-white/30">{row.reason}</p></div><div className="text-right"><p className="font-mono text-base font-black text-amber-200">{row.bookmakerOdds.toFixed(2)}</p><p className="text-[0.46rem] font-black text-white/40">{percent(row.probability)}</p></div></div>
+        </div>)}</div>:<div className="rounded-2xl border border-dashed border-amber-300/12 bg-amber-300/[0.025] p-5 text-center"><p className="text-sm font-black text-amber-100">No verified yellow-card picks right now</p><p className="mt-1 text-[0.56rem] text-white/30">This section stays visible so you can tell the card market was checked rather than missing from the app.</p></div>}
       </section>:null}
     </div>
   </main>
