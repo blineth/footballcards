@@ -960,14 +960,14 @@ type RiskBuilder = {
 function buildRiskBuilders(players:ScorePlayer[],scope:"all"|"discipline"="all"):RiskBuilder[]{
   const configs=scope==="discipline"
     ?[
-      {id:"discipline-safe-3-1",title:"Fouls & Cards 3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4,minSafety:.42,maxLegs:10},
-      {id:"discipline-balanced-10-1",title:"Fouls & Cards 10/1",risk:"Balanced" as const,targetFractional:"10/1",targetDecimal:11,minSafety:.30,maxLegs:10},
-      {id:"discipline-high-20-1",title:"Fouls & Cards 20/1+",risk:"High Risk" as const,targetFractional:"20/1+",targetDecimal:21,minSafety:.20,maxLegs:10},
+      {id:"discipline-safe-3-1",title:"Fouls & Cards 3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4,minSafety:.42,maxLegs:12},
+      {id:"discipline-balanced-10-1",title:"Fouls & Cards 10/1",risk:"Balanced" as const,targetFractional:"10/1",targetDecimal:11,minSafety:.30,maxLegs:12},
+      {id:"discipline-high-20-1",title:"Fouls & Cards 20/1+",risk:"High Risk" as const,targetFractional:"20/1+",targetDecimal:21,minSafety:.20,maxLegs:12},
     ]
     :[
-      {id:"safe-3-1",title:"Safe 3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4,minSafety:.50,maxLegs:10},
-      {id:"balanced-10-1",title:"Balanced 10/1",risk:"Balanced" as const,targetFractional:"10/1",targetDecimal:11,minSafety:.38,maxLegs:10},
-      {id:"high-20-1",title:"High Risk 20/1+",risk:"High Risk" as const,targetFractional:"20/1+",targetDecimal:21,minSafety:.28,maxLegs:10},
+      {id:"safe-3-1",title:"Safe 3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4,minSafety:.50,maxLegs:12},
+      {id:"balanced-10-1",title:"Balanced 10/1",risk:"Balanced" as const,targetFractional:"10/1",targetDecimal:11,minSafety:.38,maxLegs:12},
+      {id:"high-20-1",title:"High Risk 20/1+",risk:"High Risk" as const,targetFractional:"20/1+",targetDecimal:21,minSafety:.28,maxLegs:12},
     ]
   const baseMarkets:MarketKey[]=["goal1","assist1","shot1","sot1","foul1","fouled1","card"]
   const allPricedMarkets:MarketKey[]=scope==="discipline"
@@ -1118,13 +1118,13 @@ function buildRiskBuilders(players:ScorePlayer[],scope:"all"|"discipline"="all")
   return configs.map(config=>{
     const sourceCandidates=safeCandidates
     const safeFloors=[config.minSafety]
-    type State={legs:SlipLeg[];product:number;quality:number;prob:number;conservative:number;players:Set<string>;families:Record<string,number>}
+    type State={legs:SlipLeg[];product:number;quality:number;prob:number;conservative:number;players:Set<string>;families:Record<string,number>;teamCounts:Record<string,number>}
     let best:State|undefined
     let usedSafeFloor:number|null=null
 
     for(const safeFloor of safeFloors){
       const candidates=sourceCandidates.filter(x=>safetyLegProbability(x.leg)>=safeFloor)
-      let states:State[]=[{legs:[],product:1,quality:0,prob:1,conservative:1,players:new Set(),families:{}}]
+      let states:State[]=[{legs:[],product:1,quality:0,prob:1,conservative:1,players:new Set(),families:{},teamCounts:{}}]
 
       for(const option of candidates){
         const next=[...states]
@@ -1132,6 +1132,9 @@ function buildRiskBuilders(players:ScorePlayer[],scope:"all"|"discipline"="all")
           if(state.legs.length>=config.maxLegs)continue
           const pkey=norm(option.leg.player)
           if(state.players.has(pkey))continue
+          const teamKey=norm(option.leg.team)
+          const teamCount=state.teamCounts[teamKey]??0
+          if(teamCount>=6)continue
           const familyCount=state.families[option.family]??0
           const odd=bet365Odd(option.leg)
           if(!(odd>1))continue
@@ -1147,6 +1150,7 @@ function buildRiskBuilders(players:ScorePlayer[],scope:"all"|"discipline"="all")
             conservative:conservativeJoint(legs,rawProb),
             players:new Set([...state.players,pkey]),
             families:{...state.families,[option.family]:familyCount+1},
+            teamCounts:{...state.teamCounts,[teamKey]:teamCount+1},
           })
         }
         const score=(state:State)=>{
@@ -1225,7 +1229,7 @@ function buildRiskBuilders(players:ScorePlayer[],scope:"all"|"discipline"="all")
       exactBet365BuilderPrice:false,
       pricingBasis:"bet365_singles_product" as const,
       note:scope==="discipline"
-        ?"This slip searches only verified Bet365 yellow-card, foul-committed and foul-drawn markets. Within that discipline-only pool it chooses the combination with the highest conservative all-hit probability that reaches the target. Cards are not forced in when higher-probability foul legs are safer."
+        ?"This slip searches only verified Bet365 yellow-card, foul-committed and foul-drawn markets. It may use up to Bet365's 12-selection limit, with no more than six players from either team, and chooses the combination with the highest conservative all-hit probability that reaches the target. Cards are not forced in when higher-probability foul legs are safer."
         :config.risk==="Safe"
           ?"Every verified Bet365 player market is searched. Safe chooses the highest conservative all-hit probability that reaches the target; several short-priced fouls/shots can beat a speculative two-leg route."
           :"Every verified Bet365 player market is searched across goals, assists, cards, fouls, fouls drawn, shots and SOT. The model chooses the combination with the highest conservative all-hit probability that reaches the target; market type and leg count do not get preference. Bet365 can reprice correlated legs inside Bet Builder, so this is not labelled as the final Builder quote."
