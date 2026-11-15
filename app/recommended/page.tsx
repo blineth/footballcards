@@ -159,7 +159,7 @@ export default function RecommendedPage(){
 
       {loading&&!best?<div className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center"><RefreshCw className="mx-auto mb-3 size-5 animate-spin text-violet-300"/><p className="font-black">Scanning today's matches…</p></div>:null}
       {!loading&&data&&!data.ok?<div className="rounded-3xl border border-rose-300/15 bg-rose-400/5 p-6 text-center"><p className="font-black">Recommended scan unavailable</p><p className="mt-1 text-sm text-white/40">{data?.error??"Try a manual refresh."}</p></div>:null}
-      {!loading&&data?.ok&&!best?<div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.03] p-8 text-center"><p className="font-black">No recommendation ready yet</p><p className="mt-1 text-sm text-white/35">No strong player slip is available from today's remaining predicted or confirmed lineups.</p></div>:null}
+      {!loading&&data?.ok&&!best?<div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.03] p-8 text-center"><p className="font-black">Waiting for a verified recommendation</p><p className="mt-1 text-sm text-white/35">No qualified player slip is available yet. For internationals, Match Edge will wait for a verified current senior squad or confirmed XI rather than guess from an old player pool.</p></div>:null}
 
       {view==="all"&&best?<RecommendationCard rec={best} hero/>:null}
 
