@@ -30,6 +30,7 @@ type Bet365Availability={
   priceAvailable:boolean
   liveVerified?:boolean
   marketAvailability:Record<string,MarketStatus>
+  availableBets?:Array<{kind:string;market:string;label:string;odd:number}>
   note?:string|null
 }
 type Fixture = {
@@ -94,35 +95,30 @@ function oddsUrl(f:Fixture){
   return "/api/bet-builder-odds?"+new URLSearchParams(params)
 }
 const marketLabels:Record<string,string>={
-  goal:"Player to Score",assist:"Assists",card:"Cards",foul:"Fouls",fouled:"Fouled",shot:"Shots",sot:"SOT",
+  goal:"Player to Score",assist:"Assists",card:"Player Cards",foul:"Player Fouls",fouled:"Player Fouled",shot:"Player Shots",sot:"Player SOT",
+}
+const broadMarketLabels:Record<string,string>={
+  result:"Result","draw-no-bet":"Draw No Bet","double-chance":"Double Chance",btts:"BTTS",
+  "total-goals":"Total Goals","team-goals":"Team Goals","first-team-score":"First Team to Score",
+  corners:"Corners","corners-handicap":"Corners","bookings":"Bookings",
 }
 function availabilitySummary(a:Bet365Availability|undefined){
   if(!a||a.loading)return {tone:"checking",title:"Checking Bet365 markets",detail:""}
-  const entries=Object.entries(a.marketAvailability??{})
-  const availableKeys=entries.filter(([,v])=>v==="available").map(([k])=>k)
-  const unavailableKeys=entries.filter(([,v])=>v==="unavailable").map(([k])=>k)
-  const available=availableKeys.map(k=>marketLabels[k]??k)
-  const unavailable=unavailableKeys.map(k=>marketLabels[k]??k)
-
-  if(!available.length&&unavailable.length)return {
+  const playerAvailable=Object.entries(a.marketAvailability??{}).filter(([,v])=>v==="available").map(([k])=>marketLabels[k]??k)
+  const broadAvailable=(a.availableBets??[]).map(b=>broadMarketLabels[b.kind]??b.market).filter(Boolean)
+  const available=[...new Set([...playerAvailable,...broadAvailable])]
+  if(!available.length)return {
     tone:"none",
-    title:"No Bet365 player prop markets",
-    detail:"Shots, fouls, cards and other tracked player props are not currently offered in the verified Bet365 feed."
+    title:"No verified Bet365 markets",
+    detail:a.note??"No supported Bet365 markets are currently available in the verified feed."
   }
-
-  if(availableKeys.length===1&&availableKeys[0]==="goal")return {
-    tone:"limited",
-    title:"Bet365: Player to Score only",
-    detail:"Only Player to Score is available. Not offered: "+unavailable.join(", ")
+  const compact=available.slice(0,6)
+  const extra=Math.max(0,available.length-compact.length)
+  return {
+    tone:available.length<=2?"limited":"available",
+    title:available.length===1?"Bet365: "+available[0]+" only":"Bet365: "+available.length+" markets available",
+    detail:"Available: "+compact.join(", ")+(extra?" +"+extra+" more":"")
   }
-
-  if(available.length)return {
-    tone:unavailable.length?"limited":"available",
-    title:unavailable.length?"Limited Bet365 player markets":"Bet365 player markets available",
-    detail:"Available: "+available.join(", ")+(unavailable.length?" · Not offered: "+unavailable.join(", "):"")
-  }
-
-  return {tone:"checking",title:"Bet365 market status unknown",detail:a.note??""}
 }
 function isFinished(raw:LiveFixture|Fixture){
   const status=String(raw.status??"").toLowerCase()
@@ -170,10 +166,11 @@ export default function MatchesPage(){
           priceAvailable:Boolean(data?.priceAvailable),
           liveVerified:data?.liveVerified,
           marketAvailability:data?.marketAvailability??{},
+          availableBets:Array.isArray(data?.availableBets)?data.availableBets:[],
           note:data?.note??null,
         }] as const
       }catch{
-        return [fixture.id,{loading:false,priceAvailable:false,marketAvailability:{},note:"Unable to verify Bet365 markets right now."}] as const
+        return [fixture.id,{loading:false,priceAvailable:false,marketAvailability:{},availableBets:[],note:"Unable to verify Bet365 markets right now."}] as const
       }
     }))
     setBet365Availability(cur=>({...cur,...Object.fromEntries(results)}))
