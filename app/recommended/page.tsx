@@ -74,7 +74,8 @@ type MultiMatchBuild={
 }
 type YellowCardWatchRow={
   fixtureId:string;competition:string;kickoff:string;home:string;away:string;
-  player:string;team:string;probability:number;bookmakerOdds:number;confidence:"A"|"B"|"C"|"D";reason:string
+  player:string;team:string;probability:number;bookmakerOdds:number;confidence:"A"|"B"|"C"|"D";reason:string;
+  probabilityBasis?:"model"|"bet365-implied"
 }
 type Response={
   ok:boolean;updatedAt?:string;date?:string;autoAdvanced?:boolean;fixturesScanned?:number;recommendations?:Recommendation[];
@@ -167,7 +168,7 @@ export default function RecommendedPage(){
       {data?.ok?<section className="space-y-3">
         <div className="px-1"><div className="flex items-center gap-2 text-amber-200"><BadgeCheck className="size-4"/><p className="font-black">Yellow Card Watch</p></div><p className="mt-1 text-[0.6rem] text-white/35">Visible whenever Bet365 has a verified player-card market and Match Edge has a priced card candidate.</p></div>
         {cards.length?<div className="space-y-2">{cards.map((row,i)=><div key={row.fixtureId+"|"+row.player} className="rounded-2xl border border-amber-300/12 bg-amber-300/[0.045] p-3">
-          <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-[0.46rem] font-black uppercase text-white/25">{row.home} v {row.away}</p><p className="mt-1 truncate text-sm font-black">{i+1}. {row.player} · To be booked</p><p className="mt-1 line-clamp-2 text-[0.5rem] leading-relaxed text-white/30">{row.reason}</p></div><div className="text-right"><p className="font-mono text-base font-black text-amber-200">{row.bookmakerOdds.toFixed(2)}</p><p className="text-[0.46rem] font-black text-white/40">{percent(row.probability)}</p></div></div>
+          <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-[0.46rem] font-black uppercase text-white/25">{row.home} v {row.away}</p><div className="mt-1 flex flex-wrap items-center gap-2"><p className="truncate text-sm font-black">{i+1}. {row.player} · To be booked</p><span className={"rounded-full px-1.5 py-0.5 text-[0.38rem] font-black "+(row.probabilityBasis==="model"?"bg-emerald-300/10 text-emerald-200":"bg-amber-300/10 text-amber-200")}>{row.probabilityBasis==="model"?"MATCH EDGE MODEL":"BET365 IMPLIED"}</span></div><p className="mt-1 line-clamp-2 text-[0.5rem] leading-relaxed text-white/30">{row.reason}</p></div><div className="text-right"><p className="font-mono text-base font-black text-amber-200">{row.bookmakerOdds.toFixed(2)}</p><p className="text-[0.46rem] font-black text-white/40">{percent(row.probability)}</p></div></div>
         </div>)}</div>:<div className="rounded-2xl border border-dashed border-amber-300/12 bg-amber-300/[0.025] p-5 text-center"><p className="text-sm font-black text-amber-100">No verified yellow-card picks right now</p><p className="mt-1 text-[0.56rem] text-white/30">This section stays visible so you can tell the card market was checked rather than missing from the app.</p></div>}
       </section>:null}
     </div>
