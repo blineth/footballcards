@@ -7,6 +7,7 @@ import { GET as radarGET } from "../fixture-radar/route"
 import { GET as oddsGET } from "../bet-builder-odds/route"
 import calibrationSnapshot from "@/data/model/calibration.json"
 import { buildSnapshotScorecard } from "@/lib/snapshot-scorecard"
+import { getMatchStakes, type MatchStakesContext } from "@/lib/match-stakes"
 
 export const dynamic = "force-dynamic"
 export const revalidate = 0
@@ -112,6 +113,12 @@ type ScorePlayer = {
     sameMatchupMeetings:number
     sameMatchupCards:number
     sameMatchupFouls:number
+  }
+  stakesContext?: {
+    teamScore:number
+    matchScore:number
+    category:string
+    reason:string
   }
   cardContext?: {
     rolePrior:number
@@ -445,6 +452,90 @@ function logitAdjust(probability: number, delta: number) {
   const logit = Math.log(p / (1 - p)) + delta
   return clamp(1 / (1 + Math.exp(-logit)))
 }
+function stakesForTeam(stakes:MatchStakesContext|null|undefined,team:string){
+  if(!stakes)return null
+  if(teamMatch(team,stakes.home.team))return stakes.home
+  if(teamMatch(team,stakes.away.team))return stakes.away
+  return null
+}
+function stakesMarketDelta(stakes:MatchStakesContext|null|undefined,team:string,market:string){
+  const t=stakesForTeam(stakes,team)
+  if(!t||!stakes?.available)return 0
+  const teamScore=clamp(Number(t.score??0),0,1)
+  const matchScore=clamp(Number(stakes.matchScore??0),0,1)
+  const both=stakes.bothHighStakes?.045:0
+  if(market==="card")return teamScore*.16+matchScore*.065+both
+  if(market.startsWith("foul")&&!market.startsWith("fouled")){
+    const n=Math.max(1,Number(market.replace(/\D/g,"")||1))
+    return (teamScore*.075+matchScore*.035+both*.45)*Math.min(1.18,.92+n*.055)
+  }
+  if(market.startsWith("fouled"))return teamScore*.03+matchScore*.018
+  return 0
+}
+function stakesReason(stakes:MatchStakesContext|null|undefined,team:string,market:string){
+  const t=stakesForTeam(stakes,team)
+  if(!t||stakesMarketDelta(stakes,team,market)<.035)return null
+  const label=t.category==="relegation"?"relegation/survival"
+    :t.category==="qualification"?"qualification"
+    :t.category==="survival"?"survival/relegation"
+    :t.category==="promotion"?"promotion"
+    :t.category==="playoff"?"play-off"
+    :t.category==="europe"?"European qualification"
+    :t.category==="title"?"title race"
+    :t.category==="knockout"?"knockout progression"
+    :t.category
+  return "Match stakes: "+label+" pressure · "+t.reason
+}
+function refreshMarketValue(row:any,probability:number){
+  row.probability=Math.round(clamp(probability)*1000)/1000
+  row.fairOdds=fairOdds(row.probability)
+  const bookP=row.bookmakerNoVigProbability??row.impliedProbability
+  row.edge=bookP==null?row.edge:Math.round((row.probability-Number(bookP))*1000)/1000
+  row.expectedValue=row.bookmakerOdds==null?row.expectedValue:Math.round((row.probability*Number(row.bookmakerOdds)-1)*1000)/1000
+}
+function applyStakesToFallbackPlayers(players:any[],stakes:MatchStakesContext){
+  for(const player of players){
+    const team=String(player?.team??"")
+    const t=stakesForTeam(stakes,team)
+    player.stakesContext=t?{teamScore:t.score,matchScore:stakes.matchScore,category:t.category,reason:t.reason}:undefined
+    for(const [market,row] of Object.entries(player?.markets??{}) as Array<[string,any]>){
+      const delta=stakesMarketDelta(stakes,team,market)
+      if(delta<=0||!row)continue
+      refreshMarketValue(row,logitAdjust(Number(row.probability??0),delta))
+      const reason=stakesReason(stakes,team,market)
+      if(reason){
+        const reasons=Array.isArray(row.reasons)?row.reasons.filter((x:any)=>!String(x).startsWith("Match stakes:")):[]
+        row.reasons=[...reasons.slice(0,2),reason].slice(0,3)
+      }
+    }
+    if(Array.isArray(player?.offeredCardLines)&&player?.markets?.card){
+      for(const line of player.offeredCardLines){
+        const p=Number(player.markets.card.probability??line.probability??0)
+        line.probability=p;line.fairOdds=fairOdds(p)
+        line.edge=Math.round((p-1/Number(line.bookmakerOdds))*1000)/1000
+        line.expectedValue=Math.round((p*Number(line.bookmakerOdds)-1)*1000)/1000
+      }
+    }
+    for(const field of ["offeredFoulLines","likelyFoulLines"]){
+      if(!Array.isArray(player?.[field]))continue
+      for(const line of player[field]){
+        const threshold=Math.max(1,Number(line?.threshold??1))
+        const key="foul"+threshold
+        const standard=player?.markets?.[key]
+        const p=standard
+          ?Number(standard.probability??line.probability??0)
+          :logitAdjust(Number(line.probability??0),stakesMarketDelta(stakes,team,key))
+        line.probability=Math.round(clamp(p)*1000)/1000
+        line.fairOdds=fairOdds(line.probability)
+        if(Number(line.bookmakerOdds)>1){
+          line.edge=Math.round((line.probability-1/Number(line.bookmakerOdds))*1000)/1000
+          line.expectedValue=Math.round((line.probability*Number(line.bookmakerOdds)-1)*1000)/1000
+        }
+      }
+    }
+  }
+  return players
+}
 function conditional(rows: MatchRow[], foulThreshold: number) {
   const subset = rows.filter(row => Number(row.foulsCommitted ?? 0) >= foulThreshold)
   if (!subset.length) return { matches: 0, yellows: 0, rate: null as number | null }
@@ -679,6 +770,10 @@ function marketReasons(input: {
   matchupFouled90?: number | null
   conditional2?: { matches: number; yellows: number; rate: number | null }
   countryH2H?: { matches:number; playerSamples:number; cardRate:number|null; foulsPerPlayer:number|null } | null
+  clubMatches?:number
+  clubYellows?:number
+  clubCardRate?:number|null
+  stakesReason?:string|null
 }) {
   const reasons: string[] = []
   if(input.market==="card"&&input.h2hN>=2&&Number(input.h2hCards??0)===0){
@@ -696,6 +791,9 @@ function marketReasons(input: {
   }
   if(input.market==="card"&&Number(input.sameMatchupCards??0)>0){
     reasons.push("Booked with the same likely direct matchup on the pitch before")
+  }
+  if(input.stakesReason&&(input.market==="card"||(input.market.startsWith("foul")&&!input.market.startsWith("fouled")))){
+    reasons.push(input.stakesReason)
   }
   if (input.recent5 >= input.season + 0.12) reasons.push("Recent form is above longer-run rate")
   if (input.season >= 0.65 && input.market !== "card") reasons.push("Strong historical hit rate")
@@ -1015,9 +1113,11 @@ function buildRiskBuilders(players:ScorePlayer[],scope:"all"|"discipline"="all")
     const strongCurrent=recent>=0.40&&season>=0.20
     const strongSeason=sample>=8&&season>=0.30
     const foulPressure=Number(after2?.matches??0)>=3&&Number(after2?.rate??0)>=0.45
-    // Cards are high-variance. Do not auto-build them merely because their price
-    // helps reach a target: require a repeat opponent pattern or strong behaviour.
-    return leg.probability>=0.16&&(strongH2H||strongCurrent||strongSeason||foulPressure)
+    const highStakes=Number(player.stakesContext?.teamScore??0)>=.62&&Number(player.stakesContext?.matchScore??0)>=.55
+    const moderateBehaviour=season>=.15||recent>=.20||Number(player.cardContext?.clubCardRate??0)>=.18||foulPressure
+    // Cards are high-variance. Match stakes can reinforce a player who already
+    // has some booking/foul evidence, but pressure alone never manufactures a card pick.
+    return leg.probability>=0.16&&(strongH2H||strongCurrent||strongSeason||foulPressure||(highStakes&&moderateBehaviour))
   }
 
   const baseLegs=players.flatMap(player=>baseMarkets.map(m=>marketLeg(player,m)))
@@ -1243,9 +1343,10 @@ function buildRiskBuilders(players:ScorePlayer[],scope:"all"|"discipline"="all")
 }
 
 async function buildVerifiedBet365SnapshotFallback(input:{request:Request;date:string;home:string;away:string;competition:string}){
-  const fallback:any=await buildSnapshotScorecard({
-    date:input.date,home:input.home,away:input.away,competition:input.competition as any,
-  })
+  const [fallback,matchStakes]:[any,MatchStakesContext]=await Promise.all([
+    buildSnapshotScorecard({date:input.date,home:input.home,away:input.away,competition:input.competition as any}),
+    getMatchStakes({date:input.date,home:input.home,away:input.away,competition:input.competition}),
+  ])
   let odds:any={selections:[],priceAvailable:false}
   try{
     const oddsResponse=await oddsGET(input.request)
@@ -1286,6 +1387,7 @@ async function buildVerifiedBet365SnapshotFallback(input:{request:Request;date:s
       marketRow.expectedValue=Math.round((probability*price-1)*1000)/1000
     }
   }
+  fallbackPlayers=applyStakesToFallbackPlayers(fallbackPlayers,matchStakes)
   const bookmakerAvailability:BookmakerAvailability=odds?.bookmakerAvailability??{}
   const eligibleBooks=Object.entries(bookmakerAvailability)
     .filter(([book,a])=>book==="Bet365"&&a.card==="available"&&a.foul==="available")
@@ -1306,6 +1408,7 @@ async function buildVerifiedBet365SnapshotFallback(input:{request:Request;date:s
     priceAvailable:Boolean(odds?.priceAvailable)&&freshness!=="STALE",
     playerEligibilitySource:fallback?.lineupsConfirmed===true?"official-starting-xi-and-bet365-player-board":"bet365-player-board",
     bet365ListedPlayerCount:fallbackPlayers.length,
+    matchStakes,
     players:fallbackPlayers,
     playerCount:fallbackPlayers.length,
     riskBuilders:buildRiskBuilders(fallbackPlayers as ScorePlayer[]),
@@ -1502,6 +1605,8 @@ export async function GET(request: Request) {
       }
     }
   }
+
+  const matchStakes=await getMatchStakes({date,competition,home,away})
 
   const countryH2HDates=new Set<string>()
   let countryH2HPlayerSamples=0
@@ -1738,6 +1843,8 @@ export async function GET(request: Request) {
       probability = market==="card"
         ? blend(rawProbability,calibrated.probability,.45)
         : calibrated.probability
+      const stakesDelta=stakesMarketDelta(matchStakes,String(candidate.team??""),market)
+      if(stakesDelta>0)probability=logitAdjust(probability,stakesDelta)
 
       const odd = findOdds(usableSelections, candidate.name, market, candidates.map(x=>String(x.name??"")))
       const bookmakerOdds = odd?.odd == null ? null : Number(odd.odd)
@@ -1805,6 +1912,7 @@ export async function GET(request: Request) {
           clubMatches,
           clubYellows,
           clubCardRate,
+          stakesReason:stakesReason(matchStakes,String(candidate.team??""),market),
         }),
       }
     }
@@ -1830,7 +1938,10 @@ export async function GET(request: Request) {
       const standardKey = threshold>=1&&threshold<=5 ? ("foul"+threshold) as MarketKey : null
       const probability = standardKey
         ? markets[standardKey].probability
-        : dynamicFoulProbability({rows,threshold,per90:Number(candidate.fouls90??0),expectedMinutes,matchupFouled90})
+        : logitAdjust(
+            dynamicFoulProbability({rows,threshold,per90:Number(candidate.fouls90??0),expectedMinutes,matchupFouled90}),
+            stakesMarketDelta(matchStakes,String(candidate.team??""),"foul"+threshold)
+          )
       const bookmakerOdds=Number(selection.odd)
       const impliedProbability=1/bookmakerOdds
       return {
@@ -1916,6 +2027,7 @@ export async function GET(request: Request) {
       sampleMinutes,
       expectedMinutes,
       matchup: candidate?.likelyMatchup ? { name: candidate.likelyMatchup.name, role: candidate.likelyMatchup.role ?? null, fouled90: matchupFouled90, type:candidate.likelyMatchup.type ?? null, seasonFouled90:candidate.likelyMatchup.seasonFouled90 ?? null, recentFouled90:candidate.likelyMatchup.recentFouled90 ?? null } : null,
+      stakesContext:(()=>{const t=stakesForTeam(matchStakes,String(candidate.team??""));return t?{teamScore:t.score,matchScore:matchStakes.matchScore,category:t.category,reason:t.reason}:undefined})(),
       cardContext:{
         rolePrior:Math.round(rolePrior*1000)/1000,
         clubMatches,
@@ -2006,6 +2118,7 @@ export async function GET(request: Request) {
     eligibleBooks,
     priceAvailable: Boolean(odds?.priceAvailable) && oddsFreshness !== "STALE",
     referee: radar?.referee ?? null,
+    matchStakes,
     countryH2HContext:countryH2HContext ? {
       matches:countryH2HContext.matches,
       playerSamples:countryH2HContext.playerSamples,
@@ -2038,6 +2151,7 @@ export async function GET(request: Request) {
     foulTargetSlips,
     previewFoulTargetSlips,
     methodology: {
+      stakesModel:"Cards and fouls include a bounded competition-pressure modifier based on current league/group position, distance to promotion/qualification/relegation boundaries, season stage and knockout status. Match stakes reinforce player-specific booking/foul evidence; they never create a card pick on their own.",
       version: "scorecard-v2-calibrated",
       description: "Player-level pre-match probabilities use only match rows dated before the target fixture. Before official teams are released, Bet365's available player-prop board is the hard eligibility gate; predicted-XI/current-squad data is used only to rank and model players that Bet365 is actually offering. Once official lineups arrive, the player pool is rebuilt from the confirmed starters and Bet365 is rechecked for the markets and prices available on those starters. For international fixtures, senior international appearances from Euro 2024 onward are the primary player sample for minutes, shots, SOT, fouls, fouls drawn, goals, assists and cards; club form only stabilises thin national-team samples. Domestic fixtures use club history. All probabilities also incorporate recency, opponent H2H, expected minutes, matchup pressure, count-rate checks, referee/card context and walk-forward calibration. H2H is lineup-aware: previous meetings receive more weight when more of today's predicted/confirmed opponents also played, and the strongest extra weight is reserved for a returning likely direct matchup.",
       cardConditional: "Yellow-card estimates measure each player's booking rate at 0 fouls, exactly 1, exactly 2, 3+, 1+ and 2+ foul states, with sample-size reliability. Match-level data still cannot identify the exact foul that triggered the booking.",
