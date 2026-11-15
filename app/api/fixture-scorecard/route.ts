@@ -1485,7 +1485,11 @@ export async function GET(request: Request) {
     const rows = recommendationsAllowed ? starterRows(primaryRows) : primaryRows
     const opponent = teamMatch(candidate.team, home) ? away : home
     const h2hRows = competition==="International"
-      ? allRows.filter(row=>isInternationalHistoryCompetition(row.competition)&&teamMatch(row.opponent,opponent))
+      ? allRows.filter(row=>
+          isInternationalHistoryCompetition(row.competition) &&
+          String(row.matchDate??"")>="2021-06-01" &&
+          teamMatch(row.opponent,opponent)
+        )
       : rows.filter(row => teamMatch(row.opponent, opponent))
     const recent5Rows = [...rows].sort((a, b) => String(a.matchDate).localeCompare(String(b.matchDate))).slice(-5)
     const sampleMinutes = rows.reduce((sum, row) => sum + Number(row.minutes ?? 0), 0)
