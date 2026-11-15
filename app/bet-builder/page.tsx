@@ -1080,7 +1080,15 @@ export default function BetBuilderPage(){
           <button onClick={()=>router.push("/")} className="rounded-xl bg-white/7 p-2.5 text-white/70"><ArrowLeft className="size-4"/></button>
           <div className="min-w-0 flex-1"><div className="flex items-center gap-2 text-emerald-300"><Target className="size-4"/><span className="text-[0.6rem] font-black uppercase tracking-[0.15em]">Match Builder</span></div><h1 className="mt-1 truncate text-xl font-black">{fixture.home} <span className="text-white/25">v</span> {fixture.away}</h1><p className="mt-0.5 text-[0.58rem] text-white/35">{inPlay&&live?<span className="font-black text-rose-300">LIVE {live.elapsed}' · {live.score.home??"-"}-{live.score.away??"-"} · </span>:null}{fixture.competition} · {time(fixture.kickoff)}{!inPlay?<span className="text-white/20"> · cached until refresh</span>:null}</p></div>
           <button onClick={()=>void toggleH2H()} className={"rounded-xl border px-3 py-2.5 text-[0.55rem] font-black "+(h2hOpen?"border-emerald-300/30 bg-emerald-300 text-emerald-950":"border-white/10 bg-white/6 text-white/55")}>H2H</button>
-          <button onClick={()=>void load(fixture,true)} className="rounded-xl bg-emerald-400 p-2.5 text-emerald-950"><RefreshCw className={"size-4 "+(loading?"animate-spin":"")}/></button>
+          <button onClick={()=>{
+            if(inPlay){
+              void load(fixture,false)
+              void loadLive(fixture)
+              void loadLiveOdds(fixture)
+            }else{
+              void load(fixture,true)
+            }
+          }} className="rounded-xl bg-emerald-400 p-2.5 text-emerald-950"><RefreshCw className={"size-4 "+(loading?"animate-spin":"")}/></button>
         </div>
       </div>
     </header>
