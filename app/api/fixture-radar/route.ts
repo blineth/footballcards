@@ -90,8 +90,13 @@ async function mergeInternationalProfiles(data:any,home:string,away:string){
     const clubApps=Number(current?.appearances??0)
     const clubStarts=Number(current?.starts??0)
     const clubStartRate=clubApps>0?clubStarts/clubApps:0
+    // Never let a 1/1 or 2/2 international sample look as certain as 10+/10+.
+    // Shrink start rate toward a normal senior-squad prior and grow trust with caps.
+    const intlReliability=Math.min(1,intlMatches/8)
+    const smoothedIntlStart=(intlStarts+0.55*4)/(intlMatches+4)
+    const intlUsage=smoothedIntlStart*.65+intlMinutesRate*.35
     const startLikelihood=Math.max(.05,Math.min(.95,
-      .08+intlStartRate*.64+intlMinutesRate*.18+clubStartRate*.10
+      .18+intlUsage*(.12+.62*intlReliability)+clubStartRate*.10
     ))
     const profilePosition=String(profile?.position??"")
     const position=norm(profilePosition)==="sub"
@@ -177,24 +182,27 @@ function candidateOrder(a: any, b: any) {
 
 function positionGroup(position:string|null|undefined){
   const p=norm(position)
-  if(p.includes("goal")||p==="gk")return "gk"
-  if(p.includes("back")||p.includes("def")||["cb","lb","rb","lwb","rwb"].includes(p))return "def"
-  if(p.includes("mid")||["dm","cm","am","cdm","cam","lm","rm"].includes(p))return "mid"
-  if(p.includes("wing")||p.includes("forward")||p.includes("striker")||["st","cf","lw","rw"].includes(p))return "att"
+  const compact=p.replace(/\s+/g,"")
+  if(p.includes("goal")||compact==="gk"||compact==="g")return "gk"
+  if(p.includes("back")||p.includes("def")||/(^|[^a-z])(cb|lb|rb|lwb|rwb)([^a-z]|$)/.test(" "+p+" ")||compact.startsWith("cd"))return "def"
+  if(p.includes("forward")||p.includes("striker")||p.includes("wing")||compact==="f"||compact.startsWith("st")||compact.startsWith("cf")||compact==="lw"||compact==="rw")return "att"
+  if(p.includes("mid")||compact.startsWith("dm")||compact.startsWith("cm")||compact.startsWith("am")||compact==="lm"||compact==="rm"||compact.startsWith("cdm")||compact.startsWith("cam"))return "mid"
   return "other"
 }
 function predictedStarterScore(candidate:any){
   const starts=Number(candidate.internationalStarts??candidate.starts??0)
   const apps=Number(candidate.internationalMatches??candidate.appearances??0)
   const minutes=Number(candidate.internationalMinutes??candidate.minutes??0)
-  const startRate=apps>0?starts/apps:0
   const minutesPerCap=apps>0?Math.min(1,minutes/(apps*90)):0
   const likelihood=Number(candidate.startLikelihood??0)
+  const sampleReliability=Math.min(1,apps/8)
+  const smoothedStart=(starts+0.55*4)/(apps+4)
+  const usage=smoothedStart*.65+minutesPerCap*.35
   const subPenalty=norm(candidate.position)==="sub"?.18:0
   return Math.max(0,
-    likelihood*.44+
-    startRate*.34+
-    minutesPerCap*.16+
+    likelihood*.50+
+    usage*(.12+.24*sampleReliability)+
+    Math.min(1,apps/12)*.08+
     Math.min(1,Number(candidate.score??0)/100)*.06-
     subPenalty
   )
@@ -208,31 +216,58 @@ function buildPredictedTeam(candidates:any[],teamName:string,curatedTeam:any|nul
   const teamCandidates=candidates.filter(c=>teamMatch(c.team,teamName))
   const chosen:any[]=[]
   const used=new Set<string>()
+  const add=(candidate:any,role?:string|null,confidence?:string|null,formation?:string|null)=>{
+    if(!candidate||chosen.length>=11)return
+    const key=String(candidate.dbName??candidate.name)
+    if(used.has(key))return
+    chosen.push({...candidate,predictedStarter:true,predictedRole:role??candidate.position??null,predictedLineupConfidence:confidence??curatedTeam?.confidence??"recent-xi-fallback",predictedFormation:formation??curatedTeam?.formation??null})
+    used.add(key)
+  }
+
   if(curatedTeam?.players?.length){
     for(const p of curatedTeam.players){
       const hit=teamCandidates.find(c=>!used.has(String(c.dbName??c.name))&&candidateMatchesName(c,p.name))
-      if(hit){
-        chosen.push({...hit,predictedStarter:true,predictedRole:p.role??hit.position??null,predictedLineupConfidence:curatedTeam.confidence??"predicted",predictedFormation:curatedTeam.formation??null})
-        used.add(String(hit.dbName??hit.name))
+      if(hit)add(hit,p.role,curatedTeam.confidence,curatedTeam.formation)
+    }
+  }
+
+  const ranked=teamCandidates
+    .filter(c=>!used.has(String(c.dbName??c.name)))
+    .sort((a,b)=>predictedStarterScore(b)-predictedStarterScore(a)||Number(b.internationalMinutes??b.minutes??0)-Number(a.internationalMinutes??a.minutes??0))
+
+  // If there is no trusted published XI, build a football-shaped XI instead of
+  // simply taking the top 10 outfield scores (which could be 7-8 defenders).
+  if(!curatedTeam?.players?.length){
+    const byGroup=(group:string)=>ranked.filter(c=>positionGroup(c.position)===group)
+    add(byGroup("gk")[0],byGroup("gk")[0]?.position??"GK")
+
+    const quotas:{group:string;count:number}[]=[
+      {group:"def",count:4},
+      {group:"mid",count:4},
+      {group:"att",count:2},
+    ]
+    for(const quota of quotas){
+      for(const candidate of byGroup(quota.group)){
+        if(chosen.filter(c=>positionGroup(c.predictedRole??c.position)===quota.group).length>=quota.count)break
+        add(candidate)
       }
     }
+  }else if(!chosen.some(c=>positionGroup(c.position)==="gk")){
+    add(ranked.find(c=>positionGroup(c.position)==="gk"))
   }
-  const remaining=teamCandidates
-    .filter(c=>!used.has(String(c.dbName??c.name)))
-    .sort((a,b)=>predictedStarterScore(b)-predictedStarterScore(a)||Number(b.minutes??0)-Number(a.minutes??0))
-  if(!chosen.some(c=>positionGroup(c.position)==="gk")){
-    const gk=remaining.find(c=>positionGroup(c.position)==="gk")
-    if(gk){
-      chosen.push({...gk,predictedStarter:true,predictedRole:gk.position??"GK",predictedLineupConfidence:curatedTeam?.confidence??"recent-xi-fallback",predictedFormation:curatedTeam?.formation??null})
-      used.add(String(gk.dbName??gk.name))
-    }
-  }
-  for(const candidate of remaining){
+
+  // Fill any gaps from the strongest remaining players, but avoid an implausible
+  // defender pile-up when role data is available.
+  for(const candidate of ranked){
     if(chosen.length>=11)break
-    const key=String(candidate.dbName??candidate.name)
-    if(used.has(key))continue
-    chosen.push({...candidate,predictedStarter:true,predictedRole:candidate.position??null,predictedLineupConfidence:curatedTeam?.confidence??"recent-xi-fallback",predictedFormation:curatedTeam?.formation??null})
-    used.add(key)
+    const group=positionGroup(candidate.position)
+    if(group==="def"&&chosen.filter(c=>positionGroup(c.predictedRole??c.position)==="def").length>=5)continue
+    add(candidate)
+  }
+  // Absolute fallback if sparse role metadata prevented 11 selections.
+  for(const candidate of ranked){
+    if(chosen.length>=11)break
+    add(candidate)
   }
   return chosen.slice(0,11)
 }
