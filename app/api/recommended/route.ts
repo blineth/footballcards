@@ -143,7 +143,8 @@ async function officialLineupForFixture(f:Fixture):Promise<OfficialLineup>{
 
 type LivePlayerStat={
   player:string;team:string;foulsCommitted:number;foulsDrawn:number;shots:number;shotsOnTarget:number;
-  yellowCards:number;redCards:number;tackles:number;interceptions:number;blocks:number;duelsTotal:number;duelsWon:number;defensiveInterventions:number
+  goals:number;assists:number;yellowCards:number;redCards:number;starter:boolean;subbedOn:boolean;subbedOff:boolean;minutes:number;
+  tackles:number;interceptions:number;blocks:number;duelsTotal:number;duelsWon:number;defensiveInterventions:number
 }
 function espnStat(row:any,name:string){
   const found=(row?.stats??[]).find((s:any)=>String(s?.name??"")===name)
@@ -156,22 +157,24 @@ async function livePlayerStatsForFixture(f:Fixture){
       date:fixtureDate(f),home:f.home.name,away:f.away.name,competition:f.competition,
     })
     const response=await livePlayerStatsGET(new Request("http://local/api/live-player-stats?"+q.toString()))
-    if(!response.ok)return {source:null,players:new Map<string,LivePlayerStat>()}
+    if(!response.ok)return {source:null,status:null,elapsed:null,score:null,players:new Map<string,LivePlayerStat>()}
     const data=await response.json()
     const rows:Array<any>=Array.isArray(data?.players)?data.players:[]
     return {
-      source:data?.source??null,
+      source:data?.source??null,status:data?.status??null,elapsed:Number.isFinite(Number(data?.elapsed))?Number(data.elapsed):null,score:data?.score??null,
       players:new Map<string,LivePlayerStat>(rows.map((row:any)=>[normName(String(row.player??"")),{
         player:String(row.player??""),team:String(row.team??""),
         foulsCommitted:Number(row.foulsCommitted??0),foulsDrawn:Number(row.foulsDrawn??0),
         shots:Number(row.shots??0),shotsOnTarget:Number(row.shotsOnTarget??0),
+        goals:Number(row.goals??0),assists:Number(row.assists??0),
         yellowCards:Number(row.yellowCards??0),redCards:Number(row.redCards??0),
+        starter:row.starter===true,subbedOn:row.subbedOn===true,subbedOff:row.subbedOff===true,minutes:Number(row.minutes??0),
         tackles:Number(row.tackles??0),interceptions:Number(row.interceptions??0),blocks:Number(row.blocks??0),
         duelsTotal:Number(row.duelsTotal??0),duelsWon:Number(row.duelsWon??0),defensiveInterventions:Number(row.defensiveInterventions??0),
       }]))
     }
   }catch{
-    return {source:null,players:new Map<string,LivePlayerStat>()}
+    return {source:null,status:null,elapsed:null,score:null,players:new Map<string,LivePlayerStat>()}
   }
 }
 function filterSlipToOfficialStarters<T extends BetSlip|FoulTargetSlip>(slip:T,lineup:OfficialLineup):T|null{
@@ -1004,97 +1007,126 @@ function buildYellowCardWatchFromScans(scans:FixtureScan[]):YellowCardWatchRow[]
     .slice(0,16)
 }
 
-const LIVE_PROP_MARKETS=["card","foul1","fouled1","shot1","sot1"] as const
+const LIVE_PROP_MARKETS=["card","foul1","fouled1","shot1","sot1","goal1","assist1"] as const
 function remainingEventProbability(fullMatchProbability:number,elapsed:number){
   const p=Math.max(.001,Math.min(.995,Number(fullMatchProbability)||0))
   const remaining=Math.max(.03,Math.min(1,(96-Math.max(0,Math.min(96,elapsed)))/96))
   const lambda=-Math.log(1-p)
   return Math.max(.001,Math.min(.99,1-Math.exp(-lambda*remaining)))
 }
+function liveStatActive(stat:LivePlayerStat){
+  if(stat.subbedOff)return false
+  return stat.starter||stat.subbedOn||stat.minutes>0||stat.foulsCommitted>0||stat.foulsDrawn>0||stat.shots>0||
+    stat.shotsOnTarget>0||stat.goals>0||stat.assists>0||stat.yellowCards>0||stat.redCards>0
+}
 function buildLivePlayerProps(scorecard:Scorecard|null,elapsed:number,liveStats:Map<string,LivePlayerStat>){
-  if(!scorecard?.ok||!scorecard.lineupsConfirmed)return []
+  if(!scorecard?.ok)return []
   const candidates:any[]=[]
-  const seen=new Set<string>()
-  for(const slip of scorecard.slips??[]){
-    for(const leg of slip.legs??[]){
-      const market=String(leg.market)
-      if(!(LIVE_PROP_MARKETS as readonly string[]).includes(market)||leg.confidence==="D")continue
-      const key=normName(leg.player)+"|"+market
-      if(seen.has(key))continue
-      seen.add(key)
-      const stat=liveStats.get(normName(leg.player))
-      if(market==="card"){
-        const player=(scorecard.players??[]).find(p=>normName(p.name)===normName(leg.player)||normName(String(p.dbName??""))===normName(leg.player))
-        const cardMarket=player?.markets?.card
-        if(!player||!cardMarket||!cardEvidenceEligible(player,cardMarket))continue
-        if(stat&&(stat.yellowCards>0||stat.redCards>0))continue
-      }
+  const teamTotals=new Map<string,{fc:number;fd:number}>()
+  for(const stat of liveStats.values()){
+    if(!liveStatActive(stat))continue
+    const key=normName(stat.team)
+    const cur=teamTotals.get(key)??{fc:0,fd:0}
+    cur.fc+=stat.foulsCommitted
+    cur.fd+=stat.foulsDrawn
+    teamTotals.set(key,cur)
+  }
+  const teamKeys=[...teamTotals.keys()]
+  const per90=(value:number)=>value*90/Math.max(12,elapsed)
+  const logit=(p:number)=>Math.log(Math.max(.001,Math.min(.999,p))/(1-Math.max(.001,Math.min(.999,p))))
+  const logistic=(x:number)=>1/(1+Math.exp(-x))
+
+  for(const player of scorecard.players??[]){
+    const stat=liveStats.get(normName(player.name))??(player.dbName?liveStats.get(normName(player.dbName)):undefined)
+    if(stat&&!liveStatActive(stat))continue
+
+    for(const marketKey of LIVE_PROP_MARKETS){
+      const market=player.markets?.[marketKey]
+      if(!market||market.confidence==="D")continue
 
       let currentCount=0
-      let nextLabel=leg.label
       if(stat){
-        if(market==="foul1"){currentCount=stat.foulsCommitted;nextLabel=String(currentCount+1)+"+ fouls committed"}
-        else if(market==="fouled1"){currentCount=stat.foulsDrawn;nextLabel=String(currentCount+1)+"+ fouls drawn"}
-        else if(market==="shot1"){currentCount=stat.shots;nextLabel=String(currentCount+1)+"+ shots"}
-        else if(market==="sot1"){currentCount=stat.shotsOnTarget;nextLabel=String(currentCount+1)+"+ shots on target"}
+        if(marketKey==="foul1")currentCount=stat.foulsCommitted
+        else if(marketKey==="fouled1")currentCount=stat.foulsDrawn
+        else if(marketKey==="shot1")currentCount=stat.shots
+        else if(marketKey==="sot1")currentCount=stat.shotsOnTarget
+        else if(marketKey==="goal1")currentCount=stat.goals
+        else if(marketKey==="assist1")currentCount=stat.assists
+        else if(marketKey==="card")currentCount=stat.yellowCards+stat.redCards
       }
 
-      let probability=remainingEventProbability(Number(leg.probability??0),elapsed)
+      // Settled player markets disappear. For count markets the next threshold
+      // becomes the target, exactly like the Spain v England Match Builder.
+      if((marketKey==="card"||marketKey==="goal1"||marketKey==="assist1")&&currentCount>0)continue
+      const nextThreshold=currentCount+1
+      const nextLabel=marketKey==="foul1"?nextThreshold+"+ fouls committed"
+        :marketKey==="fouled1"?nextThreshold+"+ fouls drawn"
+        :marketKey==="shot1"?nextThreshold+"+ shots"
+        :marketKey==="sot1"?nextThreshold+"+ shots on target"
+        :market.label
+
+      const base=Math.max(.001,Math.min(.995,Number(market.probability??0)))
+      let probability=remainingEventProbability(base,elapsed)
       let pressureNote=""
-      const workload=stat?Math.max(0,Math.min(.48,
-        Number(stat.tackles??0)*.07+Number(stat.interceptions??0)*.045+Number(stat.blocks??0)*.025+
-        Number(stat.duelsTotal??0)*.009+Number(stat.duelsWon??0)*.006+Number(stat.defensiveInterventions??0)*.025
-      )):0
-      const logit=(p:number)=>Math.log(Math.max(.001,Math.min(.999,p))/(1-Math.max(.001,Math.min(.999,p))))
-      const logistic=(x:number)=>1/(1+Math.exp(-x))
-      if(market==="card"&&stat&&stat.foulsCommitted>0){
-        const player=(scorecard.players??[]).find(p=>normName(p.name)===normName(leg.player)||normName(String(p.dbName??""))===normName(leg.player))
-        const fouls=Math.max(0,Number(stat.foulsCommitted??0))
-        const cond=fouls>=3?player?.yellowConditionals?.after3PlusFouls
-          :fouls>=2?player?.yellowConditionals?.after2PlusFouls
-          :player?.yellowConditionals?.after1PlusFouls
-        const overall=player?.yellowConditionals?.overall
-        let delta=Math.min(.65,.14*fouls)
+
+      const ownKey=normName(stat?.team??player.team)
+      const oppKey=teamKeys.find(k=>k!==ownKey)??""
+      const own=teamTotals.get(ownKey)??{fc:0,fd:0}
+      const opp=teamTotals.get(oppKey)??{fc:0,fd:0}
+      const ownCommitRate=per90(own.fc)
+      const oppDrawRate=per90(opp.fd)
+
+      if(marketKey==="card"&&stat){
+        const fouls=Math.max(0,stat.foulsCommitted)
+        const cond=fouls>=3?player.yellowConditionals?.after3PlusFouls
+          :fouls>=2?player.yellowConditionals?.after2PlusFouls
+          :fouls>=1?player.yellowConditionals?.after1PlusFouls:null
+        const overall=player.yellowConditionals?.overall
+        let delta=Math.min(.78,.16*fouls+Math.max(0,oppDrawRate-7)*.012)
         if(cond?.rate!=null&&Number(overall?.rate)>0&&Number(cond.matches??0)>=2){
           const reliability=Math.min(1,Number(cond.matches??0)/10)
           const observed=logit(Number(cond.rate))-logit(Math.max(.02,Number(overall!.rate)))
-          delta=Math.max(-.10,Math.min(.90,observed*.72*reliability+.10*fouls))
-          pressureNote=` Live: ${fouls} foul${fouls===1?"":"s"} committed; historical booking rate after this foul load ${Math.round(Number(cond.rate)*100)}% (${cond.matches} matches).`
-        }else{
-          pressureNote=` Live: ${fouls} foul${fouls===1?"":"s"} committed; foul-pressure uplift applied.`
+          delta=Math.max(delta,Math.max(-.10,Math.min(.95,observed*.72*reliability+.11*fouls)))
+          pressureNote=`Live: ${fouls} foul${fouls===1?"":"s"} committed; historical booking rate after this foul load ${Math.round(Number(cond.rate)*100)}% (${cond.matches} matches).`
+        }else if(fouls>0){
+          pressureNote=`Live: ${fouls} foul${fouls===1?"":"s"} committed.`
         }
         probability=logistic(logit(probability)+delta)
-        const refYellows=Number(scorecard?.referee?.yellowsPerGame??0)
-        if(refYellows>0){
-          probability=logistic(logit(probability)+Math.max(-.18,Math.min(.22,(refYellows-4.2)*.055)))
-          pressureNote+=` Referee context ${refYellows.toFixed(1)} yellows/game.`
-        }
-        if(workload>0){
-          probability=logistic(logit(probability)+Math.min(.30,workload*.55))
-          pressureNote+=` Defensive workload: ${Number(stat.tackles??0)} tackles, ${Number(stat.interceptions??0)} interceptions, ${Number(stat.duelsTotal??0)} duels.`
-        }
         probability=Math.max(.001,Math.min(.95,probability))
-      }else if(market==="foul1"&&stat&&workload>0){
-        probability=logistic(logit(probability)+workload)
-        pressureNote=` Defensive workload: ${Number(stat.tackles??0)} tackles, ${Number(stat.interceptions??0)} interceptions, ${Number(stat.blocks??0)} blocks, ${Number(stat.duelsTotal??0)} duels; future foul probability increased.`
+        pressureNote+=(pressureNote?" ":"")+`Opponent fouls drawn running at ${oppDrawRate.toFixed(1)}/90.`
+      }else if(marketKey==="foul1"&&stat){
+        const delta=Math.min(.58,stat.foulsCommitted*.12+Math.max(0,oppDrawRate-7)*.012)
+        probability=logistic(logit(probability)+delta)
+        pressureNote=`Live: ${stat.foulsCommitted} fouls committed; opponent fouls drawn ${oppDrawRate.toFixed(1)}/90.`
+      }else if(marketKey==="fouled1"&&stat){
+        const delta=Math.min(.42,stat.foulsDrawn*.07+Math.max(0,per90(own.fd)-7)*.008)
+        probability=logistic(logit(probability)+delta)
+        pressureNote=`Live: fouled ${stat.foulsDrawn} times already.`
+      }else if((marketKey==="shot1"||marketKey==="sot1")&&stat){
+        const delta=Math.min(.38,stat.shots*.07+stat.shotsOnTarget*.11)
+        probability=logistic(logit(probability)+delta)
+        pressureNote=`Live: ${stat.shots} shots, ${stat.shotsOnTarget} on target.`
+      }else if(marketKey==="goal1"&&stat&&stat.shots>0){
+        probability=logistic(logit(probability)+Math.min(.30,stat.shots*.07+stat.shotsOnTarget*.12))
+        pressureNote=`Live: ${stat.shots} shots, ${stat.shotsOnTarget} on target.`
       }
 
-      const marketGroup=market==="card"?"card":market==="foul1"?"foul":market==="fouled1"?"fouled":market==="shot1"?"shot":"sot"
+      const marketGroup=marketKey==="card"?"card":marketKey==="foul1"?"foul":marketKey==="fouled1"?"fouled":
+        marketKey==="shot1"?"shot":marketKey==="sot1"?"sot":marketKey==="goal1"?"goal":"assist"
       const status=(scorecard.marketAvailability as any)?.[marketGroup]??"unknown"
       candidates.push({
-        player:leg.player,team:leg.team,market,label:nextLabel,
+        player:player.name,team:player.team,market:marketKey,label:nextLabel,
         probability:Math.round(probability*1000)/1000,
-        fullMatchProbability:Math.round(Number(leg.probability??0)*1000)/1000,
+        fullMatchProbability:Math.round(base*1000)/1000,
         fairOdds:Math.round((1/Math.max(.01,probability))*100)/100,
-        confidence:leg.confidence,marketStatus:status,
-        bookmakerOdds:null,bookmakerName:null,
+        confidence:market.confidence,marketStatus:status,
+        bookmakerOdds:market.bookmakerName==="Bet365"&&Number(market.bookmakerOdds)>1?Number(market.bookmakerOdds):null,
+        bookmakerName:market.bookmakerName==="Bet365"?"Bet365":null,
         currentCount,liveStatsAvailable:Boolean(stat),
         currentFouls:stat?.foulsCommitted??null,currentFouled:stat?.foulsDrawn??null,
         currentShots:stat?.shots??null,currentSot:stat?.shotsOnTarget??null,
-        currentTackles:stat?.tackles??null,currentInterceptions:stat?.interceptions??null,
-        currentBlocks:stat?.blocks??null,currentDuels:stat?.duelsTotal??null,currentDuelsWon:stat?.duelsWon??null,currentDefensiveInterventions:stat?.defensiveInterventions??null,
         currentYellowCards:stat?.yellowCards??null,currentRedCards:stat?.redCards??null,
-        reason:"Remaining-match estimate from the confirmed-XI player model, updated from live match event counts."+pressureNote,
+        reason:"Remaining-match estimate from the active-player model and current match events. "+pressureNote,
       })
     }
   }
