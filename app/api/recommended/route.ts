@@ -506,12 +506,12 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
 
     const runSearch=(pool:SlipLeg[])=>{
       const minLegProbability=.34
-      const byPlayer=new Map<string,SlipLeg[]>()
+      const byPlayerFamily=new Map<string,SlipLeg[]>()
       for(const leg of pool){
         if(leg.probability<minLegProbability)continue
-        const key=normName(leg.player)
-        if(!byPlayer.has(key))byPlayer.set(key,[])
-        byPlayer.get(key)!.push(leg)
+        const key=normName(leg.player)+"|"+family(leg.market)
+        if(!byPlayerFamily.has(key))byPlayerFamily.set(key,[])
+        byPlayerFamily.get(key)!.push(leg)
       }
 
       type State={legs:SlipLeg[];product:number;raw:number;conservative:number;families:Record<string,number>}
@@ -523,7 +523,7 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
       let states=new Map<number,State>()
       states.set(0,{legs:[],product:1,raw:1,conservative:1,families:{}})
 
-      for(const options of byPlayer.values()){
+      for(const options of byPlayerFamily.values()){
         const next=new Map(states)
         for(const state of states.values()){
           if(state.legs.length>=8)continue
