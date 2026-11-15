@@ -24,7 +24,9 @@ type SlipLeg={
   player:string;dbPlayerName?:string|null;team:string;market:string;label:string;
   probability:number;fairOdds:number|null;bookmakerOdds:number|null;bookmakerName?:string|null;
   edge:number|null;confidence:"A"|"B"|"C"|"D";reason:string;priceSource?:"exact"|"estimated"|null;
-  bookmakerProbability?:number|null
+  bookmakerProbability?:number|null;
+  recent5HitRate?:number|null;seasonHitRate?:number|null;h2hHitRate?:number|null;h2hMatches?:number;
+  sampleMatches?:number;expectedMinutes?:number|null;position?:string|null
 }
 type BetSlip={
   id:string;bookmaker?:string|null;title:string;risk:string;legs:SlipLeg[];
@@ -42,7 +44,7 @@ type ScorecardMarket={
   impliedProbability?:number|null;bookmakerNoVigProbability?:number|null
 }
 type ScorecardPlayer={
-  name:string;dbName?:string;team:string;
+  name:string;dbName?:string;team:string;expectedMinutes?:number|null;position?:string|null;
   markets?:Record<string,ScorecardMarket>;
   cardContext?:{rolePrior?:number;clubMatches?:number;clubYellows?:number;clubCardRate?:number|null;clubCompetitions?:string[]};
   yellowConditionals?:{
@@ -245,7 +247,7 @@ function buildTargetOddsSlips(scorecard:Scorecard|null,fixture:Fixture):TargetOd
   const MAX_PLAYERS_PER_TEAM=6
   const teamKey=(team:string)=>sameTeamName(team,fixture.home.name)?"home":sameTeamName(team,fixture.away.name)?"away":normName(team)
   const family=(market:string)=>market.startsWith("goal")?"goal":market.startsWith("assist")?"assist":market.startsWith("fouled")?"fouled":market.startsWith("foul")?"foul":market.startsWith("sot")?"sot":market.startsWith("shot")?"shot":"card"
-  const baseMarket=(market:string)=>market==="goal1"||market==="assist1"||market==="foul1"||market==="fouled1"||market==="card"||market==="shot1"||market==="sot1"
+  const baseMarket=(market:string)=>lowThresholdMarket(market)
 
   type Candidate={fixture:Fixture;leg:SlipLeg;exactPrice:number;conservativeP:number;modelP:number;teamKey:string}
   const conservativeLegProbability=(leg:SlipLeg,price:number)=>{
@@ -265,7 +267,7 @@ function buildTargetOddsSlips(scorecard:Scorecard|null,fixture:Fixture):TargetOd
       :fam==="assist"?.86
       :fam==="card"?.90
       :.97
-    p*=reliability
+    p*=reliability*evidenceReliability(leg)
     return Math.max(.01,Math.min(.99,p))
   }
 
@@ -541,6 +543,40 @@ function cardEvidenceEligible(player:ScorecardPlayer,market:ScorecardMarket){
   return Number(market.probability)>=.14&&evidenceScore>=.145&&(strongH2H||strongCurrent||strongSeason||strongClub||foulPressure)
 }
 
+function lowThresholdMarket(market:string){
+  return market==="foul1"||market==="fouled1"||market==="shot1"||market==="sot1"
+}
+function evidenceSupport(leg:SlipLeg){
+  const recent=Number(leg.recent5HitRate),season=Number(leg.seasonHitRate)
+  const h2h=Number(leg.h2hHitRate),h2hN=Number(leg.h2hMatches??0)
+  let weighted=0,weight=0
+  if(Number.isFinite(recent)){weighted+=recent*.34;weight+=.34}
+  if(Number.isFinite(season)){weighted+=season*.46;weight+=.46}
+  if(h2hN>=2&&Number.isFinite(h2h)){
+    const hw=Math.min(.20,.08+.03*Math.min(4,h2hN))
+    weighted+=h2h*hw;weight+=hw
+  }
+  return weight>0?Math.max(0,Math.min(1,weighted/weight)):Math.max(0,Math.min(1,Number(leg.probability??0)))
+}
+function evidenceReliability(leg:SlipLeg){
+  const support=evidenceSupport(leg)
+  let factor=.91+support*.13
+  if(lowThresholdMarket(leg.market))factor+=.012
+  else if(/^foul[2-9]/.test(leg.market)||leg.market==="shot2"||leg.market==="sot2")factor-=.035
+  const h2h=Number(leg.h2hHitRate),h2hN=Number(leg.h2hMatches??0)
+  if(h2hN>=2&&Number.isFinite(h2h)){
+    if(h2h>=.75)factor+=.012
+    else if(h2h<=.20)factor-=.012
+  }
+  const mins=Number(leg.expectedMinutes)
+  if(Number.isFinite(mins)){
+    if(mins<45)factor*=.93
+    else if(mins<60)factor*=.97
+    else if(mins<72)factor*=.985
+  }
+  return Math.max(.84,Math.min(1.035,factor))
+}
+
 function directPlayerCandidates(scorecard:Scorecard){
   const out:SlipLeg[]=[]
   const seen=new Set<string>()
@@ -576,6 +612,13 @@ function directPlayerCandidates(scorecard:Scorecard){
         reason:(market.reasons??[]).join(" · ")||"Verified Bet365 player market",
         priceSource:"exact",
         bookmakerProbability:market.bookmakerNoVigProbability??market.impliedProbability??(Number(market.bookmakerOdds)>1?1/Number(market.bookmakerOdds):null),
+        recent5HitRate:Number.isFinite(Number(market.recent5HitRate))?Number(market.recent5HitRate):null,
+        seasonHitRate:Number.isFinite(Number(market.seasonHitRate))?Number(market.seasonHitRate):null,
+        h2hHitRate:Number.isFinite(Number(market.h2hHitRate))?Number(market.h2hHitRate):null,
+        h2hMatches:Number(market.h2hMatches??0),
+        sampleMatches:Number(market.sampleMatches??0),
+        expectedMinutes:Number.isFinite(Number(player.expectedMinutes))?Number(player.expectedMinutes):null,
+        position:player.position??null,
       })
     }
   }
@@ -603,7 +646,7 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
     const price=Number(leg.bookmakerOdds??0)
     const book=Math.max(.01,Math.min(.99,Number(leg.bookmakerProbability??(price>1?1/price:model))))
     const uplift=leg.confidence==="A"?1.18:leg.confidence==="B"?1.12:leg.confidence==="C"?1.07:1
-    return Math.max(.01,Math.min(.99,Math.min(model,book*uplift)))
+    return Math.max(.01,Math.min(.99,Math.min(model,book*uplift)*evidenceReliability(leg)))
   }
   const conservativeJoint=(legs:SlipLeg[])=>{
     const counts:Record<string,number>={}
@@ -628,7 +671,7 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
     {
       id:"safe",title:"Safe",targetFractional:"3/1",targetDecimal:4,minLeg:.32,maxFactor:1.45,
       allowHighVariance:false,forceBestCard:false,
-      description:"Lowest-variance route: fouls, fouled, shots and SOT only. Uses more 1+ legs when that is safer than one speculative event.",
+      description:"Lowest-variance route: repeated 1+ fouls, fouled, shots and SOT first. Recent hit rate, season rate, H2H, expected minutes and Bet365 price all affect the safety score; 2+ lines are used only when they improve the whole-slip chance.",
     },
     {
       id:"balanced",title:"Balanced",targetFractional:"5/1",targetDecimal:6,minLeg:.25,maxFactor:1.42,
