@@ -5,8 +5,8 @@ import { Activity, CalendarDays, ChevronDown, Flame, RefreshCw, ShieldCheck, Spa
 import { addTrackedBet } from "@/lib/tracked-bets"
 
 type Leg={fixtureId:string;competition:string;kickoff:string;home:string;away:string;inPlay?:boolean;elapsed?:number|null;score?:{home:number;away:number}|null;market:string;label:string;probability:number;fairOdds:number;bookmakerOdds:number|null;bookmaker:string|null;grade:"A"|"B"|"C"|"D";reasons:string[]}
-type Slip={id:string;title:string;subtitle:string;legs:Leg[];fairCombinedOdds:number|null;bookmaker:string|null;exactCombinedOdds:number|null;exactPriced:boolean;confirmedBet365Odds?:boolean;oddsSource?:string|null;oddsCapturedAt?:string|null;available?:boolean;requiredLegs?:number;containsLive?:boolean;modelAllHitProbability?:number|null;adjustedAllHitProbability?:number|null;historicalStructureSample?:number;historicalStructureHitRate?:number|null;combinedProbabilityNote?:string}
-type Prediction={id:string;competition:string;kickoff:string;status?:string;inPlay?:boolean;finished?:boolean;bttsSettled?:boolean;elapsed?:number|null;score?:{home:number;away:number}|null;home:string;away:string;homeCrest?:string|null;awayCrest?:string|null;homeStats:any;awayStats:any;h2h:any;preMatchProbabilities?:{homeWin:number;draw:number;awayWin:number;bttsYes:number;bttsNo:number};probabilities:{homeWin:number;draw:number;awayWin:number;bttsYes:number;bttsNo:number};winnerPick?:{side:string;team:string;loser:string;probability:number;grade:string}|null;drawPick?:{probability:number;grade:string}|null;bttsPick?:{selection:string;probability:number;grade:string}|null;reasons:string[]}
+type Slip={id:string;title:string;subtitle:string;legs:Leg[];fairCombinedOdds:number|null;bookmaker:string|null;exactCombinedOdds:number|null;exactPriced:boolean;confirmedBet365Odds?:boolean;oddsSource?:string|null;oddsCapturedAt?:string|null;oddsVerifiedAt?:string|null;available?:boolean;requiredLegs?:number;containsLive?:boolean;modelAllHitProbability?:number|null;adjustedAllHitProbability?:number|null;historicalStructureSample?:number;historicalStructureHitRate?:number|null;combinedProbabilityNote?:string}
+type Prediction={id:string;competition:string;kickoff:string;status?:string;inPlay?:boolean;finished?:boolean;bttsSettled?:boolean;elapsed?:number|null;score?:{home:number;away:number}|null;home:string;away:string;homeCrest?:string|null;awayCrest?:string|null;homeStats:any;awayStats:any;h2h:any;preMatchProbabilities?:{homeWin:number;draw:number;awayWin:number;bttsYes:number;bttsNo:number};probabilities:{homeWin:number;draw:number;awayWin:number;bttsYes:number;bttsNo:number};oddsByBook?:{Bet365?:{homeWin?:number;draw?:number;awayWin?:number;bttsYes?:number;bttsNo?:number}};bet365OddsVerifiedAt?:string|null;winnerPick?:{side:string;team:string;loser:string;probability:number;grade:string}|null;drawPick?:{probability:number;grade:string}|null;bttsPick?:{selection:string;probability:number;grade:string}|null;reasons:string[]}
 type H2HMeeting={date:string;competition?:string|null;home:string;away:string;homeGoals:number;awayGoals:number;scorers:Array<{player:string;team:string;goals:number;assists:number}>;bookings:Array<{player:string;team:string;yellow:boolean;red:boolean;minute?:number|null;second?:number|null;clock?:string|null}>;players:Array<{player:string;team:string;minutes:number;goals:number;assists:number;foulsCommitted:number;foulsDrawn:number;shots:number;shotsOnTarget:number;yellow:boolean;red:boolean}>;totals:{home:{yellow:number;red:number;fouls:number;shots:number;sot:number};away:{yellow:number;red:number;fouls:number;shots:number;sot:number}}}
 type H2HData={ok:boolean;source?:string;scope?:string;meetings:H2HMeeting[];count:number;error?:string}
 type RiskMode="safe"|"balanced"|"aggressive"
@@ -23,6 +23,12 @@ function verifiedTime(v:string|null|undefined){
   if(!v)return ""
   try{return new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/London",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false}).format(new Date(v))}
   catch{return ""}
+}
+function resultBet365Odds(p:Prediction,outcome:Outcome){
+  const board=p.oddsByBook?.Bet365
+  if(!board)return null
+  const value=outcome==="home"?board.homeWin:outcome==="draw"?board.draw:board.awayWin
+  return value!=null&&Number(value)>1?Number(value):null
 }
 
 export default function AccumulatorPage(){
@@ -86,18 +92,19 @@ export default function AccumulatorPage(){
   const riskySlip=(data?.slips??[]).find(s=>s.id==="fold-10"&&s.available!==false)??null
 
   const manualPicks=useMemo(()=>{
-    const rows:(Prediction&{outcome:Outcome;label:string;probability:number;fairOdds:number})[]=[]
+    const rows:(Prediction&{outcome:Outcome;label:string;probability:number;fairOdds:number;bookmakerOdds:number|null})[]=[]
     for(const p of data?.predictions??[]){
       const outcome=selectedOutcomes[p.id]
       if(!outcome)continue
       const probability=outcome==="home"?p.probabilities.homeWin:outcome==="draw"?p.probabilities.draw:p.probabilities.awayWin
       const label=outcome==="home"?p.home+" to win":outcome==="away"?p.away+" to win":"Draw"
-      rows.push({...p,outcome,label,probability,fairOdds:probability>0?1/probability:99})
+      rows.push({...p,outcome,label,probability,fairOdds:probability>0?1/probability:99,bookmakerOdds:resultBet365Odds(p,outcome)})
     }
     return rows
   },[data?.predictions,selectedOutcomes])
   const manualProbability=manualPicks.length?manualPicks.reduce((v,p)=>v*Math.max(.01,p.probability),1):null
-  const manualOdds=manualProbability?1/manualProbability:null
+  const allManualPriced=manualPicks.length>0&&manualPicks.every(p=>p.bookmakerOdds!=null&&Number(p.bookmakerOdds)>1)
+  const manualOdds=allManualPriced?manualPicks.reduce((v,p)=>v*Number(p.bookmakerOdds),1):null
   const manualRisk=manualOdds==null?"":manualOdds>21?"Risky":manualOdds>=11?"Balanced":"Safe"
   function chooseOutcome(fixtureId:string,outcome:Outcome){
     setSelectedOutcomes(cur=>cur[fixtureId]===outcome?Object.fromEntries(Object.entries(cur).filter(([id])=>id!==fixtureId)):{...cur,[fixtureId]:outcome})
@@ -149,7 +156,7 @@ function AccaSnapshot({slip}:{slip:Slip}){
   return <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-4">
     <div className="flex items-start justify-between gap-3"><div><p className="text-[0.5rem] font-black uppercase tracking-[0.13em] text-amber-300">Build snapshot</p><h2 className="mt-1 text-lg font-black">{slip.title}</h2><p className="mt-1 text-[0.56rem] text-white/35">{slip.legs.length} selections · {slip.confirmedBet365Odds?"Bet365 verified":"waiting for Bet365 prices"}</p></div><div className="text-right"><p className="font-mono text-xl font-black">{slip.confirmedBet365Odds&&slip.exactCombinedOdds!=null?slip.exactCombinedOdds.toFixed(2):"—"}</p><p className={"text-[0.42rem] font-black uppercase "+(slip.confirmedBet365Odds?"text-emerald-300":"text-white/25")}>{slip.confirmedBet365Odds?"confirmed Bet365 acca odds":"Bet365 price unavailable"}</p></div></div>
     <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4"><Small label="Adjusted all hit" value={percent(slip.adjustedAllHitProbability)}/><Small label="Avg leg" value={percent(avg)}/><Small label="Weakest leg" value={percent(weakest)}/><Small label="Live legs" value={String(live)}/></div>
-    <p className="mt-3 text-[0.54rem] leading-relaxed text-white/30">{slip.confirmedBet365Odds?"Every leg has a verified Bet365 price from Odds-API.io"+(verifiedTime(slip.oddsCapturedAt)?" · oldest price verified "+verifiedTime(slip.oddsCapturedAt):"")+".":"No bookmaker odds are shown until Bet365 prices every leg."}</p>
+    <p className="mt-3 text-[0.54rem] leading-relaxed text-white/30">{slip.confirmedBet365Odds?"Every leg has a current verified Bet365 price from Odds-API.io"+(verifiedTime(slip.oddsVerifiedAt)?" · checked "+verifiedTime(slip.oddsVerifiedAt):"")+".":"No bookmaker odds are shown until Bet365 prices every leg."}</p>
   </section>
 }
 
@@ -228,7 +235,7 @@ function OutcomeCard({prediction:p,selected,onSelect}:{prediction:Prediction;sel
   }
   return <article className="rounded-3xl border border-white/9 bg-white/[0.035] p-4">
     <div className="flex items-start justify-between gap-3"><div><p className="text-[0.5rem] font-black uppercase text-white/25">{p.competition} · {time(p.kickoff)}</p><p className="mt-1 text-sm font-black">{p.home} <span className="text-white/25">v</span> {p.away}</p></div>{p.inPlay&&p.score?<span className="rounded-full bg-rose-300/12 px-2 py-1 text-[0.45rem] font-black text-rose-200">LIVE {p.elapsed??"?"}' · {p.score.home}-{p.score.away}</span>:null}</div>
-    <div className="mt-3 grid grid-cols-3 gap-2">{rows.map(([outcome,label,probability])=><button key={outcome} onClick={()=>onSelect(outcome)} className={"rounded-2xl border px-2 py-3 text-center transition "+outcomeTone(probability,probability===best,selected===outcome)}><p className="truncate text-[0.55rem] font-black">{label}</p><p className="mt-1 font-mono text-lg font-black">{percent(probability)}</p><p className="mt-0.5 text-[0.42rem] font-black uppercase opacity-55">{(1/Math.max(.01,probability)).toFixed(2)} fair</p></button>)}</div>
+    <div className="mt-3 grid grid-cols-3 gap-2">{rows.map(([outcome,label,probability])=>{const bet365=resultBet365Odds(p,outcome);return <button key={outcome} onClick={()=>onSelect(outcome)} className={"rounded-2xl border px-2 py-3 text-center transition "+outcomeTone(probability,probability===best,selected===outcome)}><p className="truncate text-[0.55rem] font-black">{label}</p><p className="mt-1 font-mono text-lg font-black">{percent(probability)}</p><p className={"mt-0.5 text-[0.42rem] font-black uppercase "+(bet365?"text-emerald-300/80":"opacity-45")}>{bet365?bet365.toFixed(3)+" Bet365":"No Bet365 price"}</p></button>})}</div>
     <div className="mt-3 flex items-center gap-2">
       <button onClick={()=>void toggleH2H()} className={"rounded-xl px-3 py-2 text-[0.5rem] font-black "+(h2hOpen?"bg-amber-300 text-amber-950":"bg-white/[0.06] text-white/45")}>{h2hOpen?"Hide H2H":"H2H history"}</button>
       <details className="flex-1"><summary className="cursor-pointer text-[0.5rem] font-black text-white/30">Why these percentages?</summary><p className="mt-2 text-[0.56rem] leading-relaxed text-white/40">{p.reasons.join(" · ")}</p></details>
@@ -266,12 +273,12 @@ function AccaH2HMeeting({meeting:m}:{meeting:H2HMeeting}){
   </div>
 }
 
-function ManualAccaTray({picks,probability,odds,risk,open,setOpen,onRemove,onClear}:{picks:Array<Prediction&{outcome:Outcome;label:string;probability:number;fairOdds:number}>;probability:number|null;odds:number|null;risk:string;open:boolean;setOpen:(v:boolean)=>void;onRemove:(id:string)=>void;onClear:()=>void}){
+function ManualAccaTray({picks,probability,odds,risk,open,setOpen,onRemove,onClear}:{picks:Array<Prediction&{outcome:Outcome;label:string;probability:number;fairOdds:number;bookmakerOdds:number|null}>;probability:number|null;odds:number|null;risk:string;open:boolean;setOpen:(v:boolean)=>void;onRemove:(id:string)=>void;onClear:()=>void}){
   const tone=risk==="Safe"?"bg-emerald-300/15 text-emerald-200":risk==="Balanced"?"bg-amber-300/15 text-amber-100":"bg-rose-300/15 text-rose-100"
   return <div className="fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-40 mx-auto max-w-3xl px-3">
     <div className="overflow-hidden rounded-3xl border border-white/12 bg-[#0b1813]/98 shadow-2xl backdrop-blur-xl">
-      <button onClick={()=>setOpen(!open)} className="grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 p-3 text-left"><div className="flex size-10 items-center justify-center rounded-2xl bg-amber-300 text-amber-950"><Trophy className="size-5"/></div><div className="min-w-0"><div className="flex items-center gap-2"><p className="text-sm font-black">{picks.length} selection{picks.length===1?"":"s"}</p><span className={"rounded-full px-2 py-0.5 text-[0.42rem] font-black "+tone}>{risk.toUpperCase()}</span></div><p className="mt-0.5 text-[0.5rem] text-white/35">Whole-slip model chance {percent(probability)}</p></div><div className="text-right"><p className="font-mono text-lg font-black">{odds?.toFixed(2)??"—"}</p><p className="text-[0.4rem] uppercase text-white/25">predicted odds</p></div></button>
-      {open?<div className="border-t border-white/8 bg-black/20 p-3"><div className="max-h-64 space-y-2 overflow-y-auto">{picks.map(p=><div key={p.id} className="flex items-center justify-between gap-3 rounded-xl bg-white/[0.05] px-3 py-2"><div className="min-w-0"><p className="truncate text-xs font-black">{p.label}</p><p className="truncate text-[0.46rem] text-white/30">{p.home} v {p.away} · {percent(p.probability)}</p></div><button onClick={()=>onRemove(p.id)} className="rounded-lg bg-white/7 px-2 py-1 text-[0.48rem] font-black text-white/40">REMOVE</button></div>)}</div><div className="mt-3 flex items-center justify-between gap-3"><p className="text-[0.48rem] leading-relaxed text-white/25">Predicted odds are model fair odds, not a bookmaker quote.</p><button onClick={onClear} className="rounded-xl bg-white/7 px-3 py-2 text-[0.5rem] font-black text-white/45">CLEAR</button></div></div>:null}
+      <button onClick={()=>setOpen(!open)} className="grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 p-3 text-left"><div className="flex size-10 items-center justify-center rounded-2xl bg-amber-300 text-amber-950"><Trophy className="size-5"/></div><div className="min-w-0"><div className="flex items-center gap-2"><p className="text-sm font-black">{picks.length} selection{picks.length===1?"":"s"}</p><span className={"rounded-full px-2 py-0.5 text-[0.42rem] font-black "+tone}>{risk.toUpperCase()}</span></div><p className="mt-0.5 text-[0.5rem] text-white/35">Whole-slip model chance {percent(probability)}</p></div><div className="text-right"><p className="font-mono text-lg font-black">{odds?.toFixed(2)??"—"}</p><p className="text-[0.4rem] uppercase text-white/25">{odds!=null?"Bet365 acca odds":"waiting for Bet365"}</p></div></button>
+      {open?<div className="border-t border-white/8 bg-black/20 p-3"><div className="max-h-64 space-y-2 overflow-y-auto">{picks.map(p=><div key={p.id} className="flex items-center justify-between gap-3 rounded-xl bg-white/[0.05] px-3 py-2"><div className="min-w-0"><p className="truncate text-xs font-black">{p.label}</p><p className="truncate text-[0.46rem] text-white/30">{p.home} v {p.away} · {percent(p.probability)}{p.bookmakerOdds!=null?" · "+p.bookmakerOdds.toFixed(3)+" Bet365":" · no Bet365 price"}</p></div><button onClick={()=>onRemove(p.id)} className="rounded-lg bg-white/7 px-2 py-1 text-[0.48rem] font-black text-white/40">REMOVE</button></div>)}</div><div className="mt-3 flex items-center justify-between gap-3"><p className="text-[0.48rem] leading-relaxed text-white/25">{odds!=null?"Combined odds are the product of the current verified Bet365 prices for your selected results.":"Combined odds stay blank until every selected result has a verified Bet365 price."}</p><button onClick={onClear} className="rounded-xl bg-white/7 px-3 py-2 text-[0.5rem] font-black text-white/45">CLEAR</button></div></div>:null}
     </div>
   </div>
 }
