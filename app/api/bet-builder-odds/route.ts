@@ -54,8 +54,7 @@ function seasonFor(date: string) {
   const month = d.getUTCMonth()
   return String(month >= 7 ? year : year - 1)
 }
-async function saveSnapshots(input:{
-  try {date:string;home:string;away:string;competition:string;bookmaker?:string;source?:string|null;capturedAt?:string|null;selections:Array<{market:string;kind:string;label:string;odd:number|null;bookmaker?:string|null}>}) {
+async function saveSnapshots(input:{date:string;home:string;away:string;competition:string;bookmaker?:string;source?:string|null;capturedAt?:string|null;selections:Array<{market:string;kind:string;label:string;odd:number|null;bookmaker?:string|null}>}) {
   if (!isDatabaseConfigured || !input.selections.length) return
   try {
     await ensureResearchSchema()
@@ -81,12 +80,10 @@ async function saveSnapshots(input:{
       }))
     if (rows.length) await db.insert(oddsSnapshots).values(rows).onConflictDoNothing()
   } catch (error) {
-    // Odds must remain usable even if the research DB is over quota/unavailable.
-    console.log("[bet-builder-odds] snapshot save skipped:",error instanceof Error?error.message:error)
+    console.log("[bet-builder-odds] snapshot save skipped:", error instanceof Error ? error.message : error)
   }
 }
-  } catch {}
-}
+
 async function attachMovement(input:{date:string;home:string;away:string;competition:string;bookmaker?:string;selections:Array<{market:string;kind:string;label:string;odd:number|null}>}) {
   if (!isDatabaseConfigured || !input.selections.length || !input.bookmaker) return input.selections
   try {
