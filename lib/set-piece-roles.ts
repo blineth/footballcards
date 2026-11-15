@@ -145,8 +145,7 @@ function recentEventEvidence(texts:string[],players:string[]){
         ntext.includes("corner taken by "+alias)||
         ntext.includes(alias+" takes the corner")||
         ntext.includes(alias+" takes corner")||
-        (ntext.includes("assisted by "+alias)&&ntext.includes("following a corner"))||
-        (ntext.includes("assisted by "+alias)&&ntext.includes("from a corner"))
+        ntext.includes(alias+" corner kick")
       )
       if(cornerTaker){
         row.corner+=1
