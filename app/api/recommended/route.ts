@@ -352,7 +352,7 @@ function buildTargetOddsSlips(scorecard:Scorecard|null,fixture:Fixture):TargetOd
     }
     if(!acceptable.length)return null
 
-    return acceptable.sort((a,b)=>{
+    const rank=(rows:State[])=>rows.sort((a,b)=>{
       const sa=stateSafety(a),sb=stateSafety(b)
       if(Math.abs(sa-sb)>.0000001)return sb-sa
       if(Math.abs(a.conservativeProb-b.conservativeProb)>.0000001)return b.conservativeProb-a.conservativeProb
@@ -367,6 +367,27 @@ function buildTargetOddsSlips(scorecard:Scorecard|null,fixture:Fixture):TargetOd
       if(Math.abs(da-db)>.005)return da-db
       return b.legs.length-a.legs.length
     })[0]
+    const bestOverall=rank([...acceptable])
+    const lowVariance=acceptable.filter(state=>state.legs.every(x=>{
+      const fam=family(x.leg.market)
+      return fam==="foul"||fam==="fouled"||fam==="shot"||fam==="sot"
+    }))
+    const bestLowVariance=lowVariance.length?rank([...lowVariance]):null
+    if(bestLowVariance&&bestOverall){
+      // Safe targets should be robust, not merely short. A goalscorer/card/assist
+      // route must beat the best all-foul/shot/SOT route by a meaningful margin
+      // before we accept the extra event variance. The margin relaxes as the user
+      // asks for larger target odds, where some volatility is unavoidable.
+      const requiredMargin=targetDecimal<=6?1.18:targetDecimal<=16?1.10:1.05
+      const overallHasHighVariance=bestOverall.legs.some(x=>{
+        const fam=family(x.leg.market)
+        return fam==="goal"||fam==="assist"||fam==="card"
+      })
+      if(overallHasHighVariance&&stateSafety(bestOverall)<stateSafety(bestLowVariance)*requiredMargin){
+        return bestLowVariance
+      }
+    }
+    return bestOverall
   }
 
   return TARGET_ODDS.map(target=>{
@@ -394,7 +415,7 @@ function buildTargetOddsSlips(scorecard:Scorecard|null,fixture:Fixture):TargetOd
       safetyScore:Math.round(stateSafety(chosen)*10000)/10000,
       bookmaker:"Bet365" as const,priceSource:"bookmaker-singles" as const,marketsVerified:true,legs,
       maxSelections:MAX_SELECTIONS,maxPlayersPerTeam:MAX_PLAYERS_PER_TEAM,
-      note:"Safest-route search: up to 12 Bet365 selections, max six different players per team, both teams considered, and one prop per player to reduce same-player correlation. Each leg is conservatively calibrated against Bet365's implied/no-vig probability before whole-slip optimisation. The engine can use all 12 selections if that is safer than reaching the target with one or two speculative legs. Match winner, double chance, total goals and corners are excluded.",
+      note:"Safest-route search: up to 12 Bet365 selections, max six different players per team, both teams considered, and one prop per player to reduce same-player correlation. Each leg is conservatively calibrated against Bet365's implied/no-vig probability. For 3/1 and 5/1, goalscorer/card/assist routes must materially outperform the best all-foul/shot/SOT route before they are chosen, so a longer set of high-frequency 1+ events is preferred when safety is close. Match winner, double chance, total goals and corners are excluded.",
     }
   })
 }
@@ -658,19 +679,33 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
         states=new Map(ordered.slice(0,Math.min(900,ordered.length)))
       }
 
-      return [...states.values()]
+      const valid=[...states.values()]
         .filter(s=>
           s.legs.length>=2&&s.product>=4&&s.product<=5.8&&
           (s.teamCounts[homeKey]??0)>0&&(s.teamCounts[awayKey]??0)>0
         )
-        .sort((a,b)=>{
-          if(Math.abs(a.conservative-b.conservative)>.000001)return b.conservative-a.conservative
-          const weakA=Math.min(...a.legs.map(safetyLegProbability))
-          const weakB=Math.min(...b.legs.map(safetyLegProbability))
-          if(Math.abs(weakA-weakB)>.0001)return weakB-weakA
-          if(Math.abs(a.raw-b.raw)>.000001)return b.raw-a.raw
-          return Math.abs(a.product-4)-Math.abs(b.product-4)
-        })[0]
+      const rank=(rows:State[])=>rows.sort((a,b)=>{
+        if(Math.abs(a.conservative-b.conservative)>.000001)return b.conservative-a.conservative
+        const weakA=Math.min(...a.legs.map(safetyLegProbability))
+        const weakB=Math.min(...b.legs.map(safetyLegProbability))
+        if(Math.abs(weakA-weakB)>.0001)return weakB-weakA
+        if(Math.abs(a.raw-b.raw)>.000001)return b.raw-a.raw
+        return Math.abs(a.product-4)-Math.abs(b.product-4)
+      })[0]
+      const bestOverall=valid.length?rank([...valid]):null
+      const lowVariance=valid.filter(s=>s.legs.every(leg=>{
+        const fam=family(leg.market)
+        return fam==="foul"||fam==="fouled"||fam==="shot"||fam==="sot"
+      }))
+      const bestLowVariance=lowVariance.length?rank([...lowVariance]):null
+      if(bestLowVariance&&bestOverall){
+        const hasHighVariance=bestOverall.legs.some(leg=>{
+          const fam=family(leg.market)
+          return fam==="goal"||fam==="assist"||fam==="card"
+        })
+        if(hasHighVariance&&bestOverall.conservative<bestLowVariance.conservative*1.18)return bestLowVariance
+      }
+      return bestOverall
     }
 
     // First try only the safer low thresholds spread across different players.
