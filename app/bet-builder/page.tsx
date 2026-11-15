@@ -141,6 +141,7 @@ function verifiedBet365Odd(s:Selection){
 }
 function referenceOdd(s:Selection){return Number(verifiedBet365Odd(s)??0)}
 function liveUrl(f:Fixture){return "/api/live-player-stats?"+new URLSearchParams({date:f.date,home:f.home,away:f.away,competition:f.competition})}
+function lineupStatusUrl(f:Fixture){return "/api/lineup-status?"+new URLSearchParams({id:f.id,date:f.date,home:f.home,away:f.away,competition:f.competition})}
 function liveOddsUrl(f:Fixture){return "/api/bet-builder-odds?"+new URLSearchParams({date:f.date,home:f.home,away:f.away,competition:f.competition,live:"1",refresh:String(Date.now())})}
 function h2hUrl(f:Fixture){return "/api/team-h2h?"+new URLSearchParams({date:f.date,home:f.home,away:f.away,competition:f.competition})}
 function normPlayer(v:string){return v.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim()}
@@ -673,6 +674,53 @@ export default function BetBuilderPage(){
     const t=window.setInterval(()=>void load(fixture,false),60000)
     return()=>window.clearInterval(t)
   },[fixture,live?.status,load])
+  useEffect(()=>{
+    if(!fixture||data?.lineupsConfirmed===true||data?.lineupMode==="confirmed")return
+    const kickoff=new Date(fixture.kickoff).getTime()
+    if(!Number.isFinite(kickoff))return
+
+    const windowStart=kickoff-60*60*1000
+    const windowEnd=kickoff-45*60*1000
+    let cancelled=false
+    let timer:number|undefined
+    let interval:number|undefined
+
+    const stop=()=>{
+      if(timer!=null)window.clearTimeout(timer)
+      if(interval!=null)window.clearInterval(interval)
+      timer=undefined
+      interval=undefined
+    }
+    const check=async()=>{
+      if(cancelled)return
+      const now=Date.now()
+      if(now<windowStart||now>windowEnd){if(now>windowEnd)stop();return}
+      try{
+        const r=await fetch(lineupStatusUrl(fixture),{cache:"no-store"})
+        if(!r.ok)return
+        const status=await r.json()
+        if(status?.confirmed===true){
+          stop()
+          await load(fixture,true)
+        }
+      }catch{}
+    }
+    const begin=()=>{
+      if(cancelled)return
+      void check()
+      interval=window.setInterval(()=>void check(),90000)
+    }
+
+    const now=Date.now()
+    if(now<windowStart){
+      timer=window.setTimeout(begin,Math.max(0,windowStart-now))
+    }else if(now<=windowEnd){
+      begin()
+    }
+
+    return()=>{cancelled=true;stop()}
+  },[fixture,data?.lineupsConfirmed,data?.lineupMode,load])
+
   const loadLive=useCallback(async(f:Fixture)=>{
     const kickoff=new Date(f.kickoff).getTime()
     const now=Date.now()
@@ -845,7 +893,7 @@ export default function BetBuilderPage(){
       {loading&&!data?<section className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center"><RefreshCw className="mx-auto mb-3 size-5 animate-spin text-emerald-300"/><p className="font-black">Ranking player markets…</p></section>:null}
       {data&&!data.ok?<section className="rounded-3xl border border-rose-300/15 bg-rose-400/5 p-5"><p className="font-black">Match model unavailable</p><p className="mt-1 text-sm text-white/40">{data.error}</p></section>:null}
 
-      {data?.ok&&data.lineupMode==="predicted"?<section className="rounded-3xl border border-amber-300/15 bg-amber-300/[0.05] p-4"><div className="flex items-start gap-3"><Clock3 className="mt-0.5 size-5 shrink-0 text-amber-300"/><div><p className="font-black text-amber-100">Predicted XI active</p><p className="mt-1 text-[0.6rem] leading-relaxed text-white/40">{data.lineupSource??"Probable starters based on recent selection history and minutes."} As soon as the official XI arrives, anyone benched is removed and all probabilities/slips are rebuilt automatically.</p></div></div></section>:data?.ok&&data.lineupMode==="squad"?<section className="rounded-3xl border border-amber-300/15 bg-amber-300/[0.05] p-6 text-center"><Clock3 className="mx-auto size-6 text-amber-300"/><p className="mt-3 font-black">No reliable XI yet</p><p className="mx-auto mt-1 max-w-lg text-xs leading-relaxed text-white/40">The match is still available, but player recommendations need a probable or confirmed starting XI.</p></section>:null}
+      {data?.ok&&data.lineupMode==="predicted"?<section className="rounded-3xl border border-amber-300/15 bg-amber-300/[0.05] p-4"><div className="flex items-start gap-3"><Clock3 className="mt-0.5 size-5 shrink-0 text-amber-300"/><div><p className="font-black text-amber-100">Predicted XI active</p><p className="mt-1 text-[0.6rem] leading-relaxed text-white/40">{data.lineupSource??"Probable starters based on recent selection history and minutes."} The page checks for the official XI only between roughly 60 and 45 minutes before kickoff. Once confirmed, anyone benched is removed, all probabilities/slips are rebuilt once, and lineup polling stops for this match.</p></div></div></section>:data?.ok&&data.lineupMode==="squad"?<section className="rounded-3xl border border-amber-300/15 bg-amber-300/[0.05] p-6 text-center"><Clock3 className="mx-auto size-6 text-amber-300"/><p className="mt-3 font-black">No reliable XI yet</p><p className="mx-auto mt-1 max-w-lg text-xs leading-relaxed text-white/40">The match is still available, but player recommendations need a probable or confirmed starting XI.</p></section>:null}
 
       {inPlay&&live?<section className="rounded-3xl border border-rose-300/15 bg-rose-400/[0.055] p-4"><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-black text-rose-200">Live recommendations adapting</p><p className="mt-1 text-[0.58rem] leading-relaxed text-white/40">Settled thresholds are removed automatically. If a player commits their first foul, 1+ disappears and the next available foul line moves up the ranking.</p></div><span className="shrink-0 rounded-full bg-rose-300 px-2 py-1 text-[0.45rem] font-black text-rose-950">{live.elapsed}'</span></div><p className="mt-2 text-[0.46rem] text-white/25">{live.source??"Live feed"} · refreshes every 30 seconds</p></section>:null}
 
