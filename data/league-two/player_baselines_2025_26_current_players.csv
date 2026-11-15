@@ -1,4 +1,5 @@
 player_name,team,current_competition,source_club,source_competition,season,appearances,starts,minutes,goals,assists,yellow_cards,red_cards,fouls_committed,fouls_drawn,shots,shots_on_target,fouls_per_90,cards_per_90,shots_per_90,shots_on_target_per_90,position,external_player_id
+Jamie Allen,Rochdale,League Two,Coventry City,Championship,2025/26,23,4,586,1,2,0,0,5,2,6,2,0.768,0.000,0.92,0.31,MF,2c183a79
 Tom Bradshaw,Rotherham United,League Two,Oxford United,Championship,2025/26,5,0,69,0,0,0,0,0,3,1,0,0.000,0.000,1.30,0.00,FW,a9d071f8
 Dajaune Brown,Rochdale,League Two,Derby County,Championship,2025/26,1,0,2,0,0,0,0,0,0,0,0,0.000,0.000,0.00,0.00,FW,b4d24801
 Tom Davies,Newport County,League Two,Sheffield United,Championship,2025/26,10,3,344,0,0,0,0,4,9,5,1,1.047,0.000,1.31,0.26,MF,9228b07c
@@ -56,6 +57,7 @@ Jake Evans,Cheltenham Town,League Two,Northampton,League One,2025/26,16,7,734,2,
 Lee Evans,Northampton Town,League Two,Bradford City,League One,2025/26,8,3,308,0,2,0,0,1,8,2,0,0.292,0.000,0.58,0.00,MF,8ba29cfb
 Mo Faal,Port Vale,League Two,Port Vale,League One,2025/26,13,3,351,0,0,1,0,5,6,10,4,1.282,0.256,2.56,1.03,FW,b5609935
 Favour Fawunmi,Oldham Athletic,League Two,Leyton Orient,League One,2025/26,7,4,360,0,0,1,0,6,15,6,4,1.500,0.250,1.50,1.00,MF,700639ef
+Ross Fitzsimons,Northampton Town,League Two,Northampton,League One,2025/26,26,26,2340,0,0,2,0,0,9,1,0,0.000,0.077,0.04,0.00,GK,fd3a5999
 Jack Fitzwater,Exeter City,League Two,Exeter City,League One,2025/26,29,29,2554,1,1,6,0,21,21,23,2,0.740,0.211,0.81,0.07,DF,eb2be717
 Tyrese Fornah,Northampton Town,League Two,Northampton,League One,2025/26,33,27,2394,0,2,3,0,27,24,19,3,1.015,0.113,0.71,0.11,"MF,FW",205f2e2a
 Ben Garrity,Port Vale,League Two,Port Vale,League One,2025/26,25,22,1934,0,1,1,0,22,13,35,12,1.024,0.047,1.63,0.56,MF,7642d200
@@ -98,6 +100,7 @@ Marko Maroši,Port Vale,League Two,Port Vale,League One,2025/26,5,5,450,0,0,0,0,
 Ar'jany Martha,Rotherham United,League Two,Rotherham,League One,2025/26,41,24,2576,1,2,7,0,48,24,21,6,1.677,0.245,0.73,0.21,"MF,FW",364f602a
 Ajay Matthews,Exeter City,League Two,Leyton Orient,League One,2025/26,4,2,118,0,0,0,0,1,2,1,0,0.763,0.000,0.76,0.00,FW,bddd1dec
 James Maxwell,Northampton Town,League Two,Doncaster,League One,2025/26,19,18,1449,0,2,2,0,8,18,5,0,0.497,0.124,0.31,0.00,"DF,MF",b43128df
+Conor McCarthy,Northampton Town,League Two,Northampton,League One,2025/26,30,26,2148,1,2,7,1,11,15,14,3,0.461,0.293,0.59,0.13,DF,f928e03e
 Shaun McWilliams,Cheltenham Town,League Two,Rotherham,League One,2025/26,26,19,1667,2,2,2,0,32,22,22,5,1.728,0.108,1.19,0.27,"MF,FW",6a8c0786
 Glenn Middleton,Rochdale,League Two,Doncaster,League One,2025/26,35,15,1556,1,2,4,0,8,12,30,11,0.463,0.231,1.74,0.64,"MF,FW",85d5ccdb
 Luke Molyneux,Salford City,League Two,Doncaster,League One,2025/26,40,39,3389,8,7,6,0,30,56,89,26,0.797,0.159,2.36,0.69,MF,4ab6281c
@@ -142,6 +145,7 @@ Albert Adomah,Walsall,League Two,Walsall,League Two,2025/26,42,11,1340,6,3,1,0,1
 Michael Adu-Poku,Newport County,League Two,Barrow,League Two,2025/26,4,0,79,0,0,0,0,1,1,2,0,1.139,0.000,2.28,0.00,FW,e47141d7
 Calum Agius,Crewe Alexandra,League Two,Crewe Alexandra,League Two,2025/26,40,33,2935,6,2,1,0,31,48,36,14,0.951,0.031,1.10,0.43,MF,1d359075
 Hugo Aiston,Shrewsbury Town,League Two,Shrewsbury,League Two,2025/26,1,0,4,0,0,0,0,0,0,0,0,0.000,0.000,0.00,0.00,,4c228db9
+Adrian Akande,Colchester United,League Two,Colchester,League Two,2025/26,7,1,179,0,1,0,0,7,5,7,1,3.520,0.000,3.52,0.50,MF,981c64ea
 Sonny Aljofree,Rotherham United,League Two,Notts County,League Two,2025/26,9,8,686,1,0,0,0,4,3,4,1,0.525,0.000,0.52,0.13,DF,bd44b52f
 Justin Amaluzor,Grimsby Town,League Two,Grimsby Town,League Two,2025/26,35,12,1268,3,3,4,0,22,26,32,12,1.562,0.284,2.27,0.85,MF,b3f78f19
 Harry Anderson,Colchester United,League Two,Colchester,League Two,2025/26,33,31,2575,11,4,2,0,34,23,45,17,1.188,0.070,1.57,0.59,MF,c6f940ed
@@ -200,10 +204,12 @@ Robbie Cundy,Cheltenham Town,League Two,Cheltenham,League Two,2025/26,25,25,2150
 Bradley Dack,Gillingham,League Two,Gillingham,League Two,2025/26,41,30,2552,7,1,10,0,42,35,63,23,1.481,0.353,2.22,0.81,MF,542d4f02
 Stan Dancey,Crewe Alexandra,League Two,Crewe Alexandra,League Two,2025/26,3,1,99,0,0,1,0,2,2,1,1,1.818,0.909,0.91,0.91,DF,f6a737cc
 Donervon Daniels,Oldham Athletic,League Two,Oldham Athletic,League Two,2025/26,39,39,3410,1,0,2,0,27,37,19,6,0.713,0.053,0.50,0.16,DF,06757dde
+Ronan Darcy,Accrington Stanley,League Two,Chesterfield,League Two,2025/26,24,15,1338,3,0,3,0,6,7,25,10,0.404,0.202,1.68,0.67,MF,9aff0d18
 Geza David Turi,Grimsby Town,League Two,Grimsby Town,League Two,2025/26,30,26,2024,0,0,5,0,23,18,6,0,1.023,0.222,0.27,0.00,MF,b87a0148
 Jordan Davies,Tranmere Rovers,League Two,Fleetwood Town,League Two,2025/26,15,5,621,3,1,2,0,15,17,36,11,2.174,0.290,5.22,1.59,MF,001461e2
 Will Davies,Fleetwood Town,League Two,Fleetwood Town,League Two,2025/26,42,28,2353,6,0,9,0,45,30,50,23,1.721,0.344,1.91,0.88,FW,5a5a42ac
 Josh Davison,Shrewsbury Town,League Two,Cheltenham,League Two,2025/26,16,11,853,1,2,2,0,17,9,9,4,1.794,0.211,0.95,0.42,FW,2433ab42
+Louie Dayal,Gillingham,League Two,Gillingham,League Two,2025/26,1,0,8,0,0,0,0,0,1,0,0,0.000,0.000,0.00,0.00,MF,4364666c
 Ryan Delaney,Oldham Athletic,League Two,Swindon Town,League Two,2025/26,1,0,10,0,0,0,0,0,0,0,0,0.000,0.000,0.00,0.00,DF,62b31d73
 Mickey Demetriou,Crewe Alexandra,League Two,Crewe Alexandra,League Two,2025/26,38,35,3168,3,3,3,0,14,26,31,11,0.398,0.085,0.88,0.31,DF,2acf1ee3
 Janoi Donacien,Northampton Town,League Two,Chesterfield,League Two,2025/26,20,2,580,0,0,1,0,2,4,1,1,0.310,0.155,0.16,0.16,DF,07bd38c5
@@ -304,6 +310,7 @@ Garath McCleary,Gillingham,League Two,Gillingham,League Two,2025/26,26,15,1379,4
 George McEachran,Chesterfield,League Two,Grimsby Town,League Two,2025/26,35,24,2372,0,2,7,0,40,58,18,6,1.518,0.266,0.68,0.23,MF,549864a3
 Kyle McFadzean,Chesterfield,League Two,Chesterfield,League Two,2025/26,37,36,3164,2,0,10,2,56,48,22,6,1.593,0.284,0.63,0.17,DF,d958cde6
 Luke McGee,Tranmere Rovers,League Two,Tranmere Rovers,League Two,2025/26,5,5,450,0,0,1,0,0,6,0,0,0.000,0.200,0.00,0.00,GK,bfa6049d
+Aaron McGowan,Port Vale,League Two,Tranmere Rovers,League Two,2025/26,23,15,1389,0,2,2,0,18,14,4,1,1.166,0.130,0.26,0.06,DF,ed2738f9
 Joel McGregor,Swindon Town,League Two,Swindon Town,League Two,2025/26,35,17,1847,1,1,3,0,23,31,11,4,1.121,0.146,0.54,0.19,"MF,DF",b9a2bc83
 Cameron McJannett,Grimsby Town,League Two,Grimsby Town,League Two,2025/26,46,46,4118,2,2,5,0,25,59,21,5,0.546,0.109,0.46,0.11,DF,014b544e
 Robbie McKenzie,Gillingham,League Two,Gillingham,League Two,2025/26,37,34,3081,4,0,2,0,25,16,39,11,0.730,0.058,1.14,0.32,"MF,DF",25256366

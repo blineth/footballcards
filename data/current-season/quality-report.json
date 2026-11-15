@@ -2,7 +2,7 @@
   "source": "ESPN public match-summary player statistics",
   "season": "2026/27",
   "from": "2026-07-01",
-  "to": "2026-11-14",
+  "to": "2026-11-15",
   "competitions": [
     {
       "competition": "Premier League",
@@ -16,12 +16,12 @@
     },
     {
       "competition": "League One",
-      "completed_matches": 164,
+      "completed_matches": 169,
       "failures": []
     },
     {
       "competition": "League Two",
-      "completed_matches": 167,
+      "completed_matches": 176,
       "failures": []
     },
     {
@@ -31,7 +31,7 @@
     },
     {
       "competition": "La Liga 2",
-      "completed_matches": 145,
+      "completed_matches": 151,
       "failures": []
     },
     {
@@ -71,7 +71,7 @@
     },
     {
       "competition": "Eerste Divisie",
-      "completed_matches": 139,
+      "completed_matches": 147,
       "failures": []
     },
     {
@@ -116,7 +116,7 @@
     },
     {
       "competition": "Liga MX",
-      "completed_matches": 143,
+      "completed_matches": 144,
       "failures": []
     },
     {
@@ -126,7 +126,7 @@
     },
     {
       "competition": "Brazil Serie A",
-      "completed_matches": 162,
+      "completed_matches": 164,
       "failures": []
     },
     {
@@ -165,7 +165,7 @@
       "failures": [
         {
           "stage": "scoreboard",
-          "error": "pol.1 scoreboard months failed: [{'month': '202608', 'error': 'Failed https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202608&limit=500: 400 Client Error: Bad Request for url: https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202608&limit=500'}, {'month': '202610', 'error': 'Failed https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202610&limit=500: 400 Client Error: Bad Request for url: https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202610&limit=500'}, {'month': '202609', 'error': 'Failed https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202609&limit=500: 400 Client Error: Bad Request for url: https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202609&limit=500'}, {'month': '202611', 'error': 'Failed https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202611&limit=500: 400 Client Error: Bad Request for url: https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202611&limit=500'}, {'month': '202607', 'error': 'Failed https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202607&limit=500: 400 Client Error: Bad Request for url: https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202607&limit=500'}]"
+          "error": "pol.1 scoreboard months failed: [{'month': '202611', 'error': 'Failed https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202611&limit=500: 400 Client Error: Bad Request for url: https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202611&limit=500'}, {'month': '202607', 'error': 'Failed https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202607&limit=500: 400 Client Error: Bad Request for url: https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202607&limit=500'}, {'month': '202608', 'error': 'Failed https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202608&limit=500: 400 Client Error: Bad Request for url: https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202608&limit=500'}, {'month': '202610', 'error': 'Failed https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202610&limit=500: 400 Client Error: Bad Request for url: https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202610&limit=500'}, {'month': '202609', 'error': 'Failed https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202609&limit=500: 400 Client Error: Bad Request for url: https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202609&limit=500'}]"
         }
       ]
     },
@@ -176,15 +176,15 @@
     }
   ],
   "totals": {
-    "player_match_rows": 114555,
-    "player_baselines": 14457,
-    "league_two_players": 571,
-    "goals": 10451,
-    "assists": 7293,
-    "shots": 99991,
-    "shots_on_target": 33254,
-    "yellows": 13692,
-    "fouls_committed": 87655,
-    "fouls_drawn": 83909
+    "player_match_rows": 115498,
+    "player_baselines": 14488,
+    "league_two_players": 579,
+    "goals": 10548,
+    "assists": 7366,
+    "shots": 100874,
+    "shots_on_target": 33543,
+    "yellows": 13805,
+    "fouls_committed": 88349,
+    "fouls_drawn": 84580
   }
 }
