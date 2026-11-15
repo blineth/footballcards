@@ -1196,65 +1196,48 @@ export async function GET(request:Request){
 
     if(multiOnly){
       const nowMs=Date.now()
-      const upcoming=[...fixtureMap.values()]
+      const games=[...fixtureMap.values()]
         .filter(f=>{
           const status=String(f.status??"").toLowerCase()
           const blocked=["postponed","cancelled","canceled","finished","ft","full time","after extra time","aet","abandoned","suspended"]
           const kickoffMs=new Date(f.kickoff).getTime()
-          // Keep a verified pre-match Multi visible after kickoff instead of
-          // deleting it the instant the clock passes the scheduled start.
           return Number.isFinite(kickoffMs)&&kickoffMs>nowMs-180*60*1000&&!blocked.includes(status)
         })
         .sort((a,b)=>a.kickoff.localeCompare(b.kickoff))
         .slice(0,maxFixtures)
 
-      // Cheap first pass: only inspect Bet365 market coverage. Full scorecards
-      // are built for the small set that actually has every required player prop.
-      const coverage=await Promise.all(upcoming.map(async fixture=>{
+      // Multi now exists only to show per-game top-three player likelihoods.
+      // Do NOT run bookmaker coverage scans or legacy Safe/Balanced/Risky search
+      // before returning the board; those were the reason mobile requests timed out.
+      const scans:FixtureScan[]=await Promise.all(games.map(async fixture=>{
         try{
-          const q=new URLSearchParams({
-            date:fixtureDate(fixture),home:fixture.home.name,away:fixture.away.name,competition:fixture.competition,
-          })
-          if(refresh)q.set("refresh",String(Date.now()))
-          const response=await betBuilderOddsGET(new Request("http://local/api/bet-builder-odds?"+q.toString()))
-          if(!response.ok)return null
-          const odds=await response.json()
-          return usablePlayerPropCoverage(odds?.marketAvailability)?fixture:null
-        }catch{return null}
-      }))
-
-      const eligibleFixtures=coverage.filter(Boolean) as Fixture[]
-      const coveredIds=new Set(eligibleFixtures.map(f=>f.id))
-      const scans:FixtureScan[]=await Promise.all(upcoming.map(async fixture=>{
-        try{
-          // Every match gets a model board. Only fixtures with usable Bet365
-          // coverage pay the cost of the full bookmaker-enriched scorecard.
-          let scorecard=coveredIds.has(fixture.id)?await scorecardFor(fixture,refresh):await fallbackScorecard(fixture)
-          if(!scorecard?.ok)scorecard=await fallbackScorecard(fixture)
+          let scorecard=await fallbackScorecard(fixture)
           if(!scorecard?.ok)return {fixture,scorecard:null,recommendations:[]}
+
+          // Near kickoff / in-play, use the official XI when the feed has it.
           const minutesToKickoff=(new Date(fixture.kickoff).getTime()-Date.now())/60000
-          const officialLineup=minutesToKickoff<=120?await officialLineupForFixture(fixture):{confirmed:false,starters:new Set<string>()}
-          if(officialLineup.confirmed)scorecard=filterScorecardToOfficialStarters(scorecard,officialLineup)
+          if(minutesToKickoff<=120){
+            const officialLineup=await officialLineupForFixture(fixture)
+            if(officialLineup.confirmed)scorecard=filterScorecardToOfficialStarters(scorecard,officialLineup)
+          }
           return {fixture,scorecard,recommendations:[]}
-        }catch{return {fixture,scorecard:null,recommendations:[]}}
+        }catch{
+          return {fixture,scorecard:null,recommendations:[]}
+        }
       }))
 
       const multiGameBoards=buildMultiGameBoards(scans)
-      const multiMatchBuild=buildMultiMatchFromScans(scans)
-      const yellowCardWatch=buildYellowCardWatchFromScans(scans)
       const payload={
         ok:true,
         date:resolvedDate,
         updatedAt:new Date().toISOString(),
-        fixturesScanned:upcoming.length,
-        eligibleFixtures:eligibleFixtures.length,
+        fixturesScanned:games.length,
+        eligibleFixtures:multiGameBoards.length,
         multiGameBoards,
-        multiMatchBuild,
-        yellowCardWatch,
         liveMatches:[],
         staleFallback:false,
         methodology:{
-          multiMatch:"Every match gets a per-game player likelihood board with the top three cards, fouls committed, fouls drawn, shots, SOT, goals and assists. Ranking uses the model probability plus recent/season/H2H evidence, with card-specific recommendation evidence for bookings. Bet365 prices are added when available but are not required for a match or player to appear. Once official XIs are confirmed, the board is hard-filtered to current starters.",
+          multiMatch:"Fast per-game intelligence only: top three cards, fouls committed, fouls drawn, shots, SOT, goals and assists are built directly from the player model for every available game. The Multi endpoint no longer runs legacy accumulator optimisation or requires bookmaker coverage before returning. Official XIs are applied when available; Bet365 prices are supplemental only.",
         },
       }
       lastGoodMulti=payload
