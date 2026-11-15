@@ -273,10 +273,6 @@ function buildTargetOddsSlips(scorecard:Scorecard|null,fixture:Fixture):TargetOd
 
   const candidates:Candidate[]=(scorecard?.ok?directPlayerCandidates(scorecard):[])
     .filter(leg=>leg.bookmakerName==="Bet365"&&leg.bookmakerOdds!=null&&leg.priceSource!=="estimated"&&Number(leg.bookmakerOdds)>1)
-    .filter(leg=>{
-      const f=family(leg.market)
-      return f==="foul"||f==="fouled"||f==="shot"||f==="sot"
-    })
     .map(leg=>{
       const exactPrice=Number(leg.bookmakerOdds)
       return {fixture,leg,exactPrice,conservativeP:conservativeLegProbability(leg,exactPrice),modelP:Number(leg.probability),teamKey:teamKey(leg.team)}
@@ -390,7 +386,7 @@ function buildTargetOddsSlips(scorecard:Scorecard|null,fixture:Fixture):TargetOd
       // route must beat the best all-foul/shot/SOT route by a meaningful margin
       // before we accept the extra event variance. The margin relaxes as the user
       // asks for larger target odds, where some volatility is unavoidable.
-      const requiredMargin=targetDecimal<=6?1.18:targetDecimal<=16?1.10:1.05
+      const requiredMargin=targetDecimal<=6?1.28:targetDecimal<=16?1.18:1.10
       const overallHasHighVariance=bestOverall.legs.some(x=>{
         const fam=family(x.leg.market)
         return fam==="goal"||fam==="assist"||fam==="card"
@@ -427,7 +423,7 @@ function buildTargetOddsSlips(scorecard:Scorecard|null,fixture:Fixture):TargetOd
       safetyScore:Math.round(stateSafety(chosen)*10000)/10000,
       bookmaker:"Bet365" as const,priceSource:"bookmaker-singles" as const,marketsVerified:true,legs,
       maxSelections:MAX_SELECTIONS,maxPlayersPerTeam:MAX_PLAYERS_PER_TEAM,
-      note:"Safest-route search: up to 12 Bet365 selections, max six different players per team, both teams considered, and one prop per player to reduce same-player correlation. Automatic Target Odds uses only fouls committed, fouls drawn, shots and shots on target. Each leg is conservatively calibrated against Bet365's implied/no-vig probability, and the engine prefers several high-frequency 1+ events when that gives a better whole-slip chance than a weaker higher threshold. Match winner, double chance, total goals, corners, cards, scorers and assists are excluded from the automatic target route.",
+      note:"Safest-route search: up to 12 Bet365 selections, max six different players per team, both teams considered, and one prop per player to reduce same-player correlation. All verified player props are eligible — goals, assists, cards, fouls committed, fouls drawn, shots and shots on target — but match/team markets such as match winner, double chance, total goals, BTTS and corners are excluded. The engine applies a stability penalty to scorer/assist/card legs and prefers several high-frequency 1+ events whenever that gives a better whole-slip chance.",
     }
   })
 }
@@ -692,22 +688,22 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
 
   const tierConfigs:Array<{
     id:MultiMatchRiskTier;title:string;description:string;targetFractional:string;targetDecimal:number;
-    minLeg:number;maxFactor:number;allowHighVariance:boolean;forceBestCard:boolean
+    minLeg:number;maxFactor:number;allowHighVariance:boolean;forceBestCard:boolean;maxHighVariance:number
   }>=[
     {
       id:"safe",title:"Safe",targetFractional:"3/1",targetDecimal:4,minLeg:.32,maxFactor:1.45,
-      allowHighVariance:false,forceBestCard:false,
-      description:"Lowest-variance route: repeated 1+ fouls, fouled, shots and SOT first. Recent hit rate, season rate, H2H, expected minutes and Bet365 price all affect the safety score; 2+ lines are used only when they improve the whole-slip chance.",
+      allowHighVariance:true,forceBestCard:false,maxHighVariance:1,
+      description:"All verified player props are eligible. The route is still probability-first, so repeated 1+ fouls/fouled/shots/SOT are preferred and at most one higher-variance scorer, assist or card can enter only when it materially improves the whole-slip chance.",
     },
     {
       id:"balanced",title:"Balanced",targetFractional:"5/1",targetDecimal:6,minLeg:.25,maxFactor:1.42,
-      allowHighVariance:false,forceBestCard:false,
-      description:"Higher target price, still probability-first: fouls, fouled, shots and SOT only. It may use stronger 2+ lines when needed, but will not shortcut with a scorer, assist or card.",
+      allowHighVariance:true,forceBestCard:false,maxHighVariance:2,
+      description:"All verified player props are eligible, but the engine still favours the safest combination. Scorers, assists and cards are only used when they beat safer repeated-event alternatives on the conservative safety score.",
     },
     {
       id:"risky",title:"Risky",targetFractional:"10/1",targetDecimal:11,minLeg:.15,maxFactor:1.38,
-      allowHighVariance:false,forceBestCard:false,
-      description:"Highest target price of the three, but still built from the safest available fouls, fouled, shots and SOT. More legs or higher thresholds are preferred to a speculative scorer/card shortcut.",
+      allowHighVariance:true,forceBestCard:false,maxHighVariance:3,
+      description:"All verified player props are eligible. Higher target odds allow more scorer/assist/card exposure, but only where the evidence-adjusted route is safer than simply stacking weaker low-frequency selections.",
     },
   ]
 
@@ -775,8 +771,7 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
         const fam=family(option.market)
         const isHigh=fam==="goal"||fam==="assist"||fam==="card"
         if(fam==="card"&&(state.families.card??0)>=1)continue
-        if(config.id==="balanced"&&isHigh&&state.highVarianceCount>=1)continue
-        if(config.id==="risky"&&isHigh&&state.highVarianceCount>=2)continue
+        if(isHigh&&state.highVarianceCount>=config.maxHighVariance)continue
         const product=state.product*Number(option.bookmakerOdds)
         if(product>maxProduct)continue
         const legs=[...state.legs,option]
@@ -861,10 +856,10 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
     const allHit=matchBuilders.length?matchBuilders.reduce((v,x)=>v*x.conservativeAllHitProbability,1):null
     const cardCount=matchBuilders.reduce((sum,b)=>sum+(b.includesCard?1:0),0)
     const note=config.id==="safe"
-      ?"Safe uses only fouls, fouled, shots and SOT, choosing the highest conservative-probability route that reaches about 3/1 in each match. No card, scorer or assist is inserted just to make the price."
+      ?"Safe considers all verified player props, but heavily prefers repeated high-frequency events and permits no more than one scorer/assist/card leg per match."
       :config.id==="balanced"
-        ?"Balanced targets about 5/1 per match using only fouls, fouled, shots and SOT. It prefers extra high-probability 1+ legs over one weaker 2+ line whenever the joint conservative probability is better."
-        :"Risky targets about 10/1 per match but remains probability-first: only fouls, fouled, shots and SOT are used in the automatic builder. Higher odds come from the safest available combination, not from forcing a card, scorer or assist."
+        ?"Balanced considers all verified player props and still prefers extra high-probability 1+ legs whenever their conservative joint chance beats a lower-frequency alternative."
+        :"Risky considers all verified player props. Higher target odds can use more scorer/assist/card legs, but only when the evidence-adjusted route ranks better than the available foul/shot alternatives."
     return {
       id:config.id,title:config.title,description:config.description,targetFractionalPerMatch:config.targetFractional,targetDecimalPerMatch:config.targetDecimal,
       available:matchBuilders.length>=2,matchBuilders,legs,
@@ -887,7 +882,7 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
     conservativeAllHitProbability:safe.conservativeAllHitProbability,
     tiers,
     defaultTier:"safe",
-    note:"Multi-Match has three probability-led target levels: Safe (~3/1), Balanced (~5/1) and Risky (~10/1) per match. All automatic builds use verified Bet365 fouls, fouls drawn, shots and SOT only, both teams where qualifying props exist, one prop per player, up to 12 selections and no more than six players per team. Once official lineups are confirmed, only those starters are eligible.",
+    note:"Multi-Match has three probability-led target levels: Safe (~3/1), Balanced (~5/1) and Risky (~10/1) per match. All verified Bet365 player props are eligible — goals, assists, cards, fouls, fouls drawn, shots and SOT — while match/team markets such as corners, BTTS, total goals, match winner and double chance are excluded. The engine prefers higher-frequency repeated events when they offer the better whole-slip chance. Once official lineups are confirmed, only those starters are eligible.",
   }
 }
 
@@ -1360,8 +1355,8 @@ export async function GET(request:Request){
         recommendationCalibration:"Final ranking uses a second walk-forward calibration layer built from historical recommendations that survived the selection process.",
         cache:"Recommended scans today's matchday only. It never silently advances to tomorrow. Manual refresh bypasses the normal scan cadence, while provider and last-good caches protect against temporary source failures.",
         tracking:"Predicted-XI recommendations remain visible before official teams. As soon as confirmed lineups arrive, the scorecard is rebuilt and benched players disappear. Recommendations are saved before kickoff and graded later from imported player-match data.",
-        targetOdds:"Select a match, then 3/1 through 50/1 targets search only verified Bet365 fouls committed, fouls drawn, shots and shots-on-target markets for eligible players. The target price is a constraint, not the objective: the chosen route maximises conservative whole-slip hit probability and can use several safer 1+ events across different starters instead of one weaker 2+ line. Cards, scorers, assists, match winner, double chance, total goals and corners are excluded from the automatic target route. H2H/direct matchup, current form, season history, expected minutes, stakes and set-piece effects are already reflected in each underlying player probability.",
-        multiMatch:"The Multi-Match Builder uses the same probability-first engine as individual Target Odds. Safe (~3/1), Balanced (~5/1) and Risky (~10/1) all search only verified Bet365 fouls committed, fouls drawn, shots and shots-on-target markets. Higher tiers raise the target odds rather than forcing a card/scorer. Search-state pruning is conservative-probability first, both teams are represented where qualifying props exist, and confirmed starters are a hard eligibility gate.",
+        targetOdds:"Select a match, then 3/1 through 50/1 targets search every verified Bet365 player prop for eligible starters: goals, assists, cards, fouls committed, fouls drawn, shots and shots on target. Match/team markets such as match winner, double chance, BTTS, total goals and corners are excluded. The target price is a constraint, not the objective: the chosen route maximises conservative whole-slip hit probability and applies a stability preference to repeated 1+ events so they beat scorer/card legs whenever they are genuinely safer.",
+        multiMatch:"The Multi-Match Builder uses the same probability-first engine as individual Target Odds. Safe (~3/1), Balanced (~5/1) and Risky (~10/1) search all verified Bet365 player props — goals, assists, cards, fouls committed, fouls drawn, shots and SOT — while excluding match/team markets such as BTTS, corners, total goals and match winner. Repeated high-frequency events receive a stability preference, and scorer/assist/card exposure is capped by tier. Confirmed starters are a hard eligibility gate.",
         liveRecommended:"Matches remain on Recommended after kick-off. Live rows use the current score and minute plus current player event counts. Confirmed-XI card, foul, fouled, shot and SOT models become next-threshold remaining-match probabilities; already-carded players are removed from the card market, and stale pre-match bookmaker prices are never relabelled as live prices.",
         liveFeedback:liveTopSample>=50
           ? "Live top-pick calibration is active. Current 30-day reliability multiplier: "+liveReliabilityFactor.toFixed(3)
