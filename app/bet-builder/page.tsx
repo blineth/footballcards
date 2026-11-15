@@ -34,13 +34,13 @@ type LiveData={
   score:{home:number|null;away:number|null};players:LivePlayerStat[];updatedAt:string
 }
 type H2HMeeting={
-  date:string;home:string;away:string;homeGoals:number;awayGoals:number;
+  date:string;competition?:string|null;home:string;away:string;homeGoals:number;awayGoals:number;
   scorers:Array<{player:string;team:string;goals:number;assists:number}>;
   bookings:Array<{player:string;team:string;yellow:boolean;red:boolean}>;
   players:Array<{player:string;team:string;minutes:number;goals:number;assists:number;foulsCommitted:number;foulsDrawn:number;shots:number;shotsOnTarget:number;yellow:boolean;red:boolean}>;
   totals:{home:{yellow:number;red:number;fouls:number;shots:number;sot:number};away:{yellow:number;red:number;fouls:number;shots:number;sot:number}}
 }
-type H2HData={ok:boolean;source?:string;meetings:H2HMeeting[];count:number;error?:string}
+type H2HData={ok:boolean;source?:string;scope?:string;meetings:H2HMeeting[];count:number;error?:string}
 type RiskBuilder={
   id:string;title:string;risk:"Safe"|"Balanced"|"High Risk";targetFractional:string;targetDecimal:number;
   legs:Selection[];referenceProductOdds:number|null;averageLegProbability:number|null;minimumLegProbability:number|null;
@@ -353,7 +353,7 @@ export default function BetBuilderPage(){
 
 function H2HPanel({data,loading,home,away}:{data:H2HData|null;loading:boolean;home:string;away:string}){
   return <section className="rounded-3xl border border-white/10 bg-white/[0.035] p-4">
-    <div className="flex items-start justify-between gap-3"><div><p className="text-[0.5rem] font-black uppercase tracking-[0.12em] text-emerald-300">Head to head</p><h2 className="mt-1 text-base font-black">{home} v {away}</h2><p className="mt-1 text-[0.55rem] text-white/35">Scores, scorers, bookings and player match stats from previous meetings.</p></div>{data?.source?<span className="rounded-full bg-white/6 px-2 py-1 text-[0.4rem] font-black text-white/25">{data.source}</span>:null}</div>
+    <div className="flex items-start justify-between gap-3"><div><p className="text-[0.5rem] font-black uppercase tracking-[0.12em] text-emerald-300">Head to head</p><h2 className="mt-1 text-base font-black">{home} v {away}</h2><p className="mt-1 text-[0.55rem] text-white/35">{data?.scope??"Scores, scorers, bookings and player match stats from previous meetings."}</p></div>{data?.source?<span className="rounded-full bg-white/6 px-2 py-1 text-[0.4rem] font-black text-white/25">{data.source}</span>:null}</div>
     {loading?<div className="py-8 text-center"><RefreshCw className="mx-auto size-5 animate-spin text-emerald-300"/><p className="mt-2 text-xs text-white/35">Loading H2H history…</p></div>:data?.meetings?.length?<div className="mt-4 space-y-3">{data.meetings.map(m=><H2HMeetingCard key={m.date} meeting={m}/>)}</div>:<p className="mt-4 rounded-2xl bg-black/20 px-3 py-5 text-center text-xs text-white/35">{data?.error??"No tracked previous meetings found in the current history source."}</p>}
   </section>
 }
@@ -362,7 +362,7 @@ function H2HMeetingCard({meeting:m}:{meeting:H2HMeeting}){
   const fmt=new Intl.DateTimeFormat("en-GB",{day:"2-digit",month:"short",year:"numeric"}).format(new Date(m.date+"T12:00:00Z"))
   return <article className="overflow-hidden rounded-2xl border border-white/8 bg-black/20">
     <button onClick={()=>setOpen(v=>!v)} className="w-full p-3 text-left">
-      <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3"><p className="font-mono text-[0.5rem] text-white/30">{fmt}</p><p className="truncate text-xs font-black">{m.home} <span className="text-white/25">v</span> {m.away}</p><p className="font-mono text-lg font-black">{m.homeGoals}-{m.awayGoals}</p></div>
+      <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3"><div><p className="font-mono text-[0.5rem] text-white/30">{fmt}</p>{m.competition?<p className="mt-0.5 max-w-24 truncate text-[0.4rem] font-black uppercase text-emerald-300/55">{m.competition}</p>:null}</div><p className="truncate text-xs font-black">{m.home} <span className="text-white/25">v</span> {m.away}</p><p className="font-mono text-lg font-black">{m.homeGoals}-{m.awayGoals}</p></div>
       <div className="mt-2 grid grid-cols-2 gap-2"><div className="rounded-xl bg-white/[0.04] px-2 py-1.5"><p className="text-[0.44rem] font-black uppercase text-white/25">Scorers</p><p className="mt-1 text-[0.52rem] text-white/55">{m.scorers.length?m.scorers.map(s=>s.player+(s.goals>1?" x"+s.goals:"")).join(", "):"None tracked"}</p></div><div className="rounded-xl bg-white/[0.04] px-2 py-1.5"><p className="text-[0.44rem] font-black uppercase text-white/25">Booked</p><p className="mt-1 text-[0.52rem] text-white/55">{m.bookings.length?m.bookings.map(b=>b.player+(b.red?" 🟥":" 🟨")).join(", "):"None tracked"}</p></div></div>
       <div className="mt-2 grid grid-cols-2 gap-2"><H2HTeamTotals label={m.home} x={m.totals.home}/><H2HTeamTotals label={m.away} x={m.totals.away}/></div>
       <p className="mt-2 text-center text-[0.44rem] font-black uppercase text-white/20">{open?"Hide player stats":"Show player fouls / shots / SOT"}</p>
