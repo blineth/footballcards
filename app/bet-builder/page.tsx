@@ -6,8 +6,8 @@ import { useRouter } from "next/navigation"
 
 type Competition = "Premier League" | "Championship" | "League One" | "League Two" | "International"
 type MarketStatus = "available"|"unavailable"|"unknown"
-type MarketKey = "goal1"|"foul1"|"foul2"|"foul3"|"foul4"|"foul5"|"fouled1"|"card"|"shot1"|"shot2"|"sot1"|"sot2"
-type Category = "popular"|"goals"|"shots"|"sot"|"fouls"|"fouled"|"cards"
+type MarketKey = "goal1"|"assist1"|"foul1"|"foul2"|"foul3"|"foul4"|"foul5"|"fouled1"|"card"|"shot1"|"shot2"|"sot1"|"sot2"
+type Category = "popular"|"goals"|"assists"|"shots"|"sot"|"fouls"|"fouled"|"cards"
 
 type Fixture={id:string;date:string;kickoff:string;competition:Competition;home:string;away:string}
 
@@ -27,7 +27,7 @@ type Selection={
 }
 type LivePlayerStat={
   player:string;team:string;minutes:number|null;foulsCommitted:number;foulsDrawn:number;shots:number;shotsOnTarget:number;
-  goals:number;yellowCards:number;redCards:number;subbedOff:boolean
+  goals:number;assists:number;yellowCards:number;redCards:number;subbedOff:boolean
 }
 type LiveData={
   ok:boolean;source:string|null;status:"scheduled"|"live"|"halftime"|"finished"|"unknown";elapsed:number;
@@ -57,8 +57,9 @@ type Scorecard={
 }
 
 const categories:{id:Category;label:string;markets:MarketKey[]}[]=[
-  {id:"popular",label:"Most likely",markets:["goal1","shot1","sot1","foul1","fouled1","card"]},
+  {id:"popular",label:"Most likely",markets:["goal1","assist1","shot1","sot1","foul1","fouled1","card"]},
   {id:"goals",label:"Goals",markets:["goal1"]},
+  {id:"assists",label:"Assists",markets:["assist1"]},
   {id:"shots",label:"Shots",markets:["shot1","shot2"]},
   {id:"sot",label:"SOT",markets:["sot1","sot2"]},
   {id:"fouls",label:"Fouls",markets:["foul1","foul2","foul3","foul4","foul5"]},
@@ -67,6 +68,41 @@ const categories:{id:Category;label:string;markets:MarketKey[]}[]=[
 ]
 
 function percent(v:number|null|undefined,digits=0){return v==null?"—":(Number(v)*100).toFixed(digits)+"%"}
+type Traffic="high"|"average"|"low"
+function marketFloors(market:string){
+  if(market==="card")return {green:.20,amber:.14}
+  if(market==="goal1")return {green:.32,amber:.18}
+  if(market==="assist1")return {green:.24,amber:.14}
+  if(market==="shot1")return {green:.72,amber:.48}
+  if(market==="shot2")return {green:.48,amber:.28}
+  if(market==="sot1")return {green:.42,amber:.25}
+  if(market==="sot2")return {green:.20,amber:.10}
+  if(market==="foul1")return {green:.68,amber:.48}
+  if(market==="foul2")return {green:.42,amber:.24}
+  if(market==="foul3")return {green:.20,amber:.10}
+  if(market==="foul4")return {green:.10,amber:.05}
+  if(market==="foul5")return {green:.055,amber:.025}
+  if(market==="fouled1")return {green:.62,amber:.42}
+  return {green:.55,amber:.30}
+}
+function quantile(values:number[],q:number){
+  if(!values.length)return 0
+  const sorted=[...values].sort((a,b)=>a-b)
+  const pos=(sorted.length-1)*q
+  const lo=Math.floor(pos),hi=Math.ceil(pos)
+  if(lo===hi)return sorted[lo]
+  const w=pos-lo
+  return sorted[lo]*(1-w)+sorted[hi]*w
+}
+function trafficFor(row:Selection,all:Selection[]):Traffic{
+  const peers=all.filter(x=>x.market===row.market).map(x=>x.probability).filter(Number.isFinite)
+  const floors=marketFloors(row.market)
+  const greenCut=Math.max(floors.green,quantile(peers,.75))
+  const amberCut=Math.max(floors.amber,quantile(peers,.40))
+  if(row.probability>=greenCut)return "high"
+  if(row.probability>=amberCut)return "average"
+  return "low"
+}
 function parseFixture():Fixture|null{
   if(typeof window==="undefined")return null
   const p=new URLSearchParams(window.location.search)
@@ -87,6 +123,7 @@ function thresholdForMarket(m:string){
 }
 function countForMarket(stat:LivePlayerStat,m:string){
   if(m.startsWith("goal"))return stat.goals
+  if(m.startsWith("assist"))return stat.assists
   if(m==="card")return stat.yellowCards+stat.redCards
   if(m.startsWith("fouled"))return stat.foulsDrawn
   if(m.startsWith("foul"))return stat.foulsCommitted
@@ -96,6 +133,7 @@ function countForMarket(stat:LivePlayerStat,m:string){
 }
 function familyOneMarket(m:string){
   if(m.startsWith("goal"))return "goal1"
+  if(m.startsWith("assist"))return "assist1"
   if(m==="card")return "card"
   if(m.startsWith("fouled"))return "fouled1"
   if(m.startsWith("foul"))return "foul1"
@@ -339,7 +377,7 @@ export default function BetBuilderPage(){
 
           <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]">
             <div className="grid grid-cols-[1fr_auto] gap-3 border-b border-white/8 px-3 py-2"><p className="text-[0.48rem] font-black uppercase text-white/25">Most likely first</p><p className="text-[0.48rem] font-black uppercase text-white/25">{visible.length} options</p></div>
-            <div>{visible.length?visible.map((row,i)=><SelectionRow key={row.id} row={row} selected={Boolean(selected[row.id])} onToggle={()=>toggle(row)} rank={i+1}/>):<p className="px-4 py-8 text-center text-sm text-white/35">No qualifying selections in this market.</p>}</div>
+            <div>{visible.length?visible.map((row,i)=><SelectionRow key={row.id} row={row} selected={Boolean(selected[row.id])} onToggle={()=>toggle(row)} rank={i+1} traffic={trafficFor(row,allRows)}/>):<p className="px-4 py-8 text-center text-sm text-white/35">No qualifying selections in this market.</p>}</div>
           </div>
         </section>
 
@@ -384,12 +422,15 @@ function RiskCard({build,onUse}:{build:RiskBuilder;onUse:()=>void}){
 }
 function MiniStat({label,value}:{label:string;value:string}){return <div className="rounded-xl bg-black/20 px-2 py-1.5"><p className="font-mono text-xs font-black">{value}</p><p className="text-[0.4rem] uppercase text-white/25">{label}</p></div>}
 
-function SelectionRow({row,selected,onToggle,rank}:{row:Selection;selected:boolean;onToggle:()=>void;rank:number}){
+function SelectionRow({row,selected,onToggle,rank,traffic}:{row:Selection;selected:boolean;onToggle:()=>void;rank:number;traffic:Traffic}){
   const exact=row.bookmakerOdds!=null
+  const trafficText=traffic==="high"?"HIGH":traffic==="average"?"AVERAGE":"LOW"
+  const trafficClass=traffic==="high"?"bg-emerald-300/15 text-emerald-200 border-emerald-300/20":traffic==="average"?"bg-amber-300/12 text-amber-100 border-amber-300/20":"bg-rose-300/10 text-rose-100/75 border-rose-300/15"
+  const probabilityClass=traffic==="high"?"text-emerald-200":traffic==="average"?"text-amber-100":"text-rose-100/80"
   return <button onClick={onToggle} className={"grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 px-3 py-3 text-left transition "+(rank>1?"border-t border-white/[0.055] ":"")+(selected?"bg-emerald-400/[0.08]":"hover:bg-white/[0.025]")}>
     <span className={"flex size-7 items-center justify-center rounded-full text-[0.56rem] font-black "+(rank<=3?"bg-emerald-400/12 text-emerald-300":"bg-white/5 text-white/30")}>{rank}</span>
     <div className="min-w-0"><div className="flex items-center gap-1.5"><p className="truncate text-sm font-black">{row.player}</p>{selected?<BadgeCheck className="size-3.5 shrink-0 text-emerald-300"/>:null}</div><p className="mt-0.5 truncate text-[0.54rem] font-bold text-white/55">{row.label}</p><p className="mt-0.5 truncate text-[0.46rem] text-white/25">{row.team} · Grade {row.confidence}{row.liveAdjusted?" · live count "+(row.currentCount??0):row.edge!=null?" · "+(row.edge>=0?"+":"")+(row.edge*100).toFixed(1)+"pp vs price":""}</p></div>
-    <div className="min-w-[4.5rem] text-right"><p className="font-mono text-base font-black">{percent(row.probability)}</p><p className="text-[0.42rem] text-white/25">{exact?(row.bookmakerOdds!.toFixed(2)+" "+(row.bookmakerName??"book")):((row.fairOdds?.toFixed(2)??"—")+(row.liveAdjusted?" live fair":" fair"))}</p><span className={"mt-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[0.4rem] font-black "+(selected?"bg-emerald-300 text-emerald-950":"bg-white/6 text-white/30")}>{selected?<X className="size-2.5"/>:<CirclePlus className="size-2.5"/>}{selected?"REMOVE":"ADD"}</span></div>
+    <div className="min-w-[5rem] text-right"><div className="mb-1 flex justify-end"><span className={"rounded-full border px-1.5 py-0.5 text-[0.38rem] font-black "+trafficClass}>{trafficText}</span></div><p className={"font-mono text-base font-black "+probabilityClass}>{percent(row.probability)}</p><p className="text-[0.42rem] text-white/25">{exact?(row.bookmakerOdds!.toFixed(2)+" "+(row.bookmakerName??"book")):((row.fairOdds?.toFixed(2)??"—")+(row.liveAdjusted?" live fair":" fair"))}</p><span className={"mt-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[0.4rem] font-black "+(selected?"bg-emerald-300 text-emerald-950":"bg-white/6 text-white/30")}>{selected?<X className="size-2.5"/>:<CirclePlus className="size-2.5"/>}{selected?"REMOVE":"ADD"}</span></div>
   </button>
 }
 
