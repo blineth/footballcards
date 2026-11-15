@@ -33,7 +33,12 @@ function playerNameScore(current: string, historic: string) {
   return 0
 }
 async function espn(path: string) {
-  const response = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${path}`, { cache: "no-store", signal: AbortSignal.timeout(8000), headers: { accept: "application/json" } })
+  const ttl = path.includes("/summary?") ? 30 : path.includes("/scoreboard?") ? 60 : path.includes("/roster") ? 21600 : 300
+  const response = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${path}`, {
+    next:{revalidate:ttl},
+    signal: AbortSignal.timeout(8000),
+    headers: { accept: "application/json" },
+  })
   if (!response.ok) throw new Error(`ESPN ${response.status}`)
   return response.json()
 }
