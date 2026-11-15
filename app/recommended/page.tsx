@@ -217,18 +217,28 @@ export default function RecommendedPage(){
 
   useEffect(()=>{
     const cached=readMultiCache()
-    if(cached){setData(cached);setLoading(false);return}
+    if(cached){
+      setData(cached)
+      setLoading(false)
+      const now=Date.now()
+      const nearLineup=(cached.multiMatchBuild?.matchBuilders??[]).some(m=>{
+        const kickoff=new Date(m.kickoff).getTime()
+        return Number.isFinite(kickoff)&&now>=kickoff-120*60*1000&&now<=kickoff+3*60*60*1000
+      })
+      if(nearLineup)void refresh(true)
+      return
+    }
     void refresh(false)
   },[refresh])
 
   useEffect(()=>{
     const t=window.setInterval(()=>{
       const now=Date.now()
-      const likelyLive=(data?.liveMatches?.length??0)>0||(data?.multiMatchBuild?.matchBuilders??[]).some(m=>{
+      const nearLineupOrLive=(data?.liveMatches?.length??0)>0||(data?.multiMatchBuild?.matchBuilders??[]).some(m=>{
         const kickoff=new Date(m.kickoff).getTime()
-        return Number.isFinite(kickoff)&&now>=kickoff-2*60*1000&&now<=kickoff+3*60*60*1000
+        return Number.isFinite(kickoff)&&now>=kickoff-120*60*1000&&now<=kickoff+3*60*60*1000
       })
-      if(likelyLive)void refresh(false)
+      if(nearLineupOrLive)void refresh(true)
     },30000)
     return()=>window.clearInterval(t)
   },[refresh,data])
@@ -260,7 +270,7 @@ export default function RecommendedPage(){
         <div className="mt-3 flex flex-wrap gap-1.5 text-[0.46rem] font-black uppercase">
           {["Cards","Fouls committed","Fouls drawn","Shots","SOT"].map(x=><span key={x} className="rounded-full bg-emerald-300/10 px-2 py-1 text-emerald-200">{x}</span>)}
         </div>
-        <p className="mt-2 text-[0.52rem] text-white/30">Only verified Bet365 player markets are used. Safe avoids cards/scorers; Balanced expands the route; Risky can anchor on the strongest evidence-backed card candidate. Confirmed lineups automatically replace predicted XIs.</p>
+        <p className="mt-2 text-[0.52rem] text-white/30">Only verified Bet365 player markets are used. Safe avoids cards/scorers; Balanced expands the route; Risky can anchor on the strongest evidence-backed card candidate. From 120 minutes before kickoff, Multi force-checks lineups every 30 seconds; once both XIs are confirmed, only those starters remain eligible.</p>
       </div>
     </header>
 
