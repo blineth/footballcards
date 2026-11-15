@@ -56,29 +56,32 @@ function seasonFor(date: string) {
 }
 async function saveSnapshots(input:{date:string;home:string;away:string;competition:string;bookmaker?:string;source?:string|null;capturedAt?:string|null;selections:Array<{market:string;kind:string;label:string;odd:number|null;bookmaker?:string|null}>}) {
   if (!isDatabaseConfigured || !input.selections.length) return
-  await ensureResearchSchema()
-  const now = new Date()
-  const bucket = new Date(Math.floor(now.getTime() / 300000) * 300000)
-  const captured = input.capturedAt ? new Date(input.capturedAt) : now
-  const capturedAt = Number.isNaN(captured.getTime()) ? now : captured
-  const rows = input.selections
-    .filter(s => s.odd != null && Number.isFinite(Number(s.odd)) && Number(s.odd) > 1)
-    .map(s => ({
-      competition: input.competition,
-      fixtureDate: input.date,
-      homeTeam: input.home,
-      awayTeam: input.away,
-      bookmaker: s.bookmaker ?? input.bookmaker ?? "Unknown",
-      source: input.source ?? null,
-      market: s.market,
-      kind: s.kind,
-      label: s.label,
-      odds: String(Number(s.odd)),
-      snapshotBucket: bucket,
-      capturedAt,
-    }))
-  if(rows.length){
-    try{await db.insert(oddsSnapshots).values(rows).onConflictDoNothing()}catch{}
+  try {
+    await ensureResearchSchema()
+    const now = new Date()
+    const bucket = new Date(Math.floor(now.getTime() / 300000) * 300000)
+    const captured = input.capturedAt ? new Date(input.capturedAt) : now
+    const capturedAt = Number.isNaN(captured.getTime()) ? now : captured
+    const rows = input.selections
+      .filter(s => s.odd != null && Number.isFinite(Number(s.odd)) && Number(s.odd) > 1)
+      .map(s => ({
+        competition: input.competition,
+        fixtureDate: input.date,
+        homeTeam: input.home,
+        awayTeam: input.away,
+        bookmaker: s.bookmaker ?? input.bookmaker ?? "Unknown",
+        source: input.source ?? null,
+        market: s.market,
+        kind: s.kind,
+        label: s.label,
+        odds: String(Number(s.odd)),
+        snapshotBucket: bucket,
+        capturedAt,
+      }))
+    if (rows.length) await db.insert(oddsSnapshots).values(rows).onConflictDoNothing()
+  } catch (error) {
+    // Odds must remain usable even if the research DB is over quota/unavailable.
+    console.log("[bet-builder-odds] snapshot save skipped:",error instanceof Error?error.message:error)
   }
 }
 
