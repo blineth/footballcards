@@ -976,78 +976,91 @@ function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
     .sort((a,b)=>(b.safeP-a.safeP)||(b.leg.probability-a.leg.probability))
 
   return configs.map(config=>{
-    const candidates=config.risk==="Safe"?safeCandidates:preferredCandidates
+    const sourceCandidates=config.risk==="Safe"?safeCandidates:preferredCandidates
+    const safeFloors=config.risk==="Safe"?[.70,.65,.62,.60]:[0]
     type State={legs:SlipLeg[];product:number;quality:number;prob:number;conservative:number;players:Set<string>;families:Record<string,number>}
-    let states:State[]=[{legs:[],product:1,quality:0,prob:1,conservative:1,players:new Set(),families:{}}]
-    for(const option of candidates.filter(x=>config.risk==="Safe"
-      ? safetyLegProbability(x.leg)>=.60
-      : (x.leg.probability>=config.minProb||x.signal>=.82))){
-      const next=[...states]
-      for(const state of states){
-        if(state.legs.length>=config.maxLegs)continue
-        const pkey=norm(option.leg.player)
-        if(state.players.has(pkey))continue
-        const familyCount=state.families[option.family]??0
-        if(familyCount>=config.maxPerFamily)continue
-        const odd=bet365Odd(option.leg)
-        if(!(odd>1))continue
-        const product=state.product*odd
-        if(product>config.targetDecimal*1.45&&state.legs.length>=1)continue
-        const legs=[...state.legs,option.leg]
-        const rawProb=state.prob*option.leg.probability
-        next.push({
-          legs,
-          product,
-          quality:state.quality+option.signal+legRank(option.leg)*.35,
-          prob:rawProb,
-          conservative:conservativeJoint(legs,rawProb),
-          players:new Set([...state.players,pkey]),
-          families:{...state.families,[option.family]:familyCount+1},
-        })
-      }
-      const score=(s:State)=>{
-        if(!s.legs.length)return 999
-        const distance=Math.abs(Math.log(Math.max(1.01,s.product))-Math.log(config.targetDecimal))
-        const diversity=Object.keys(s.families).length
-        const avg=s.quality/s.legs.length
-        const weak=Math.min(...s.legs.map(l=>safetyLegProbability(l)))
-        const under=s.product<config.targetDecimal?1:0
-        if(config.risk==="Safe"){
-          // Before reaching 4.00, retain states with strong component safety.
-          // After reaching it, conservative all-hit probability dominates.
-          return under*1.6+distance*.22-s.conservative*4.5-weak*.45+s.legs.length*.002
+    let best:State|undefined
+    let usedSafeFloor:number|null=null
+
+    for(const safeFloor of safeFloors){
+      const candidates=sourceCandidates.filter(x=>config.risk==="Safe"
+        ? safetyLegProbability(x.leg)>=safeFloor
+        : (x.leg.probability>=config.minProb||x.signal>=.82))
+      let states:State[]=[{legs:[],product:1,quality:0,prob:1,conservative:1,players:new Set(),families:{}}]
+
+      for(const option of candidates){
+        const next=[...states]
+        for(const state of states){
+          if(state.legs.length>=config.maxLegs)continue
+          const pkey=norm(option.leg.player)
+          if(state.players.has(pkey))continue
+          const familyCount=state.families[option.family]??0
+          if(familyCount>=config.maxPerFamily)continue
+          const odd=bet365Odd(option.leg)
+          if(!(odd>1))continue
+          const product=state.product*odd
+          if(product>config.targetDecimal*1.65&&state.legs.length>=1)continue
+          const legs=[...state.legs,option.leg]
+          const rawProb=state.prob*option.leg.probability
+          next.push({
+            legs,
+            product,
+            quality:state.quality+option.signal+legRank(option.leg)*.35,
+            prob:rawProb,
+            conservative:conservativeJoint(legs,rawProb),
+            players:new Set([...state.players,pkey]),
+            families:{...state.families,[option.family]:familyCount+1},
+          })
         }
-        return distance*1.15+under*.8-s.conservative*2.1-avg*.18-weak*.08-diversity*.05+s.legs.length*.015
+        const score=(state:State)=>{
+          if(!state.legs.length)return 999
+          const distance=Math.abs(Math.log(Math.max(1.01,state.product))-Math.log(config.targetDecimal))
+          const diversity=Object.keys(state.families).length
+          const avg=state.quality/state.legs.length
+          const weakest=Math.min(...state.legs.map(l=>safetyLegProbability(l)))
+          const under=state.product<config.targetDecimal?1:0
+          if(config.risk==="Safe"){
+            return under*1.5+distance*.16-state.conservative*5-weakest*.65+state.legs.length*.001
+          }
+          return distance*1.15+under*.8-state.conservative*2.1-avg*.18-weakest*.08-diversity*.05+state.legs.length*.015
+        }
+        states=next.sort((a,b)=>score(a)-score(b)).slice(0,config.risk==="Safe"?2400:650)
       }
-      states=next.sort((a,b)=>score(a)-score(b)).slice(0,config.risk==="Safe"?1800:650)
+
+      const valid=states.filter(state=>
+        state.legs.length>=2&&
+        state.product>=config.targetDecimal&&
+        Object.keys(state.families).length>=config.minFamilies
+      )
+      const candidateBest=valid.sort((a,b)=>{
+        if(Math.abs(a.conservative-b.conservative)>.0005)return b.conservative-a.conservative
+        const weakA=Math.min(...a.legs.map(l=>safetyLegProbability(l)))
+        const weakB=Math.min(...b.legs.map(l=>safetyLegProbability(l)))
+        if(Math.abs(weakA-weakB)>.005)return weakB-weakA
+        const da=Math.abs(Math.log(a.product)-Math.log(config.targetDecimal))
+        const db=Math.abs(Math.log(b.product)-Math.log(config.targetDecimal))
+        if(Math.abs(da-db)>.015)return da-db
+        return a.legs.length-b.legs.length
+      })[0]
+
+      if(candidateBest){
+        best=candidateBest
+        usedSafeFloor=config.risk==="Safe"?safeFloor:null
+        break
+      }
     }
-    const validStates=states.filter(s=>
-      s.legs.length>=2&&
-      s.product>=config.targetDecimal&&
-      Object.keys(s.families).length>=config.minFamilies
-    )
-    const best=validStates.sort((a,b)=>{
-      // Safety first: among combinations that genuinely reach the target,
-      // maximise the conservative all-hit probability. Leg count and closeness
-      // to the target are only tie-breakers.
-      if(Math.abs(a.conservative-b.conservative)>.0005)return b.conservative-a.conservative
-      const da=Math.abs(Math.log(a.product)-Math.log(config.targetDecimal))
-      const db=Math.abs(Math.log(b.product)-Math.log(config.targetDecimal))
-      if(Math.abs(da-db)>.015)return da-db
-      const qa=a.quality/Math.max(1,a.legs.length)
-      const qb=b.quality/Math.max(1,b.legs.length)
-      if(Math.abs(qa-qb)>.01)return qb-qa
-      return a.legs.length-b.legs.length
-    })[0]
+
     if(!best)return {
       id:config.id,title:config.title,risk:config.risk,targetFractional:config.targetFractional,targetDecimal:config.targetDecimal,
       legs:[],referenceProductOdds:null,averageLegProbability:null,minimumLegProbability:null,modelAllHitProbability:null,conservativeAllHitProbability:null,safetyScore:null,
       exactPriced:false,bookmaker:null,verifiedBet365LegPrices:false,exactBet365BuilderPrice:false,pricingBasis:"none" as const,
-      note:"No combination of verified Bet365 player prices reaches this target with the required model strength yet."
+      note:config.risk==="Safe"
+        ?"No combination of verified Bet365 legs with at least 60% consensus safety reaches 3/1."
+        :"No combination of verified Bet365 player prices reaches this target with the required model strength yet."
     }
-    const avg=best.legs.reduce((s,l)=>s+l.probability,0)/best.legs.length
-    const min=Math.min(...best.legs.map(l=>l.probability))
-    const families=[...new Set(best.legs.map(l=>family(l.market)))]
+    const avg=best.legs.reduce((sum,leg)=>sum+leg.probability,0)/best.legs.length
+    const min=Math.min(...best.legs.map(leg=>leg.probability))
+    const families=[...new Set(best.legs.map(leg=>family(leg.market)))]
     const verifiedBet365LegPrices=best.legs.every(isVerifiedBet365Leg)
     return {
       id:config.id,title:config.title,risk:config.risk,targetFractional:config.targetFractional,targetDecimal:config.targetDecimal,
@@ -1061,7 +1074,9 @@ function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
       verifiedBet365LegPrices,
       exactBet365BuilderPrice:false,
       pricingBasis:"bet365_singles_product" as const,
-      note:"Every displayed leg price is a verified Bet365 price. Safe only admits legs with at least 60% consensus safety, then chooses the combination with the highest conservative all-hit probability that still reaches the target. It can prefer several very likely fouls/shots over one speculative scorer or defender shot. Large model-vs-Bet365 disagreements are capped. Bet365 can still reprice correlated legs inside Bet Builder, so the singles product is not labelled as the final Builder quote."
+      note:config.risk==="Safe"
+        ?"Every leg has a verified Bet365 price. Safe used the highest minimum consensus-safety floor that could still reach 3/1 ("+Math.round(Number(usedSafeFloor??.60)*100)+"%+ per leg), then selected the highest conservative all-hit route. Several very likely fouls/shots can therefore beat a shorter slip containing one speculative leg. Large model-vs-Bet365 disagreements are capped."
+        :"Every displayed leg price is a verified Bet365 price. The target is built from live Bet365 singles ("+families.join(", ")+") and ranked by conservative all-hit probability. Bet365 can reprice correlated legs inside Bet Builder, so this is not labelled as the final Builder quote."
     }
   })
 }
