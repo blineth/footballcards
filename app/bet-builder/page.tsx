@@ -91,6 +91,21 @@ const categories:{id:Category;label:string;markets:MarketKey[]}[]=[
 ]
 
 function percent(v:number|null|undefined,digits=0){return v==null?"—":(Number(v)*100).toFixed(digits)+"%"}
+function fractionalOdds(decimal:number|null|undefined){
+  if(decimal==null||!Number.isFinite(decimal)||decimal<=1)return "—"
+  const target=decimal-1
+  const common:Array<[number,number]>=[
+    [1,10],[1,8],[1,6],[1,5],[1,4],[2,7],[1,3],[2,5],[4,9],[1,2],[4,7],[8,13],[4,6],[8,11],[4,5],[5,6],[10,11],
+    [1,1],[11,10],[6,5],[5,4],[11,8],[3,2],[13,8],[7,4],[15,8],[2,1],[9,4],[5,2],[11,4],[3,1],[10,3],[7,2],[15,4],[4,1],[9,2],[5,1],[11,2],[6,1],[7,1],[8,1],[9,1],[10,1],[12,1],[14,1],[16,1],[20,1],[25,1],[33,1],[40,1],[50,1]
+  ]
+  if(target>20)return Math.round(target)+"/1"
+  let best=common[0],diff=Infinity
+  for(const pair of common){
+    const d=Math.abs(pair[0]/pair[1]-target)
+    if(d<diff){best=pair;diff=d}
+  }
+  return best[0]===best[1]?"EVS":best[0]+"/"+best[1]
+}
 type Traffic="high"|"average"|"low"
 function marketFloors(market:string){
   if(market==="card")return {green:.20,amber:.14}
@@ -1073,7 +1088,7 @@ function RiskCard({build,onUse,onTrack,liveBet365=false,inPlay=false}:{build:Ris
   const blockedLive=inPlay&&!verified
   return <article className={"rounded-2xl border p-3 "+tone}>
     <div className="flex items-start justify-between gap-2"><div><p className={"text-[0.5rem] font-black uppercase "+accent}>{build.id.startsWith("discipline-")?"FOULS & CARDS · ":""}{build.risk==="High Risk"?"Risky":build.risk}</p><p className="mt-1 text-lg font-black">{build.targetFractional}</p></div><ShieldCheck className={"size-4 "+accent}/></div>
-    {build.legs.length&&!blockedLive?<><div className="mt-2 flex items-center gap-1.5"><span className={"rounded-full px-2 py-1 text-[0.38rem] font-black "+(verified?(liveBet365?"bg-emerald-300/15 text-emerald-200":"bg-cyan-300/10 text-cyan-100"):"bg-amber-300/10 text-amber-100")}>{verified?(liveBet365?"LIVE BET365 LEGS":"VERIFIED BET365 LEGS"):"MODEL ANALYSIS ONLY"}</span><span className="text-[0.38rem] text-white/25">{verified?"final Bet Builder quote may differ":"not an actionable Bet365 bet"}</span></div><div className="mt-2 grid grid-cols-3 gap-1.5"><MiniStat label="Raw chance" value={percent(build.modelAllHitProbability,1)}/><MiniStat label="Safety chance" value={percent(build.conservativeAllHitProbability??build.modelAllHitProbability,1)}/><MiniStat label={verified?"Bet365 leg product":"Model fair product"} value={build.referenceProductOdds?.toFixed(2)??"—"}/></div><div className="mt-2 space-y-1.5">{build.legs.map(l=><div key={keyOf(l)} className="flex items-center justify-between gap-2 rounded-lg bg-black/15 px-2 py-1.5"><p className="min-w-0 flex-1 truncate text-[0.5rem] text-white/65">{l.player} · {l.label}</p><span className="shrink-0 font-mono text-[0.48rem] font-black text-white/45">{percent(l.probability)}</span></div>)}</div><div className="mt-3 grid grid-cols-2 gap-2"><button onClick={onUse} className="rounded-xl bg-white/8 px-3 py-2 text-[0.54rem] font-black text-white/55">Use selections</button><button onClick={onTrack} className="rounded-xl bg-white px-3 py-2 text-[0.58rem] font-black text-[#07120e]">Track this bet</button></div></>:<div className="mt-2 rounded-xl border border-rose-300/12 bg-rose-300/[0.045] px-3 py-2"><p className="text-[0.54rem] font-black text-rose-200">{blockedLive?"Not available to bet on Bet365 live":(build.note||"No strong route available yet.")}</p>{blockedLive?<p className="mt-1 text-[0.46rem] text-white/30">Match Edge may still analyse the underlying probability, but it will not show the model-only legs as a 3/1, 10/1 or 20/1 bet.</p>:null}</div>}
+    {build.legs.length&&!blockedLive?<><div className="mt-2 flex items-center gap-1.5"><span className={"rounded-full px-2 py-1 text-[0.38rem] font-black "+(verified?(liveBet365?"bg-emerald-300/15 text-emerald-200":"bg-cyan-300/10 text-cyan-100"):"bg-amber-300/10 text-amber-100")}>{verified?(liveBet365?"LIVE BET365 LEGS":"VERIFIED BET365 LEGS"):"MODEL ANALYSIS ONLY"}</span><span className="text-[0.38rem] text-white/25">{verified?"final Bet Builder quote may differ":"not an actionable Bet365 bet"}</span></div><div className="mt-2 grid grid-cols-3 gap-1.5"><MiniStat label="Raw chance" value={percent(build.modelAllHitProbability,1)}/><MiniStat label="Safety chance" value={percent(build.conservativeAllHitProbability??build.modelAllHitProbability,1)}/><MiniStat label={verified?"Bet365 leg product":"Model fair product"} value={fractionalOdds(build.referenceProductOdds)}/></div><div className="mt-2 space-y-1.5">{build.legs.map(l=><div key={keyOf(l)} className="flex items-center justify-between gap-2 rounded-lg bg-black/15 px-2 py-1.5"><p className="min-w-0 flex-1 truncate text-[0.5rem] text-white/65">{l.player} · {l.label}</p><span className="shrink-0 font-mono text-[0.48rem] font-black text-white/45">{percent(l.probability)}</span></div>)}</div><div className="mt-3 grid grid-cols-2 gap-2"><button onClick={onUse} className="rounded-xl bg-white/8 px-3 py-2 text-[0.54rem] font-black text-white/55">Use selections</button><button onClick={onTrack} className="rounded-xl bg-white px-3 py-2 text-[0.58rem] font-black text-[#07120e]">Track this bet</button></div></>:<div className="mt-2 rounded-xl border border-rose-300/12 bg-rose-300/[0.045] px-3 py-2"><p className="text-[0.54rem] font-black text-rose-200">{blockedLive?"Not available to bet on Bet365 live":(build.note||"No strong route available yet.")}</p>{blockedLive?<p className="mt-1 text-[0.46rem] text-white/30">Match Edge may still analyse the underlying probability, but it will not show the model-only legs as a 3/1, 10/1 or 20/1 bet.</p>:null}</div>}
   </article>
 }
 function TrackBetModal({draft,onClose,onSaved}:{draft:TrackDraft;onClose:()=>void;onSaved:()=>void}){
