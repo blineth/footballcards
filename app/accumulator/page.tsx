@@ -1,7 +1,8 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
-import { Activity, CalendarDays, ChevronDown, Flame, RefreshCw, ShieldCheck, Sparkles, Target, Trophy } from "lucide-react"
+import { Activity, CalendarDays, ChevronDown, Flame, RefreshCw, ShieldCheck, Sparkles, Target, Trophy, X } from "lucide-react"
+import { addTrackedBet } from "@/lib/tracked-bets"
 
 type Leg={fixtureId:string;competition:string;kickoff:string;home:string;away:string;inPlay?:boolean;elapsed?:number|null;score?:{home:number;away:number}|null;market:string;label:string;probability:number;fairOdds:number;bookmakerOdds:number|null;bookmaker:string|null;grade:"A"|"B"|"C"|"D";reasons:string[]}
 type Slip={id:string;title:string;subtitle:string;legs:Leg[];fairCombinedOdds:number|null;bookmaker:string|null;exactCombinedOdds:number|null;exactPriced:boolean;confirmedBet365Odds?:boolean;oddsSource?:string|null;oddsCapturedAt?:string|null;available?:boolean;requiredLegs?:number;containsLive?:boolean;modelAllHitProbability?:number|null;adjustedAllHitProbability?:number|null;historicalStructureSample?:number;historicalStructureHitRate?:number|null;combinedProbabilityNote?:string}
@@ -33,6 +34,7 @@ export default function AccumulatorPage(){
   const[risk,setRisk]=useState<RiskMode>("safe")
   const[selectedOutcomes,setSelectedOutcomes]=useState<Record<string,Outcome>>({})
   const[manualOpen,setManualOpen]=useState(false)
+  const[trackSlip,setTrackSlip]=useState<Slip|null>(null)
   const load=useCallback(async(force=false)=>{
     setLoading(true)
     try{
@@ -123,14 +125,15 @@ export default function AccumulatorPage(){
 
       {data?.ok?<>{data.staleFallback?<section className="rounded-2xl border border-amber-300/15 bg-amber-300/5 px-4 py-3 text-[0.62rem] text-amber-100">{data.warning??"Showing the last successful cached analysis because a fresh data pull failed."}</section>:null}<section className="grid grid-cols-2 gap-2 sm:grid-cols-5"><Metric label="Matchday" value={resolvedDate===date?"Selected":"Next"}/><Metric label="Active fixtures" value={String(data.activeFixtureCount??data.predictions?.length??0)}/><Metric label="Live matches" value={String((data.predictions??[]).filter(p=>p.inPlay).length)}/><Metric label="Build" value={risk==="safe"?"5 fold":risk==="balanced"?"7 fold":"10 fold"}/><Metric label="Updated" value={data.generatedAt?new Date(data.generatedAt).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}):"—"}/></section>
 
-      {selectedSlip?<><AccaSnapshot slip={selectedSlip}/><section className="space-y-3"><div className="px-1"><p className="font-black">{risk==="safe"?"Safer":"Selected"} build</p><p className="text-[0.6rem] text-white/35">The weakest leg and combined chance are visible before you expand the full slip.</p></div><SlipCard slip={selectedSlip} hero/></section></>:<section className="rounded-3xl border border-dashed border-white/10 bg-white/[0.03] p-6 text-center"><p className="font-black">No {risk} build available</p><p className="mt-1 text-sm text-white/35">There are not enough qualifying matches for this risk level on {prettyDate(resolvedDate)}.</p></section>}
+      {selectedSlip?<><AccaSnapshot slip={selectedSlip}/><section className="space-y-3"><div className="px-1"><p className="font-black">{risk==="safe"?"Safer":"Selected"} build</p><p className="text-[0.6rem] text-white/35">The weakest leg and combined chance are visible before you expand the full slip.</p></div><SlipCard slip={selectedSlip} hero onTrack={()=>setTrackSlip(selectedSlip)}/></section></>:<section className="rounded-3xl border border-dashed border-white/10 bg-white/[0.03] p-6 text-center"><p className="font-black">No {risk} build available</p><p className="mt-1 text-sm text-white/35">There are not enough qualifying matches for this risk level on {prettyDate(resolvedDate)}.</p></section>}
 
-      <section className="space-y-3"><div className="px-1"><p className="font-black">Suggested accas</p><p className="mt-1 text-[0.6rem] text-white/35">Safe, Balanced and Risky are generated automatically. Tap a risk above to focus on one, or expand any suggestion below.</p></div><div className="space-y-3">{(data.slips??[]).map(s=><SlipCard key={"suggested-"+s.id} slip={s}/>)}</div></section>
+      <section className="space-y-3"><div className="px-1"><p className="font-black">Suggested accas</p><p className="mt-1 text-[0.6rem] text-white/35">Safe, Balanced and Risky are generated automatically. Tap a risk above to focus on one, or expand any suggestion below.</p></div><div className="space-y-3">{(data.slips??[]).map(s=><SlipCard key={"suggested-"+s.id} slip={s} onTrack={()=>setTrackSlip(s)}/>)}</div></section>
 
       <section className="space-y-3"><div className="px-1"><p className="font-black">Build your own acca</p><p className="mt-1 text-[0.6rem] text-white/35">Tap Home, Draw or Away. Green is the strongest result call, amber is closer, red is less likely. Your slip updates at the bottom.</p></div>{(data.predictions??[]).map(p=><OutcomeCard key={p.id} prediction={p} selected={selectedOutcomes[p.id]??null} onSelect={o=>chooseOutcome(p.id,o)}/>)}</section>
       {(data.finishedPredictions?.length??0)>0?<details className="rounded-3xl border border-white/8 bg-white/[0.025] p-4"><summary className="cursor-pointer text-sm font-black text-white/45">Finished matches ({data.finishedPredictions?.length})</summary><div className="mt-3 space-y-2">{(data.finishedPredictions??[]).map(p=><PredictionCard key={"finished-"+p.id} prediction={p}/>)}</div></details>:null}</>:null}
     </div>
     {manualPicks.length?<ManualAccaTray picks={manualPicks} probability={manualProbability} odds={manualOdds} risk={manualRisk} open={manualOpen} setOpen={setManualOpen} onRemove={id=>setSelectedOutcomes(cur=>Object.fromEntries(Object.entries(cur).filter(([key])=>key!==id)))} onClear={()=>setSelectedOutcomes({})}/>:null}
+    {trackSlip?<TrackAccaModal slip={trackSlip} onClose={()=>setTrackSlip(null)} onSaved={()=>setTrackSlip(null)}/>:null}
   </main>
 }
 
@@ -152,14 +155,49 @@ function AccaSnapshot({slip}:{slip:Slip}){
 
 function Metric({label,value}:{label:string;value:string}){return <div className="rounded-2xl border border-white/8 bg-white/[0.04] p-3 text-center"><p className="font-mono text-lg font-black">{value}</p><p className="mt-1 text-[0.46rem] font-black uppercase text-white/25">{label}</p></div>}
 
-function SlipCard({slip,hero=false}:{slip:Slip;hero?:boolean}){
+function SlipCard({slip,hero=false,onTrack}:{slip:Slip;hero?:boolean;onTrack?:()=>void}){
   const[open,setOpen]=useState(hero)
   if(slip.available===false)return <article className="rounded-3xl border border-white/10 bg-white/[0.035] p-4"><h2 className="text-lg font-black">{slip.title}</h2><p className="mt-1 text-[0.62rem] text-white/45">{slip.subtitle}</p><p className="mt-3 rounded-xl bg-amber-300/10 px-3 py-2 text-[0.6rem] font-bold text-amber-100">Not enough qualifying picks to build the required {slip.requiredLegs??5}-leg acca for this matchday.</p></article>
   return <article className={"overflow-hidden rounded-3xl border "+(hero?"border-amber-300/25 bg-gradient-to-br from-amber-400/15 to-black/30":"border-white/10 bg-white/[0.04]")}>
     <button onClick={()=>setOpen(v=>!v)} className="w-full p-4 text-left"><div className="flex items-start justify-between gap-3"><div>{hero?<div className="flex items-center gap-1.5 text-amber-300"><Sparkles className="size-3.5"/><span className="text-[0.5rem] font-black uppercase tracking-[0.14em]">Starting point</span></div>:null}<h2 className="mt-1 text-lg font-black">{slip.title}</h2><p className="mt-1 text-[0.62rem] text-white/45">{slip.subtitle}</p><p className="mt-2 text-[0.56rem] font-black text-white/35">{slip.legs.length} legs{slip.bookmaker?" · "+slip.bookmaker:""}</p></div><div className="text-right"><p className="font-mono text-xl font-black">{slip.confirmedBet365Odds&&slip.exactCombinedOdds!=null?slip.exactCombinedOdds.toFixed(2):"—"}</p><p className={"text-[0.43rem] font-black uppercase "+(slip.confirmedBet365Odds?"text-emerald-300":"text-white/25")}>{slip.confirmedBet365Odds?"Bet365 acca odds":"no verified odds"}</p></div></div>
       <div className="mt-3 grid grid-cols-3 gap-1.5"><Small label={slip.containsLive?"Live all hit":"Adj. all hit"} value={percent(slip.adjustedAllHitProbability)}/><Small label="Raw product" value={percent(slip.modelAllHitProbability)}/><Small label={slip.containsLive?"Live legs":"Hist. structure"} value={slip.containsLive?String(slip.legs.filter(l=>l.inPlay).length):percent(slip.historicalStructureHitRate)}/></div><div className="mt-3 flex items-center justify-between"><span className={"rounded-full px-2.5 py-1 text-[0.5rem] font-black "+(slip.confirmedBet365Odds?"bg-emerald-400/15 text-emerald-300":"bg-white/7 text-white/40")}>{slip.confirmedBet365Odds?"CONFIRMED BET365 ACCA ODDS":"BET365 PRICE UNAVAILABLE"}</span><ChevronDown className={"size-4 text-white/30 transition "+(open?"rotate-180":"")}/></div></button>
-    {open?<div className="border-t border-white/8 bg-black/20 p-4"><div className="space-y-2">{slip.legs.map((l,i)=><div key={l.fixtureId+"|"+l.market+"|"+i} className="rounded-2xl bg-white/[0.055] p-3"><div className="flex items-start justify-between gap-3"><div><p className="text-[0.5rem] font-black uppercase text-white/30">{l.competition} · {l.inPlay&&l.score?<span className="text-rose-300">LIVE {l.elapsed??"?"}' · {l.home} {l.score.home}-{l.score.away} {l.away}</span>:<>{time(l.kickoff)} · {l.home} v {l.away}</>}</p><p className="mt-1 text-sm font-black">{l.label}</p><p className="mt-0.5 text-[0.54rem] text-white/35">Grade {l.grade}{l.bookmaker?" · "+l.bookmaker:""}</p></div><div className="text-right"><p className="font-mono text-base font-black">{percent(l.probability)}</p><p className={"text-[0.43rem] font-black "+(l.bookmakerOdds!=null&&l.bookmaker==="Bet365"?"text-emerald-300/75":"text-white/25")}>{l.bookmakerOdds!=null&&l.bookmaker==="Bet365"?l.bookmakerOdds.toFixed(3)+" Bet365":"No verified Bet365 price"}</p></div></div><p className="mt-2 text-[0.58rem] leading-relaxed text-white/40">{l.reasons.slice(0,2).join(" · ")}</p></div>)}</div><p className="mt-3 text-[0.52rem] text-white/30">{slip.confirmedBet365Odds?"Combined price is the product of verified Bet365 prices across separate matches. Prices can move before placement.":"Model probability is still shown, but no combined odds are presented without complete Bet365 pricing."}</p></div>:null}
+    {open?<div className="border-t border-white/8 bg-black/20 p-4"><div className="space-y-2">{slip.legs.map((l,i)=><div key={l.fixtureId+"|"+l.market+"|"+i} className="rounded-2xl bg-white/[0.055] p-3"><div className="flex items-start justify-between gap-3"><div><p className="text-[0.5rem] font-black uppercase text-white/30">{l.competition} · {l.inPlay&&l.score?<span className="text-rose-300">LIVE {l.elapsed??"?"}' · {l.home} {l.score.home}-{l.score.away} {l.away}</span>:<>{time(l.kickoff)} · {l.home} v {l.away}</>}</p><p className="mt-1 text-sm font-black">{l.label}</p><p className="mt-0.5 text-[0.54rem] text-white/35">Grade {l.grade}{l.bookmaker?" · "+l.bookmaker:""}</p></div><div className="text-right"><p className="font-mono text-base font-black">{percent(l.probability)}</p><p className={"text-[0.43rem] font-black "+(l.bookmakerOdds!=null&&l.bookmaker==="Bet365"?"text-emerald-300/75":"text-white/25")}>{l.bookmakerOdds!=null&&l.bookmaker==="Bet365"?l.bookmakerOdds.toFixed(3)+" Bet365":"No verified Bet365 price"}</p></div></div><p className="mt-2 text-[0.58rem] leading-relaxed text-white/40">{l.reasons.slice(0,2).join(" · ")}</p></div>)}</div><p className="mt-3 text-[0.52rem] text-white/30">{slip.confirmedBet365Odds?"Combined price is the product of verified Bet365 prices across separate matches. Prices can move before placement.":"Model probability is still shown, but no combined odds are presented without complete Bet365 pricing."}</p>{onTrack?<button onClick={onTrack} className="mt-3 w-full rounded-xl bg-emerald-400 px-3 py-2.5 text-[0.58rem] font-black text-emerald-950">Track this Acca</button>:null}</div>:null}
   </article>
+}
+
+function TrackAccaModal({slip,onClose,onSaved}:{slip:Slip;onClose:()=>void;onSaved:()=>void}){
+  const[odds,setOdds]=useState(slip.confirmedBet365Odds&&slip.exactCombinedOdds!=null?String(slip.exactCombinedOdds):"")
+  const[stake,setStake]=useState("")
+  const actualOdds=Number(odds),actualStake=Number(stake)
+  const valid=Number.isFinite(actualOdds)&&actualOdds>1&&Number.isFinite(actualStake)&&actualStake>0
+  const save=()=>{
+    if(!valid)return
+    addTrackedBet({
+      source:"acca",
+      title:slip.title,
+      fixture:slip.legs.length+"-fold Acca",
+      odds:actualOdds,
+      stake:actualStake,
+      modelProbability:slip.adjustedAllHitProbability??slip.modelAllHitProbability??null,
+      legs:slip.legs.map(l=>({
+        label:l.label,
+        fixture:l.home+" v "+l.away,
+        market:l.market,
+        modelProbability:l.probability,
+        bet365Odds:l.bookmaker==="Bet365"?l.bookmakerOdds:null,
+      })),
+    })
+    onSaved()
+  }
+  return <div className="fixed inset-0 z-[80] flex items-end bg-black/70 p-3 backdrop-blur-sm sm:items-center sm:justify-center">
+    <div className="w-full max-w-lg rounded-3xl border border-emerald-300/20 bg-[#0d1d17] p-4 shadow-2xl">
+      <div className="flex items-start justify-between gap-3"><div><p className="text-[0.52rem] font-black uppercase tracking-[0.13em] text-emerald-300">My slips</p><h3 className="mt-1 text-lg font-black">{slip.title}</h3><p className="mt-1 text-[0.55rem] text-white/35">{slip.legs.length} selections{slip.confirmedBet365Odds?" · verified Bet365 price":""}</p></div><button onClick={onClose} className="rounded-xl bg-white/7 p-2 text-white/45"><X className="size-4"/></button></div>
+      <div className="mt-3 max-h-44 space-y-1.5 overflow-y-auto">{slip.legs.map((l,i)=><div key={l.fixtureId+"|"+l.market+"|"+i} className="rounded-xl bg-white/[0.045] px-3 py-2"><p className="text-xs font-black">{l.label}</p><p className="mt-0.5 text-[0.44rem] text-white/25">{l.home} v {l.away}{l.bookmakerOdds!=null?" · "+l.bookmakerOdds.toFixed(3)+" Bet365":""}</p></div>)}</div>
+      <div className="mt-3 grid grid-cols-2 gap-2"><label className="rounded-2xl bg-black/20 p-3"><span className="text-[0.44rem] font-black uppercase text-white/25">Actual Bet365 odds</span><input inputMode="decimal" value={odds} onChange={e=>setOdds(e.target.value)} placeholder="e.g. 5.30" className="mt-1 w-full bg-transparent font-mono text-lg font-black outline-none"/></label><label className="rounded-2xl bg-black/20 p-3"><span className="text-[0.44rem] font-black uppercase text-white/25">Stake £</span><input inputMode="decimal" value={stake} onChange={e=>setStake(e.target.value)} placeholder="e.g. 10" className="mt-1 w-full bg-transparent font-mono text-lg font-black outline-none"/></label></div>
+      {valid?<div className="mt-3 grid grid-cols-2 gap-2"><Metric label="Potential return" value={"£"+(actualStake*actualOdds).toFixed(2)}/><Metric label="Potential profit" value={"£"+(actualStake*(actualOdds-1)).toFixed(2)}/></div>:null}
+      <button disabled={!valid} onClick={save} className="mt-4 w-full rounded-xl bg-emerald-400 px-4 py-3 text-sm font-black text-emerald-950 disabled:opacity-30">Save as open bet</button>
+    </div>
+  </div>
 }
 
 function outcomeTone(probability:number,isBest:boolean,selected:boolean){
