@@ -355,13 +355,38 @@ function buildTargetOddsSlips(recommendations:Recommendation[],fixtureId:string)
   })
 }
 
-function buildTargetOddsGames(recommendations:Recommendation[]):TargetOddsGame[]{
+function buildTargetOddsGames(recommendations:Recommendation[],fixturePool:Fixture[]=[]):TargetOddsGame[]{
   const fixtures=new Map<string,Fixture>()
+  // Let the user choose any remaining game today, even when that fixture does not
+  // currently have enough qualified legs for a full recommendation card.
+  for(const fixture of fixturePool)fixtures.set(fixture.id,fixture)
   for(const rec of recommendations)fixtures.set(rec.fixture.id,rec.fixture)
   return [...fixtures.values()]
     .sort((a,b)=>a.kickoff.localeCompare(b.kickoff))
     .map(fixture=>({fixture,targets:buildTargetOddsSlips(recommendations,fixture.id)}))
 }
+function selectDiversifiedRecommendations(rows:Recommendation[],limit=8){
+  const sorted=[...rows].sort((a,b)=>b.rank-a.rank)
+  if(sorted.length<=limit)return sorted
+  const selected:Recommendation[]=[]
+  const seen=new Set<string>()
+  const add=(row:Recommendation|undefined)=>{
+    if(!row||seen.has(row.id)||selected.length>=limit)return
+    selected.push(row);seen.add(row.id)
+  }
+  // Keep the strongest overall recommendation first.
+  add(sorted[0])
+  // Then make sure every competition that has a qualified candidate is visible.
+  const bestByCompetition=new Map<Competition,Recommendation>()
+  for(const row of sorted){
+    const competition=row.fixture.competition
+    if(!bestByCompetition.has(competition))bestByCompetition.set(competition,row)
+  }
+  for(const row of [...bestByCompetition.values()].sort((a,b)=>b.rank-a.rank))add(row)
+  for(const row of sorted)add(row)
+  return selected
+}
+
 function blockedReason(scorecard:Scorecard,slip:BetSlip|FoulTargetSlip,kind:"standard"|"foul"){
   if(kind==="foul"){
     const status=(slip as FoulTargetSlip).marketStatus??scorecard.marketAvailability?.foul??"unknown"
@@ -523,31 +548,11 @@ export async function GET(request:Request){
       ? Math.max(.82,Math.min(1.05,liveTopHit/liveTopModel))
       : 1
 
-    let resolvedDate=londonDate(0)
-    let autoAdvanced=false
-    let fixtureData=await fixturesFor(resolvedDate,refresh)
-    const hasUsable=(data:any)=>{
-      if(!data)return false
-      return competitions.some(competition=>(data.leagues?.[competition]??[]).some((f:Fixture)=>{
-        const status=String(f.status??"").toLowerCase()
-        const blocked=["finished","ft","full time","postponed","cancelled","canceled","abandoned","suspended"].includes(status)
-        if(blocked)return false
-        const kick=new Date(f.kickoff).getTime()
-        return Number.isFinite(kick)&&kick>Date.now()-3*60*60*1000
-      }))
-    }
-    if(!hasUsable(fixtureData)){
-      for(let offset=1;offset<=21;offset++){
-        const candidateDate=londonDate(offset)
-        const candidate=await fixturesFor(candidateDate,refresh)
-        if(hasUsable(candidate)){
-          resolvedDate=candidateDate
-          fixtureData=candidate
-          autoAdvanced=true
-          break
-        }
-      }
-    }
+    // Recommended is deliberately today-only. Matches/Accumulator can browse
+    // future dates, but Picks must never silently switch the user to tomorrow.
+    const resolvedDate=londonDate(0)
+    const autoAdvanced=false
+    const fixtureData=await fixturesFor(resolvedDate,refresh)
     const fixtureMap=new Map<string,Fixture>()
     if(fixtureData){
       for(const competition of competitions){
@@ -687,8 +692,8 @@ export async function GET(request:Request){
     }))
 
     const allRecommendations=rows.flat().sort((a,b)=>b.rank-a.rank)
-    const recommendations=allRecommendations.slice(0,8)
-    const targetOddsGames=buildTargetOddsGames(allRecommendations)
+    const recommendations=selectDiversifiedRecommendations(allRecommendations,8)
+    const targetOddsGames=buildTargetOddsGames(allRecommendations,upcoming)
     const nowForSave=Date.now()
     if(nowForSave-lastRecommendationSaveAt>=RECOMMENDATION_SAVE_MS){
       lastRecommendationSaveAt=nowForSave
@@ -721,7 +726,7 @@ export async function GET(request:Request){
       staleFallback:false,
       methodology:{
         recommendationCalibration:"Final ranking uses a second walk-forward calibration layer built from historical recommendations that survived the selection process.",
-        cache:"Recommended scans the current matchday and automatically advances to the next available matchday when no usable fixtures remain. Manual refresh bypasses the normal scan cadence.",
+        cache:"Recommended scans today's matchday only. It never silently advances to tomorrow. Manual refresh bypasses the normal scan cadence, while provider and last-good caches protect against temporary source failures.",
         tracking:"Predicted-XI recommendations remain visible before official teams. As soon as confirmed lineups arrive, the scorecard is rebuilt and benched players disappear. Recommendations are saved before kickoff and graded later from imported player-match data.",
         targetOdds:"Select a match, then 5/1 through 50/1 targets use verified Bet365 individual leg prices only. If Bet365 prices are missing, the target is unavailable; model/fair odds are never substituted. The final Bet365 Bet Builder quote can still differ because of correlation.",
         liveRecommended:"Matches remain on Recommended after kick-off. Live rows use the current score and minute plus current player event counts. Confirmed-XI card, foul, fouled, shot and SOT models become next-threshold remaining-match probabilities; already-carded players are removed from the card market, and stale pre-match bookmaker prices are never relabelled as live prices.",
