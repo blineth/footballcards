@@ -499,8 +499,18 @@ function directPlayerCandidates(scorecard:Scorecard){
       if(!supported)continue
       const exact=market.bookmakerName==="Bet365"&&market.bookmakerOdds!=null&&Number(market.bookmakerOdds)>1
       const probability=Number(market.probability)
-      const minimum=marketKey==="card"?.14:marketKey.startsWith("goal")||marketKey.startsWith("assist")?.18:marketKey.startsWith("sot")?.24:.30
-      if(!exact||!Number.isFinite(probability)||probability<minimum||market.confidence==="D")continue
+      const minimum=marketKey==="card"?.14:marketKey.startsWith("goal")||marketKey.startsWith("assist")?.18:marketKey.startsWith("sot")?.20:.24
+      const h2hN=Number(market.h2hMatches??0)
+      const h2hRate=Number(market.h2hHitRate??0)
+      const recent=Number(market.recent5HitRate??0)
+      const season=Number(market.seasonHitRate??0)
+      const lowSampleEvidence=Number(player.expectedMinutes??0)>=50&&(
+        (h2hN>=2&&h2hRate>=.50)||
+        recent>=.60||
+        season>=.65
+      )
+      if(!exact||!Number.isFinite(probability)||probability<minimum)continue
+      if(market.confidence==="D"&&!lowSampleEvidence)continue
       if(marketKey==="card"&&!cardEvidenceEligible(player,market))continue
       const key=normName(player.name)+"|"+marketKey+"|"+market.label
       if(seen.has(key))continue
