@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { AlertTriangle, BadgeCheck, RefreshCw, Sparkles, Trophy, Activity, Target, TrendingUp, Users, Zap, BarChart3 } from "lucide-react"
+import { AlertTriangle, BadgeCheck, RefreshCw, Sparkles, Trophy, Activity, Target, TrendingUp, Users, Zap, BarChart3, X, Shirt } from "lucide-react"
 
 type Fixture={id:string;competition:string;kickoff:string;home:{name:string;shortName?:string;crest?:string|null};away:{name:string;shortName?:string;crest?:string|null}}
 type SlipLeg={
@@ -40,6 +40,7 @@ type TargetOddsSlip={
 }
 type TargetOddsGame={
   fixture:Fixture
+  lineupsConfirmed?:boolean
   targets:TargetOddsSlip[]
 }
 type LivePlayerProp={
@@ -72,7 +73,7 @@ type MultiMatchRiskTier="safe"|"balanced"|"risky"
 type MultiMatchGameBuilder={
   fixtureId:string;competition:string;kickoff:string;home:string;away:string;homeCrest?:string|null;awayCrest?:string|null;
   riskTier?:MultiMatchRiskTier;targetFractional:string;targetDecimal?:number;referenceOdds:number;modelAllHitProbability:number;
-  conservativeAllHitProbability:number;includesCard?:boolean;cardPick?:string|null;legs:MultiMatchLeg[]
+  conservativeAllHitProbability:number;includesCard?:boolean;cardPick?:string|null;lineupsConfirmed?:boolean;legs:MultiMatchLeg[]
 }
 type MultiMatchTier={
   id:MultiMatchRiskTier;title:string;description:string;targetFractionalPerMatch:string;targetDecimalPerMatch:number;
@@ -94,6 +95,19 @@ type Response={
   ok:boolean;updatedAt?:string;date?:string;autoAdvanced?:boolean;fixturesScanned?:number;recommendations?:Recommendation[];
   liveMatches?:LiveMatch[];targetOddsGames?:TargetOddsGame[];tracking?:Tracking;error?:string;staleFallback?:boolean;warning?:string;
   multiMatchBuild?:MultiMatchBuild;yellowCardWatch?:YellowCardWatchRow[]
+}
+
+type LineupPlayer={
+  id:string;name:string;shortName:string;jersey:string|null;position:string|null;
+  group:"gk"|"def"|"mid"|"att"|"other";starter:boolean;captain:boolean;headshot?:string|null
+}
+type LineupTeam={
+  team:string;formation:string|null;formationSource:"official-feed"|"position-inferred"|null;crest?:string|null;
+  starters:LineupPlayer[];substitutes:LineupPlayer[]
+}
+type LineupResponse={
+  ok:boolean;confirmed:boolean;source:string;checkedAt:string;competition:string;
+  home:LineupTeam;away:LineupTeam;error?:string
 }
 
 function percent(v:number|null|undefined){return v==null?"—":Math.round(v*100)+"%"}
@@ -284,7 +298,7 @@ export default function RecommendedPage(){
         {activeTier?.description?<div className="mt-3 rounded-2xl border border-white/8 bg-black/15 px-3 py-2 text-[0.56rem] leading-relaxed text-white/45">{activeTier.description}</div>:null}
 
         {matchBuilders.length?<div className="mt-4 space-y-3">{matchBuilders.map((builder,matchIndex)=><div key={(builder.riskTier??activeTier?.id??"safe")+"|"+builder.fixtureId} className="rounded-2xl border border-white/8 bg-black/20 p-3">
-          <div className="flex items-start justify-between gap-3"><div><p className="text-[0.46rem] font-black uppercase text-violet-200/70">Match {matchIndex+1} · {activeTier?.title??"Safe"} {builder.targetFractional}</p><p className="mt-1 text-sm font-black">{builder.home} <span className="text-white/25">v</span> {builder.away}</p><p className="mt-1 text-[0.46rem] text-white/30">{builder.competition} · {builder.legs.length} selections{builder.includesCard&&builder.cardPick?" · card: "+builder.cardPick:""}</p></div><div className="text-right"><p className="font-mono text-base font-black text-emerald-200">{fractionalOdds(builder.referenceOdds)}</p><p className="text-[0.42rem] text-white/30">{percent(builder.conservativeAllHitProbability)} est. · Bet365 ref</p></div></div>
+          <div className="flex items-start justify-between gap-3"><div><p className="text-[0.46rem] font-black uppercase text-violet-200/70">Match {matchIndex+1} · {activeTier?.title??"Safe"} {builder.targetFractional}</p><p className="mt-1 text-sm font-black">{builder.home} <span className="text-white/25">v</span> {builder.away}</p><p className="mt-1 text-[0.46rem] text-white/30">{builder.competition} · {builder.legs.length} selections{builder.includesCard&&builder.cardPick?" · card: "+builder.cardPick:""}</p><div className="mt-2"><LineupButton fixture={{id:builder.fixtureId,competition:builder.competition,kickoff:builder.kickoff,home:{name:builder.home,crest:builder.homeCrest},away:{name:builder.away,crest:builder.awayCrest}}} confirmed={Boolean(builder.lineupsConfirmed)}/></div></div><div className="text-right"><p className="font-mono text-base font-black text-emerald-200">{fractionalOdds(builder.referenceOdds)}</p><p className="text-[0.42rem] text-white/30">{percent(builder.conservativeAllHitProbability)} est. · Bet365 ref</p></div></div>
           <div className="mt-3 space-y-1.5">{builder.legs.map((leg,i)=><div key={leg.player+"|"+leg.market+"|"+i} className={"grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-xl px-2.5 py-2 "+(leg.market==="card"?"border border-amber-300/15 bg-amber-300/[0.06]":"bg-white/[0.045]")}>
             <span className="text-[0.46rem] font-black text-white/25">{i+1}</span>
             <div className="min-w-0"><div className="flex flex-wrap items-center gap-1.5"><p className="truncate text-[0.62rem] font-black">{leg.player} · {leg.label}</p><TeamBadge team={leg.team} home={builder.home} away={builder.away} homeCrest={builder.homeCrest} awayCrest={builder.awayCrest}/>{leg.market==="card"?<span className="rounded-full bg-amber-300/10 px-1.5 py-0.5 text-[0.38rem] font-black text-amber-200">TOP CARD PICK</span>:null}</div><p className="mt-0.5 text-[0.42rem] text-white/25">Grade {leg.confidence} · verified Bet365</p></div>
@@ -318,6 +332,64 @@ function buildPropBoard(recommendations:Recommendation[]):PropBoardRow[]{
     }
   }
   return out.sort((a,b)=>b.leg.probability-a.leg.probability)
+}
+
+function LineupPitch({team}:{team:LineupTeam}){
+  const groups=[
+    {key:"att",label:"Attack",players:team.starters.filter(p=>p.group==="att")},
+    {key:"mid",label:"Midfield",players:team.starters.filter(p=>p.group==="mid")},
+    {key:"def",label:"Defence",players:team.starters.filter(p=>p.group==="def")},
+    {key:"gk",label:"Goalkeeper",players:team.starters.filter(p=>p.group==="gk")},
+  ]
+  const known=new Set(groups.flatMap(g=>g.players.map(p=>p.id||p.name)))
+  const other=team.starters.filter(p=>!known.has(p.id||p.name))
+  if(other.length)groups.splice(3,0,{key:"other",label:"Other",players:other})
+  return <div className="rounded-3xl border border-emerald-200/15 bg-gradient-to-b from-emerald-950/90 to-[#0b291b] p-3">
+    <div className="mb-3 flex items-center justify-between gap-3">
+      <div className="flex items-center gap-2">{team.crest?<img src={team.crest} alt="" className="size-7 object-contain"/>:<div className="grid size-7 place-items-center rounded-full bg-white/10 text-[0.48rem] font-black">{teamCode(team.team).slice(0,2)}</div>}<div><p className="text-sm font-black">{team.team}</p><p className="text-[0.48rem] text-emerald-100/45">{team.starters.length}/11 starters</p></div></div>
+      <div className="text-right"><p className="font-mono text-base font-black text-emerald-200">{team.formation??"—"}</p><p className="text-[0.4rem] uppercase text-emerald-100/35">{team.formationSource==="official-feed"?"official formation":team.formationSource==="position-inferred"?"shape inferred from positions":"formation unavailable"}</p></div>
+    </div>
+    <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-emerald-900/35 px-2 py-4">
+      <div className="pointer-events-none absolute inset-x-0 top-1/2 border-t border-white/10"/>
+      <div className="pointer-events-none absolute left-1/2 top-1/2 size-24 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10"/>
+      <div className="relative space-y-4">
+        {groups.map(group=>group.players.length?<div key={group.key}><p className="mb-1 text-center text-[0.38rem] font-black uppercase tracking-[0.14em] text-white/25">{group.label}</p><div className="flex flex-wrap justify-center gap-1.5">{group.players.map(player=><div key={player.id||player.name} className="min-w-[4.2rem] max-w-[6.2rem] rounded-xl bg-black/35 px-2 py-1.5 text-center shadow-sm"><p className="truncate text-[0.54rem] font-black">{player.shortName||player.name}{player.captain?" ©":""}</p><p className="mt-0.5 text-[0.38rem] text-white/35">{player.jersey?"#"+player.jersey+" · ":""}{player.position??group.label}</p></div>)}</div></div>:null)}
+      </div>
+    </div>
+  </div>
+}
+
+function LineupButton({fixture,confirmed,className=""}:{fixture:Fixture;confirmed:boolean;className?:string}){
+  const[open,setOpen]=useState(false)
+  const[loading,setLoading]=useState(false)
+  const[data,setLineup]=useState<LineupResponse|null>(null)
+  if(!confirmed)return null
+  const load=async()=>{
+    setOpen(true)
+    if(data?.confirmed)return
+    setLoading(true)
+    try{
+      const date=new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/London",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(fixture.kickoff))
+      const q=new URLSearchParams({date,home:fixture.home.name,away:fixture.away.name,competition:fixture.competition})
+      const r=await fetch("/api/lineup?"+q.toString(),{cache:"no-store"})
+      const json=await r.json() as LineupResponse
+      setLineup(json)
+    }catch{
+      setLineup(null)
+    }finally{setLoading(false)}
+  }
+  return <>
+    <button type="button" onClick={(e)=>{e.stopPropagation();void load()}} className={"inline-flex items-center gap-1.5 rounded-xl border border-emerald-300/20 bg-emerald-300/10 px-2.5 py-1.5 text-[0.52rem] font-black text-emerald-200 "+className}><Shirt className="size-3"/>Lineup ✓</button>
+    {open?<div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/75 p-0 backdrop-blur-sm sm:items-center sm:p-4" onClick={()=>setOpen(false)}>
+      <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-t-3xl border border-white/10 bg-[#07120e] p-4 shadow-2xl sm:rounded-3xl" onClick={e=>e.stopPropagation()}>
+        <div className="sticky top-0 z-10 -mx-1 flex items-start justify-between gap-3 bg-[#07120e]/95 px-1 pb-3 backdrop-blur">
+          <div><div className="flex items-center gap-2"><span className="rounded-full bg-emerald-300 px-2 py-1 text-[0.45rem] font-black text-emerald-950">CONFIRMED XI</span><span className="text-[0.46rem] text-white/30">{data?.source??"Official match sheet"}</span></div><h3 className="mt-2 text-lg font-black">{fixture.home.name} <span className="text-white/25">v</span> {fixture.away.name}</h3><p className="mt-0.5 text-[0.52rem] text-white/35">{fixture.competition} · this is the XI used by Match Edge</p></div>
+          <button type="button" onClick={()=>setOpen(false)} className="rounded-xl bg-white/8 p-2 text-white/60"><X className="size-4"/></button>
+        </div>
+        {loading?<div className="py-14 text-center"><RefreshCw className="mx-auto size-5 animate-spin text-emerald-300"/><p className="mt-2 text-xs font-black">Loading official team sheets…</p></div>:data?.confirmed?<div className="space-y-3"><LineupPitch team={data.home}/><LineupPitch team={data.away}/><p className="px-1 text-[0.48rem] leading-relaxed text-white/30">Formation is shown as official when the match feed supplies it. If ESPN confirms the XI but omits the formation, the app labels any displayed shape as position-inferred rather than pretending it is official.</p></div>:<div className="rounded-2xl border border-amber-300/15 bg-amber-300/[0.05] p-5 text-center"><p className="font-black text-amber-100">Official XI could not be reloaded</p><p className="mt-1 text-xs text-white/35">The match was flagged confirmed by the recommendation scan, but the live match-sheet endpoint did not return both 11s on this request.</p></div>}
+      </div>
+    </div>:null}
+  </>
 }
 
 function DecisionMetric({label,value,sub}:{label:string;value:string;sub:string}){
@@ -445,7 +517,7 @@ function TargetOddsSection({games,selectedId,onSelect}:{games:TargetOddsGame[];s
         <p className="mt-1 text-sm font-black">{game.fixture.home.name} <span className="text-white/25">v</span> {game.fixture.away.name}</p>
       </button>)}
     </div>
-    <div className="rounded-2xl border border-violet-300/10 bg-violet-400/[0.035] px-4 py-3"><p className="text-[0.5rem] font-black uppercase text-violet-300">Selected match</p><p className="mt-1 font-black">{selected.fixture.home.name} v {selected.fixture.away.name}</p><p className="mt-1 text-[0.56rem] text-white/35">{selected.fixture.competition} · {time(selected.fixture)}</p></div>
+    <div className="rounded-2xl border border-violet-300/10 bg-violet-400/[0.035] px-4 py-3"><div className="flex items-start justify-between gap-3"><div><p className="text-[0.5rem] font-black uppercase text-violet-300">Selected match</p><p className="mt-1 font-black">{selected.fixture.home.name} v {selected.fixture.away.name}</p><p className="mt-1 text-[0.56rem] text-white/35">{selected.fixture.competition} · {time(selected.fixture)}</p></div><LineupButton fixture={selected.fixture} confirmed={Boolean(selected.lineupsConfirmed)}/></div></div>
     <div className="grid gap-3 sm:grid-cols-2">{selected.targets.map(s=><TargetOddsCard key={s.id} slip={s} fixture={selected.fixture}/>)}</div>
   </section>
 }
@@ -545,6 +617,7 @@ function RecommendationCard({rec,hero=false}:{rec:Recommendation;hero?:boolean})
       </div>
       {rec.blockedReason?<p className="mt-2 rounded-xl bg-amber-300/10 px-3 py-2 text-[0.6rem] text-amber-100">{rec.blockedReason}</p>:null}
     </button>
+    {rec.confirmed?<div className="border-t border-white/[0.055] px-4 py-2"><LineupButton fixture={rec.fixture} confirmed={rec.confirmed}/></div>:null}
 
     {open?<div className="border-t border-white/8 bg-black/20 p-4"><div className="space-y-2">{legs.map((leg,i)=><div key={leg.player+"|"+leg.market+"|"+i} className="rounded-2xl bg-white/[0.055] p-3">
       <div className="flex items-center justify-between gap-3"><div><div className="flex flex-wrap items-center gap-1.5"><p className="text-sm font-black">{leg.player} · {leg.label}</p><TeamBadge team={leg.team} home={rec.fixture.home.name} away={rec.fixture.away.name} homeCrest={rec.fixture.home.crest} awayCrest={rec.fixture.away.crest}/></div><p className="mt-0.5 text-[0.56rem] text-white/35">Grade {leg.confidence}{leg.bookmakerName?" · "+leg.bookmakerName:""}{leg.priceSource==="estimated"?" · ESTIMATED PRICE":""}</p></div><p className="font-mono text-base font-black">{percent(leg.probability)}</p></div>
