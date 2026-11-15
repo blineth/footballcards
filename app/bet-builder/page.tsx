@@ -566,106 +566,88 @@ function broadBetToSelection(bet:AvailableBet,fixture:Fixture):Selection{
 }
 function buildBroadTargetBuilders(rows:Selection[]):RiskBuilder[]{
   const configs=[
-    {id:"broad-safe-3-1",title:"Safe 3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4,minP:.34},
-    {id:"broad-balanced-10-1",title:"Balanced 10/1",risk:"Balanced" as const,targetFractional:"10/1",targetDecimal:11,minP:.18},
-    {id:"broad-high-20-1",title:"High Risk 20/1+",risk:"High Risk" as const,targetFractional:"20/1+",targetDecimal:21,minP:.10},
+    {id:"broad-most-likely",title:"Most Likely",risk:"Safe" as const,targetFractional:"Best",targetDecimal:0},
+    {id:"broad-5-1",title:"5/1",risk:"Safe" as const,targetFractional:"5/1",targetDecimal:6},
+    {id:"broad-10-1",title:"10/1",risk:"Safe" as const,targetFractional:"10/1",targetDecimal:11},
+    {id:"broad-15-1",title:"15/1",risk:"Balanced" as const,targetFractional:"15/1",targetDecimal:16},
+    {id:"broad-20-1",title:"20/1",risk:"Balanced" as const,targetFractional:"20/1",targetDecimal:21},
+    {id:"broad-25-1",title:"25/1",risk:"Balanced" as const,targetFractional:"25/1",targetDecimal:26},
+    {id:"broad-30-1",title:"30/1",risk:"Balanced" as const,targetFractional:"30/1",targetDecimal:31},
+    {id:"broad-40-1",title:"40/1",risk:"High Risk" as const,targetFractional:"40/1",targetDecimal:41},
+    {id:"broad-50-1",title:"50/1",risk:"High Risk" as const,targetFractional:"50/1",targetDecimal:51},
+    {id:"broad-75-1",title:"75/1",risk:"High Risk" as const,targetFractional:"75/1",targetDecimal:76},
+    {id:"broad-100-1",title:"100/1",risk:"High Risk" as const,targetFractional:"100/1",targetDecimal:101},
   ]
+  const stability=(row:Selection)=>{
+    if(row.market==="foul1")return 1.10
+    if(row.market==="fouled1")return 1.07
+    if(row.market==="shot1")return 1.04
+    if(row.market==="sot1")return .99
+    if(row.market==="board:btts")return .96
+    if(row.market==="card")return .84
+    if(row.market.startsWith("goal"))return .80
+    if(row.market.startsWith("assist"))return .77
+    return .92
+  }
   const candidates=rows
-    .filter(r=>verifiedBet365Odd(r)!=null&&r.probability>0&&Number(r.bookmakerOdds)<12&&Number(r.bookmakerOdds)>=1.02)
-    .sort((a,b)=>b.probability-a.probability||Number(a.bookmakerOdds)-Number(b.bookmakerOdds))
+    .filter(r=>verifiedBet365Odd(r)!=null&&r.probability>0&&Number(r.bookmakerOdds)<12&&Number(r.bookmakerOdds)>=1.02&&r.confidence!=="D")
+    .sort((a,b)=>(b.probability*stability(b))-(a.probability*stability(a))||b.probability-a.probability)
+
+  const pool:Selection[]=[]
+  const seenPlayers=new Set<string>()
+  let usedBtts=false
+  for(const row of candidates){
+    if(row.market.startsWith("board:")){
+      if(row.market!=="board:btts"||usedBtts)continue
+      usedBtts=true
+      pool.push(row)
+      continue
+    }
+    const key=normPlayer(row.player)
+    if(!key||seenPlayers.has(key))continue
+    seenPlayers.add(key)
+    pool.push(row)
+    if(pool.length>=12)break
+  }
+
+  const chosen:Selection[]=[]
+  let product=1
+  let raw=1
+  const addNext=()=>{
+    const next=pool[chosen.length]
+    if(!next)return false
+    chosen.push(next)
+    product*=Number(verifiedBet365Odd(next))
+    raw*=next.probability
+    return true
+  }
 
   return configs.map(cfg=>{
-    type State={
-      legs:Selection[];product:number;prob:number;players:Set<string>;
-      teamCounts:Record<string,number>;usedBtts:boolean
+    if(cfg.id==="broad-most-likely"){
+      while(chosen.length<Math.min(2,pool.length))if(!addNext())break
+    }else{
+      while(product<cfg.targetDecimal&&chosen.length<pool.length)if(!addNext())break
     }
-    let states:State[]=[{legs:[],product:1,prob:1,players:new Set(),teamCounts:{},usedBtts:false}]
-
-    for(const row of candidates.filter(r=>r.probability>=cfg.minP)){
-      const isBoard=row.market.startsWith("board:")
-      const isBtts=row.market==="board:btts"
-      if(isBoard&&!isBtts)continue
-      const next=[...states]
-      for(const state of states){
-        if(state.legs.length>=12)continue
-
-        let playerKey=""
-        let teamKey=""
-        let teamCount=0
-        if(!isBoard){
-          playerKey=normPlayer(row.player)
-          if(!playerKey||state.players.has(playerKey))continue
-          teamKey=teamNorm(row.team)
-          teamCount=state.teamCounts[teamKey]??0
-          if(teamCount>=6)continue
-        }else if(state.usedBtts){
-          continue
-        }
-
-        const odd=Number(verifiedBet365Odd(row))
-        const product=state.product*odd
-        if(product>cfg.targetDecimal*1.55&&state.legs.length>=1)continue
-        next.push({
-          legs:[...state.legs,row],
-          product,
-          prob:state.prob*row.probability,
-          players:isBoard?state.players:new Set([...state.players,playerKey]),
-          teamCounts:isBoard?state.teamCounts:{...state.teamCounts,[teamKey]:teamCount+1},
-          usedBtts:state.usedBtts||isBtts,
-        })
-      }
-
-      const buckets=new Map<string,State[]>()
-      for(const state of next){
-        const bucket=Math.floor(Math.log(Math.max(1,state.product))*140)
-        const key=bucket+"|"+state.legs.length
-        const bucketRows=buckets.get(key)??[]
-        bucketRows.push(state)
-        bucketRows.sort((a,b)=>{
-          if(Math.abs(a.prob-b.prob)>.000001)return b.prob-a.prob
-          const weakA=a.legs.length?Math.min(...a.legs.map(x=>x.probability)):0
-          const weakB=b.legs.length?Math.min(...b.legs.map(x=>x.probability)):0
-          return weakB-weakA
-        })
-        buckets.set(key,bucketRows.slice(0,16))
-      }
-      states=[...buckets.values()].flat()
-        .sort((a,b)=>{
-          const ah=a.product>=cfg.targetDecimal,bh=b.product>=cfg.targetDecimal
-          if(ah!==bh)return ah?-1:1
-          return b.prob-a.prob
-        })
-        .slice(0,5000)
-    }
-
-    const best=states
-      .filter(state=>state.legs.length>=2&&state.product>=cfg.targetDecimal&&state.product<=cfg.targetDecimal*1.35)
-      .sort((a,b)=>{
-        // Once both routes meet the requested price, highest all-hit probability wins.
-        if(Math.abs(a.prob-b.prob)>.000001)return b.prob-a.prob
-        const weakA=Math.min(...a.legs.map(x=>x.probability))
-        const weakB=Math.min(...b.legs.map(x=>x.probability))
-        if(Math.abs(weakA-weakB)>.0001)return weakB-weakA
-        return Math.abs(a.product-cfg.targetDecimal)-Math.abs(b.product-cfg.targetDecimal)
-      })[0]
-
-    if(!best)return {
+    const legs=[...chosen]
+    const reached=cfg.id==="broad-most-likely"?legs.length>=1:product>=cfg.targetDecimal
+    if(!reached)return {
       id:cfg.id,title:cfg.title,risk:cfg.risk,targetFractional:cfg.targetFractional,targetDecimal:cfg.targetDecimal,
       legs:[],referenceProductOdds:null,averageLegProbability:null,minimumLegProbability:null,modelAllHitProbability:null,
       conservativeAllHitProbability:null,safetyScore:null,exactPriced:false,bookmaker:"Bet365",
       verifiedBet365LegPrices:false,exactBet365BuilderPrice:false,pricingBasis:"none" as const,
-      note:"No verified Bet365 route reaches this target within the 12-selection / six-players-per-team limit at the required evidence level."
+      note:"No verified Bet365 route reaches this odds floor with the remaining high-likelihood selections."
     }
-
     return {
       id:cfg.id,title:cfg.title,risk:cfg.risk,targetFractional:cfg.targetFractional,targetDecimal:cfg.targetDecimal,
-      legs:best.legs,referenceProductOdds:Math.round(best.product*100)/100,
-      averageLegProbability:best.legs.reduce((sum,x)=>sum+x.probability,0)/best.legs.length,
-      minimumLegProbability:Math.min(...best.legs.map(x=>x.probability)),
-      modelAllHitProbability:best.prob,conservativeAllHitProbability:best.prob,safetyScore:best.prob,
+      legs,referenceProductOdds:Math.round(product*100)/100,
+      averageLegProbability:legs.reduce((sum,x)=>sum+x.probability,0)/legs.length,
+      minimumLegProbability:Math.min(...legs.map(x=>x.probability)),
+      modelAllHitProbability:raw,conservativeAllHitProbability:raw,safetyScore:raw,
       exactPriced:true,bookmaker:"Bet365",verifiedBet365LegPrices:true,exactBet365BuilderPrice:false,
       pricingBasis:"bet365_singles_product" as const,
-      note:"Probability first. The target price is a constraint, not the objective. The optimiser can use up to 12 selections and six players per team, including BTTS when it improves the route, and chooses the combination with the highest estimated all-hit chance. Match winner, double chance, total goals and corners are excluded. Final Bet365 Bet Builder pricing can differ because correlated legs are repriced."
+      note:cfg.id==="broad-most-likely"
+        ?"The strongest estimated win chance from the available verified Bet365 markets."
+        :`Probability first, odds floor second. This keeps the safer route below it and adds only the next-best selection until it clears ${cfg.targetFractional}.`
     }
   })
 }
