@@ -91,10 +91,20 @@ type YellowCardWatchRow={
   player:string;team:string;probability:number;bookmakerOdds:number;confidence:"A"|"B"|"C"|"D";reason:string;
   probabilityBasis?:"model"|"bet365-implied"
 }
+type MultiGameBoardPick={
+  player:string;team:string;market:string;label:string;probability:number;rankScore:number;
+  bookmakerOdds:number|null;bookmakerName:string|null;confidence:"A"|"B"|"C"|"D";reason:string;
+  recent5HitRate:number|null;seasonHitRate:number|null;h2hHitRate:number|null;h2hMatches:number
+}
+type MultiGameBoardGroup={id:"cards"|"fouls"|"fouled"|"shots"|"sot"|"goals"|"assists";title:string;picks:MultiGameBoardPick[]}
+type MultiGameBoard={
+  fixtureId:string;competition:string;kickoff:string;home:string;away:string;homeCrest?:string|null;awayCrest?:string|null;
+  lineupsConfirmed:boolean;lineupMode:"confirmed"|"predicted"|"squad";preMatchSnapshot:boolean;groups:MultiGameBoardGroup[]
+}
 type Response={
   ok:boolean;updatedAt?:string;date?:string;autoAdvanced?:boolean;fixturesScanned?:number;recommendations?:Recommendation[];
   liveMatches?:LiveMatch[];targetOddsGames?:TargetOddsGame[];tracking?:Tracking;error?:string;staleFallback?:boolean;warning?:string;
-  multiMatchBuild?:MultiMatchBuild;yellowCardWatch?:YellowCardWatchRow[]
+  multiGameBoards?:MultiGameBoard[];multiMatchBuild?:MultiMatchBuild;yellowCardWatch?:YellowCardWatchRow[]
 }
 
 type LineupPlayer={
@@ -171,7 +181,7 @@ function avgProbability(slip:Slip){
 function londonToday(){
   return new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/London",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date())
 }
-function multiCacheKey(){return "match-edge:multi:v3:"+londonToday()}
+function multiCacheKey(){return "match-edge:multi:v4:"+londonToday()}
 function readMultiCache():Response|null{
   try{
     const raw=window.localStorage.getItem(multiCacheKey())
@@ -182,26 +192,26 @@ function readMultiCache():Response|null{
 }
 function writeMultiCache(data:Response){
   try{
-    const hasBuild=(data?.multiMatchBuild?.matchBuilders?.length??0)>0||(data?.multiMatchBuild?.tiers??[]).some(t=>(t.matchBuilders?.length??0)>0)
-    if(data?.ok&&hasBuild)window.localStorage.setItem(multiCacheKey(),JSON.stringify({savedAt:new Date().toISOString(),data}))
+    const hasBoards=(data?.multiGameBoards?.length??0)>0
+    const hasLegacy=(data?.multiMatchBuild?.matchBuilders?.length??0)>0||(data?.multiMatchBuild?.tiers??[]).some(t=>(t.matchBuilders?.length??0)>0)
+    if(data?.ok&&(hasBoards||hasLegacy))window.localStorage.setItem(multiCacheKey(),JSON.stringify({savedAt:new Date().toISOString(),data}))
   }catch{}
 }
 
 export default function RecommendedPage(){
   const[loading,setLoading]=useState(false)
   const[data,setData]=useState<Response|null>(null)
-  const[multiTier,setMultiTier]=useState<MultiMatchRiskTier>("safe")
 
   const refresh=useCallback(async(force=false)=>{
     setLoading(true)
     const controller=new AbortController()
-    const timeout=window.setTimeout(()=>controller.abort(),force?25000:8000)
+    const timeout=window.setTimeout(()=>controller.abort(),force?25000:12000)
     try{
       const url="/api/recommended?mode=multi"+(force?"&refresh=1":"")
       const r=await fetch(url,{cache:"no-store",signal:controller.signal})
       const next=r.ok?await r.json() as Response:{ok:false,error:"Multi-match scan failed"}
-      const hasBuild=(next?.multiMatchBuild?.matchBuilders?.length??0)>0||(next?.multiMatchBuild?.tiers??[]).some(t=>(t.matchBuilders?.length??0)>0)
-      if(next.ok&&!hasBuild){
+      const hasBoards=(next?.multiGameBoards?.length??0)>0
+      if(next.ok&&!hasBoards){
         const cached=readMultiCache()
         setData(cached??next)
       }else{
@@ -212,9 +222,7 @@ export default function RecommendedPage(){
       const timedOut=error instanceof DOMException&&error.name==="AbortError"
       setData(cur=>cur??{
         ok:false,
-        error:timedOut
-          ?"No cached Multi build is available yet. Tap refresh to build it once; after that it stays cached until you refresh again."
-          :"Multi-match scan failed"
+        error:timedOut?"No cached Multi board is available yet. Tap refresh to build today's boards.":"Multi-match scan failed"
       })
     }finally{
       window.clearTimeout(timeout)
@@ -227,41 +235,28 @@ export default function RecommendedPage(){
     if(cached){
       setData(cached)
       setLoading(false)
-      const now=Date.now()
-      const nearLineup=(cached.multiMatchBuild?.matchBuilders??[]).some(m=>{
-        const kickoff=new Date(m.kickoff).getTime()
-        return Number.isFinite(kickoff)&&now>=kickoff-120*60*1000&&now<=kickoff+3*60*60*1000
-      })
-      if(nearLineup)void refresh(true)
+      void refresh(false)
       return
     }
     void refresh(false)
   },[refresh])
 
   useEffect(()=>{
-    const t=window.setInterval(()=>{
-      const now=Date.now()
-      const nearLineupOrLive=(data?.liveMatches?.length??0)>0||(data?.multiMatchBuild?.matchBuilders??[]).some(m=>{
-        const kickoff=new Date(m.kickoff).getTime()
-        return Number.isFinite(kickoff)&&now>=kickoff-120*60*1000&&now<=kickoff+3*60*60*1000
-      })
-      if(nearLineupOrLive)void refresh(true)
-    },30000)
+    const boards=data?.multiGameBoards??[]
+    if(!boards.length)return
+    const now=Date.now()
+    const relevant=boards.some(board=>{
+      const kickoff=new Date(board.kickoff).getTime()
+      return Number.isFinite(kickoff)&&now>=kickoff-120*60*1000&&now<=kickoff+3*60*60*1000
+    })
+    if(!relevant)return
+    const t=window.setInterval(()=>void refresh(true),60000)
     return()=>window.clearInterval(t)
-  },[refresh,data])
+  },[refresh,data?.multiGameBoards])
 
-  const multi=data?.multiMatchBuild
-  const cards=data?.yellowCardWatch??[]
-  const legacySafeTier:MultiMatchTier|null=multi?{
-    id:"safe",title:"Safe",description:"Safest available route",targetFractionalPerMatch:multi.targetFractionalPerMatch||"3/1",targetDecimalPerMatch:4,
-    available:multi.available,matchBuilders:multi.matchBuilders??[],legs:multi.legs??[],
-    combinedBet365Odds:multi.combinedBet365Odds??null,conservativeAllHitProbability:multi.conservativeAllHitProbability??multi.modelAllHitProbability??null,
-    note:multi.note,
-  }:null
-  const tiers=(multi?.tiers?.length?multi.tiers:(legacySafeTier?[legacySafeTier]:[]))
-  const activeTier=tiers.find(t=>t.id===multiTier)??tiers[0]??null
-  const legs=activeTier?.legs??[]
-  const matchBuilders=activeTier?.matchBuilders??[]
+  const boards=data?.multiGameBoards??[]
+  const confirmed=boards.filter(b=>b.lineupsConfirmed).length
+  const predicted=boards.filter(b=>!b.lineupsConfirmed&&b.lineupMode==="predicted").length
 
   return <main className="min-h-screen bg-[#07120e] pb-24 text-white">
     <header className="sticky top-0 z-30 border-b border-white/10 bg-[#07120e]/95 backdrop-blur-xl">
@@ -269,69 +264,76 @@ export default function RecommendedPage(){
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-2 text-violet-300"><Trophy className="size-4"/><span className="text-[0.62rem] font-black uppercase tracking-[0.16em]">Match Edge</span></div>
-            <h1 className="mt-1 text-2xl font-black">Multi-Match Builder</h1>
-            <p className="mt-1 text-xs text-white/45">Three probability-led Multi builds: Safe, Balanced and Risky · up to 10 matches.</p>
+            <h1 className="mt-1 text-2xl font-black">Multi Match Intelligence</h1>
+            <p className="mt-1 text-xs text-white/45">Top 3 player probabilities for every market in every game.</p>
           </div>
           <button onClick={()=>void refresh(true)} className="rounded-xl bg-violet-300 p-2.5 text-violet-950"><RefreshCw className={"size-4 "+(loading?"animate-spin":"")}/></button>
         </div>
         <div className="mt-3 flex flex-wrap gap-1.5 text-[0.46rem] font-black uppercase">
-          {["Goals","Assists","Cards","Fouls committed","Fouls drawn","Shots","SOT"].map(x=><span key={x} className="rounded-full bg-emerald-300/10 px-2 py-1 text-emerald-200">{x}</span>)}
+          {["Cards","Fouls committed","Fouls drawn","Shots","SOT","Goals","Assists"].map(x=><span key={x} className="rounded-full bg-emerald-300/10 px-2 py-1 text-emerald-200">{x}</span>)}
         </div>
-        <p className="mt-2 text-[0.52rem] text-white/30">Automatic Multi uses verified Bet365 player markets only: goals, assists, cards, fouls committed, fouls drawn, shots and SOT. Match/team markets such as corners, BTTS, total goals, match winner and double chance are excluded. Safe, Balanced and Risky stay probability-first, so repeated 1+ events are preferred when they are more likely. Once both XIs are confirmed, only those starters remain eligible.</p>
+        <p className="mt-2 text-[0.52rem] leading-relaxed text-white/30">Each game is ranked independently from the player model: season and recent form, H2H where available, matchup evidence and card-specific evidence for bookings. Bet365 prices are shown when captured, but a player does not need a Bet365 price to appear. Once the XI is confirmed, only eligible players remain on the board.</p>
       </div>
     </header>
 
-    <div className="mx-auto max-w-3xl space-y-5 px-4 py-4">
-      {data?.staleFallback?<div className="rounded-2xl border border-amber-300/15 bg-amber-300/[0.06] px-4 py-3 text-xs text-amber-100">{data.warning??"Showing the last successful cached build."}</div>:null}
-
-      {loading&&!data?<section className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center"><RefreshCw className="mx-auto mb-3 size-5 animate-spin text-violet-300"/><p className="font-black">Loading cached Multi build…</p><p className="mt-1 text-xs text-white/30">If there is no cache yet, this will stop automatically rather than scan forever.</p></section>:null}
+    <div className="mx-auto max-w-3xl space-y-4 px-4 py-4">
+      {data?.staleFallback?<div className="rounded-2xl border border-amber-300/15 bg-amber-300/[0.06] px-4 py-3 text-xs text-amber-100">{data.warning??"Showing the last successful cached Multi board."}</div>:null}
+      {loading&&!data?<section className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center"><RefreshCw className="mx-auto mb-3 size-5 animate-spin text-violet-300"/><p className="font-black">Building today's player boards…</p></section>:null}
       {!loading&&data&&!data.ok?<section className="rounded-3xl border border-rose-300/15 bg-rose-400/5 p-6 text-center"><p className="font-black">Multi-match scan unavailable</p><p className="mt-1 text-sm text-white/40">{data.error??"Try a manual refresh."}</p></section>:null}
 
-      {data?.ok?<section className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <DecisionMetric label="Eligible matches" value={String(multi?.eligibleFixtureCount??0)} sub="verified player-prop coverage"/>
-        <DecisionMetric label="Match builders" value={String(matchBuilders.length)} sub={(activeTier?.title??"Safe")+" · "+(activeTier?.targetFractionalPerMatch??"3/1")+" each"}/>
-        <DecisionMetric label="Total selections" value={String(legs.length)} sub="inside selected tier"/>
-        <DecisionMetric label="Combined chance" value={percent(activeTier?.conservativeAllHitProbability)} sub="conservative estimate"/>
+      {data?.ok?<section className="grid grid-cols-3 gap-2">
+        <DecisionMetric label="Games" value={String(boards.length)} sub="today's boards"/>
+        <DecisionMetric label="Confirmed XI" value={String(confirmed)} sub="starter-filtered"/>
+        <DecisionMetric label="Predicted XI" value={String(predicted)} sub="until teams confirm"/>
       </section>:null}
 
-      {data?.ok&&tiers.length?<section className="grid grid-cols-3 gap-2">
-        {tiers.map(tier=>{
-          const active=activeTier?.id===tier.id
-          const label=tier.id==="safe"?"Safe":tier.id==="balanced"?"Balanced":"Risky"
-          return <button key={tier.id} onClick={()=>setMultiTier(tier.id)} className={"rounded-2xl border px-3 py-3 text-left transition "+(active?"border-violet-300/35 bg-violet-300 text-violet-950":"border-white/8 bg-white/[0.035] text-white")}>
-            <p className="text-xs font-black">{label}</p>
-            <p className={"mt-1 font-mono text-sm font-black "+(active?"text-violet-950":"text-emerald-200")}>{tier.targetFractionalPerMatch}</p>
-            <p className={"mt-1 text-[0.46rem] "+(active?"text-violet-950/65":"text-white/30")}>{tier.id==="safe"?"Low variance":tier.id==="balanced"?"Higher target":"Highest target"}</p>
-          </button>
-        })}
-      </section>:null}
+      {data?.ok&&!boards.length?<section className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center"><p className="font-black">No player boards available yet</p><p className="mt-1 text-xs text-white/35">The next refresh will add games as player data becomes available.</p></section>:null}
 
-      {data?.ok?<section className="rounded-3xl border border-violet-300/20 bg-gradient-to-br from-violet-400/[0.13] to-black/30 p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div><div className="flex items-center gap-2 text-violet-200"><Sparkles className="size-4"/><p className="text-[0.54rem] font-black uppercase tracking-[0.13em]">{activeTier?.title??"Safe"} Bet Builder Multi</p></div><h2 className="mt-1 text-xl font-black">{matchBuilders.length?matchBuilders.length+" matches · "+legs.length+" selections":"No qualifying multi yet"}</h2><p className="mt-1 text-[0.58rem] leading-relaxed text-white/40">{activeTier?.note??multi?.note??"Waiting for enough matches with verified Bet365 prices."}</p></div>
-          <div className="text-right"><p className="font-mono text-xl font-black">{fractionalOdds(activeTier?.combinedBet365Odds)}</p><p className="text-[0.42rem] font-black uppercase text-emerald-300/75">{activeTier?.combinedBet365Odds!=null?"Bet365 singles reference":"no complete price"}</p></div>
-        </div>
-
-        {activeTier?.description?<div className="mt-3 rounded-2xl border border-white/8 bg-black/15 px-3 py-2 text-[0.56rem] leading-relaxed text-white/45">{activeTier.description}</div>:null}
-
-        {matchBuilders.length?<div className="mt-4 space-y-3">{matchBuilders.map((builder,matchIndex)=><div key={(builder.riskTier??activeTier?.id??"safe")+"|"+builder.fixtureId} className="rounded-2xl border border-white/8 bg-black/20 p-3">
-          <div className="flex items-start justify-between gap-3"><div><p className="text-[0.46rem] font-black uppercase text-violet-200/70">Match {matchIndex+1} · {activeTier?.title??"Safe"} {builder.targetFractional}</p><p className="mt-1 text-sm font-black">{builder.home} <span className="text-white/25">v</span> {builder.away}</p><p className="mt-1 text-[0.46rem] text-white/30">{builder.competition} · {builder.legs.length} selections{builder.includesCard&&builder.cardPick?" · card: "+builder.cardPick:""}{builder.preMatchSnapshot?" · pre-match snapshot":""}</p><div className="mt-2"><LineupButton fixture={{id:builder.fixtureId,competition:builder.competition,kickoff:builder.kickoff,home:{name:builder.home,crest:builder.homeCrest},away:{name:builder.away,crest:builder.awayCrest}}} confirmed={Boolean(builder.lineupsConfirmed)}/></div></div><div className="text-right"><p className="font-mono text-base font-black text-emerald-200">{fractionalOdds(builder.referenceOdds)}</p><p className="text-[0.42rem] text-white/30">{percent(builder.conservativeAllHitProbability)} est. · {builder.preMatchSnapshot?"pre-match Bet365 ref":"Bet365 ref"}</p></div></div>
-          <div className="mt-3 space-y-1.5">{builder.legs.map((leg,i)=><div key={leg.player+"|"+leg.market+"|"+i} className={"grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-xl px-2.5 py-2 "+(leg.market==="card"?"border border-amber-300/15 bg-amber-300/[0.06]":"bg-white/[0.045]")}>
-            <span className="text-[0.46rem] font-black text-white/25">{i+1}</span>
-            <div className="min-w-0"><div className="flex flex-wrap items-center gap-1.5"><p className="truncate text-[0.62rem] font-black">{leg.player} · {leg.label}</p><TeamBadge team={leg.team} home={builder.home} away={builder.away} homeCrest={builder.homeCrest} awayCrest={builder.awayCrest}/>{leg.market==="card"?<span className="rounded-full bg-amber-300/10 px-1.5 py-0.5 text-[0.38rem] font-black text-amber-200">TOP CARD PICK</span>:null}</div><p className="mt-0.5 text-[0.42rem] text-white/25">Grade {leg.confidence} · verified Bet365</p></div>
-            <div className="text-right"><p className="font-mono text-[0.62rem] font-black text-emerald-200">{fractionalOdds(leg.bookmakerOdds)}</p><p className="text-[0.4rem] text-white/25">{percent(leg.probability)}</p></div>
-          </div>)}</div>
-        </div>)}</div>:<div className="mt-4 rounded-2xl border border-dashed border-white/10 bg-black/15 p-6 text-center"><p className="font-black">No {activeTier?.title??"selected"} multi available yet</p><p className="mt-1 text-xs text-white/35">The builder will not manufacture a card or weak player prop just to reach the target price.</p></div>}
-      </section>:null}
-
-      {data?.ok?<section className="space-y-3">
-        <div className="px-1"><div className="flex items-center gap-2 text-amber-200"><BadgeCheck className="size-4"/><p className="font-black">Yellow Card Watch</p></div><p className="mt-1 text-[0.6rem] text-white/35">Visible whenever Bet365 has a verified player-card market and Match Edge has a priced card candidate.</p></div>
-        {cards.length?<div className="space-y-2">{cards.map((row,i)=><div key={row.fixtureId+"|"+row.player} className="rounded-2xl border border-amber-300/12 bg-amber-300/[0.045] p-3">
-          <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-[0.46rem] font-black uppercase text-white/25">{row.home} v {row.away}</p><div className="mt-1 flex flex-wrap items-center gap-2"><p className="truncate text-sm font-black">{i+1}. {row.player} · To be booked</p><TeamBadge team={row.team} home={row.home} away={row.away} homeCrest={row.homeCrest} awayCrest={row.awayCrest}/><span className={"rounded-full px-1.5 py-0.5 text-[0.38rem] font-black "+(row.probabilityBasis==="model"?"bg-emerald-300/10 text-emerald-200":"bg-amber-300/10 text-amber-200")}>{row.probabilityBasis==="model"?"MATCH EDGE MODEL":"BET365 IMPLIED"}</span></div><p className="mt-1 line-clamp-2 text-[0.5rem] leading-relaxed text-white/30">{row.reason}</p></div><div className="text-right"><p className="font-mono text-base font-black text-amber-200">{fractionalOdds(row.bookmakerOdds)}</p><p className="text-[0.46rem] font-black text-white/40">{percent(row.probability)}</p></div></div>
-        </div>)}</div>:<div className="rounded-2xl border border-dashed border-amber-300/12 bg-amber-300/[0.025] p-5 text-center"><p className="text-sm font-black text-amber-100">No verified yellow-card picks right now</p><p className="mt-1 text-[0.56rem] text-white/30">This section stays visible so you can tell the card market was checked rather than missing from the app.</p></div>}
-      </section>:null}
+      {boards.map((board,index)=><MultiGameBoardCard key={board.fixtureId} board={board} index={index}/>)}
     </div>
   </main>
+}
+
+function MultiGameBoardCard({board,index}:{board:MultiGameBoard;index:number}){
+  const fixture:Fixture={
+    id:board.fixtureId,competition:board.competition,kickoff:board.kickoff,
+    home:{name:board.home,crest:board.homeCrest},away:{name:board.away,crest:board.awayCrest}
+  }
+  return <article className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]">
+    <div className="border-b border-white/8 bg-black/15 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div><p className="text-[0.46rem] font-black uppercase tracking-wide text-violet-300">Game {index+1} · {board.competition}</p><h2 className="mt-1 text-lg font-black">{board.home} <span className="text-white/25">v</span> {board.away}</h2><p className="mt-1 text-[0.54rem] text-white/35">{time(fixture)}{board.preMatchSnapshot?" · pre-match model snapshot":""}</p></div>
+        <span className={"rounded-full px-2 py-1 text-[0.44rem] font-black "+(board.lineupsConfirmed?"bg-emerald-300/12 text-emerald-200":board.lineupMode==="predicted"?"bg-amber-300/10 text-amber-100":"bg-white/6 text-white/35")}>{board.lineupsConfirmed?"XI CONFIRMED":board.lineupMode==="predicted"?"PREDICTED XI":"SQUAD"}</span>
+      </div>
+      {board.lineupsConfirmed?<div className="mt-2"><LineupButton fixture={fixture} confirmed/></div>:null}
+    </div>
+
+    <div className="grid gap-2 p-3 sm:grid-cols-2">
+      {board.groups.map(group=><MarketTopThree key={group.id} group={group} board={board}/>)}
+    </div>
+  </article>
+}
+
+function MarketTopThree({group,board}:{group:MultiGameBoardGroup;board:MultiGameBoard}){
+  const isCards=group.id==="cards"
+  return <section className={"overflow-hidden rounded-2xl border "+(isCards?"border-amber-300/15 bg-amber-300/[0.045]":"border-white/8 bg-black/20")}>
+    <div className="flex items-center justify-between border-b border-white/[0.055] px-3 py-2.5">
+      <p className={"text-[0.56rem] font-black uppercase tracking-wide "+(isCards?"text-amber-200":"text-white/55")}>{group.title}</p>
+      <span className="text-[0.42rem] font-black text-white/20">TOP {group.picks.length}</span>
+    </div>
+    {group.picks.length?group.picks.map((pick,i)=>{
+      const evidence=[
+        pick.recent5HitRate!=null?"R5 "+percent(pick.recent5HitRate):null,
+        pick.seasonHitRate!=null?"Season "+percent(pick.seasonHitRate):null,
+        pick.h2hMatches>=2&&pick.h2hHitRate!=null?"H2H "+percent(pick.h2hHitRate):null,
+      ].filter(Boolean).join(" · ")
+      return <div key={pick.player+"|"+pick.market} className={"grid grid-cols-[auto_1fr_auto] items-center gap-2 px-3 py-2.5 "+(i?"border-t border-white/[0.05]":"")}>
+        <span className={"flex size-6 items-center justify-center rounded-full font-mono text-[0.5rem] font-black "+(i===0?(isCards?"bg-amber-300 text-amber-950":"bg-emerald-300 text-emerald-950"):"bg-white/6 text-white/40")}>{i+1}</span>
+        <div className="min-w-0"><div className="flex flex-wrap items-center gap-1.5"><p className="truncate text-xs font-black">{pick.player}</p><TeamBadge team={pick.team} home={board.home} away={board.away} homeCrest={board.homeCrest} awayCrest={board.awayCrest}/></div><p className="mt-0.5 truncate text-[0.45rem] text-white/25">{evidence||"model evidence"} · Grade {pick.confidence}</p></div>
+        <div className="text-right"><p className={"font-mono text-sm font-black "+(isCards?"text-amber-100":"text-emerald-200")}>{percent(pick.probability)}</p>{pick.bookmakerOdds?<p className="text-[0.4rem] font-black text-white/25">B365 {fractionalOdds(pick.bookmakerOdds)}</p>:<p className="text-[0.4rem] text-white/15">model</p>}</div>
+      </div>
+    }):<p className="px-3 py-5 text-center text-[0.55rem] text-white/25">No qualifying players yet.</p>}
+  </section>
 }
 
 function buildPropBoard(recommendations:Recommendation[]):PropBoardRow[]{
