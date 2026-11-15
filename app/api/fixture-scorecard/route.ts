@@ -1035,6 +1035,62 @@ function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
   })
 }
 
+async function buildVerifiedBet365SnapshotFallback(input:{request:Request;date:string;home:string;away:string;competition:string}){
+  const fallback:any=await buildSnapshotScorecard({
+    date:input.date,home:input.home,away:input.away,competition:input.competition as any,
+  })
+  let odds:any={selections:[],priceAvailable:false}
+  try{
+    const oddsResponse=await oddsGET(input.request)
+    if(oddsResponse.ok)odds=await oddsResponse.json()
+  }catch{}
+  const selections:OddSelection[]=Array.isArray(odds?.selections)?odds.selections:[]
+  const capturedAt=odds?.capturedAt?String(odds.capturedAt):null
+  const capturedMs=capturedAt?new Date(capturedAt).getTime():Number.NaN
+  const ageSeconds=Number.isFinite(capturedMs)?Math.max(0,Math.round((Date.now()-capturedMs)/1000)):null
+  const maxAge=Math.max(300,Number(odds?.maxUsableAgeSeconds??300))
+  const freshness=ageSeconds==null?"UNKNOWN":ageSeconds<120?"LIVE":ageSeconds<maxAge?(odds?.cached?"CACHED":"SLIGHTLY STALE"):"STALE"
+  const usable=freshness==="STALE"?[]:selections.filter(s=>s.bookmaker==="Bet365")
+  const fallbackPlayers:Array<any>=Array.isArray(fallback?.players)?fallback.players:[]
+  const names=fallbackPlayers.map(p=>String(p?.name??"")).filter(Boolean)
+  for(const player of fallbackPlayers){
+    for(const [marketKey,marketRow] of Object.entries(player?.markets??{}) as Array<[MarketKey,any]>){
+      const odd=findOdds(usable,String(player?.name??""),marketKey,names)
+      if(!odd||odd.bookmaker!=="Bet365"||odd.odd==null||Number(odd.odd)<=1)continue
+      const price=Number(odd.odd)
+      const probability=Number(marketRow?.probability??0)
+      marketRow.bookmakerOdds=price
+      marketRow.bookmakerName="Bet365"
+      marketRow.previousBookmakerOdds=odd.previousOdd==null?null:Number(odd.previousOdd)
+      marketRow.bookmakerMovement=odd.movement==null?null:Number(odd.movement)
+      marketRow.bookmakerLabel=odd.label??null
+      marketRow.impliedProbability=Math.round((1/price)*1000)/1000
+      marketRow.edge=Math.round((probability-1/price)*1000)/1000
+      marketRow.expectedValue=Math.round((probability*price-1)*1000)/1000
+    }
+  }
+  const bookmakerAvailability:BookmakerAvailability=odds?.bookmakerAvailability??{}
+  const eligibleBooks=Object.entries(bookmakerAvailability)
+    .filter(([book,a])=>book==="Bet365"&&a.card==="available"&&a.foul==="available")
+    .map(([book])=>book)
+  return {
+    ...fallback,
+    bookmaker:odds?.bookmaker==="Bet365"?"Bet365":null,
+    oddsSource:odds?.source??null,
+    oddsCapturedAt:capturedAt,
+    oddsAgeSeconds:ageSeconds,
+    oddsFreshness:freshness,
+    freeTier:odds?.freeTier!==false,
+    marketAvailability:odds?.marketAvailability??fallback?.marketAvailability??{},
+    bookmakerAvailability,
+    eligibleBooks,
+    priceAvailable:Boolean(odds?.priceAvailable)&&freshness!=="STALE",
+    players:fallbackPlayers,
+    riskBuilders:buildRiskBuilders(fallbackPlayers as ScorePlayer[]),
+    fallbackReason:"Live research database is temporarily unavailable; snapshot probabilities are combined with verified Bet365 prices.",
+  }
+}
+
 export async function GET(request: Request) {
   const url = new URL(request.url)
   const date = url.searchParams.get("date") ?? ""
@@ -1063,7 +1119,7 @@ export async function GET(request: Request) {
     radarResponse = await radarGET(request)
   } catch (error) {
     try {
-      return NextResponse.json(await buildSnapshotScorecard({date,home,away,competition:competition as any}))
+      return NextResponse.json(await buildVerifiedBet365SnapshotFallback({request,date,home,away,competition}))
     } catch {
       return NextResponse.json({
         ok:false,
