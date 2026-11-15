@@ -1114,9 +1114,16 @@ function buildLivePlayerProps(scorecard:Scorecard|null,elapsed:number,liveStats:
       const marketGroup=marketKey==="card"?"card":marketKey==="foul1"?"foul":marketKey==="fouled1"?"fouled":
         marketKey==="shot1"?"shot":marketKey==="sot1"?"sot":marketKey==="goal1"?"goal":"assist"
       const status=(scorecard.marketAvailability as any)?.[marketGroup]??"unknown"
+      const historicalRank=Math.max(0,Math.min(1,Number(market.recommendationScore??base)))
+      const liveFoulRank=stat?Math.min(.28,stat.foulsCommitted*.07)+Math.min(.05,stat.foulsDrawn*.012):0
+      const rankScore=marketKey==="card"
+        ?Math.max(0,Math.min(1,probability*.55+historicalRank*.35+liveFoulRank))
+        :probability
+
       candidates.push({
         player:player.name,team:player.team,market:marketKey,label:nextLabel,
         probability:Math.round(probability*1000)/1000,
+        rankScore:Math.round(rankScore*1000)/1000,
         fullMatchProbability:Math.round(base*1000)/1000,
         fairOdds:Math.round((1/Math.max(.01,probability))*100)/100,
         confidence:market.confidence,marketStatus:status,
@@ -1133,7 +1140,10 @@ function buildLivePlayerProps(scorecard:Scorecard|null,elapsed:number,liveStats:
   }
   const out:any[]=[]
   for(const market of LIVE_PROP_MARKETS){
-    out.push(...candidates.filter(x=>x.market===market).sort((a,b)=>b.probability-a.probability).slice(0,3))
+    out.push(...candidates
+      .filter(x=>x.market===market)
+      .sort((a,b)=>Number(b.rankScore??b.probability)-Number(a.rankScore??a.probability)||b.probability-a.probability)
+      .slice(0,5))
   }
   return out
 }
@@ -1185,9 +1195,13 @@ function overlayBet365OnLiveProps(props:any[],odds:any){
     const model=Math.max(.001,Math.min(.99,Number(prop.probability)))
     const weight=fresh?.22:.08
     const calibrated=Math.max(.001,Math.min(.99,model*(1-weight)+implied*weight))
+    const rankScore=prop.market==="card"
+      ?Math.max(.001,Math.min(.999,Number(prop.rankScore??model)+(implied-model)*(fresh?.10:.04)))
+      :calibrated
     return {
       ...prop,
       probability:Math.round(calibrated*1000)/1000,
+      rankScore:Math.round(rankScore*1000)/1000,
       bookmakerOdds:price,
       bookmakerName:"Bet365",
       bookmakerPriceState:fresh?"live":"reference",
