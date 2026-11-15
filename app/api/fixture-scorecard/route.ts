@@ -961,6 +961,27 @@ function marketLeg(player: ScorePlayer, market: MarketKey): SlipLeg {
 function lowThresholdMarket(market:string){
   return market==="foul1"||market==="fouled1"||market==="shot1"||market==="sot1"
 }
+function marketStabilityFactor(leg:SlipLeg){
+  if(leg.market==="foul1")return 1.10
+  if(leg.market==="fouled1")return 1.045
+  if(leg.market==="shot1")return 1.02
+  if(leg.market==="sot1")return .985
+  if(/^foul[2-9]/.test(leg.market))return .93
+  if(leg.market==="shot2")return .945
+  if(leg.market==="sot2")return .91
+  if(leg.market==="card")return .84
+  if(leg.market==="goal1")return .82
+  if(leg.market==="assist1")return .79
+  return .96
+}
+function routeSelectionSafety(legs:SlipLeg[],joint:number){
+  if(!legs.length)return 0
+  const stabilityGeo=Math.exp(legs.reduce((sum,leg)=>sum+Math.log(Math.max(.70,marketStabilityFactor(leg))),0)/legs.length)
+  const foulOneCount=legs.filter(leg=>leg.market==="foul1").length
+  const lowThresholdCount=legs.filter(leg=>lowThresholdMarket(leg.market)).length
+  const repeatEventBonus=1+Math.min(.09,foulOneCount*.018+Math.max(0,lowThresholdCount-foulOneCount)*.006)
+  return joint*stabilityGeo*repeatEventBonus
+}
 function evidenceSupport(leg:SlipLeg){
   const recent=Number(leg.recent5HitRate)
   const season=Number(leg.seasonHitRate)
@@ -1001,7 +1022,8 @@ function legRank(leg: SlipLeg) {
   const edgeBonus = Math.max(0, Number(leg.edge ?? 0)) * 0.25
   const evidenceBonus=(evidenceSupport(leg)-.5)*.10
   const lowThresholdBonus=lowThresholdMarket(leg.market)?.025:0
-  return leg.probability*evidenceReliability(leg) + confidenceBonus + edgeBonus + evidenceBonus + lowThresholdBonus
+  const stabilityBonus=(marketStabilityFactor(leg)-1)*.22
+  return leg.probability*evidenceReliability(leg) + confidenceBonus + edgeBonus + evidenceBonus + lowThresholdBonus + stabilityBonus
 }
 function bestLeg(players: ScorePlayer[], market: MarketKey, used = new Set<string>()) {
   return players
@@ -1158,15 +1180,18 @@ function buildFoulTargetSlips(players: ScorePlayer[]): FoulTargetSlip[] {
   })
 }
 function buildSlips(players: ScorePlayer[]) {
-  const used = new Set<string>()
-  const safeMarkets: MarketKey[] = ["foul1", "fouled1", "shot1", "sot1"]
-  const safe: SlipLeg[] = []
-  for (const market of safeMarkets) {
-    const leg = bestLeg(players, market, used)
-    if (leg) {
-      safe.push(leg)
-      used.add(norm(leg.player))
-    }
+  const safePool=players.flatMap(player=>["foul1","fouled1","shot1","sot1"].map(market=>marketLeg(player,market as MarketKey)))
+    .filter(leg=>leg.confidence!=="D")
+    .filter(leg=>leg.expectedValue==null||leg.expectedValue>=-.08)
+    .sort((a,b)=>(legRank(b)*marketStabilityFactor(b))-(legRank(a)*marketStabilityFactor(a)))
+  const safe:SlipLeg[]=[]
+  const used=new Set<string>()
+  for(const leg of safePool){
+    if(safe.length>=5)break
+    const playerKey=norm(leg.player)
+    if(used.has(playerKey))continue
+    safe.push(leg)
+    used.add(playerKey)
   }
 
   const cardLegs = players.map(player => ({leg:marketLeg(player, "card"),score:Number(player.markets.card.recommendationScore??player.markets.card.probability)}))
@@ -1198,7 +1223,7 @@ function buildSlips(players: ScorePlayer[]) {
   }
 
   return [
-    makeSlip("main-safe", "Main safer mix", "Lower", safe, "One high-ranked leg from fouls committed, fouls drawn, shots and SOT. Player duplicates are avoided and scorer/card shortcuts are excluded from this safer route."),
+    makeSlip("main-safe", "Main safer mix", "Lower", safe, "Probability-first low-variance mix. Separate 1+ foul legs are favoured when their evidence-adjusted chance is comparable to shots/SOT; player duplicates and scorer/card shortcuts are excluded from this safer route."),
     makeSlip("two-cards", "2-card builder", "Medium", twoCard, "Two highest-rated yellow-card candidates from the confirmed starters."),
     makeSlip("three-cards", "3-card builder", "Higher", threeCard, "Three highest-rated yellow-card candidates. Higher return, materially higher variance."),
     makeSlip("yellow-foul", "Yellow + foul pressure", "Higher", yellowFoul, "Pairs 1+ foul with a yellow for the same high-pressure players. These legs are correlated, so their probabilities should not be multiplied as if independent."),
@@ -1243,7 +1268,7 @@ function buildRiskBuilders(players:ScorePlayer[],scope:"all"|"discipline"="all")
   const baseMarkets:MarketKey[]=["goal1","assist1","shot1","sot1","foul1","fouled1","card"]
   const allPricedMarkets:MarketKey[]=scope==="discipline"
     ?["foul1","foul2","foul3","foul4","foul5","fouled1","card"]
-    :["shot1","shot2","sot1","sot2","foul1","foul2","foul3","foul4","foul5","fouled1"]
+    :["goal1","assist1","card","shot1","shot2","sot1","sot2","foul1","foul2","foul3","foul4","foul5","fouled1"]
   const familyLines:Record<string,MarketKey[]>={
     goal:["goal1"],assist:["assist1"],shot:["shot1","shot2"],sot:["sot1","sot2"],
     foul:["foul1","foul2","foul3","foul4","foul5"],fouled:["fouled1"],card:["card"],
@@ -1387,7 +1412,7 @@ function buildRiskBuilders(players:ScorePlayer[],scope:"all"|"discipline"="all")
     .filter(x=>x.leg.confidence!=="D"&&x.leg.probability>=.08)
     .filter(x=>isVerifiedBet365Leg(x.leg))
     .filter(x=>automaticEvidenceEligible(x.leg))
-    .sort((a,b)=>(b.safeP-a.safeP)||(b.leg.probability-a.leg.probability))
+    .sort((a,b)=>(b.safeP*marketStabilityFactor(b.leg))-(a.safeP*marketStabilityFactor(a.leg))||(b.safeP-a.safeP)||(b.leg.probability-a.leg.probability))
 
   return configs.map(config=>{
     const sourceCandidates=safeCandidates
@@ -1436,7 +1461,8 @@ function buildRiskBuilders(players:ScorePlayer[],scope:"all"|"discipline"="all")
           const avg=state.quality/state.legs.length
           const weakest=Math.min(...state.legs.map(l=>safetyLegProbability(l)))
           const under=state.product<config.targetDecimal?1:0
-          return under*1.25+distance*.12-state.conservative*5.5-weakest*.55-avg*.05+state.legs.length*.001
+          const routeSafety=routeSelectionSafety(state.legs,state.conservative)
+          return under*1.25+distance*.12-routeSafety*5.5-weakest*.55-avg*.05+state.legs.length*.001
         }
         // Preserve the best probability states across the whole odds range.
         // This is essential: a longer set of very likely foul/shot legs must be
@@ -1447,7 +1473,7 @@ function buildRiskBuilders(players:ScorePlayer[],scope:"all"|"discipline"="all")
           const key=oddsBucket+"|"+state.legs.length
           const rows=buckets.get(key)??[]
           rows.push(state)
-          rows.sort((a,b)=>b.conservative-a.conservative||score(a)-score(b))
+          rows.sort((a,b)=>routeSelectionSafety(b.legs,b.conservative)-routeSelectionSafety(a.legs,a.conservative)||b.conservative-a.conservative||score(a)-score(b))
           buckets.set(key,rows.slice(0,12))
         }
         states=[...buckets.values()].flat()
@@ -1461,6 +1487,9 @@ function buildRiskBuilders(players:ScorePlayer[],scope:"all"|"discipline"="all")
         (!requireBothTeams||Object.keys(state.teamCounts).filter(k=>state.teamCounts[k]>0).length>=2)
       )
       const rankStates=(rows:State[])=>rows.sort((a,b)=>{
+        const routeA=routeSelectionSafety(a.legs,a.conservative)
+        const routeB=routeSelectionSafety(b.legs,b.conservative)
+        if(Math.abs(routeA-routeB)>.0005)return routeB-routeA
         if(Math.abs(a.conservative-b.conservative)>.0005)return b.conservative-a.conservative
         const weakA=Math.min(...a.legs.map(l=>safetyLegProbability(l)))
         const weakB=Math.min(...b.legs.map(l=>safetyLegProbability(l)))
@@ -1484,7 +1513,7 @@ function buildRiskBuilders(players:ScorePlayer[],scope:"all"|"discipline"="all")
           const f=family(leg.market)
           return f==="goal"||f==="assist"||f==="card"
         })
-        const requiredMargin=config.risk==="Safe"?1.18:config.risk==="Balanced"?1.10:1.05
+        const requiredMargin=config.risk==="Safe"?1.28:config.risk==="Balanced"?1.18:1.10
         if(hasHighVariance&&bestOverall.conservative<bestLowVariance.conservative*requiredMargin){
           candidateBest=bestLowVariance
         }
@@ -1526,7 +1555,7 @@ function buildRiskBuilders(players:ScorePlayer[],scope:"all"|"discipline"="all")
       note:scope==="discipline"
         ?"This slip searches only verified Bet365 yellow-card, foul-committed and foul-drawn markets. It may use up to Bet365's 12-selection limit, with no more than six players from either team, and chooses the combination with the highest conservative all-hit probability that reaches the target. Cards are not forced in when higher-probability foul legs are safer."
         :config.risk==="Safe"
-          ?"Every verified Bet365 player market is searched. Safe prefers the best low-variance foul/fouled/shot/SOT route whenever a scorer/card/assist route is not at least 18% better on the uncertainty-adjusted safety estimate. Longer low-threshold routes are not penalised simply for using more legs."
+          ?"Every verified Bet365 player market is eligible: goals, assists, cards, fouls, fouls drawn, shots and SOT. Safe still gives repeated low-threshold events a stability preference, and a scorer/card/assist route must materially beat the best low-variance alternative before it is selected."
           :"Every verified Bet365 player market is searched across goals, assists, cards, fouls, fouls drawn, shots and SOT. The model chooses the combination with the highest conservative all-hit probability that reaches the target; market type and leg count do not get preference. Bet365 can reprice correlated legs inside Bet Builder, so this is not labelled as the final Builder quote."
     }
   })
