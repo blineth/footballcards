@@ -569,23 +569,26 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
         byPlayer.get(key)!.push(leg)
       }
 
-      type State={legs:SlipLeg[];product:number;raw:number;conservative:number;families:Record<string,number>}
+      type State={legs:SlipLeg[];product:number;raw:number;conservative:number;families:Record<string,number>;teamCounts:Record<string,number>}
       const maxProduct=6.2
       const maxLog=Math.log(maxProduct)
       const buckets=700
       const bucketFor=(product:number)=>Math.max(0,Math.min(buckets,Math.round(Math.log(Math.max(1,product))/maxLog*buckets)))
 
       let states=new Map<number,State>()
-      states.set(0,{legs:[],product:1,raw:1,conservative:1,families:{}})
+      states.set(0,{legs:[],product:1,raw:1,conservative:1,families:{},teamCounts:{}})
 
       for(const options of byPlayer.values()){
         const next=new Map(states)
         for(const state of states.values()){
-          if(state.legs.length>=8)continue
+          if(state.legs.length>=12)continue
           for(const leg of options){
             const fam=family(leg.market)
             const familyCount=state.families[fam]??0
-            if(familyCount>=6)continue
+            if(familyCount>=12)continue
+            const teamKey=normName(leg.team)
+            const teamCount=state.teamCounts[teamKey]??0
+            if(teamCount>=6)continue
             const product=state.product*Number(leg.bookmakerOdds)
             if(product>maxProduct)continue
             const legs=[...state.legs,leg]
@@ -593,6 +596,7 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
             const candidate:State={
               legs,product,raw,conservative:conservativeJoint(legs,raw),
               families:{...state.families,[fam]:familyCount+1},
+              teamCounts:{...state.teamCounts,[teamKey]:teamCount+1},
             }
             const bucket=bucketFor(product)
             const existing=next.get(bucket)
@@ -663,7 +667,7 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
     combinedBet365Odds:combined==null?null:Math.round(combined*100)/100,
     modelAllHitProbability:allHit==null?null:Math.round(allHit*10000)/10000,
     note:matchBuilders.length
-      ?"Each included match uses the safest verified Bet365 route that reaches roughly 3/1 using the same probability-first player-prop logic as the individual Match Builder. Predicted-XI players are allowed before confirmation but carry a heavier reliability penalty; the official XI replaces them automatically. The overall number is the product of verified Bet365 leg prices; Bet365 can reprice correlated same-game selections in the final Bet Builder Acca."
+      ?"Each included match uses the safest verified Bet365 route that reaches roughly 3/1 using the same probability-first player-prop logic as the individual Match Builder, with up to 12 selections and six players per team when that improves the all-hit chance. Predicted-XI players are allowed before confirmation but carry a heavier reliability penalty; the official XI replaces them automatically. The overall number is the product of verified Bet365 leg prices; Bet365 can reprice correlated same-game selections in the final Bet Builder Acca."
       :"No two fully-covered matches currently have a verified Safe 3/1 player-prop route.",
   }
 }
