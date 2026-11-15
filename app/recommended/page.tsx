@@ -90,6 +90,20 @@ type Response={
 }
 
 function percent(v:number|null|undefined){return v==null?"—":Math.round(v*100)+"%"}
+function fractionalOdds(decimal:number|null|undefined){
+  if(decimal==null||!Number.isFinite(decimal)||decimal<=1)return "—"
+  const target=decimal-1
+  const common:Array<[number,number]>=[
+    [1,20],[1,16],[1,14],[1,12],[1,10],[1,8],[1,7],[1,6],[1,5],[2,9],[1,4],[2,7],[3,10],[1,3],[4,11],[2,5],[4,9],[1,2],[8,15],[4,7],[8,13],[4,6],[8,11],[4,5],[5,6],[10,11],
+    [1,1],[11,10],[6,5],[5,4],[11,8],[3,2],[13,8],[7,4],[15,8],[2,1],[9,4],[5,2],[11,4],[3,1],[10,3],[7,2],[15,4],[4,1],[9,2],[5,1],[11,2],[6,1],[13,2],[7,1],[15,2],[8,1],[9,1],[10,1],[11,1],[12,1],[14,1],[16,1],[18,1],[20,1],[25,1],[33,1],[40,1],[50,1]
+  ]
+  let best=common[0],diff=Infinity
+  for(const pair of common){
+    const d=Math.abs(pair[0]/pair[1]-target)
+    if(d<diff){best=pair;diff=d}
+  }
+  return best[0]===best[1]?"EVS":best[0]+"/"+best[1]
+}
 function time(f:Fixture){
   return new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/London",weekday:"short",day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit",hour12:false}).format(new Date(f.kickoff))
 }
@@ -201,11 +215,11 @@ export default function RecommendedPage(){
       {data?.ok?<section className="rounded-3xl border border-violet-300/20 bg-gradient-to-br from-violet-400/[0.13] to-black/30 p-4">
         <div className="flex items-start justify-between gap-3">
           <div><div className="flex items-center gap-2 text-violet-200"><Sparkles className="size-4"/><p className="text-[0.54rem] font-black uppercase tracking-[0.13em]">Recommended Bet Builder Multi</p></div><h2 className="mt-1 text-xl font-black">{matchBuilders.length?matchBuilders.length+" matches · "+legs.length+" selections":"No qualifying multi yet"}</h2><p className="mt-1 text-[0.58rem] leading-relaxed text-white/40">{multi?.note??"Waiting for enough fully-covered matches with verified Bet365 prices."}</p></div>
-          <div className="text-right"><p className="font-mono text-xl font-black">{multi?.combinedBet365Odds!=null?multi.combinedBet365Odds.toFixed(2):"—"}</p><p className="text-[0.42rem] font-black uppercase text-emerald-300/75">{multi?.combinedBet365Odds!=null?"verified singles reference":"no complete price"}</p></div>
+          <div className="text-right"><p className="font-mono text-xl font-black">{fractionalOdds(multi?.combinedBet365Odds)}</p><p className="text-[0.42rem] font-black uppercase text-emerald-300/75">{multi?.combinedBet365Odds!=null?"Bet365 singles reference":"no complete price"}</p></div>
         </div>
 
         {matchBuilders.length?<div className="mt-4 space-y-3">{matchBuilders.map((builder,matchIndex)=><div key={builder.fixtureId} className="rounded-2xl border border-white/8 bg-black/20 p-3">
-          <div className="flex items-start justify-between gap-3"><div><p className="text-[0.46rem] font-black uppercase text-violet-200/70">Match {matchIndex+1} · Safe {builder.targetFractional}</p><p className="mt-1 text-sm font-black">{builder.home} <span className="text-white/25">v</span> {builder.away}</p><p className="mt-1 text-[0.46rem] text-white/30">{builder.competition} · {builder.legs.length} selections</p></div><div className="text-right"><p className="font-mono text-base font-black text-emerald-200">{builder.referenceOdds.toFixed(2)}</p><p className="text-[0.42rem] text-white/30">{percent(builder.conservativeAllHitProbability)} est.</p></div></div>
+          <div className="flex items-start justify-between gap-3"><div><p className="text-[0.46rem] font-black uppercase text-violet-200/70">Match {matchIndex+1} · Safe {builder.targetFractional}</p><p className="mt-1 text-sm font-black">{builder.home} <span className="text-white/25">v</span> {builder.away}</p><p className="mt-1 text-[0.46rem] text-white/30">{builder.competition} · {builder.legs.length} selections</p></div><div className="text-right"><p className="font-mono text-base font-black text-emerald-200">{fractionalOdds(builder.referenceOdds)}</p><p className="text-[0.42rem] text-white/30">{percent(builder.conservativeAllHitProbability)} est. · Bet365 ref</p></div></div>
           <div className="mt-3 space-y-1.5">{builder.legs.map((leg,i)=><div key={leg.player+"|"+leg.market+"|"+i} className="grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-xl bg-white/[0.045] px-2.5 py-2">
             <span className="text-[0.46rem] font-black text-white/25">{i+1}</span>
             <div className="min-w-0"><p className="truncate text-[0.62rem] font-black">{leg.player} · {leg.label}</p><p className="mt-0.5 text-[0.42rem] text-white/25">Grade {leg.confidence} · verified Bet365</p></div>
