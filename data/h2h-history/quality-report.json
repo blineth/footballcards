@@ -1,0 +1,137 @@
+{
+  "generatedAt": "2026-11-15T17:25:40.346163Z",
+  "domesticScope": "2025/26 + 2026/27 to date, Premier League/Championship/League One/League Two + FA Cup + League Cup",
+  "internationalScope": "All senior national teams from 2022 onward: Euros, Euro qualifying, Nations League, World Cup, all regional World Cup qualifying feeds and friendlies",
+  "rows": 190777,
+  "yellowCards": 16582,
+  "goals": 11969,
+  "fouls": 98985,
+  "shots": 107183,
+  "shotsOnTarget": 35297,
+  "competitions": [
+    {
+      "competition": "Premier League",
+      "matches": 480,
+      "rows": 14577,
+      "failures": []
+    },
+    {
+      "competition": "Championship",
+      "matches": 737,
+      "rows": 22723,
+      "failures": []
+    },
+    {
+      "competition": "League One",
+      "matches": 726,
+      "rows": 21897,
+      "failures": []
+    },
+    {
+      "competition": "League Two",
+      "matches": 733,
+      "rows": 21906,
+      "failures": []
+    },
+    {
+      "competition": "FA Cup",
+      "matches": 163,
+      "rows": 5071,
+      "failures": []
+    },
+    {
+      "competition": "League Cup",
+      "matches": 177,
+      "rows": 5550,
+      "failures": []
+    },
+    {
+      "competition": "UEFA European Championship",
+      "matches": 51,
+      "rows": 1598,
+      "failures": []
+    },
+    {
+      "competition": "UEFA European Championship Qualifying",
+      "matches": 239,
+      "rows": 7444,
+      "failures": []
+    },
+    {
+      "competition": "UEFA Nations League",
+      "matches": 492,
+      "rows": 15158,
+      "failures": []
+    },
+    {
+      "competition": "FIFA World Cup",
+      "matches": 168,
+      "rows": 5287,
+      "failures": []
+    },
+    {
+      "competition": "FIFA World Cup Qualifying - UEFA",
+      "matches": 213,
+      "rows": 6645,
+      "failures": []
+    },
+    {
+      "competition": "FIFA World Cup Qualifying - CONMEBOL",
+      "matches": 110,
+      "rows": 3415,
+      "failures": []
+    },
+    {
+      "competition": "FIFA World Cup Qualifying - CONCACAF",
+      "matches": 124,
+      "rows": 3831,
+      "failures": []
+    },
+    {
+      "competition": "FIFA World Cup Qualifying - AFC",
+      "matches": 251,
+      "rows": 7760,
+      "failures": []
+    },
+    {
+      "competition": "FIFA World Cup Qualifying - CAF",
+      "matches": 283,
+      "rows": 8289,
+      "failures": []
+    },
+    {
+      "competition": "FIFA World Cup Qualifying - OFC",
+      "matches": 32,
+      "rows": 818,
+      "failures": []
+    },
+    {
+      "competition": "International Friendly",
+      "matches": 1716,
+      "rows": 38813,
+      "failures": []
+    }
+  ],
+  "neonSync": {
+    "rows": 190777,
+    "competitions": {
+      "International Friendly": 38809,
+      "FIFA World Cup Qualifying - AFC": 7760,
+      "FIFA World Cup Qualifying - CONMEBOL": 3415,
+      "FIFA World Cup Qualifying - CONCACAF": 3831,
+      "FIFA World Cup Qualifying - OFC": 818,
+      "FIFA World Cup Qualifying - UEFA": 6645,
+      "UEFA Nations League": 15158,
+      "FIFA World Cup Qualifying - CAF": 8288,
+      "FIFA World Cup": 5287,
+      "UEFA European Championship Qualifying": 7444,
+      "UEFA European Championship": 1598,
+      "League Cup": 5550,
+      "League One": 21897,
+      "League Two": 21906,
+      "Championship": 22723,
+      "Premier League": 14577,
+      "FA Cup": 5071
+    }
+  }
+}
