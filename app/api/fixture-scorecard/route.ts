@@ -1297,7 +1297,6 @@ export async function GET(request: Request) {
           priceAvailable:Boolean(odds?.priceAvailable)&&oddsFreshness!=="STALE",
           players:fallbackPlayers,
           riskBuilders:verifiedRiskBuilders,
-      foulCardBuilders:buildRiskBuilders(players,"discipline"),
           foulCardBuilders:buildRiskBuilders(fallbackPlayers as ScorePlayer[],"discipline"),
           fallbackReason:"Live history database is temporarily unavailable; snapshot probabilities are being combined with verified Bet365 prices.",
         })
