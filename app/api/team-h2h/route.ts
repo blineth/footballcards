@@ -49,7 +49,7 @@ type Meeting={
   homeGoals:number
   awayGoals:number
   scorers:Array<{player:string;team:string;goals:number;assists:number}>
-  bookings:Array<{player:string;team:string;yellow:boolean;red:boolean}>
+  bookings:Array<{player:string;team:string;yellow:boolean;red:boolean;minute?:number|null;second?:number|null;clock?:string|null;detail?:string|null}>
   players:Array<{player:string;team:string;minutes:number;goals:number;assists:number;foulsCommitted:number;foulsDrawn:number;shots:number;shotsOnTarget:number;yellow:boolean;red:boolean}>
   totals:{home:{yellow:number;red:number;fouls:number;shots:number;sot:number};away:{yellow:number;red:number;fouls:number;shots:number;sot:number}}
 }
@@ -95,7 +95,7 @@ function aggregate(rows:Row[],home:string,away:string,start:string,before:string
     const actualAwayRows=reverseHome?homeTeamRows:awayTeamRows
     const scorers=matchRows.filter(r=>n(r.goals)>0).map(r=>({player:r.playerName,team:r.team,goals:n(r.goals),assists:n(r.assists)}))
       .sort((a,b)=>b.goals-a.goals||a.player.localeCompare(b.player))
-    const bookings=matchRows.filter(r=>r.yellowCard||r.redCard).map(r=>({player:r.playerName,team:r.team,yellow:r.yellowCard,red:r.redCard}))
+    const bookings=matchRows.filter(r=>r.yellowCard||r.redCard).map(r=>({player:r.playerName,team:r.team,yellow:r.yellowCard,red:r.redCard,minute:null,second:null,clock:null,detail:null}))
     const players=matchRows.filter(r=>n(r.minutes)>0||n(r.goals)>0||r.yellowCard||r.redCard).map(r=>({
       player:r.playerName,team:r.team,minutes:n(r.minutes),goals:n(r.goals),assists:n(r.assists),
       foulsCommitted:n(r.foulsCommitted),foulsDrawn:n(r.foulsDrawn),shots:n(r.shots),shotsOnTarget:n(r.shotsOnTarget),
@@ -143,6 +143,48 @@ async function resolveApiTeamIds(date:string,home:string,away:string){
   }
   return {homeId:pick(a,home),awayId:pick(b,away)}
 }
+function bookingClockFromApi(event:any){
+  const elapsed=Number(event?.time?.elapsed)
+  const extra=Number(event?.time?.extra)
+  const minute=Number.isFinite(elapsed)?elapsed:null
+  const clock=minute==null?null:String(minute)+(Number.isFinite(extra)&&extra>0?"+"+String(extra):"")+"'"
+  return {minute,second:null,clock}
+}
+function bookingClockFromEspn(event:any){
+  const display=String(event?.clock?.displayValue??"").trim()||null
+  const raw=Number(event?.clock?.value)
+  let minute:number|null=null,second:number|null=null
+  if(Number.isFinite(raw)){
+    if(raw>180){minute=Math.floor(raw/60);second=Math.round(raw%60)}
+    else minute=Math.floor(raw)
+  }
+  const clock=display??(minute==null?null:String(minute)+(second!=null&&second>0?":"+String(second).padStart(2,"0"):"'"))
+  return {minute,second,clock}
+}
+function mergeBookingEvents(players:any[],events:any[],source:"api"|"espn"){
+  const out:any[]=[]
+  const seen=new Set<string>()
+  for(const event of events){
+    const type=String(event?.type?.type??event?.type??event?.type?.text??"").toLowerCase()
+    const detail=String(event?.detail??event?.type?.text??event?.text??"")
+    const isYellow=type.includes("yellow")||detail.toLowerCase().includes("yellow card")
+    const isRed=(type.includes("red")||detail.toLowerCase().includes("red card"))&&!isYellow
+    if(!isYellow&&!isRed)continue
+    const participant=source==="api"
+      ? String(event?.player?.name??"").trim()
+      : String(event?.participants?.[0]?.athlete?.displayName??event?.participants?.[0]?.athlete?.fullName??event?.athlete?.displayName??"").trim()
+    if(!participant)continue
+    const matched=players.find(p=>same(p.player,participant))
+    const team=String(source==="api"?event?.team?.name??matched?.team??"":event?.team?.displayName??event?.team?.name??matched?.team??"")
+    const t=source==="api"?bookingClockFromApi(event):bookingClockFromEspn(event)
+    const key=[norm(participant),isYellow?"y":"r",t.clock??""].join("|")
+    if(seen.has(key))continue
+    seen.add(key)
+    out.push({player:participant,team,yellow:isYellow,red:isRed,minute:t.minute,second:t.second,clock:t.clock,detail:detail||null})
+  }
+  return out.sort((a,b)=>(a.minute??999)-(b.minute??999)||(a.second??0)-(b.second??0))
+}
+
 function basicApiMeeting(row:any):Meeting{
   return {
     fixtureId:String(row?.fixture?.id??""),
@@ -156,7 +198,10 @@ function basicApiMeeting(row:any):Meeting{
 }
 async function enrichApiMeeting(meeting:Meeting){
   if(!meeting.fixtureId)return meeting
-  const teams=await apiFootball("/fixtures/players",{fixture:meeting.fixtureId})
+  const [teams,events]=await Promise.all([
+    apiFootball("/fixtures/players",{fixture:meeting.fixtureId}),
+    apiFootball("/fixtures/events",{fixture:meeting.fixtureId}),
+  ])
   if(!teams?.length)return meeting
   const players:any[]=[]
   for(const teamBlock of teams){
@@ -176,7 +221,9 @@ async function enrichApiMeeting(meeting:Meeting){
   return {
     ...meeting,
     scorers:players.filter(p=>p.goals>0).map(p=>({player:p.player,team:p.team,goals:p.goals,assists:p.assists})).sort((x,y)=>y.goals-x.goals),
-    bookings:players.filter(p=>p.yellow||p.red).map(p=>({player:p.player,team:p.team,yellow:p.yellow,red:p.red})),
+    bookings:mergeBookingEvents(players,events??[],"api").length
+      ? mergeBookingEvents(players,events??[],"api")
+      : players.filter(p=>p.yellow||p.red).map(p=>({player:p.player,team:p.team,yellow:p.yellow,red:p.red,minute:null,second:null,clock:null,detail:null})),
     players:players.filter(p=>p.minutes>0||p.goals>0||p.yellow||p.red),
     totals:{home:totals(h),away:totals(a)},
   }
@@ -247,7 +294,9 @@ async function enrichEspnMeeting(meeting:Meeting,slug:string){
   return {
     ...meeting,
     scorers:players.filter(p=>p.goals>0).map(p=>({player:p.player,team:p.team,goals:p.goals,assists:p.assists})).sort((x,y)=>y.goals-x.goals),
-    bookings:players.filter(p=>p.yellow||p.red).map(p=>({player:p.player,team:p.team,yellow:p.yellow,red:p.red})),
+    bookings:mergeBookingEvents(players,[...(summary?.keyEvents??[]),...(summary?.plays??[])],"espn").length
+      ? mergeBookingEvents(players,[...(summary?.keyEvents??[]),...(summary?.plays??[])],"espn")
+      : players.filter(p=>p.yellow||p.red).map(p=>({player:p.player,team:p.team,yellow:p.yellow,red:p.red,minute:null,second:null,clock:null,detail:null})),
     players,totals:{home:totals(h),away:totals(a)},
   }
 }
