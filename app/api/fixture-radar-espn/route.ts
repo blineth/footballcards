@@ -94,22 +94,32 @@ async function currentRoster(league: string, teamId: string | number | undefined
   } catch { return [] }
 }
 
-function startersFromSummary(summary: any, home: string, away: string) {
+function rosterFromSummary(summary: any, home: string, away: string, startersOnly = false) {
   const result: CurrentPlayer[] = []
   let homeCount = 0, awayCount = 0
   for (const section of summary?.rosters ?? []) {
-    const currentTeam = section.homeAway === "home" ? home : away
-    for (const row of section.roster ?? []) {
-      if (row.starter !== true) continue
-      const player: EspnPlayer = row.athlete ?? {}
-      const name = String(player.displayName ?? player.fullName ?? "")
+    const side = section?.homeAway === "home" ? "home" : section?.homeAway === "away" ? "away" : null
+    if (!side) continue
+    const currentTeam = side === "home" ? home : away
+    for (const row of section?.roster ?? []) {
+      if (startersOnly && row?.starter !== true) continue
+      const player: EspnPlayer = row?.athlete ?? {}
+      const name = String(player.displayName ?? player.fullName ?? "").trim()
       if (!name) continue
-      result.push({ id: String(player.id ?? ""), name, position: positionOf(player) ?? row.position?.displayName ?? row.position?.abbreviation, currentTeam })
-      if (section.homeAway === "home") homeCount += 1
+      result.push({ id: String(player.id ?? ""), name, position: positionOf(player) ?? row?.position?.displayName ?? row?.position?.abbreviation, currentTeam })
+      if (side === "home") homeCount += 1
       else awayCount += 1
     }
   }
-  return { players: result, confirmed: homeCount >= 11 && awayCount >= 11 }
+  return { players: result, homeCount, awayCount }
+}
+function startersFromSummary(summary: any, home: string, away: string) {
+  const roster = rosterFromSummary(summary, home, away, true)
+  return { players: roster.players, confirmed: roster.homeCount >= 11 && roster.awayCount >= 11 }
+}
+function matchdaySquadFromSummary(summary: any, home: string, away: string) {
+  const roster = rosterFromSummary(summary, home, away, false)
+  return { players: roster.players, usable: roster.homeCount >= 12 && roster.awayCount >= 12 }
 }
 
 export async function GET(request: Request) {
@@ -126,9 +136,17 @@ export async function GET(request: Request) {
   if (eventInfo?.event?.id && league) { try { summary = await espn(`${league}/summary?event=${eventInfo.event.id}`) } catch {} }
   const official = startersFromSummary(summary, home, away)
   const confirmed = official.confirmed
+  const matchdaySquad = matchdaySquadFromSummary(summary, home, away)
 
-  let currentPlayers: CurrentPlayer[] = official.players
-  if (!confirmed && eventInfo && league) {
+  // International team roster endpoints can contain a very broad national-team
+  // player pool rather than the players called up for this window. Never use that
+  // broad pool to manufacture a predicted XI. Prefer the matchday squad embedded
+  // in the fixture summary; if it is not available yet, fall back to recent senior
+  // international appearances below.
+  let currentPlayers: CurrentPlayer[] = confirmed ? official.players : []
+  if (!confirmed && matchdaySquad.usable) {
+    currentPlayers = matchdaySquad.players
+  } else if (!confirmed && competition !== "International" && eventInfo && league) {
     const [homeRoster, awayRoster] = await Promise.all([
       currentRoster(league, eventInfo.homeCompetitor?.team?.id, home),
       currentRoster(league, eventInfo.awayCompetitor?.team?.id, away),
@@ -173,7 +191,15 @@ export async function GET(request: Request) {
   let pool = [...unique.values()]
   if (competition === "International" && !pool.length) {
     const relevant = internationalRows.filter((r) => teamMatch(r.team, home) || teamMatch(r.team, away))
-    const namesFromHistory = Array.from(new Set(relevant.map((r) => r.playerName)))
+    const fixtureDay = new Date(date + "T12:00:00Z")
+    fixtureDay.setUTCDate(fixtureDay.getUTCDate() - 240)
+    const cutoff = fixtureDay.toISOString().slice(0,10)
+    const recentRelevant = relevant.filter((r) => String(r.matchDate ?? "") >= cutoff && String(r.matchDate ?? "") < date)
+    // A recent senior cap is a much safer eligibility gate than a generic ESPN
+    // national-team roster. If the imported recent sample is too thin, retain the
+    // wider senior history rather than introducing uncapped club players.
+    const eligibleRows = new Set(recentRelevant.map((r) => norm(r.playerName))).size >= 16 ? recentRelevant : relevant
+    const namesFromHistory = Array.from(new Set(eligibleRows.map((r) => r.playerName)))
     for (const name of namesFromHistory) {
       let best: (typeof allBaselines)[number] | undefined, bestScore = 0
       for (const baseline of allBaselines) {
@@ -250,5 +276,14 @@ export async function GET(request: Request) {
     referee = { name: officialName, yellowsPerGame: row?.yellowsPerGame != null ? Number(row.yellowsPerGame) : null, foulsPerGame: row?.foulsPerGame != null ? Number(row.foulsPerGame) : null, matches: row?.matchesRefereed ?? null, historicalCompetition: row?.competition ?? null }
   }
 
-  return NextResponse.json({ connected: true, source: eventInfo ? "ESPN current squads/lineups + historical database" : "historical database fallback", liveProviderOk: Boolean(eventInfo), eventId: eventInfo?.event?.id ?? null, competition, date, home, away, lineupsConfirmed: confirmed, referee, candidates: ranked.slice(0, confirmed ? 24 : 50) })
+  const source = confirmed
+    ? "ESPN confirmed starting XI + historical database"
+    : matchdaySquad.usable
+      ? "ESPN matchday squad + historical database"
+      : competition === "International"
+        ? "Recent senior international appearances + historical database"
+        : eventInfo
+          ? "ESPN current squad + historical database"
+          : "historical database fallback"
+  return NextResponse.json({ connected: true, source, liveProviderOk: Boolean(eventInfo), eventId: eventInfo?.event?.id ?? null, competition, date, home, away, lineupsConfirmed: confirmed, squadVerified: confirmed || matchdaySquad.usable, referee, candidates: ranked.slice(0, confirmed ? 24 : 50) })
 }
