@@ -769,11 +769,22 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
   return configs.map(cfg=>{
     const verified=buildOne(cfg,true)
     if(verified.legs.length)return verified
+
+    // Bet365 pricing is an overlay, not an eligibility gate for the model.
+    // If the live player board disappears, keep ranking the remaining events from
+    // our model + current match state and clearly mark the route as model-only.
+    const model=buildOne(cfg,false)
+    if(model.legs.length)return {
+      ...model,
+      note:strictVerifiedLive
+        ?"Live model route using the current match state. Bet365 has not returned enough fresh player prices for this target, so these are model fair odds only until the next successful Bet365 refresh."
+        :model.note,
+    }
+    const guaranteed=guaranteedModelTarget(cfg)
+    if(guaranteed.legs.length)return guaranteed
     return {
       ...verified,
-      note:strictVerifiedLive
-        ?"Waiting for enough fresh verified Bet365 live player selections to reach this target."
-        :"Bet365 does not currently list enough exact player selections/thresholds to build this target. Model-only players are excluded from recommended bets."
+      note:"No remaining model combination reaches this target at the required probability level."
     }
   })
 }
@@ -1089,11 +1100,14 @@ export default function BetBuilderPage(){
   const broadTargetBuilders=useMemo(()=>buildBroadTargetBuilders([...broadRows,...verifiedPlayerRows]),[broadRows,verifiedPlayerRows])
   const playerBuilders=clientRiskBuilders(allRows,true)
   const disciplineBuilders=clientRiskBuilders(disciplineRows,true)
+  const broadHasBuild=broadTargetBuilders.some(b=>b.legs?.length)
   const builders=builderMode==="discipline"
     ?disciplineBuilders
     :builderMode==="player"
       ?playerBuilders
-      :broadTargetBuilders
+      :broadHasBuild
+        ?broadTargetBuilders
+        :playerBuilders
   const bestAvailableBets=useMemo(()=>{
     const byFamily=new Map<string,Selection>()
     const candidates=[...broadRows,...verifiedPlayerRows]
