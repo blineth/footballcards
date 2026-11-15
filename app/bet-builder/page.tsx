@@ -504,7 +504,7 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
       if(options[0])preferred.set(player,options[0])
     }
 
-    const candidateRows=rows
+    const allCandidateRows=rows
       .filter(r=>r.confidence!=="D"&&(verifiedOnly?verifiedBet365Odd(r)!=null:Number(r.fairOdds??0)>1))
       .filter(r=>{
         if(cfg.risk==="Safe")return true
@@ -513,12 +513,13 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
       })
       .map(r=>({row:r,family:family(r.market),signal:preferred.get(normPlayer(r.player))?.score??0}))
       .sort((a,b)=>cfg.risk==="Safe"
-        ?(b.row.probability-a.row.probability)||(a.row.market.endsWith("1")?-1:1)
+        ?(b.row.probability-a.row.probability)||((baseMarket(a.row.market)?0:1)-(baseMarket(b.row.market)?0:1))
         :(b.signal-a.signal)||(b.row.probability-a.row.probability))
 
-    type State={legs:Selection[];product:number;prob:number;conservative:number;players:Set<string>;quality:number;families:Record<string,number>}
-    let states:State[]=[{legs:[],product:1,prob:1,conservative:1,players:new Set(),quality:0,families:{}}]
-    for(const option of candidateRows.filter(x=>x.row.probability>=cfg.min||x.signal>=.88)){
+    const runSearch=(candidateRows:typeof allCandidateRows)=>{
+      type State={legs:Selection[];product:number;prob:number;conservative:number;players:Set<string>;quality:number;families:Record<string,number>}
+      let states:State[]=[{legs:[],product:1,prob:1,conservative:1,players:new Set(),quality:0,families:{}}]
+      for(const option of candidateRows.filter(x=>x.row.probability>=cfg.min||x.signal>=.88)){
       const leg=option.row
       const next=[...states]
       for(const state of states){
@@ -568,8 +569,8 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
       }).slice(0,cfg.risk==="Safe"?2600:900)
     }
 
-    const best=states.filter(s=>s.legs.length>=2&&s.product>=cfg.targetDecimal&&Object.keys(s.families).length>=cfg.minFamilies)
-      .sort((a,b)=>{
+      const best=states.filter(s=>s.legs.length>=2&&s.product>=cfg.targetDecimal&&Object.keys(s.families).length>=cfg.minFamilies)
+        .sort((a,b)=>{
         if(cfg.risk==="Safe"){
           if(Math.abs(a.prob-b.prob)>.002)return b.prob-a.prob
           if(Math.abs(a.conservative-b.conservative)>.002)return b.conservative-a.conservative
@@ -583,7 +584,16 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
         const db=Math.abs(Math.log(b.product)-Math.log(cfg.targetDecimal))
         if(Math.abs(da-db)>.015)return da-db
         return a.legs.length-b.legs.length
-      })[0]
+        })[0]
+      return best
+    }
+
+    // Safe first tries only low-threshold "1+" player markets across different
+    // players. Higher thresholds (2+ fouls, 2+ shots, 2+ SOT, etc.) are only
+    // considered if those safer base lines cannot reach the requested target.
+    const safeBaseRows=cfg.risk==="Safe"?allCandidateRows.filter(x=>baseMarket(x.row.market)):allCandidateRows
+    let best=runSearch(safeBaseRows)
+    if(!best&&cfg.risk==="Safe")best=runSearch(allCandidateRows)
 
     if(!best)return {
       id:cfg.id,title:cfg.title,risk:cfg.risk,targetFractional:cfg.targetFractional,targetDecimal:cfg.targetDecimal,
