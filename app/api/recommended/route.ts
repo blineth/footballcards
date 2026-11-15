@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { GET as fixturesGET } from "../fixtures/route"
 import { GET as scorecardGET } from "../fixture-scorecard/route"
 import { GET as matchAccaGET } from "../match-acca/route"
+import { GET as livePlayerStatsGET } from "../live-player-stats/route"
 import { gradeHistoricalRecommendations, recommendationTrackingSummary, saveRecommendationSnapshots } from "@/lib/recommendation-tracking"
 import recommendationBacktest from "@/data/model/recommendation-backtest.json"
 import calibrationSnapshot from "@/data/model/calibration.json"
@@ -120,7 +121,7 @@ async function officialLineupForFixture(f:Fixture):Promise<OfficialLineup>{
 
 type LivePlayerStat={
   player:string;team:string;foulsCommitted:number;foulsDrawn:number;shots:number;shotsOnTarget:number;
-  yellowCards:number;redCards:number
+  yellowCards:number;redCards:number;tackles:number;interceptions:number;blocks:number;duelsTotal:number;duelsWon:number
 }
 function espnStat(row:any,name:string){
   const found=(row?.stats??[]).find((s:any)=>String(s?.name??"")===name)
@@ -128,67 +129,28 @@ function espnStat(row:any,name:string){
   return Number.isFinite(value)?value:0
 }
 async function livePlayerStatsForFixture(f:Fixture){
-  const preferred=String(f.id??"").includes(":")?String(f.id).split(":")[0]:null
-  const slugs=[
-    ...(preferred?[preferred]:[]),
-    ...(f.competition==="International"?ESPN_INTL_SLUGS:[ESPN_LEAGUE_SLUGS[f.competition]].filter(Boolean) as string[]),
-  ].filter((v,i,a)=>Boolean(v)&&a.indexOf(v)===i) as string[]
-  const date=fixtureDate(f).replaceAll("-","")
-  for(const slug of slugs){
-    try{
-      let eventId=preferred===slug&&String(f.id).includes(":")?String(f.id).split(":").slice(1).join(":"):""
-      if(!eventId){
-        const scoreboard=await fetch("https://site.api.espn.com/apis/site/v2/sports/soccer/"+slug+"/scoreboard?dates="+date+"&limit=300",{cache:"no-store",signal:AbortSignal.timeout(4500),headers:{accept:"application/json"}})
-        if(!scoreboard.ok)continue
-        const data=await scoreboard.json()
-        const event=(data?.events??[]).find((e:any)=>{
-          const comps=e?.competitions?.[0]?.competitors??[]
-          const h=comps.find((x:any)=>x.homeAway==="home")
-          const a=comps.find((x:any)=>x.homeAway==="away")
-          return sameTeamName(String(h?.team?.displayName??""),f.home.name)&&sameTeamName(String(a?.team?.displayName??""),f.away.name)
-        })
-        eventId=String(event?.id??"")
-      }
-      if(!eventId)continue
-      const summaryRes=await fetch("https://site.api.espn.com/apis/site/v2/sports/soccer/"+slug+"/summary?event="+eventId,{cache:"no-store",signal:AbortSignal.timeout(5000),headers:{accept:"application/json"}})
-      if(!summaryRes.ok)continue
-      const summary=await summaryRes.json()
-      const map=new Map<string,LivePlayerStat>()
-      for(const section of summary?.rosters??[]){
-        const team=String(section?.team?.displayName??section?.team?.name??"")
-        for(const row of section?.roster??[]){
-          const player=String(row?.athlete?.displayName??row?.athlete?.fullName??"").trim()
-          if(!player)continue
-          map.set(normName(player),{
-            player,team,
-            foulsCommitted:espnStat(row,"foulsCommitted"),
-            foulsDrawn:espnStat(row,"foulsSuffered"),
-            shots:espnStat(row,"totalShots"),
-            shotsOnTarget:espnStat(row,"shotsOnTarget"),
-            yellowCards:espnStat(row,"yellowCards"),
-            redCards:espnStat(row,"redCards"),
-          })
-        }
-      }
-      // Card events are also read from the event stream because roster totals can lag briefly.
-      for(const event of summary?.keyEvents??[]){
-        const type=String(event?.type?.type??event?.type?.text??"").toLowerCase()
-        const isYellow=type.includes("yellow")
-        const isRed=type.includes("red")
-        if(!isYellow&&!isRed)continue
-        for(const p of event?.participants??[]){
-          const name=String(p?.athlete?.displayName??p?.athlete?.fullName??"").trim()
-          if(!name)continue
-          const key=normName(name),current=map.get(key)
-          if(!current)continue
-          if(isYellow)current.yellowCards=Math.max(1,current.yellowCards)
-          if(isRed)current.redCards=Math.max(1,current.redCards)
-        }
-      }
-      if(map.size)return {source:"ESPN-live",players:map}
-    }catch{}
+  try{
+    const q=new URLSearchParams({
+      date:fixtureDate(f),home:f.home.name,away:f.away.name,competition:f.competition,
+    })
+    const response=await livePlayerStatsGET(new Request("http://local/api/live-player-stats?"+q.toString()))
+    if(!response.ok)return {source:null,players:new Map<string,LivePlayerStat>()}
+    const data=await response.json()
+    const rows:Array<any>=Array.isArray(data?.players)?data.players:[]
+    return {
+      source:data?.source??null,
+      players:new Map<string,LivePlayerStat>(rows.map((row:any)=>[normName(String(row.player??"")),{
+        player:String(row.player??""),team:String(row.team??""),
+        foulsCommitted:Number(row.foulsCommitted??0),foulsDrawn:Number(row.foulsDrawn??0),
+        shots:Number(row.shots??0),shotsOnTarget:Number(row.shotsOnTarget??0),
+        yellowCards:Number(row.yellowCards??0),redCards:Number(row.redCards??0),
+        tackles:Number(row.tackles??0),interceptions:Number(row.interceptions??0),blocks:Number(row.blocks??0),
+        duelsTotal:Number(row.duelsTotal??0),duelsWon:Number(row.duelsWon??0),
+      }]))
+    }
+  }catch{
+    return {source:null,players:new Map<string,LivePlayerStat>()}
   }
-  return {source:null,players:new Map<string,LivePlayerStat>()}
 }
 function filterSlipToOfficialStarters<T extends BetSlip|FoulTargetSlip>(slip:T,lineup:OfficialLineup):T|null{
   if(!lineup.confirmed)return slip
@@ -467,6 +429,12 @@ function buildLivePlayerProps(scorecard:Scorecard|null,elapsed:number,liveStats:
 
       let probability=remainingEventProbability(Number(leg.probability??0),elapsed)
       let pressureNote=""
+      const workload=stat?Math.max(0,Math.min(.48,
+        Number(stat.tackles??0)*.07+Number(stat.interceptions??0)*.045+Number(stat.blocks??0)*.025+
+        Number(stat.duelsTotal??0)*.009+Number(stat.duelsWon??0)*.006
+      )):0
+      const logit=(p:number)=>Math.log(Math.max(.001,Math.min(.999,p))/(1-Math.max(.001,Math.min(.999,p))))
+      const logistic=(x:number)=>1/(1+Math.exp(-x))
       if(market==="card"&&stat&&stat.foulsCommitted>0){
         const player=(scorecard.players??[]).find(p=>normName(p.name)===normName(leg.player)||normName(String(p.dbName??""))===normName(leg.player))
         const fouls=Math.max(0,Number(stat.foulsCommitted??0))
@@ -474,8 +442,6 @@ function buildLivePlayerProps(scorecard:Scorecard|null,elapsed:number,liveStats:
           :fouls>=2?player?.yellowConditionals?.after2PlusFouls
           :player?.yellowConditionals?.after1PlusFouls
         const overall=player?.yellowConditionals?.overall
-        const logit=(p:number)=>Math.log(Math.max(.001,Math.min(.999,p))/(1-Math.max(.001,Math.min(.999,p))))
-        const logistic=(x:number)=>1/(1+Math.exp(-x))
         let delta=Math.min(.65,.14*fouls)
         if(cond?.rate!=null&&Number(overall?.rate)>0&&Number(cond.matches??0)>=2){
           const reliability=Math.min(1,Number(cond.matches??0)/10)
@@ -491,7 +457,14 @@ function buildLivePlayerProps(scorecard:Scorecard|null,elapsed:number,liveStats:
           probability=logistic(logit(probability)+Math.max(-.18,Math.min(.22,(refYellows-4.2)*.055)))
           pressureNote+=` Referee context ${refYellows.toFixed(1)} yellows/game.`
         }
+        if(workload>0){
+          probability=logistic(logit(probability)+Math.min(.30,workload*.55))
+          pressureNote+=` Defensive workload: ${Number(stat.tackles??0)} tackles, ${Number(stat.interceptions??0)} interceptions, ${Number(stat.duelsTotal??0)} duels.`
+        }
         probability=Math.max(.001,Math.min(.95,probability))
+      }else if(market==="foul1"&&stat&&workload>0){
+        probability=logistic(logit(probability)+workload)
+        pressureNote=` Defensive workload: ${Number(stat.tackles??0)} tackles, ${Number(stat.interceptions??0)} interceptions, ${Number(stat.blocks??0)} blocks, ${Number(stat.duelsTotal??0)} duels; future foul probability increased.`
       }
 
       const marketGroup=market==="card"?"card":market==="foul1"?"foul":market==="fouled1"?"fouled":market==="shot1"?"shot":"sot"
@@ -506,6 +479,8 @@ function buildLivePlayerProps(scorecard:Scorecard|null,elapsed:number,liveStats:
         currentCount,liveStatsAvailable:Boolean(stat),
         currentFouls:stat?.foulsCommitted??null,currentFouled:stat?.foulsDrawn??null,
         currentShots:stat?.shots??null,currentSot:stat?.shotsOnTarget??null,
+        currentTackles:stat?.tackles??null,currentInterceptions:stat?.interceptions??null,
+        currentBlocks:stat?.blocks??null,currentDuels:stat?.duelsTotal??null,currentDuelsWon:stat?.duelsWon??null,
         currentYellowCards:stat?.yellowCards??null,currentRedCards:stat?.redCards??null,
         reason:"Remaining-match estimate from the confirmed-XI player model, updated from live match event counts."+pressureNote,
       })
