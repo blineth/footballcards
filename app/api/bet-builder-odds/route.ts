@@ -271,7 +271,14 @@ async function oddsApiIo(path:string,params:Record<string,string>,key:string){
   const url=new URL(ODDS_API_IO_BASE+path)
   url.searchParams.set("apiKey",key)
   for(const[k,v]of Object.entries(params))url.searchParams.set(k,v)
-  const response=await fetch(url,{cache:"no-store",signal:AbortSignal.timeout(10000),headers:{accept:"application/json"}})
+  // Persist successful provider responses in Vercel/Next's data cache.
+  // Odds refresh quickly; fixture/bookmaker metadata can live longer.
+  const revalidateSeconds=path==="/odds"?30:path==="/events"?120:600
+  const response=await fetch(url,{
+    next:{revalidate:revalidateSeconds},
+    signal:AbortSignal.timeout(10000),
+    headers:{accept:"application/json"},
+  })
   if(!response.ok)throw new Error("Odds-API.io "+path+" "+response.status)
   return response.json()
 }
@@ -673,7 +680,8 @@ export async function GET(request: Request) {
   }
 
   try {
-    // 1) Primary paid feed: actual Bet365 + Sky Bet prices from Odds-API.io.
+    // 1) Primary paid feed: verified Bet365 prices from Odds-API.io.
+    // Successful upstream responses are retained in the Vercel Data Cache.
     const oddsApiIoKey=process.env.ODDS_API_IO_KEY
     if(oddsApiIoKey){
       try{
@@ -685,6 +693,7 @@ export async function GET(request: Request) {
             ...primary,selections,priceAvailable:true,freeTier:false,cached:false,maxUsableAgeSeconds:300,
             marketAvailability:marketAvailability(selections,true),
             bookmakerAvailability:bookmakerAvailability(selections,["Bet365"]),
+            cacheLayer:{provider:"Vercel Data Cache",oddsTtlSeconds:30,eventTtlSeconds:120,lastGoodDatabase:"oddsSnapshots when database is available"},
           })
         }
       }catch(error){
