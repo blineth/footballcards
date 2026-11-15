@@ -206,8 +206,8 @@ export default function MatchesPage(){
     return await r.json() as FixturesResponse
   },[])
 
-  const refresh=useCallback(async(force=false)=>{
-    if(!force){
+  const refresh=useCallback(async(force=false,liveTick=false)=>{
+    if(!force&&!liveTick){
       const cached=readJsonCache<{
         resolvedDate:string;data:FixturesResponse;autoAdvanced:boolean;savedAt:string
       }>(fixturesCacheKey(selectedDate))
@@ -221,22 +221,22 @@ export default function MatchesPage(){
         if(avail)setBet365Availability(avail)
         return
       }
-    }else{
+    }else if(force){
       try{window.localStorage.removeItem(fixturesCacheKey(selectedDate))}catch{}
       try{window.localStorage.removeItem(availabilityCacheKey(resolvedDate||selectedDate))}catch{}
       setBet365Availability({})
     }
 
-    setLoading(true)
+    if(!liveTick)setLoading(true)
     try{
       let date=selectedDate
-      let data=await fetchDate(date,force)
+      let data=await fetchDate(date,force||liveTick)
       let advanced=false
 
       if(!hasRemainingGames(data)){
         for(let offset=1;offset<=21;offset++){
           const next=addDays(selectedDate,offset)
-          const candidate=await fetchDate(next,force)
+          const candidate=await fetchDate(next,force||liveTick)
           if(hasRemainingGames(candidate)){
             date=next
             data=candidate
@@ -259,7 +259,7 @@ export default function MatchesPage(){
       setResolvedDate(selectedDate)
       setAutoAdvanced(false)
     }finally{
-      setLoading(false)
+      if(!liveTick)setLoading(false)
     }
   },[fetchDate,selectedDate,resolvedDate])
 
@@ -267,7 +267,7 @@ export default function MatchesPage(){
   useEffect(()=>{
     const liveOnly=visibleFixtures.filter(isLive)
     if(!liveOnly.length)return
-    const t=window.setInterval(()=>void refresh(true),60000)
+    const t=window.setInterval(()=>void refresh(false,true),60000)
     return()=>window.clearInterval(t)
   },[visibleFixtures,refresh])
   useEffect(()=>{void refreshBet365Availability(visibleFixtures,false)},[visibleFixtures,refreshBet365Availability])
