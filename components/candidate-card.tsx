@@ -4,6 +4,14 @@ import type { Candidate, ConfidenceBand } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { ChevronRight } from "lucide-react"
 
+const TEAM_CODES:Record<string,string>={england:"ENG",spain:"ESP",germany:"GER",france:"FRA",italy:"ITA",portugal:"POR",netherlands:"NED",belgium:"BEL",croatia:"CRO",scotland:"SCO",wales:"WAL",ireland:"IRL","northern ireland":"NIR"}
+function teamCode(team:string){
+  const n=team.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/\b(afc|fc)\b/g,"").replace(/[^a-z0-9]+/g," ").trim()
+  if(TEAM_CODES[n])return TEAM_CODES[n]
+  const words=n.split(" ").filter(Boolean)
+  return (words.length>1?words[0].slice(0,1)+words[1].slice(0,2):n.slice(0,3)).toUpperCase()
+}
+
 const bandConfig: Record<ConfidenceBand, { label: string; dot: string; text: string; ring: string }> = {
   STRONG: { label: "STRONG", dot: "bg-strong", text: "text-strong", ring: "border-strong/30 bg-strong/8" },
   GOOD: { label: "GOOD", dot: "bg-good", text: "text-good", ring: "border-good/40 bg-good/10" },
@@ -42,7 +50,7 @@ export function CandidateCard({
                 </span>
               ) : null}
             </div>
-            <span className="text-sm text-muted-foreground">{candidate.team}</span>
+            <div className="mt-1 flex items-center gap-1.5"><span className="inline-flex items-center gap-1 rounded-full border border-border bg-secondary px-2 py-0.5 text-[0.62rem] font-bold text-secondary-foreground"><span className="grid size-4 place-items-center rounded-full bg-background text-[0.5rem]">{teamCode(candidate.team).slice(0,2)}</span>{teamCode(candidate.team)}</span><span className="truncate text-sm text-muted-foreground">{candidate.team}</span></div>
           </div>
         </div>
         <ChevronRight className="mt-1 size-4 shrink-0 text-muted-foreground" />
