@@ -170,6 +170,13 @@ type SlipLeg = {
   reason: string
   priceSource?: "exact" | "estimated" | null
   bookmakerProbability?: number | null
+  recent5HitRate?: number | null
+  seasonHitRate?: number | null
+  h2hHitRate?: number | null
+  h2hMatches?: number
+  sampleMatches?: number
+  expectedMinutes?: number | null
+  position?: string | null
 }
 
 type FoulTargetSlip = {
@@ -942,12 +949,59 @@ function marketLeg(player: ScorePlayer, market: MarketKey): SlipLeg {
     reason: m.reasons[0] ?? "",
     priceSource: m.bookmakerOdds!=null && m.bookmakerName==="Bet365" ? "exact" : null,
     bookmakerProbability:m.bookmakerNoVigProbability??m.impliedProbability,
+    recent5HitRate:Number.isFinite(Number(m.recent5HitRate))?Number(m.recent5HitRate):null,
+    seasonHitRate:Number.isFinite(Number(m.seasonHitRate))?Number(m.seasonHitRate):null,
+    h2hHitRate:Number.isFinite(Number(m.h2hHitRate))?Number(m.h2hHitRate):null,
+    h2hMatches:Number(m.h2hMatches??0),
+    sampleMatches:Number(m.sampleMatches??player.sampleMatches??0),
+    expectedMinutes:Number.isFinite(Number(player.expectedMinutes))?Number(player.expectedMinutes):null,
+    position:player.position??null,
   }
+}
+function lowThresholdMarket(market:string){
+  return market==="foul1"||market==="fouled1"||market==="shot1"||market==="sot1"
+}
+function evidenceSupport(leg:SlipLeg){
+  const recent=Number(leg.recent5HitRate)
+  const season=Number(leg.seasonHitRate)
+  const h2h=Number(leg.h2hHitRate)
+  const h2hN=Number(leg.h2hMatches??0)
+  let weighted=0,weight=0
+  if(Number.isFinite(recent)){weighted+=recent*.34;weight+=.34}
+  if(Number.isFinite(season)){weighted+=season*.46;weight+=.46}
+  if(h2hN>=2&&Number.isFinite(h2h)){
+    const hw=Math.min(.20,.08+.03*Math.min(4,h2hN))
+    weighted+=h2h*hw;weight+=hw
+  }
+  return weight>0?clamp(weighted/weight,0,1):clamp(Number(leg.probability??0),0,1)
+}
+function evidenceReliability(leg:SlipLeg){
+  // Recent/season/H2H do not replace the model probability: they are used as a
+  // modest robustness check. Repeated 1+ behaviour gets a small lift; weak
+  // empirical support and higher thresholds are penalised.
+  const support=evidenceSupport(leg)
+  let factor=.91+support*.13
+  if(lowThresholdMarket(leg.market))factor+=.012
+  else if(/^foul[2-9]/.test(leg.market)||leg.market==="shot2"||leg.market==="sot2")factor-=.035
+  const h2hN=Number(leg.h2hMatches??0),h2h=Number(leg.h2hHitRate)
+  if(h2hN>=2&&Number.isFinite(h2h)){
+    if(h2h>=.75)factor+=.012
+    else if(h2h<=.20)factor-=.012
+  }
+  const mins=Number(leg.expectedMinutes)
+  if(Number.isFinite(mins)){
+    if(mins<45)factor*=.93
+    else if(mins<60)factor*=.97
+    else if(mins<72)factor*=.985
+  }
+  return Math.max(.84,Math.min(1.035,factor))
 }
 function legRank(leg: SlipLeg) {
   const confidenceBonus = leg.confidence === "A" ? 0.08 : leg.confidence === "B" ? 0.05 : leg.confidence === "C" ? 0.02 : 0
-  const edgeBonus = Math.max(0, Number(leg.edge ?? 0)) * 0.35
-  return leg.probability + confidenceBonus + edgeBonus
+  const edgeBonus = Math.max(0, Number(leg.edge ?? 0)) * 0.25
+  const evidenceBonus=(evidenceSupport(leg)-.5)*.10
+  const lowThresholdBonus=lowThresholdMarket(leg.market)?.025:0
+  return leg.probability*evidenceReliability(leg) + confidenceBonus + edgeBonus + evidenceBonus + lowThresholdBonus
 }
 function bestLeg(players: ScorePlayer[], market: MarketKey, used = new Set<string>()) {
   return players
@@ -973,88 +1027,107 @@ function referenceOdd(leg: SlipLeg) {
 }
 function buildFoulTargetSlips(players: ScorePlayer[]): FoulTargetSlip[] {
   const targets = [
-    { id:"foul-3-1", fractional:"3/1", decimal:4, minProbability:0.66 },
-    { id:"foul-10-1", fractional:"10/1", decimal:11, minProbability:0.60 },
-    { id:"foul-20-1", fractional:"20/1", decimal:21, minProbability:0.55 },
-    { id:"foul-50-1", fractional:"50/1", decimal:51, minProbability:0.48 },
-    { id:"foul-100-1", fractional:"100/1", decimal:101, minProbability:0.42 },
+    { id:"foul-3-1", fractional:"3/1", decimal:4, minProbability:0.58 },
+    { id:"foul-10-1", fractional:"10/1", decimal:11, minProbability:0.52 },
+    { id:"foul-20-1", fractional:"20/1", decimal:21, minProbability:0.48 },
+    { id:"foul-50-1", fractional:"50/1", decimal:51, minProbability:0.42 },
+    { id:"foul-100-1", fractional:"100/1", decimal:101, minProbability:0.36 },
   ] as const
 
   const pool:SlipLeg[] = players.flatMap(player =>
-    player.likelyFoulLines.map(line => ({
-      player:player.name,
-      dbPlayerName:player.dbName,
-      team:player.team,
-      market:(("foul"+line.threshold) as SlipMarketKey),
-      label:line.label,
-      probability:line.probability,
-      fairOdds:line.fairOdds,
-      bookmakerOdds:line.bookmakerOdds,
-      bookmakerName:line.bookmaker,
-      previousBookmakerOdds:line.previousBookmakerOdds,
-      bookmakerMovement:line.bookmakerMovement,
-      edge:line.edge,
-      expectedValue:line.expectedValue,
-      confidence:line.confidence,
-      reason:(line.priceSource==="exact"?"Exact":"Estimated")+" "+line.threshold+"+ foul price at "+line.bookmaker+" "+line.bookmakerOdds.toFixed(2),
-      priceSource:line.priceSource,
-    }))
+    player.likelyFoulLines.map(line => {
+      const market=(("foul"+line.threshold) as SlipMarketKey)
+      const source=player.markets?.[market as MarketKey]
+      return {
+        player:player.name,
+        dbPlayerName:player.dbName,
+        team:player.team,
+        market,
+        label:line.label,
+        probability:line.probability,
+        fairOdds:line.fairOdds,
+        bookmakerOdds:line.bookmakerOdds,
+        bookmakerName:line.bookmaker,
+        previousBookmakerOdds:line.previousBookmakerOdds,
+        bookmakerMovement:line.bookmakerMovement,
+        edge:line.edge,
+        expectedValue:line.expectedValue,
+        confidence:line.confidence,
+        reason:(line.priceSource==="exact"?"Exact":"Estimated")+" "+line.threshold+"+ foul price at "+line.bookmaker+" "+line.bookmakerOdds.toFixed(2),
+        priceSource:line.priceSource,
+        bookmakerProbability:line.bookmakerOdds>1?1/line.bookmakerOdds:null,
+        recent5HitRate:source?.recent5HitRate??null,
+        seasonHitRate:source?.seasonHitRate??null,
+        h2hHitRate:source?.h2hHitRate??null,
+        h2hMatches:source?.h2hMatches??0,
+        sampleMatches:source?.sampleMatches??player.sampleMatches??0,
+        expectedMinutes:player.expectedMinutes,
+        position:player.position,
+      } as SlipLeg
+    })
   )
     .filter(leg=>leg.confidence!=="D")
     .filter(leg=>leg.bookmakerOdds!=null&&Number(leg.bookmakerOdds)>1)
 
   const books=[...new Set(pool.map(l=>l.bookmakerName).filter(Boolean))] as string[]
+  const legSafety=(leg:SlipLeg)=>{
+    const model=clamp(Number(leg.probability),.01,.99)
+    const price=Number(leg.bookmakerOdds??0)
+    const book=price>1?clamp(1/price,.01,.99):model
+    const uplift=leg.confidence==="A"?1.14:leg.confidence==="B"?1.10:leg.confidence==="C"?1.05:1
+    return clamp(Math.min(model,book*uplift)*evidenceReliability(leg),.01,.99)
+  }
 
   return targets.map(target=>{
-    type State={legs:SlipLeg[];product:number;teamCounts:Record<string,number>;quality:number;bookmaker:string}
+    type State={legs:SlipLeg[];product:number;teamCounts:Record<string,number>;joint:number;bookmaker:string}
     const finals:State[]=[]
 
     for(const bookmaker of books){
       const candidates=pool
-        .filter(leg=>leg.bookmakerName===bookmaker&&leg.probability>=target.minProbability)
-        .sort((a,b)=>{
-          const qa=a.probability+Math.max(0,Number(a.edge??0))*0.35
-          const qb=b.probability+Math.max(0,Number(b.edge??0))*0.35
-          return qb-qa
-        })
-      let states:State[]=[{legs:[],product:1,teamCounts:{},quality:0,bookmaker}]
+        .filter(leg=>leg.bookmakerName===bookmaker&&legSafety(leg)>=target.minProbability)
+        .sort((a,b)=>legSafety(b)-legSafety(a)||legRank(b)-legRank(a))
+      let states:State[]=[{legs:[],product:1,teamCounts:{},joint:1,bookmaker}]
       for(const leg of candidates){
         const next=[...states]
         for(const state of states){
           if(state.legs.length>=12)continue
-          if(state.legs.some(existing=>existing.player===leg.player))continue
+          if(state.legs.some(existing=>norm(existing.player)===norm(leg.player)))continue
           const count=state.teamCounts[leg.team]??0
           if(count>=6)continue
           const product=state.product*Number(leg.bookmakerOdds)
-          if(product>target.decimal*2.5&&state.legs.length>=2)continue
+          if(product>target.decimal*1.65&&state.legs.length>=1)continue
           next.push({
             legs:[...state.legs,leg],
             product,
             teamCounts:{...state.teamCounts,[leg.team]:count+1},
-            quality:state.quality+leg.probability+Math.max(0,Number(leg.edge??0))*0.25,
+            joint:state.joint*legSafety(leg),
             bookmaker,
           })
         }
-        states=next.sort((a,b)=>{
-          const score=(state:State)=>{
-            if(!state.legs.length)return Number.POSITIVE_INFINITY
-            const distance=Math.abs(Math.log(Math.max(1.01,state.product))-Math.log(target.decimal))
-            const avg=state.quality/state.legs.length
-            const under=state.product<target.decimal*0.80?0.7:0
-            return distance*1.8+under-avg*0.5
-          }
-          return score(a)-score(b)
-        }).slice(0,220)
+        // Keep probability leaders across the odds curve, rather than only the
+        // shortest/closest-price route.
+        const buckets=new Map<string,State[]>()
+        for(const state of next){
+          const key=Math.floor(Math.log(Math.max(1,state.product))*120)+"|"+state.legs.length
+          const rows=buckets.get(key)??[]
+          rows.push(state)
+          rows.sort((a,b)=>b.joint-a.joint)
+          buckets.set(key,rows.slice(0,10))
+        }
+        states=[...buckets.values()].flat()
+          .sort((a,b)=>b.joint-a.joint)
+          .slice(0,2800)
       }
-      finals.push(...states.filter(s=>s.legs.length>=2))
+      finals.push(...states.filter(s=>s.legs.length>=2&&s.product>=target.decimal&&s.product<=target.decimal*1.45))
     }
 
     const best=finals.sort((a,b)=>{
-      const da=Math.abs(Math.log(a.product)-Math.log(target.decimal))
-      const db=Math.abs(Math.log(b.product)-Math.log(target.decimal))
-      const qa=a.quality/Math.max(1,a.legs.length)
-      const qb=b.quality/Math.max(1,b.legs.length)
-      return (da-qa*0.15)-(db-qb*0.15)
+      if(Math.abs(a.joint-b.joint)>.000001)return b.joint-a.joint
+      const weakA=Math.min(...a.legs.map(legSafety)),weakB=Math.min(...b.legs.map(legSafety))
+      if(Math.abs(weakA-weakB)>.001)return weakB-weakA
+      const dA=Math.abs(Math.log(a.product)-Math.log(target.decimal)),dB=Math.abs(Math.log(b.product)-Math.log(target.decimal))
+      if(Math.abs(dA-dB)>.005)return dA-dB
+      return b.legs.length-a.legs.length
     })[0]
 
     if(!best){
@@ -1062,7 +1135,7 @@ function buildFoulTargetSlips(players: ScorePlayer[]): FoulTargetSlip[] {
         id:target.id,bookmaker:null,targetFractional:target.fractional,targetDecimal:target.decimal,
         legs:[],referenceProductOdds:null,averageLegProbability:null,minimumLegProbability:null,
         pricedLegs:0,usesLivePrices:false,withinTargetRange:false,
-        note:"No single preferred bookmaker has enough exact foul lines that meet the model threshold for this target.",
+        note:"No verified foul-only route reaches this target while keeping every leg above the evidence-adjusted safety floor.",
       }
     }
 
@@ -1079,11 +1152,8 @@ function buildFoulTargetSlips(players: ScorePlayer[]): FoulTargetSlip[] {
       minimumLegProbability:Math.round(min*1000)/1000,
       pricedLegs:best.legs.length,
       usesLivePrices:best.legs.every(leg=>leg.priceSource==="exact"),
-      withinTargetRange:best.product>=target.decimal*0.80&&best.product<=target.decimal*1.35,
-      note:(best.legs.every(leg=>leg.priceSource==="exact")
-        ?"Every leg in this builder is an exact offered line from "+best.bookmaker+". "
-        :"This builder contains one or more estimated prices for "+best.bookmaker+" and must be checked in the bookmaker before placing. ")
-        +"The displayed reference product multiplies individual prices only; the bookmaker's same-game correlation adjustment may change the final Bet Builder price.",
+      withinTargetRange:best.product>=target.decimal&&best.product<=target.decimal*1.45,
+      note:"Probability-first foul route: recent/season/H2H evidence and expected minutes are used as a robustness check, then the highest conservative all-hit combination that reaches the target is selected. More separate 1+ foul legs are preferred whenever they beat a shorter higher-threshold route. The reference price is the product of exact Bet365 singles; Bet365 can adjust the final same-game Builder price for correlation.",
     }
   })
 }
@@ -1253,7 +1323,7 @@ function buildRiskBuilders(players:ScorePlayer[],scope:"all"|"discipline"="all")
   const safetyLegProbability=(leg:SlipLeg)=>{
     const model=clamp(Number(leg.probability??0),.01,.99)
     const price=bet365Odd(leg)
-    if(!(price>1))return model
+    if(!(price>1))return clamp(model*evidenceReliability(leg),.01,.99)
     const book=clamp(Number(leg.bookmakerProbability??(1/price)),.01,.99)
     const modelWeight=leg.confidence==="A"?.66:leg.confidence==="B"?.58:leg.confidence==="C"?.50:.42
     let consensus=model*modelWeight+book*(1-modelWeight)
@@ -1261,6 +1331,7 @@ function buildRiskBuilders(players:ScorePlayer[],scope:"all"|"discipline"="all")
     // excess disagreement beyond eight percentage points.
     const disagreement=Math.abs(model-book)
     consensus-=Math.max(0,disagreement-.08)*.32
+    consensus*=evidenceReliability(leg)
     return clamp(consensus,.01,.99)
   }
   const conservativeJoint=(legs:SlipLeg[],_raw:number)=>{
