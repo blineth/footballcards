@@ -51,7 +51,8 @@ type Scorecard={
 }
 type Recommendation={
   id:string;fixture:Fixture;slip:BetSlip|FoulTargetSlip;confirmed:boolean;kind:"standard"|"foul";
-  rank:number;placeable:boolean;blockedReason:string|null;recommendationReliability:number|null
+  rank:number;placeable:boolean;blockedReason:string|null;recommendationReliability:number|null;
+  fullPlayerMarkets?:boolean;playerMarketAvailability?:Record<string,MarketStatus>
 }
 type TargetOddsLeg={
   fixtureId:string;competition:Competition;kickoff:string;home:string;away:string;
@@ -397,6 +398,77 @@ async function scorecardFor(f:Fixture,refresh:boolean){
   }catch{return null}
 }
 
+type MultiMatchLeg={
+  fixtureId:string;competition:Competition;kickoff:string;home:string;away:string;
+  player:string;team:string;market:string;label:string;probability:number;
+  bookmakerOdds:number;bookmaker:"Bet365";confidence:SlipLeg["confidence"]
+}
+type MultiMatchBuild={
+  available:boolean;targetLegProbability:number;maxLegs:number;eligibleFixtureCount:number;
+  legs:MultiMatchLeg[];combinedBet365Odds:number|null;modelAllHitProbability:number|null;note:string
+}
+type YellowCardWatchRow={
+  fixtureId:string;competition:Competition;kickoff:string;home:string;away:string;
+  player:string;team:string;probability:number;bookmakerOdds:number;confidence:SlipLeg["confidence"];reason:string
+}
+function fullPlayerMarketSet(status:Scorecard["marketAvailability"]){
+  return ["card","foul","fouled","shot","sot"].every(key=>(status as any)?.[key]==="available")
+}
+function buildMultiMatch(recommendations:Recommendation[]):MultiMatchBuild{
+  const eligible=recommendations.filter(r=>r.fullPlayerMarkets===true)
+  const fixtureBest=new Map<string,{rec:Recommendation;leg:SlipLeg}>()
+  for(const rec of eligible){
+    for(const leg of rec.slip.legs??[]){
+      const exact=leg.bookmakerName==="Bet365"&&leg.bookmakerOdds!=null&&leg.priceSource!=="estimated"&&Number(leg.bookmakerOdds)>1
+      if(!exact||leg.confidence==="D")continue
+      const existing=fixtureBest.get(rec.fixture.id)
+      if(!existing||leg.probability>existing.leg.probability)fixtureBest.set(rec.fixture.id,{rec,leg})
+    }
+  }
+  const ordered=[...fixtureBest.values()].sort((a,b)=>b.leg.probability-a.leg.probability)
+  const high=ordered.filter(x=>x.leg.probability>=.90)
+  const chosen=(high.length?high:ordered.filter(x=>x.leg.probability>=.80)).slice(0,10)
+  const legs:MultiMatchLeg[]=chosen.map(({rec,leg})=>({
+    fixtureId:rec.fixture.id,competition:rec.fixture.competition,kickoff:rec.fixture.kickoff,
+    home:rec.fixture.home.name,away:rec.fixture.away.name,player:leg.player,team:leg.team,
+    market:leg.market,label:leg.label,probability:leg.probability,
+    bookmakerOdds:Number(leg.bookmakerOdds),bookmaker:"Bet365",confidence:leg.confidence,
+  }))
+  const combined=legs.length?legs.reduce((v,l)=>v*l.bookmakerOdds,1):null
+  const allHit=legs.length?legs.reduce((v,l)=>v*l.probability,1):null
+  return {
+    available:legs.length>=2,targetLegProbability:.90,maxLegs:10,
+    eligibleFixtureCount:new Set(eligible.map(r=>r.fixture.id)).size,
+    legs,combinedBet365Odds:combined==null?null:Math.round(combined*100)/100,
+    modelAllHitProbability:allHit==null?null:Math.round(allHit*10000)/10000,
+    note:high.length
+      ?"Uses one verified Bet365 selection per fully-covered match, prioritising 90%+ model legs. A 90% leg target does not mean the whole multi has a 90% chance."
+      :"No 90%+ verified legs were available across enough fully-covered matches, so the builder shows the strongest 80%+ alternatives rather than pretending they are 90%.",
+  }
+}
+function buildYellowCardWatch(recommendations:Recommendation[]):YellowCardWatchRow[]{
+  const rows:YellowCardWatchRow[]=[]
+  const seen=new Set<string>()
+  for(const rec of recommendations){
+    const cardStatus=rec.playerMarketAvailability?.card
+    if(cardStatus!=="available")continue
+    for(const leg of rec.slip.legs??[]){
+      if(leg.market!=="card")continue
+      const exact=leg.bookmakerName==="Bet365"&&leg.bookmakerOdds!=null&&leg.priceSource!=="estimated"&&Number(leg.bookmakerOdds)>1
+      if(!exact)continue
+      const key=rec.fixture.id+"|"+normName(leg.player)
+      if(seen.has(key))continue
+      seen.add(key)
+      rows.push({
+        fixtureId:rec.fixture.id,competition:rec.fixture.competition,kickoff:rec.fixture.kickoff,
+        home:rec.fixture.home.name,away:rec.fixture.away.name,player:leg.player,team:leg.team,
+        probability:leg.probability,bookmakerOdds:Number(leg.bookmakerOdds),confidence:leg.confidence,reason:leg.reason,
+      })
+    }
+  }
+  return rows.sort((a,b)=>b.probability-a.probability).slice(0,12)
+}
+
 const LIVE_PROP_MARKETS=["card","foul1","fouled1","shot1","sot1"] as const
 function remainingEventProbability(fullMatchProbability:number,elapsed:number){
   const p=Math.max(.001,Math.min(.995,Number(fullMatchProbability)||0))
@@ -677,6 +749,8 @@ export async function GET(request:Request){
             id:fixture.id+"|"+slip.id,fixture,slip:displaySlip,confirmed,kind:"standard",
             rank:rankSlip(displaySlip,confirmed,placeable,liveReliabilityFactor),placeable,blockedReason:blocked,
             recommendationReliability:recommendationReliability(avgProbability(displaySlip),liveReliabilityFactor),
+            fullPlayerMarkets:fullPlayerMarketSet(scorecard.marketAvailability),
+            playerMarketAvailability:scorecard.marketAvailability as Record<string,MarketStatus>,
           })
         }
 
@@ -694,6 +768,8 @@ export async function GET(request:Request){
             id:fixture.id+"|"+preferredFoul.id,fixture,slip:displayFoul,confirmed,kind:"foul",
             rank:rankSlip(displayFoul,confirmed,placeable,liveReliabilityFactor),placeable,blockedReason:blocked,
             recommendationReliability:recommendationReliability(avgProbability(displayFoul),liveReliabilityFactor),
+            fullPlayerMarkets:fullPlayerMarketSet(scorecard.marketAvailability),
+            playerMarketAvailability:scorecard.marketAvailability as Record<string,MarketStatus>,
           })
         }
         return candidates
@@ -703,6 +779,8 @@ export async function GET(request:Request){
     const allRecommendations=rows.flat().sort((a,b)=>b.rank-a.rank)
     const recommendations=selectDiversifiedRecommendations(allRecommendations,8)
     const targetOddsGames=buildTargetOddsGames(allRecommendations,upcoming)
+    const multiMatchBuild=buildMultiMatch(allRecommendations)
+    const yellowCardWatch=buildYellowCardWatch(allRecommendations)
     const nowForSave=Date.now()
     if(nowForSave-lastRecommendationSaveAt>=RECOMMENDATION_SAVE_MS){
       lastRecommendationSaveAt=nowForSave
@@ -731,6 +809,8 @@ export async function GET(request:Request){
       recommendations,
       liveMatches,
       targetOddsGames,
+      multiMatchBuild,
+      yellowCardWatch,
       tracking,
       staleFallback:false,
       methodology:{
@@ -738,6 +818,7 @@ export async function GET(request:Request){
         cache:"Recommended scans today's matchday only. It never silently advances to tomorrow. Manual refresh bypasses the normal scan cadence, while provider and last-good caches protect against temporary source failures.",
         tracking:"Predicted-XI recommendations remain visible before official teams. As soon as confirmed lineups arrive, the scorecard is rebuilt and benched players disappear. Recommendations are saved before kickoff and graded later from imported player-match data.",
         targetOdds:"Select a match, then 5/1 through 50/1 targets use verified Bet365 individual leg prices only. If Bet365 prices are missing, the target is unavailable; model/fair odds are never substituted. The final Bet365 Bet Builder quote can still differ because of correlation.",
+        multiMatch:"The Multi-Match Builder only admits fixtures where Bet365 has Cards, Fouls Committed, Fouls Drawn, Shots and Shots on Target all available. It uses one verified Bet365 selection per match, prefers 90%+ model legs and caps the build at 10 matches.",
         liveRecommended:"Matches remain on Recommended after kick-off. Live rows use the current score and minute plus current player event counts. Confirmed-XI card, foul, fouled, shot and SOT models become next-threshold remaining-match probabilities; already-carded players are removed from the card market, and stale pre-match bookmaker prices are never relabelled as live prices.",
         liveFeedback:liveTopSample>=50
           ? "Live top-pick calibration is active. Current 30-day reliability multiplier: "+liveReliabilityFactor.toFixed(3)
