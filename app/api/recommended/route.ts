@@ -237,23 +237,26 @@ function buildTargetOddsSlips(scorecard:Scorecard|null,fixture:Fixture):TargetOd
   const baseMarket=(market:string)=>market==="goal1"||market==="assist1"||market==="foul1"||market==="fouled1"||market==="card"||market==="shot1"||market==="sot1"
 
   function search(targetDecimal:number){
-    type State={legs:Candidate[];odds:number;prob:number;players:Set<string>;families:Record<string,number>;baseCount:number}
-    let states:State[]=[{legs:[],odds:1,prob:1,players:new Set(),families:{},baseCount:0}]
+    type State={legs:Candidate[];odds:number;prob:number;players:Set<string>;families:Record<string,number>;baseCount:number;teamCounts:Record<string,number>}
+    let states:State[]=[{legs:[],odds:1,prob:1,players:new Set(),families:{},baseCount:0,teamCounts:{}}]
     const pool=[...candidates]
       .sort((a,b)=>b.leg.probability-a.leg.probability||((baseMarket(a.leg.market)?0:1)-(baseMarket(b.leg.market)?0:1))||a.exactPrice-b.exactPrice)
-      .slice(0,60)
+      .slice(0,90)
 
     for(const option of pool){
       const next=[...states]
       for(const state of states){
         const playerKey=normName(option.leg.player)
-        if(state.legs.length>=10||state.players.has(playerKey))continue
+        if(state.legs.length>=12||state.players.has(playerKey))continue
+        const teamKey=normName(option.leg.team)
+        const teamCount=state.teamCounts[teamKey]??0
+        if(teamCount>=6)continue
         const fam=family(option.leg.market)
         const familyCount=state.families[fam]??0
         // Do not force artificial market diversity. If five different players
         // getting 1+ foul is the safest route, that should beat one speculative
         // 2+ foul/card/SOT leg simply because it creates more market families.
-        if(familyCount>=8)continue
+        if(familyCount>=12)continue
         const odds=state.odds*option.exactPrice
         if(odds>targetDecimal*1.55&&state.legs.length>=1)continue
         next.push({
@@ -263,6 +266,7 @@ function buildTargetOddsSlips(scorecard:Scorecard|null,fixture:Fixture):TargetOd
           players:new Set([...state.players,playerKey]),
           families:{...state.families,[fam]:familyCount+1},
           baseCount:state.baseCount+(baseMarket(option.leg.market)?1:0),
+          teamCounts:{...state.teamCounts,[teamKey]:teamCount+1},
         })
       }
 
@@ -327,7 +331,7 @@ function buildTargetOddsSlips(scorecard:Scorecard|null,fixture:Fixture):TargetOd
       referenceOdds:Math.round(chosen.odds*100)/100,
       modelAllHitProbability:Math.round(chosen.prob*10000)/10000,
       bookmaker:"Bet365" as const,priceSource:"bookmaker-singles" as const,marketsVerified:true,legs,
-      note:"Probability first: verified Bet365 player-prop prices set the target, then the model chooses the highest estimated whole-slip hit chance. Multiple safer 1+ events across different players are allowed to beat a riskier 2+/card/SOT leg. Cards require supporting form/H2H/foul-pressure evidence. Match winner, double chance, total goals and corners are excluded here.",
+      note:"Probability first: verified Bet365 player-prop prices set the target, then the model chooses the highest estimated whole-slip hit chance. It can use up to 12 selections, capped at six players per team, so a longer set of safer 1+ events can beat a shorter riskier route. Cards require supporting form/H2H/foul-pressure evidence. Match winner, double chance, total goals and corners are excluded here.",
     }
   })
 }
