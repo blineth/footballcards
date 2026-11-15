@@ -464,6 +464,31 @@ let lastGoodRecommended:any=null
 let lastGoodAt=0
 const STALE_CACHE_MS=60*60*1000
 
+// Tracking/calibration is useful background data, but it should not turn every
+// Recommended page load into several Neon reads and writes.
+const TRACKING_CACHE_MS=15*60*1000
+const RECOMMENDATION_SAVE_MS=15*60*1000
+let trackingCache:any={available:false,topPickLegs:0}
+let trackingCacheAt=0
+let lastGradeAt=0
+let lastRecommendationSaveAt=0
+
+async function maybeGradeRecommendations(){
+  const now=Date.now()
+  if(now-lastGradeAt<TRACKING_CACHE_MS)return
+  lastGradeAt=now
+  try{await gradeHistoricalRecommendations(250)}catch{}
+}
+async function cachedTrackingSummary(){
+  const now=Date.now()
+  if(trackingCacheAt&&now-trackingCacheAt<TRACKING_CACHE_MS)return trackingCache
+  try{
+    trackingCache=await recommendationTrackingSummary(30)
+    trackingCacheAt=now
+  }catch{}
+  return trackingCache
+}
+
 function beta(hits:number,total:number,prior:number,strength=6){
   return (hits+prior*strength)/(total+strength)
 }
@@ -489,9 +514,8 @@ export async function GET(request:Request){
   const maxFixtures=Math.max(6,Math.min(24,Number(url.searchParams.get("limit")??18)||18))
 
   try{
-    try{await gradeHistoricalRecommendations(500)}catch{}
-    let trackingBefore:any={available:false,topPickLegs:0}
-    try{trackingBefore=await recommendationTrackingSummary(30)}catch{}
+    await maybeGradeRecommendations()
+    const trackingBefore:any=await cachedTrackingSummary()
     const liveTopSample=Number(trackingBefore?.topPickLegs??0)
     const liveTopHit=Number(trackingBefore?.topPickHitRate??0)
     const liveTopModel=Number(trackingBefore?.topPickAvgProbability??0)
@@ -665,21 +689,24 @@ export async function GET(request:Request){
     const allRecommendations=rows.flat().sort((a,b)=>b.rank-a.rank)
     const recommendations=allRecommendations.slice(0,8)
     const targetOddsGames=buildTargetOddsGames(allRecommendations)
-    try{await saveRecommendationSnapshots(recommendations.map((rec,index)=>({
-      fixture:rec.fixture,
-      slip:{
-        id:rec.slip.id,
-        title:rec.kind==="foul"?"Foul builder "+(rec.slip as FoulTargetSlip).targetFractional:(rec.slip as BetSlip).title,
-        bookmaker:rec.slip.bookmaker??null,
-        legs:rec.slip.legs,
-      },
-      rank:rec.rank,
-      position:index+1,
-      confirmed:rec.confirmed,
-      placeable:rec.placeable,
-    })))}catch{}
-    let tracking:any=trackingBefore
-    try{tracking=await recommendationTrackingSummary(30)}catch{}
+    const nowForSave=Date.now()
+    if(nowForSave-lastRecommendationSaveAt>=RECOMMENDATION_SAVE_MS){
+      lastRecommendationSaveAt=nowForSave
+      try{await saveRecommendationSnapshots(recommendations.map((rec,index)=>({
+        fixture:rec.fixture,
+        slip:{
+          id:rec.slip.id,
+          title:rec.kind==="foul"?"Foul builder "+(rec.slip as FoulTargetSlip).targetFractional:(rec.slip as BetSlip).title,
+          bookmaker:rec.slip.bookmaker??null,
+          legs:rec.slip.legs,
+        },
+        rank:rec.rank,
+        position:index+1,
+        confirmed:rec.confirmed,
+        placeable:rec.placeable,
+      })))}catch{}
+    }
+    const tracking:any=trackingBefore
 
     const payload={
       ok:true,
