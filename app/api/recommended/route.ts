@@ -1228,20 +1228,79 @@ export async function GET(request:Request){
 
     if(multiOnly){
       const nowMs=Date.now()
-      const upcoming=[...fixtureMap.values()]
+      const allCandidates=[...fixtureMap.values()]
         .filter(f=>{
           const status=String(f.status??"").toLowerCase()
           const blocked=["postponed","cancelled","canceled","finished","ft","full time","after extra time","aet","abandoned","suspended"]
           const kickoffMs=new Date(f.kickoff).getTime()
-          // Keep a verified pre-match Multi visible after kickoff instead of
-          // deleting it the instant the clock passes the scheduled start.
           return Number.isFinite(kickoffMs)&&kickoffMs>nowMs-180*60*1000&&!blocked.includes(status)
         })
         .sort((a,b)=>a.kickoff.localeCompare(b.kickoff))
         .slice(0,maxFixtures)
 
-      // Cheap first pass: only inspect Bet365 market coverage. Full scorecards
-      // are built for the small set that actually has every required player prop.
+      const liveFixtures=allCandidates.filter(f=>{
+        const status=String(f.status??"").toLowerCase()
+        const explicitLive=["live","halftime","in progress","1h","2h","et","extra time"].includes(status)
+        const home=Number(f.score?.home),away=Number(f.score?.away)
+        const hasScore=Number.isFinite(home)&&Number.isFinite(away)
+        const kickoffMs=new Date(f.kickoff).getTime()
+        const mins=Number.isFinite(kickoffMs)?Math.floor((Date.now()-kickoffMs)/60000):-1
+        return explicitLive||(hasScore&&mins>=0&&mins<=180)
+      })
+
+      if(liveFixtures.length){
+        const liveMatches=await Promise.all(liveFixtures.map(async f=>{
+          try{
+            const liveStatData=await livePlayerStatsForFixture(f)
+            const activeNames=[...liveStatData.players.values()].filter(liveStatActive).map(p=>p.player)
+            let scorecard:Scorecard|null=null
+
+            if(activeNames.length>=20){
+              try{
+                scorecard=await buildSnapshotScorecard({
+                  date:fixtureDate(f),home:f.home.name,away:f.away.name,competition:f.competition,
+                  confirmedStarterNames:activeNames,
+                }) as Scorecard
+              }catch{}
+            }
+            if(!scorecard?.ok)scorecard=await fallbackScorecard(f)
+
+            const kickoffMs=new Date(f.kickoff).getTime()
+            const inferredElapsed=Number.isFinite(kickoffMs)?Math.max(0,Math.min(96,Math.floor((Date.now()-kickoffMs)/60000))):0
+            const elapsed=Math.max(0,Math.min(96,Number(liveStatData.elapsed??f.elapsed??inferredElapsed)))
+            const livePlayerProps=buildLivePlayerProps(scorecard,elapsed,liveStatData.players)
+            const score=liveStatData.score??f.score??null
+            return {
+              id:String(f.id),competition:f.competition,kickoff:f.kickoff,status:liveStatData.status??f.status??"live",
+              inPlay:true,elapsed,score,
+              home:f.home.name,away:f.away.name,homeCrest:f.home.crest??null,awayCrest:f.away.crest??null,
+              probabilities:null,winnerPick:null,bttsPick:null,
+              bttsSettled:Boolean(Number(score?.home??0)>0&&Number(score?.away??0)>0),
+              livePlayerProps,livePlayerStatsSource:liveStatData.source,
+              reasons:["Live player intelligence uses the active roster, current event counts and the same remaining-match logic as Match Builder."],
+            }
+          }catch{
+            return null
+          }
+        }))
+
+        const payload={
+          ok:true,date:resolvedDate,updatedAt:new Date().toISOString(),
+          fixturesScanned:liveFixtures.length,
+          liveMode:true,
+          liveMatches:liveMatches.filter(Boolean),
+          staleFallback:false,
+          methodology:{
+            multiMatch:"When any tracked game is in play, Multi switches to the same live player engine as Match Builder: active players only, including substitutes who come on, with current fouls committed, fouls drawn, shots, SOT, cards, goals and assists recalculating the remaining-match probabilities. When no games are live, Multi returns to the original Safe/Balanced/Risky pre-match builder.",
+          },
+        }
+        lastGoodMulti=payload
+        lastGoodMultiAt=Date.now()
+        return NextResponse.json(payload,{headers:{"Cache-Control":"public, s-maxage=15, stale-while-revalidate=45"}})
+      }
+
+      // No games are live: preserve the original pre-match Multi builder.
+      const upcoming=allCandidates.filter(f=>new Date(f.kickoff).getTime()>nowMs)
       const coverage=await Promise.all(upcoming.map(async fixture=>{
         try{
           const q=new URLSearchParams({
@@ -1256,12 +1315,9 @@ export async function GET(request:Request){
       }))
 
       const eligibleFixtures=coverage.filter(Boolean) as Fixture[]
-      const coveredIds=new Set(eligibleFixtures.map(f=>f.id))
-      const scans:FixtureScan[]=await Promise.all(upcoming.map(async fixture=>{
+      const scans:FixtureScan[]=await Promise.all(eligibleFixtures.map(async fixture=>{
         try{
-          // Every match gets a model board. Only fixtures with usable Bet365
-          // coverage pay the cost of the full bookmaker-enriched scorecard.
-          let scorecard=coveredIds.has(fixture.id)?await scorecardFor(fixture,refresh):await fallbackScorecard(fixture)
+          let scorecard=await scorecardFor(fixture,refresh)
           if(!scorecard?.ok)scorecard=await fallbackScorecard(fixture)
           if(!scorecard?.ok)return {fixture,scorecard:null,recommendations:[]}
           const minutesToKickoff=(new Date(fixture.kickoff).getTime()-Date.now())/60000
@@ -1271,22 +1327,14 @@ export async function GET(request:Request){
         }catch{return {fixture,scorecard:null,recommendations:[]}}
       }))
 
-      const multiGameBoards=buildMultiGameBoards(scans)
       const multiMatchBuild=buildMultiMatchFromScans(scans)
       const yellowCardWatch=buildYellowCardWatchFromScans(scans)
       const payload={
-        ok:true,
-        date:resolvedDate,
-        updatedAt:new Date().toISOString(),
-        fixturesScanned:upcoming.length,
-        eligibleFixtures:eligibleFixtures.length,
-        multiGameBoards,
-        multiMatchBuild,
-        yellowCardWatch,
-        liveMatches:[],
-        staleFallback:false,
+        ok:true,date:resolvedDate,updatedAt:new Date().toISOString(),
+        fixturesScanned:upcoming.length,eligibleFixtures:eligibleFixtures.length,
+        multiMatchBuild,yellowCardWatch,liveMatches:[],staleFallback:false,
         methodology:{
-          multiMatch:"Every match gets a per-game player likelihood board with the top three cards, fouls committed, fouls drawn, shots, SOT, goals and assists. Ranking uses the model probability plus recent/season/H2H evidence, with card-specific recommendation evidence for bookings. Bet365 prices are added when available but are not required for a match or player to appear. Once official XIs are confirmed, the board is hard-filtered to current starters.",
+          multiMatch:"Pre-match Multi remains the original Safe/Balanced/Risky verified Bet365 player-prop builder. Once a tracked game goes live, the page automatically switches to live per-game player intelligence.",
         },
       }
       lastGoodMulti=payload
