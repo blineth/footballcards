@@ -179,6 +179,16 @@ function filterSlipToOfficialStarters<T extends BetSlip|FoulTargetSlip>(slip:T,l
   return {...slip,legs,averageLegProbability:avg} as T
 }
 
+function filterScorecardToOfficialStarters(scorecard:Scorecard,lineup:OfficialLineup):Scorecard{
+  if(!lineup.confirmed)return scorecard
+  return {
+    ...scorecard,
+    lineupsConfirmed:true,
+    lineupMode:"confirmed",
+    players:(scorecard.players??[]).filter(player=>lineup.starters.has(normName(player.name))),
+  }
+}
+
 
 function londonDate(offset=0){
   const now=new Date()
@@ -331,8 +341,7 @@ function buildTargetOddsSlips(scorecard:Scorecard|null,fixture:Fixture):TargetOd
       state.legs.length>=2&&state.odds>=targetDecimal&&state.odds<=targetDecimal*1.35
     )
     if(bothTeamsAvailable){
-      const balanced=acceptable.filter(state=>(state.teamCounts.home??0)>0&&(state.teamCounts.away??0)>0)
-      if(balanced.length)acceptable=balanced
+      acceptable=acceptable.filter(state=>(state.teamCounts.home??0)>0&&(state.teamCounts.away??0)>0)
     }
     if(!acceptable.length)return null
 
@@ -468,6 +477,10 @@ type YellowCardWatchRow={
 function fullPlayerMarketSet(status:Scorecard["marketAvailability"]){
   return ["card","foul","fouled","shot","sot"].every(key=>(status as any)?.[key]==="available")
 }
+function usablePlayerPropCoverage(status:Scorecard["marketAvailability"]){
+  const keys=["goal","assist","card","foul","fouled","shot","sot"]
+  return keys.filter(key=>(status as any)?.[key]==="available").length>=2
+}
 type FixtureScan={fixture:Fixture;scorecard:Scorecard|null;recommendations:Recommendation[]}
 
 function cardEvidenceEligible(player:ScorecardPlayer,market:ScorecardMarket){
@@ -530,7 +543,7 @@ function directPlayerCandidates(scorecard:Scorecard){
 }
 
 function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
-  const eligible=scans.filter(x=>x.scorecard?.ok&&fullPlayerMarketSet(x.scorecard.marketAvailability))
+  const eligible=scans.filter(x=>x.scorecard?.ok&&usablePlayerPropCoverage(x.scorecard.marketAvailability))
 
   const family=(market:string)=>market.startsWith("goal")?"goal":market.startsWith("assist")?"assist":market.startsWith("fouled")?"fouled":market.startsWith("foul")?"foul":market.startsWith("sot")?"sot":market.startsWith("shot")?"shot":"card"
   const baseMarket=(market:string)=>market==="goal1"||market==="assist1"||market==="foul1"||market==="fouled1"||market==="card"||market==="shot1"||market==="sot1"
@@ -546,34 +559,48 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
     if(f==="assist")return .90
     return .95
   }
-  const conservativeJoint=(legs:SlipLeg[],raw:number)=>{
+  const safetyLegProbability=(leg:SlipLeg)=>{
+    const model=Math.max(.01,Math.min(.99,Number(leg.probability)))
+    const price=Number(leg.bookmakerOdds??0)
+    const book=Math.max(.01,Math.min(.99,Number(leg.bookmakerProbability??(price>1?1/price:model))))
+    const uplift=leg.confidence==="A"?1.18:leg.confidence==="B"?1.12:leg.confidence==="C"?1.07:1
+    let p=Math.min(model,book*uplift)
+    if(leg.market.startsWith("goal")||leg.market.startsWith("assist"))p*=.98
+    if(leg.market==="card")p*=.985
+    return Math.max(.01,Math.min(.99,p))
+  }
+  const conservativeJoint=(legs:SlipLeg[],_raw:number)=>{
     const counts:Record<string,number>={}
-    let reliability=1
+    let conservative=1
     for(const leg of legs){
       const f=family(leg.market)
       counts[f]=(counts[f]??0)+1
-      reliability*=confidenceReliability(leg)*marketReliability(leg)
+      conservative*=safetyLegProbability(leg)*confidenceReliability(leg)*marketReliability(leg)
     }
     let concentration=1
-    for(const count of Object.values(counts))if(count>1)concentration*=Math.pow(.965,count-1)
-    return Math.max(0,Math.min(.99,raw*reliability*concentration*Math.pow(.985,Math.max(0,legs.length-2))))
+    for(const count of Object.values(counts))if(count>1)concentration*=Math.pow(.985,count-1)
+    return Math.max(0,Math.min(.99,conservative*concentration))
   }
 
   function safestThreeToOne(scan:FixtureScan):MultiMatchGameBuilder|null{
     const scorecard=scan.scorecard
     if(!scorecard)return null
     const candidates=directPlayerCandidates(scorecard)
-      .filter(leg=>leg.bookmakerName==="Bet365"&&leg.bookmakerOdds!=null&&Number(leg.bookmakerOdds)>1&&leg.probability>=.40)
-      .sort((a,b)=>b.probability-a.probability||((baseMarket(a.market)?0:1)-(baseMarket(b.market)?0:1))||Number(a.bookmakerOdds)-Number(b.bookmakerOdds))
-      .slice(0,90)
+      .filter(leg=>leg.bookmakerName==="Bet365"&&leg.bookmakerOdds!=null&&Number(leg.bookmakerOdds)>1&&safetyLegProbability(leg)>=.32)
+      .sort((a,b)=>safetyLegProbability(b)-safetyLegProbability(a)||b.probability-a.probability||((baseMarket(a.market)?0:1)-(baseMarket(b.market)?0:1))||Number(a.bookmakerOdds)-Number(b.bookmakerOdds))
+      .slice(0,110)
+    const homeKey=normName(scan.fixture.home.name)
+    const awayKey=normName(scan.fixture.away.name)
+    const bothTeamsAvailable=candidates.some(leg=>normName(leg.team)===homeKey)&&candidates.some(leg=>normName(leg.team)===awayKey)
+    if(!bothTeamsAvailable)return null
 
     type State={legs:SlipLeg[];product:number;raw:number;conservative:number;players:Set<string>;families:Record<string,number>}
 
     const runSearch=(pool:SlipLeg[])=>{
-      const minLegProbability=.34
+      const minLegProbability=.32
       const byPlayer=new Map<string,SlipLeg[]>()
       for(const leg of pool){
-        if(leg.probability<minLegProbability)continue
+        if(safetyLegProbability(leg)<minLegProbability)continue
         const key=normName(leg.player)
         if(!byPlayer.has(key))byPlayer.set(key,[])
         byPlayer.get(key)!.push(leg)
@@ -627,10 +654,16 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
       }
 
       return [...states.values()]
-        .filter(s=>s.legs.length>=2&&s.product>=4&&s.product<=5.8)
+        .filter(s=>
+          s.legs.length>=2&&s.product>=4&&s.product<=5.8&&
+          (s.teamCounts[homeKey]??0)>0&&(s.teamCounts[awayKey]??0)>0
+        )
         .sort((a,b)=>{
-          if(Math.abs(a.raw-b.raw)>.000001)return b.raw-a.raw
           if(Math.abs(a.conservative-b.conservative)>.000001)return b.conservative-a.conservative
+          const weakA=Math.min(...a.legs.map(safetyLegProbability))
+          const weakB=Math.min(...b.legs.map(safetyLegProbability))
+          if(Math.abs(weakA-weakB)>.0001)return weakB-weakA
+          if(Math.abs(a.raw-b.raw)>.000001)return b.raw-a.raw
           return Math.abs(a.product-4)-Math.abs(b.product-4)
         })[0]
     }
@@ -658,7 +691,7 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
   }
 
   const built=eligible.map(safestThreeToOne).filter(Boolean) as MultiMatchGameBuilder[]
-  built.sort((a,b)=>b.modelAllHitProbability-a.modelAllHitProbability||b.conservativeAllHitProbability-a.conservativeAllHitProbability||a.referenceOdds-b.referenceOdds)
+  built.sort((a,b)=>b.conservativeAllHitProbability-a.conservativeAllHitProbability||b.modelAllHitProbability-a.modelAllHitProbability||a.referenceOdds-b.referenceOdds)
 
   // A Bet Builder Acca is capped by matches here, not by the number of
   // underlying player selections inside each same-game builder.
@@ -677,7 +710,7 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
     combinedBet365Odds:combined==null?null:Math.round(combined*100)/100,
     modelAllHitProbability:allHit==null?null:Math.round(allHit*10000)/10000,
     note:matchBuilders.length
-      ?"Each included match uses the safest verified Bet365 route that reaches roughly 3/1 using the same probability-first player-prop logic as the individual Match Builder, with up to 12 selections and six players per team when that improves the all-hit chance. Predicted-XI players are allowed before confirmation but carry a heavier reliability penalty; the official XI replaces them automatically. The overall number is the product of verified Bet365 leg prices; Bet365 can reprice correlated same-game selections in the final Bet Builder Acca."
+      ?"Each included match uses the safest conservative Bet365-calibrated route that reaches roughly 3/1. Both teams must be represented, up to 12 selections and six players per team are allowed, and several likely 1+ foul/shot/fouled/SOT legs can beat one speculative scorer or card. Predicted-XI players are allowed before confirmation; once official lineups arrive the scorecard is restricted to confirmed starters before the multi-match search reruns. The overall number is the product of verified Bet365 leg prices; Bet365 can reprice correlated same-game selections in the final Bet Builder Acca."
       :"No two fully-covered matches currently have a verified Safe 3/1 player-prop route.",
   }
 }
@@ -932,7 +965,7 @@ export async function GET(request:Request){
           const response=await betBuilderOddsGET(new Request("http://local/api/bet-builder-odds?"+q.toString()))
           if(!response.ok)return null
           const odds=await response.json()
-          return fullPlayerMarketSet(odds?.marketAvailability)?fixture:null
+          return usablePlayerPropCoverage(odds?.marketAvailability)?fixture:null
         }catch{return null}
       }))
 
@@ -941,7 +974,11 @@ export async function GET(request:Request){
         try{
           let scorecard=await scorecardFor(fixture,refresh)
           if(!scorecard?.ok)scorecard=await fallbackScorecard(fixture)
-          return {fixture,scorecard:scorecard?.ok?scorecard:null,recommendations:[]}
+          if(!scorecard?.ok)return {fixture,scorecard:null,recommendations:[]}
+          const minutesToKickoff=(new Date(fixture.kickoff).getTime()-Date.now())/60000
+          const officialLineup=minutesToKickoff<=120?await officialLineupForFixture(fixture):{confirmed:false,starters:new Set<string>()}
+          if(officialLineup.confirmed)scorecard=filterScorecardToOfficialStarters(scorecard,officialLineup)
+          return {fixture,scorecard,recommendations:[]}
         }catch{return {fixture,scorecard:null,recommendations:[]}}
       }))
 
@@ -958,7 +995,7 @@ export async function GET(request:Request){
         liveMatches:[],
         staleFallback:false,
         methodology:{
-          multiMatch:"Fast path: Bet365 coverage is checked first. Full scorecards are only built for fixtures with Cards, Fouls Committed, Fouls Drawn, Shots and SOT all available.",
+          multiMatch:"Fast path: Bet365 coverage is checked first. Full scorecards are built for every fixture with at least two usable verified player-prop families; the final 3/1 builder must contain players from both teams and is rebuilt from official starters as soon as lineups are confirmed.",
         },
       }
       lastGoodMulti=payload
@@ -1046,6 +1083,7 @@ export async function GET(request:Request){
         if(!scorecard?.ok)return {fixture,scorecard:null,recommendations:[]}
         const minutesToKickoff=(new Date(fixture.kickoff).getTime()-Date.now())/60000
         const officialLineup=minutesToKickoff<=120?await officialLineupForFixture(fixture):{confirmed:false,starters:new Set<string>()}
+        if(officialLineup.confirmed)scorecard=filterScorecardToOfficialStarters(scorecard,officialLineup)
         const confirmed=officialLineup.confirmed||Boolean(scorecard.lineupsConfirmed)
         const predicted=!confirmed&&scorecard.lineupMode==="predicted"
         if(!confirmed&&!predicted)return {fixture,scorecard,recommendations:[]}
