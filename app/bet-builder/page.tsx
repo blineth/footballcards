@@ -189,6 +189,12 @@ function keyOf(s:Pick<Selection,"player"|"market"|"label">){return [s.player,s.m
 function verifiedBet365Odd(s:Selection){
   return s.bookmakerName==="Bet365"&&s.bookmakerOdds!=null&&Number(s.bookmakerOdds)>1?Number(s.bookmakerOdds):null
 }
+function displayedBet365Odd(s:Selection){
+  const live=verifiedBet365Odd(s)
+  if(live!=null)return {odd:live,state:"live" as const}
+  if(s.referenceBookmakerOdds!=null&&Number(s.referenceBookmakerOdds)>1)return {odd:Number(s.referenceBookmakerOdds),state:"reference" as const}
+  return null
+}
 function referenceOdd(s:Selection){return Number(verifiedBet365Odd(s)??0)}
 function liveUrl(f:Fixture){return "/api/live-player-stats?"+new URLSearchParams({date:f.date,home:f.home,away:f.away,competition:f.competition})}
 function livePlayerIsActive(p:LivePlayerStat){
@@ -425,7 +431,8 @@ function liveOddThreshold(label:string){
   return hit?Number(hit[1]):1
 }
 function sameLivePlayer(a:string,b:string){
-  const x=normPlayer(a),y=normPlayer(b)
+  const clean=(v:string)=>normPlayer(String(v??"").replace(/\s*\(\d+\)\s*$/,""))
+  const x=clean(a),y=clean(b)
   if(!x||!y)return false
   if(x===y)return true
   const xt=x.split(" "),yt=y.split(" ")
@@ -1338,7 +1345,7 @@ export default function BetBuilderPage(){
         </section>:null}
 
         <section className="rounded-3xl border border-emerald-300/12 bg-gradient-to-br from-emerald-400/[0.09] to-black/25 p-4">
-          <div className="flex items-start justify-between gap-3"><div><div className="flex items-center gap-2 text-emerald-300"><Sparkles className="size-4"/><p className="text-[0.54rem] font-black uppercase tracking-[0.13em]">{inPlay&&!liveBet365?"Suggested live model slips":"Suggested Bet365 slips"}</p></div><h2 className="mt-1 text-lg font-black">{builderMode==="discipline"?"Most likely to be carded":builderMode==="player"?"Player markets":"All markets"}</h2><p className="mt-1 text-[0.6rem] leading-relaxed text-white/40">{builderMode==="discipline"?"One live ranking based mainly on who is committing fouls and who is being fouled right now, combined with each player's normal card risk and Bet365 card price when available.":builderMode==="player"?"Only player props are considered: goals, assists, shots, shots on target, cards, fouls committed and fouls drawn.":inPlay?"Everything Bet365 currently offers can be considered, including match result, goals, BTTS, team goals, corners, bookings and verified player props.":"Everything Bet365 offers can be considered, including result, goals, BTTS, team goals, corners, bookings and all verified player props."}</p></div><span className={"rounded-full px-2 py-1 text-[0.46rem] font-black "+(data.lineupMode==="confirmed"?"bg-emerald-400/10 text-emerald-300":"bg-amber-300/10 text-amber-200")}>{data.lineupMode==="confirmed"?"XI CONFIRMED":"PREDICTED XI"}</span></div>
+          <div className="flex items-start justify-between gap-3"><div><div className="flex items-center gap-2 text-emerald-300"><Sparkles className="size-4"/><p className="text-[0.54rem] font-black uppercase tracking-[0.13em]">{inPlay&&!liveBet365?"Suggested live model slips":"Suggested Bet365 slips"}</p></div><h2 className="mt-1 text-lg font-black">{builderMode==="discipline"?"Most likely to be carded":builderMode==="player"?"Player markets":"All markets"}</h2><p className="mt-1 text-[0.6rem] leading-relaxed text-white/40">{builderMode==="discipline"?"One live ranking based mainly on who is committing fouls and who is being fouled right now, combined with each player's normal card risk and Bet365 card price when available.":builderMode==="player"?"Only player props are considered: goals, assists, shots, shots on target, cards, fouls committed and fouls drawn. Each row shows the Bet365 price captured for that exact player line when available.":inPlay?"Everything Bet365 currently offers can be considered, including match result, goals, BTTS, team goals, corners, bookings and verified player props.":"Everything Bet365 offers can be considered, including result, goals, BTTS, team goals, corners, bookings and all verified player props."}</p></div><span className={"rounded-full px-2 py-1 text-[0.46rem] font-black "+(data.lineupMode==="confirmed"?"bg-emerald-400/10 text-emerald-300":"bg-amber-300/10 text-amber-200")}>{data.lineupMode==="confirmed"?"XI CONFIRMED":"PREDICTED XI"}</span></div>
           <div className="mt-4 grid grid-cols-3 gap-2">
             <button onClick={()=>setBuilderMode("all")} className={"rounded-xl border px-2 py-2.5 text-[0.5rem] font-black "+(builderMode==="all"?"border-emerald-300/30 bg-emerald-300 text-emerald-950":"border-white/8 bg-white/[0.04] text-white/45")}>ALL MARKETS</button>
             <button onClick={()=>setBuilderMode("player")} className={"rounded-xl border px-2 py-2.5 text-[0.5rem] font-black "+(builderMode==="player"?"border-cyan-300/30 bg-cyan-300 text-cyan-950":"border-white/8 bg-white/[0.04] text-white/45")}>PLAYER MARKETS</button>
@@ -1543,7 +1550,9 @@ function TrackBetModal({draft,fixture,onClose,onSaved}:{draft:TrackDraft;fixture
 function MiniStat({label,value}:{label:string;value:string}){return <div className="rounded-xl bg-black/20 px-2 py-1.5"><p className="font-mono text-xs font-black">{value}</p><p className="text-[0.4rem] uppercase text-white/25">{label}</p></div>}
 
 function SelectionRow({row,selected,onToggle,rank,traffic,bestAction=false,liveBet365=false,marketStatus="unknown",inPlay=false,fixture}:{row:Selection;selected:boolean;onToggle:()=>void;rank:number;traffic:Traffic;bestAction?:boolean;liveBet365?:boolean;marketStatus?:MarketStatus;inPlay?:boolean;fixture:Fixture}){
-  const exact=row.bookmakerOdds!=null
+  const shownPrice=displayedBet365Odd(row)
+  const exact=shownPrice?.state==="live"
+  const referencePrice=shownPrice?.state==="reference"
   const actionable=exact&&marketStatus!=="unavailable"
   const trafficText=traffic==="high"?"HIGH":traffic==="average"?"AVERAGE":"LOW"
   const trafficClass=traffic==="high"?"bg-emerald-300/15 text-emerald-200 border-emerald-300/20":traffic==="average"?"bg-amber-300/12 text-amber-100 border-amber-300/20":"bg-rose-300/10 text-rose-100/75 border-rose-300/15"
@@ -1559,7 +1568,7 @@ function SelectionRow({row,selected,onToggle,rank,traffic,bestAction=false,liveB
         ?" · FC "+Number(row.liveFoulsCommitted??0)+" · pressure "+Math.round(Number(row.livePressureScore??0)*100)
         :" · live count "+(row.currentCount??0)+(row.livePressureScore!=null?" · pressure "+Math.round(row.livePressureScore*100):""))
   :row.edge!=null?" · "+(row.edge>=0?"+":"")+(row.edge*100).toFixed(1)+"pp vs price":""}{row.referenceBookmakerOdds&&!row.referenceOddsLive?" · last Bet365 "+row.referenceBookmakerOdds.toFixed(2):""}</p></div>
-    <div className="min-w-[5rem] text-right"><div className="mb-1 flex justify-end"><span className={"rounded-full border px-1.5 py-0.5 text-[0.38rem] font-black "+trafficClass}>{trafficText}</span></div><p className={"font-mono text-base font-black "+probabilityClass}>{percent(row.probability)}</p><p className={"text-[0.42rem] font-black "+(exact?"text-emerald-200/70":marketStatus==="unavailable"?"text-rose-200/70":"text-white/20")}>{exact?(row.bookmakerOdds!.toFixed(3)+" · "+(liveBet365?"LIVE BET365":"VERIFIED BET365")):marketStatus==="unavailable"?"NOT OFFERED IN VERIFIED BET365 FEED":"NO VERIFIED BET365 PRICE"}</p>{actionable?<span className={"mt-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[0.4rem] font-black "+(selected?"bg-emerald-300 text-emerald-950":"bg-white/6 text-white/30")}>{selected?<X className="size-2.5"/>:<CirclePlus className="size-2.5"/>}{selected?"REMOVE":"ADD"}</span>:<span className="mt-1 inline-flex rounded-full bg-rose-300/10 px-1.5 py-0.5 text-[0.4rem] font-black text-rose-200">MODEL ONLY</span>}</div>
+    <div className="min-w-[5rem] text-right"><div className="mb-1 flex justify-end"><span className={"rounded-full border px-1.5 py-0.5 text-[0.38rem] font-black "+trafficClass}>{trafficText}</span></div><p className={"font-mono text-base font-black "+probabilityClass}>{percent(row.probability)}</p><p className={"text-[0.42rem] font-black "+(exact?"text-emerald-200/70":referencePrice?"text-amber-200/75":marketStatus==="unavailable"?"text-rose-200/70":"text-white/20")}>{exact?(shownPrice!.odd.toFixed(3)+" · "+(liveBet365?"LIVE BET365":"BET365")):referencePrice?(shownPrice!.odd.toFixed(3)+" · LAST BET365"):marketStatus==="unavailable"?"NOT OFFERED IN CURRENT BET365 FEED":"NO BET365 PRICE CAPTURED"}</p>{actionable?<span className={"mt-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[0.4rem] font-black "+(selected?"bg-emerald-300 text-emerald-950":"bg-white/6 text-white/30")}>{selected?<X className="size-2.5"/>:<CirclePlus className="size-2.5"/>}{selected?"REMOVE":"ADD"}</span>:referencePrice?<span className="mt-1 inline-flex rounded-full bg-amber-300/10 px-1.5 py-0.5 text-[0.4rem] font-black text-amber-100">PRICE REFERENCE</span>:<span className="mt-1 inline-flex rounded-full bg-rose-300/10 px-1.5 py-0.5 text-[0.4rem] font-black text-rose-200">MODEL ONLY</span>}</div>
   </button>
 }
 
