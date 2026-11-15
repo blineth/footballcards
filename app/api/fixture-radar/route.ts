@@ -13,6 +13,25 @@ const CHAMPIONSHIP_SEASON_START = "2026-08-01"
 const LEAGUE_ONE_SEASON_START = "2026-08-01"
 const LEAGUE_TWO_SEASON_START = "2026-08-01"
 const INTERNATIONAL_FORM_START = "2026-01-01"
+const INTERNATIONAL_COMPETITIONS=[
+  "International",
+  "UEFA European Championship",
+  "UEFA European Championship Qualifying",
+  "UEFA Nations League",
+  "FIFA World Cup",
+  "FIFA World Cup Qualifying - UEFA",
+  "FIFA World Cup Qualifying - CONMEBOL",
+  "FIFA World Cup Qualifying - CONCACAF",
+  "FIFA World Cup Qualifying - AFC",
+  "FIFA World Cup Qualifying - CAF",
+  "FIFA World Cup Qualifying - OFC",
+  "International Friendly",
+]
+function competitionHistoryCondition(competition:string){
+  return competition==="International"
+    ? inArray(playerH2H.competition,INTERNATIONAL_COMPETITIONS)
+    : eq(playerH2H.competition,competition)
+}
 
 function norm(value: string | null | undefined) {
   return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\b(afc|fc)\b/g, "").replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ")
@@ -160,7 +179,7 @@ async function mergeInternationalProfiles(data:any,home:string,away:string){
 async function addCurrentSeasonLayer(data: any, competition: string) {
   if (!isDatabaseConfigured || !Array.isArray(data?.candidates) || !data.candidates.length) return data
   const names = Array.from(new Set(data.candidates.map((c: any) => String(c.dbName ?? "")).filter(Boolean))) as string[]
-  const rows = names.length ? await db.select().from(playerH2H).where(and(inArray(playerH2H.playerName, names), eq(playerH2H.competition, competition))) : []
+  const rows = names.length ? await db.select().from(playerH2H).where(and(inArray(playerH2H.playerName, names), competitionHistoryCondition(competition))) : []
   const seasonStart = competition === "Championship" ? CHAMPIONSHIP_SEASON_START : competition === "League One" ? LEAGUE_ONE_SEASON_START : competition === "League Two" ? LEAGUE_TWO_SEASON_START : competition === "International" ? INTERNATIONAL_FORM_START : PREMIER_LEAGUE_SEASON_START
   const currentRows = rows.filter((row) => String(row.matchDate ?? "") >= seasonStart)
   data.candidates = data.candidates.map((candidate: any) => {
@@ -325,7 +344,7 @@ function applyLineupMode(data:any,date:string,home:string,away:string,competitio
 async function addH2HMatchesAndBalance(data: any, home: string, away: string, competition: string, fixtureDate: string) {
   if (!isDatabaseConfigured || !Array.isArray(data?.candidates) || !data.candidates.length) return data
   const names = Array.from(new Set(data.candidates.map((c: any) => String(c.dbName ?? "")).filter(Boolean))) as string[]
-  const rows = names.length ? await db.select().from(playerH2H).where(and(inArray(playerH2H.playerName, names), eq(playerH2H.competition, competition))) : []
+  const rows = names.length ? await db.select().from(playerH2H).where(and(inArray(playerH2H.playerName, names), competitionHistoryCondition(competition))) : []
   data.candidates = data.candidates.map((candidate: any) => {
     const opponent = teamMatch(candidate.team, home) ? away : home
     const matches = rows.filter((row) => row.playerName === candidate.dbName && teamMatch(row.opponent, opponent) && (!fixtureDate || String(row.matchDate) < fixtureDate)).sort((a, b) => String(b.matchDate).localeCompare(String(a.matchDate))).slice(0, 8)
@@ -358,7 +377,7 @@ async function addDeepEvidence(data: any, home: string, away: string, competitio
   const allNames = Array.from(new Set([...candidateNames, ...predictedNames])) as string[]
   const [baselines, matchRows, refereeRows] = await Promise.all([
     db.select().from(playerBaselines).where(eq(playerBaselines.season, "2026/27")),
-    db.select().from(playerH2H).where(and(inArray(playerH2H.playerName, allNames), eq(playerH2H.competition, competition))),
+    db.select().from(playerH2H).where(and(inArray(playerH2H.playerName, allNames), competitionHistoryCondition(competition))),
     refereeName ? db.select().from(playerRefereeHistory).where(and(inArray(playerRefereeHistory.playerName, candidateNames), eq(playerRefereeHistory.refereeName, refereeName))) : Promise.resolve([]),
   ])
 
