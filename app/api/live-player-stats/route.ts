@@ -6,7 +6,7 @@ export const revalidate=0
 type Competition="Premier League"|"Championship"|"League One"|"League Two"|"International"
 type LivePlayerStat={
   player:string;team:string;minutes:number|null;foulsCommitted:number;foulsDrawn:number;shots:number;shotsOnTarget:number;
-  goals:number;assists:number;yellowCards:number;redCards:number;starter:boolean;subbedOff:boolean;
+  goals:number;assists:number;yellowCards:number;redCards:number;starter:boolean;subbedOn:boolean;subbedOff:boolean;
   tackles:number;interceptions:number;blocks:number;duelsTotal:number;duelsWon:number;defensiveInterventions:number
 }
 type LivePayload={
@@ -87,6 +87,7 @@ async function espnLive(input:{date:string;home:string;away:string;competition:C
             yellowCards:espnStat(row,"yellowCards"),
             redCards:espnStat(row,"redCards"),
             starter:row?.starter===true,
+            subbedOn:false,
             tackles:Math.max(espnStat(row,"tackles"),espnStat(row,"totalTackles"),espnStat(row,"wonTackles")),
             interceptions:Math.max(espnStat(row,"interceptions"),espnStat(row,"totalInterceptions")),
             blocks:Math.max(espnStat(row,"blocks"),espnStat(row,"blockedShots")),
@@ -135,11 +136,21 @@ async function espnLive(input:{date:string;home:string;away:string;competition:C
           }
         }
         if(isSub){
-          // ESPN wording commonly uses "X replaces Y"; Y is the player leaving.
-          const replaces=rawText.match(/replaces\s+([^,.]+(?:\s+[^,.]+){0,3})/i)
-          if(replaces?.[1]){
-            const outgoing=map.get(norm(replaces[1]))
+          // ESPN commonly phrases substitutions as "Incoming replaces Outgoing".
+          const pair=rawText.match(/^(.+?)\s+replaces\s+(.+?)(?:[,.]|$)/i)
+          if(pair?.[1]){
+            const incoming=map.get(norm(pair[1]))
+            if(incoming)incoming.subbedOn=true
+          }
+          if(pair?.[2]){
+            const outgoing=map.get(norm(pair[2]))
             if(outgoing)outgoing.subbedOff=true
+          }else{
+            const replaces=rawText.match(/replaces\s+([^,.]+(?:\s+[^,.]+){0,3})/i)
+            if(replaces?.[1]){
+              const outgoing=map.get(norm(replaces[1]))
+              if(outgoing)outgoing.subbedOff=true
+            }
           }
           // Some feeds expose participant roles/order instead of useful text.
           for(const p of ev?.participants??[]){
@@ -149,6 +160,7 @@ async function espnLive(input:{date:string;home:string;away:string;competition:C
             const row=map.get(norm(name))
             if(!row)continue
             if(role.includes("out")||role.includes("replaced")||role.includes("subbed off"))row.subbedOff=true
+            if(role==="in"||role.includes("subbed on")||role.includes("replacement"))row.subbedOn=true
           }
         }
       }
@@ -199,6 +211,7 @@ function mergeLivePlayers(primary:LivePayload,secondary:LivePayload|null){
       shotsOnTarget:Math.max(Number(player.shotsOnTarget??0),Number(other.shotsOnTarget??0)),
       yellowCards:Math.max(Number(player.yellowCards??0),Number(other.yellowCards??0)),
       redCards:Math.max(Number(player.redCards??0),Number(other.redCards??0)),
+      subbedOn:Boolean(player.subbedOn||other.subbedOn),
       subbedOff:Boolean(player.subbedOff||other.subbedOff),
     }
   })
@@ -222,13 +235,16 @@ async function apiFootballLive(input:{date:string;home:string;away:string;compet
       apiFootball("/fixtures/events",{fixture:id},key).catch(()=>[]),
     ])
     const subbedOffNames=new Set<string>()
+    const subbedOnNames=new Set<string>()
     for(const event of eventRows??[]){
       const type=String(event?.type??"").toLowerCase()
       const detail=String(event?.detail??"").toLowerCase()
       if(type==="subst"||type.includes("subst")||detail.includes("substitution")){
         // API-Football substitution events use player = outgoing, assist = incoming.
         const outgoing=String(event?.player?.name??"").trim()
+        const incoming=String(event?.assist?.name??"").trim()
         if(outgoing)subbedOffNames.add(norm(outgoing))
+        if(incoming)subbedOnNames.add(norm(incoming))
       }
     }
     const players:LivePlayerStat[]=[]
@@ -248,6 +264,7 @@ async function apiFootballLive(input:{date:string;home:string;away:string;compet
           yellowCards:Number(s?.cards?.yellow??0)||0,
           redCards:Number(s?.cards?.red??0)||0,
           starter:s?.games?.substitute===false,
+          subbedOn:subbedOnNames.has(norm(player))||Boolean(s?.games?.substitute===true&&Number(s?.games?.minutes??0)>0),
           tackles:Number(s?.tackles?.total??0)||0,
           interceptions:Number(s?.tackles?.interceptions??0)||0,
           blocks:Number(s?.tackles?.blocks??0)||0,
