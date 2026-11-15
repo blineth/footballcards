@@ -851,14 +851,15 @@ type RiskBuilder = {
 
 function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
   const configs=[
-    {id:"safe-3-1",title:"Safe 3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4,minProb:.40,maxLegs:6,minFamilies:1,maxPerFamily:4},
+    {id:"safe-3-1",title:"Safe 3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4,minProb:.36,maxLegs:10,minFamilies:1,maxPerFamily:8},
     {id:"balanced-10-1",title:"Balanced 10/1",risk:"Balanced" as const,targetFractional:"10/1",targetDecimal:11,minProb:.15,maxLegs:7,minFamilies:2,maxPerFamily:3},
     {id:"high-20-1",title:"High Risk 20/1+",risk:"High Risk" as const,targetFractional:"20/1+",targetDecimal:21,minProb:.09,maxLegs:8,minFamilies:2,maxPerFamily:3},
   ]
   const baseMarkets:MarketKey[]=["goal1","assist1","shot1","sot1","foul1","fouled1","card"]
+  const allPricedMarkets:MarketKey[]=["goal1","assist1","shot1","shot2","sot1","sot2","foul1","foul2","foul3","foul4","foul5","fouled1","card"]
   const familyLines:Record<string,MarketKey[]>={
     goal:["goal1"],assist:["assist1"],shot:["shot1","shot2"],sot:["sot1","sot2"],
-    foul:["foul1","foul2","foul3"],fouled:["fouled1"],card:["card"],
+    foul:["foul1","foul2","foul3","foul4","foul5"],fouled:["fouled1"],card:["card"],
   }
   const family=(market:string)=>market.startsWith("goal")?"goal":market.startsWith("assist")?"assist":market.startsWith("fouled")?"fouled":market.startsWith("foul")?"foul":market.startsWith("sot")?"sot":market.startsWith("shot")?"shot":"card"
   const floor=(market:string)=>{
@@ -883,7 +884,6 @@ function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
 
   const baseLegs=players.flatMap(player=>baseMarkets.map(m=>marketLeg(player,m)))
     .filter(leg=>leg.confidence!=="D"&&leg.probability>=.05)
-    .filter(leg=>leg.expectedValue==null||leg.expectedValue>=-.12)
     .filter(isVerifiedBet365Leg)
   const peers=new Map<string,number[]>()
   for(const leg of baseLegs){
@@ -902,30 +902,45 @@ function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
   const confidenceReliability=(leg:SlipLeg)=>leg.confidence==="A"?1:leg.confidence==="B"?.96:leg.confidence==="C"?.88:.74
   const marketReliability=(leg:SlipLeg)=>{
     const f=family(leg.market)
-    if(f==="foul")return .99
-    if(f==="fouled")return .985
-    if(f==="shot")return .98
-    if(f==="sot")return .95
-    if(f==="card")return .93
-    if(f==="goal")return .92
-    if(f==="assist")return .90
-    return .95
+    if(f==="foul")return .995
+    if(f==="fouled")return .992
+    if(f==="shot")return .99
+    if(f==="sot")return .975
+    if(f==="card")return .95
+    if(f==="goal")return .95
+    if(f==="assist")return .93
+    return .97
   }
-  const conservativeJoint=(legs:SlipLeg[],raw:number)=>{
+  const safetyLegProbability=(leg:SlipLeg)=>{
+    const model=Math.max(.01,Math.min(.99,Number(leg.probability??0)))
+    const price=bet365Odd(leg)
+    if(!(price>1))return model
+    const implied=Math.max(.01,Math.min(.99,1/price))
+    // Safe bets should not rely on a huge disagreement with the bookmaker.
+    // Allow the model a modest edge, but cap extreme optimism such as a model
+    // saying 63% when Bet365 prices the event around 36%.
+    const marketSanityCap=Math.min(.99,implied+.08)
+    return Math.min(model,marketSanityCap)
+  }
+  const conservativeJoint=(legs:SlipLeg[],_raw:number)=>{
     if(!legs.length)return 0
     const counts:Record<string,number>={}
-    let reliability=1
+    let conservative=1
     for(const leg of legs){
       const f=family(leg.market)
       counts[f]=(counts[f]??0)+1
-      reliability*=confidenceReliability(leg)*marketReliability(leg)
+      conservative*=safetyLegProbability(leg)*confidenceReliability(leg)*marketReliability(leg)
     }
-    // Same-market legs in one match can rise/fall together with game state.
-    // Penalise concentration so we do not overstate independence.
+    // Raw probability multiplication already penalises extra legs heavily.
+    // Only a light concentration penalty is applied so five genuinely strong
+    // foul/shot legs can beat one speculative scorer/defender shot.
     let concentrationPenalty=1
-    for(const count of Object.values(counts))if(count>1)concentrationPenalty*=Math.pow(.965,count-1)
-    const legCountPenalty=Math.pow(.985,Math.max(0,legs.length-2))
-    return Math.max(0,Math.min(.99,raw*reliability*concentrationPenalty*legCountPenalty))
+    for(const [f,count] of Object.entries(counts)){
+      if(count<=1)continue
+      const perExtra=f==="foul"||f==="fouled"?.992:f==="shot"?.988:.98
+      concentrationPenalty*=Math.pow(perExtra,count-1)
+    }
+    return Math.max(0,Math.min(.99,conservative*concentrationPenalty))
   }
 
   // Choose the action family where each player stands out most versus the other
@@ -935,24 +950,33 @@ function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
   for(const player of players){
     const options=baseMarkets.map(m=>marketLeg(player,m))
       .filter(l=>l.confidence!=="D"&&l.probability>=.05)
-      .filter(l=>l.expectedValue==null||l.expectedValue>=-.12)
       .filter(isVerifiedBet365Leg)
       .map(l=>({family:family(l.market),signal:signal(l)}))
       .sort((a,b)=>b.signal-a.signal)
     if(options[0])preferredFamily.set(norm(player.name),options[0])
   }
 
-  const candidates=players.flatMap(player=>{
+  const preferredCandidates=players.flatMap(player=>{
     const preferred=preferredFamily.get(norm(player.name))
     if(!preferred)return []
     return (familyLines[preferred.family]??[]).map(m=>({leg:marketLeg(player,m),family:preferred.family,signal:preferred.signal}))
   })
     .filter(x=>x.leg.confidence!=="D"&&x.leg.probability>=.08)
-    .filter(x=>x.leg.expectedValue==null||x.leg.expectedValue>=-.12)
     .filter(x=>isVerifiedBet365Leg(x.leg))
     .sort((a,b)=>(b.signal-a.signal)||(legRank(b.leg)-legRank(a.leg)))
 
+  const safeCandidates=players.flatMap(player=>
+    allPricedMarkets.map(m=>{
+      const leg=marketLeg(player,m)
+      return {leg,family:family(m),signal:signal(leg),safeP:safetyLegProbability(leg)}
+    })
+  )
+    .filter(x=>x.leg.confidence!=="D"&&x.leg.probability>=.08)
+    .filter(x=>isVerifiedBet365Leg(x.leg))
+    .sort((a,b)=>(b.safeP-a.safeP)||(b.leg.probability-a.leg.probability))
+
   return configs.map(config=>{
+    const candidates=config.risk==="Safe"?safeCandidates:preferredCandidates
     type State={legs:SlipLeg[];product:number;quality:number;prob:number;conservative:number;players:Set<string>;families:Record<string,number>}
     let states:State[]=[{legs:[],product:1,quality:0,prob:1,conservative:1,players:new Set(),families:{}}]
     for(const option of candidates.filter(x=>x.leg.probability>=config.minProb||x.signal>=.82)){
@@ -984,12 +1008,16 @@ function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
         const distance=Math.abs(Math.log(Math.max(1.01,s.product))-Math.log(config.targetDecimal))
         const diversity=Object.keys(s.families).length
         const avg=s.quality/s.legs.length
-        const weak=Math.min(...s.legs.map(l=>l.probability))
-        const under=s.product<config.targetDecimal?.8:0
-        const safety=s.conservative
-        return distance*1.15+under-safety*2.1-avg*.18-weak*.08-diversity*(config.risk==="Safe"?.01:.05)+s.legs.length*.015
+        const weak=Math.min(...s.legs.map(l=>safetyLegProbability(l)))
+        const under=s.product<config.targetDecimal?1:0
+        if(config.risk==="Safe"){
+          // Before reaching 4.00, retain states with strong component safety.
+          // After reaching it, conservative all-hit probability dominates.
+          return under*1.6+distance*.22-s.conservative*4.5-weak*.45+s.legs.length*.002
+        }
+        return distance*1.15+under*.8-s.conservative*2.1-avg*.18-weak*.08-diversity*.05+s.legs.length*.015
       }
-      states=next.sort((a,b)=>score(a)-score(b)).slice(0,650)
+      states=next.sort((a,b)=>score(a)-score(b)).slice(0,config.risk==="Safe"?1800:650)
     }
     const validStates=states.filter(s=>
       s.legs.length>=2&&
@@ -998,8 +1026,9 @@ function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
     )
     const best=validStates.sort((a,b)=>{
       // Safety first: among combinations that genuinely reach the target,
-      // maximise the conservative all-hit probability.
-      if(Math.abs(a.conservative-b.conservative)>.002)return b.conservative-a.conservative
+      // maximise the conservative all-hit probability. Leg count and closeness
+      // to the target are only tie-breakers.
+      if(Math.abs(a.conservative-b.conservative)>.0005)return b.conservative-a.conservative
       const da=Math.abs(Math.log(a.product)-Math.log(config.targetDecimal))
       const db=Math.abs(Math.log(b.product)-Math.log(config.targetDecimal))
       if(Math.abs(da-db)>.015)return da-db
@@ -1030,7 +1059,7 @@ function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
       verifiedBet365LegPrices,
       exactBet365BuilderPrice:false,
       pricingBasis:"bet365_singles_product" as const,
-      note:"Every displayed leg price is a verified Bet365 price. The target is built from the product of those live Bet365 singles ("+families.join(", ")+"), never model/fair odds. The model then chooses the highest conservative hit-probability route that reaches the target. Bet365 can reprice correlated legs inside Bet Builder, so this product is not labelled as an exact Bet Builder quote."
+      note:"Every displayed leg price is a verified Bet365 price. Safe searches all priced player lines and chooses the highest conservative all-hit probability that reaches the target — it can prefer several very likely fouls/shots over one speculative scorer or defender shot. Large model-vs-Bet365 disagreements are capped in the safety score. Bet365 can still reprice correlated legs inside Bet Builder, so the singles product is not labelled as the final Builder quote."
     }
   })
 }
