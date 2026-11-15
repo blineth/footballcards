@@ -514,56 +514,77 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
       )
 
     const runSearch=(candidateRows:typeof allCandidateRows)=>{
-      type State={legs:Selection[];product:number;prob:number;conservative:number;players:Set<string>;quality:number;families:Record<string,number>}
-      let states:State[]=[{legs:[],product:1,prob:1,conservative:1,players:new Set(),quality:0,families:{}}]
-      for(const option of candidateRows.filter(x=>x.row.probability>=cfg.min||x.signal>=.88)){
-      const leg=option.row
-      const next=[...states]
-      for(const state of states){
-        const pkey=normPlayer(leg.player)
-        if(state.legs.length>=cfg.max||state.players.has(pkey))continue
-        const count=state.families[option.family]??0
-        if(count>=cfg.maxPerFamily)continue
-        const odd=verifiedOnly?referenceOdd(leg):Number(leg.fairOdds??0)
-        if(!(odd>1))continue
-        const product=state.product*odd
-        if(product>cfg.targetDecimal*1.45&&state.legs.length>=1)continue
-        const legs=[...state.legs,leg]
-        const raw=state.prob*leg.probability
-        next.push({
-          legs,product,prob:raw,conservative:conservativeJoint(legs,raw),
-          players:new Set([...state.players,pkey]),
-          quality:state.quality+option.signal+leg.probability*.25,
-          families:{...state.families,[option.family]:count+1},
-        })
+      // Exact objective: maximise joint hit probability subject to reaching the
+      // requested odds. We group by player so at most one market from each player
+      // can be used, then dynamic-program over odds buckets. This avoids a 9%
+      // long-shot leg surviving merely because it reaches the target faster.
+      const minLegProbability=cfg.risk==="Safe"?.34:cfg.risk==="Balanced"?.24:.18
+      const byPlayer=new Map<string,typeof candidateRows>()
+      for(const option of candidateRows){
+        if(option.row.probability<Math.max(cfg.min,minLegProbability))continue
+        const key=normPlayer(option.row.player)
+        if(!byPlayer.has(key))byPlayer.set(key,[])
+        byPlayer.get(key)!.push(option)
       }
-      states=next.sort((a,b)=>{
-        const aHit=a.product>=cfg.targetDecimal,bHit=b.product>=cfg.targetDecimal
-        if(aHit!==bHit)return aHit?-1:1
-        if(aHit&&bHit){
-          if(Math.abs(a.prob-b.prob)>.001)return b.prob-a.prob
-          if(Math.abs(a.conservative-b.conservative)>.001)return b.conservative-a.conservative
-          return Math.abs(a.product-cfg.targetDecimal)-Math.abs(b.product-cfg.targetDecimal)
-        }
-        const aProgress=Math.min(1,a.product/cfg.targetDecimal)
-        const bProgress=Math.min(1,b.product/cfg.targetDecimal)
-        const aScore=a.prob*Math.pow(aProgress,.32)
-        const bScore=b.prob*Math.pow(bProgress,.32)
-        if(Math.abs(aScore-bScore)>.0005)return bScore-aScore
-        return b.conservative-a.conservative
-      }).slice(0,3000)
-    }
 
-      const best=states.filter(s=>s.legs.length>=2&&s.product>=cfg.targetDecimal&&Object.keys(s.families).length>=cfg.minFamilies)
+      type State={
+        legs:Selection[];product:number;prob:number;conservative:number;
+        families:Record<string,number>
+      }
+      const maxProduct=cfg.targetDecimal*1.45
+      const maxLog=Math.log(maxProduct)
+      const buckets=700
+      const bucketFor=(product:number)=>Math.max(0,Math.min(buckets,Math.round(Math.log(Math.max(1,product))/maxLog*buckets)))
+
+      let states=new Map<number,State>()
+      states.set(0,{legs:[],product:1,prob:1,conservative:1,families:{}})
+
+      for(const options of byPlayer.values()){
+        const next=new Map(states)
+        for(const state of states.values()){
+          if(state.legs.length>=cfg.max)continue
+          for(const option of options){
+            const count=state.families[option.family]??0
+            if(count>=cfg.maxPerFamily)continue
+            const odd=verifiedOnly?referenceOdd(option.row):Number(option.row.fairOdds??0)
+            if(!(odd>1))continue
+            const product=state.product*odd
+            if(product>maxProduct)continue
+            const legs=[...state.legs,option.row]
+            const prob=state.prob*option.row.probability
+            const candidate:State={
+              legs,product,prob,conservative:conservativeJoint(legs,prob),
+              families:{...state.families,[option.family]:count+1},
+            }
+            const bucket=bucketFor(product)
+            const existing=next.get(bucket)
+            if(!existing||
+              candidate.prob>existing.prob+.000001||
+              (Math.abs(candidate.prob-existing.prob)<=.000001&&candidate.conservative>existing.conservative)
+            )next.set(bucket,candidate)
+          }
+        }
+
+        // Keep the globally strongest target-reaching states plus the strongest
+        // probability state in each odds bucket. This preserves slower, safer
+        // routes made from several likely 1+ events.
+        const ordered=[...next.entries()].sort(([,a],[,b])=>{
+          const aHit=a.product>=cfg.targetDecimal,bHit=b.product>=cfg.targetDecimal
+          if(aHit!==bHit)return aHit?-1:1
+          if(Math.abs(a.prob-b.prob)>.000001)return b.prob-a.prob
+          if(Math.abs(a.conservative-b.conservative)>.000001)return b.conservative-a.conservative
+          return Math.abs(a.product-cfg.targetDecimal)-Math.abs(b.product-cfg.targetDecimal)
+        })
+        states=new Map(ordered.slice(0,Math.min(900,ordered.length)))
+      }
+
+      return [...states.values()]
+        .filter(s=>s.legs.length>=2&&s.product>=cfg.targetDecimal&&Object.keys(s.families).length>=cfg.minFamilies)
         .sort((a,b)=>{
-          if(Math.abs(a.prob-b.prob)>.002)return b.prob-a.prob
-          if(Math.abs(a.conservative-b.conservative)>.002)return b.conservative-a.conservative
-          const da=Math.abs(Math.log(a.product)-Math.log(cfg.targetDecimal))
-          const db=Math.abs(Math.log(b.product)-Math.log(cfg.targetDecimal))
-          if(Math.abs(da-db)>.015)return da-db
-          return a.legs.length-b.legs.length
+          if(Math.abs(a.prob-b.prob)>.000001)return b.prob-a.prob
+          if(Math.abs(a.conservative-b.conservative)>.000001)return b.conservative-a.conservative
+          return Math.abs(a.product-cfg.targetDecimal)-Math.abs(b.product-cfg.targetDecimal)
         })[0]
-      return best
     }
 
     // Every target first tries only low-threshold 1+ markets across different
