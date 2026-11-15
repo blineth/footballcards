@@ -256,8 +256,15 @@ function buildTargetOddsSlips(scorecard:Scorecard|null,fixture:Fixture):TargetOd
     // proves itself in backtesting. This stops a long-priced goalscorer from
     // dominating a target simply because our raw model is over-confident.
     let p=Math.min(modelP,bookmakerP*uplift)
-    if(leg.market.startsWith("goal")||leg.market.startsWith("assist"))p*=.98
-    if(leg.market==="card")p*=.985
+    const fam=family(leg.market)
+    const reliability=fam==="foul"||fam==="fouled"?.998
+      :fam==="shot"?.995
+      :fam==="sot"?.975
+      :fam==="goal"?.90
+      :fam==="assist"?.86
+      :fam==="card"?.90
+      :.97
+    p*=reliability
     return Math.max(.01,Math.min(.99,p))
   }
 
@@ -547,16 +554,16 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
 
   const family=(market:string)=>market.startsWith("goal")?"goal":market.startsWith("assist")?"assist":market.startsWith("fouled")?"fouled":market.startsWith("foul")?"foul":market.startsWith("sot")?"sot":market.startsWith("shot")?"shot":"card"
   const baseMarket=(market:string)=>market==="goal1"||market==="assist1"||market==="foul1"||market==="fouled1"||market==="card"||market==="shot1"||market==="sot1"
-  const confidenceReliability=(leg:SlipLeg)=>leg.confidence==="A"?1:leg.confidence==="B"?.96:leg.confidence==="C"?.88:.74
+  const confidenceReliability=(leg:SlipLeg)=>leg.confidence==="A"?1:leg.confidence==="B"?.99:leg.confidence==="C"?.965:.90
   const marketReliability=(leg:SlipLeg)=>{
     const f=family(leg.market)
-    if(f==="foul")return .99
-    if(f==="fouled")return .985
-    if(f==="shot")return .98
-    if(f==="sot")return .95
-    if(f==="card")return .93
-    if(f==="goal")return .92
-    if(f==="assist")return .90
+    if(f==="foul")return .998
+    if(f==="fouled")return .997
+    if(f==="shot")return .995
+    if(f==="sot")return .975
+    if(f==="card")return .90
+    if(f==="goal")return .90
+    if(f==="assist")return .86
     return .95
   }
   const safetyLegProbability=(leg:SlipLeg)=>{
@@ -564,9 +571,7 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
     const price=Number(leg.bookmakerOdds??0)
     const book=Math.max(.01,Math.min(.99,Number(leg.bookmakerProbability??(price>1?1/price:model))))
     const uplift=leg.confidence==="A"?1.18:leg.confidence==="B"?1.12:leg.confidence==="C"?1.07:1
-    let p=Math.min(model,book*uplift)
-    if(leg.market.startsWith("goal")||leg.market.startsWith("assist"))p*=.98
-    if(leg.market==="card")p*=.985
+    const p=Math.min(model,book*uplift)
     return Math.max(.01,Math.min(.99,p))
   }
   const conservativeJoint=(legs:SlipLeg[],_raw:number)=>{
@@ -578,7 +583,7 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
       conservative*=safetyLegProbability(leg)*confidenceReliability(leg)*marketReliability(leg)
     }
     let concentration=1
-    for(const count of Object.values(counts))if(count>1)concentration*=Math.pow(.985,count-1)
+    for(const [f,count] of Object.entries(counts))if(count>1)concentration*=Math.pow(f==="foul"||f==="fouled"?.997:f==="shot"?.995:.985,count-1)
     return Math.max(0,Math.min(.99,conservative*concentration))
   }
 
@@ -638,16 +643,16 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
             const bucket=bucketFor(product)
             const existing=next.get(bucket)
             if(!existing||
-              candidate.raw>existing.raw+.000001||
-              (Math.abs(candidate.raw-existing.raw)<=.000001&&candidate.conservative>existing.conservative)
+              candidate.conservative>existing.conservative+.000001||
+              (Math.abs(candidate.conservative-existing.conservative)<=.000001&&candidate.raw>existing.raw)
             )next.set(bucket,candidate)
           }
         }
         const ordered=[...next.entries()].sort(([,a],[,b])=>{
           const aHit=a.product>=4,bHit=b.product>=4
           if(aHit!==bHit)return aHit?-1:1
-          if(Math.abs(a.raw-b.raw)>.000001)return b.raw-a.raw
           if(Math.abs(a.conservative-b.conservative)>.000001)return b.conservative-a.conservative
+          if(Math.abs(a.raw-b.raw)>.000001)return b.raw-a.raw
           return Math.abs(a.product-4)-Math.abs(b.product-4)
         })
         states=new Map(ordered.slice(0,Math.min(900,ordered.length)))
@@ -1184,8 +1189,8 @@ export async function GET(request:Request){
         recommendationCalibration:"Final ranking uses a second walk-forward calibration layer built from historical recommendations that survived the selection process.",
         cache:"Recommended scans today's matchday only. It never silently advances to tomorrow. Manual refresh bypasses the normal scan cadence, while provider and last-good caches protect against temporary source failures.",
         tracking:"Predicted-XI recommendations remain visible before official teams. As soon as confirmed lineups arrive, the scorecard is rebuilt and benched players disappear. Recommendations are saved before kickoff and graded later from imported player-match data.",
-        targetOdds:"Select a match, then 3/1 through 50/1 targets use every eligible verified Bet365 player-prop option from the scorecard. The target price is only a constraint: the chosen route maximises estimated whole-slip hit probability, can use several safer 1+ events across different players, and never adds match winner, double chance, total goals or corners. Cards require supporting H2H/current-form/foul-pressure evidence. Model/fair odds are never substituted for Bet365 prices.",
-        multiMatch:"The Multi-Match Builder only admits fixtures where Bet365 has Cards, Fouls Committed, Fouls Drawn, Shots and Shots on Target all available. It builds the safest verified same-game route to roughly 3/1 in each included match using the same probability-first logic as the individual Match Builder, then combines up to 10 match builders. Each match can contain multiple underlying player selections.",
+        targetOdds:"Select a match, then 3/1 through 50/1 targets use every eligible verified Bet365 player-prop option from the scorecard. The target price is only a constraint: the chosen route maximises uncertainty-adjusted whole-slip hit probability and can use several safer 1+ events across different players. Longer routes are no longer penalised merely for having more C/B evidence-rated legs. Goals, assists and cards carry a stronger high-variance reliability discount unless their evidence and Bet365 price justify them. Match winner, double chance, total goals and corners remain excluded. Set-piece responsibility from the scorecard is included in player goal/shot/SOT/assist probabilities.",
+        multiMatch:"The Multi-Match Builder uses verified Bet365 player-prop coverage and builds the safest same-game route to roughly 3/1 in each included match. Search-state pruning is conservative-probability first, so a raw-model goalscorer cannot displace a safer four- or five-leg foul/shot route simply because the raw scorer model is higher. Both teams must be represented where qualifying props exist, with up to 12 selections and six players per team.",
         liveRecommended:"Matches remain on Recommended after kick-off. Live rows use the current score and minute plus current player event counts. Confirmed-XI card, foul, fouled, shot and SOT models become next-threshold remaining-match probabilities; already-carded players are removed from the card market, and stale pre-match bookmaker prices are never relabelled as live prices.",
         liveFeedback:liveTopSample>=50
           ? "Live top-pick calibration is active. Current 30-day reliability multiplier: "+liveReliabilityFactor.toFixed(3)
