@@ -5,11 +5,15 @@ import * as schema from "./schema"
 // A small shared pool is enough for this app and avoids opening a burst of
 // Neon connections when several serverless routes run in parallel.
 const globalForDb = globalThis as unknown as { pool?: Pool }
+const databaseUrl = process.env.DATABASE_URL?.replace(
+  /([?&])sslmode=(?:prefer|require|verify-ca)(?=&|$)/i,
+  "$1sslmode=verify-full",
+)
 
 export const pool =
   globalForDb.pool ??
   new Pool({
-    connectionString: process.env.DATABASE_URL,
+    connectionString: databaseUrl,
     max: 3,
     min: 0,
     idleTimeoutMillis: 10_000,
