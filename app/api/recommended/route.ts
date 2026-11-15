@@ -1137,6 +1137,66 @@ function buildLivePlayerProps(scorecard:Scorecard|null,elapsed:number,liveStats:
   return out
 }
 
+function sameBet365Player(a:string,b:string){
+  const clean=(v:string)=>normName(String(v??"").replace(/\s*\(\d+\)\s*$/,""))
+  const x=clean(a),y=clean(b)
+  if(!x||!y)return false
+  if(x===y)return true
+  const xt=x.split(" "),yt=y.split(" ")
+  return xt.length>1&&yt.length>1&&xt[xt.length-1]===yt[yt.length-1]&&(x.includes(yt[0])||y.includes(xt[0]))
+}
+function livePropKind(market:string){
+  return market==="card"?"card":market==="foul1"?"foul":market==="fouled1"?"fouled":
+    market==="shot1"?"shot":market==="sot1"?"sot":market==="goal1"?"goal":"assist"
+}
+function propThreshold(prop:any){
+  if(prop.market==="card"||prop.market==="goal1"||prop.market==="assist1")return 1
+  return Math.max(1,Number(prop.currentCount??0)+1)
+}
+function oddsThreshold(label:string){
+  const m=String(label??"").match(/(\d+)\s*\+/)
+  return m?Number(m[1]):1
+}
+async function liveBet365ForFixture(f:Fixture){
+  try{
+    const q=new URLSearchParams({
+      date:fixtureDate(f),home:f.home.name,away:f.away.name,competition:f.competition,live:"1",
+    })
+    const res=await betBuilderOddsGET(new Request("http://local/api/bet-builder-odds?"+q.toString()))
+    return res.ok?await res.json():null
+  }catch{return null}
+}
+function overlayBet365OnLiveProps(props:any[],odds:any){
+  const selections=Array.isArray(odds?.selections)?odds.selections:[]
+  if(!selections.length)return props
+  const fresh=odds?.priceAvailable===true&&odds?.liveVerified===true
+  return props.map(prop=>{
+    const kind=livePropKind(prop.market)
+    const threshold=propThreshold(prop)
+    const match=selections.find((sel:any)=>{
+      if(sel?.bookmaker!=="Bet365"||sel?.kind!==kind||!(Number(sel?.odd)>1))return false
+      const player=String(sel?.label??"").split("·")[0]?.trim()??""
+      return sameBet365Player(player,prop.player)&&oddsThreshold(String(sel?.label??""))===threshold
+    })
+    if(!match)return prop
+    const price=Number(match.odd)
+    const implied=Math.max(.001,Math.min(.99,1/price))
+    const model=Math.max(.001,Math.min(.99,Number(prop.probability)))
+    const weight=fresh?.22:.08
+    const calibrated=Math.max(.001,Math.min(.99,model*(1-weight)+implied*weight))
+    return {
+      ...prop,
+      probability:Math.round(calibrated*1000)/1000,
+      bookmakerOdds:price,
+      bookmakerName:"Bet365",
+      bookmakerPriceState:fresh?"live":"reference",
+    }
+  }).sort((a,b)=>{
+    if(a.market!==b.market)return 0
+    return Number(b.probability)-Number(a.probability)
+  })
+}
+
 
 let lastGoodRecommended:any=null
 let lastGoodAt=0
@@ -1251,7 +1311,10 @@ export async function GET(request:Request){
       if(liveFixtures.length){
         const liveMatches=await Promise.all(liveFixtures.map(async f=>{
           try{
-            const liveStatData=await livePlayerStatsForFixture(f)
+            const [liveStatData,bet365Live]=await Promise.all([
+              livePlayerStatsForFixture(f),
+              liveBet365ForFixture(f),
+            ])
             const activeNames=[...liveStatData.players.values()].filter(liveStatActive).map(p=>p.player)
             let scorecard:Scorecard|null=null
 
@@ -1268,7 +1331,8 @@ export async function GET(request:Request){
             const kickoffMs=new Date(f.kickoff).getTime()
             const inferredElapsed=Number.isFinite(kickoffMs)?Math.max(0,Math.min(96,Math.floor((Date.now()-kickoffMs)/60000))):0
             const elapsed=Math.max(0,Math.min(96,Number(liveStatData.elapsed??f.elapsed??inferredElapsed)))
-            const livePlayerProps=buildLivePlayerProps(scorecard,elapsed,liveStatData.players)
+            const rawLivePlayerProps=buildLivePlayerProps(scorecard,elapsed,liveStatData.players)
+            const livePlayerProps=overlayBet365OnLiveProps(rawLivePlayerProps,bet365Live)
             const score=liveStatData.score??f.score??null
             return {
               id:String(f.id),competition:f.competition,kickoff:f.kickoff,status:liveStatData.status??f.status??"live",
