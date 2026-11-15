@@ -41,11 +41,16 @@ type LiveData={
   ok:boolean;source:string|null;status:"scheduled"|"live"|"halftime"|"finished"|"unknown";elapsed:number;
   score:{home:number|null;away:number|null};players:LivePlayerStat[];updatedAt:string
 }
-type LiveOddSelection={kind:string;label:string;odd:number|null;bookmaker?:string|null}
+type LiveOddSelection={kind:string;label:string;odd:number|null;bookmaker?:string|null;noVigProbability?:number|null}
+type AvailableBet={
+  market:string;kind:string;label:string;odd:number;bookmaker:string;
+  probability:number|null;probabilityBasis:"no-vig"|"implied";line?:number|null;side?:string|null
+}
 type LiveOddsData={
   connected?:boolean;bookmaker?:string|null;source?:string|null;capturedAt?:string|null;
   priceAvailable?:boolean;liveVerified?:boolean;selections?:LiveOddSelection[];note?:string|null;
-  marketAvailability?:Record<string,MarketStatus>;bookmakerAvailability?:Record<string,Record<string,MarketStatus>>
+  marketAvailability?:Record<string,MarketStatus>;bookmakerAvailability?:Record<string,Record<string,MarketStatus>>;
+  availableBets?:AvailableBet[]
 }
 type H2HMeeting={
   date:string;competition?:string|null;home:string;away:string;homeGoals:number;awayGoals:number;
@@ -70,6 +75,7 @@ type Scorecard={
   oddsFreshness?:"LIVE"|"SLIGHTLY STALE"|"CACHED"|"STALE"|"UNKNOWN";players?:ScorePlayer[];
   slips?:FallbackSlip[];riskBuilders?:RiskBuilder[];foulCardBuilders?:RiskBuilder[];eligibleBooks?:string[];
   marketAvailability?:Record<string,MarketStatus>;bookmakerAvailability?:Record<string,Record<string,MarketStatus>>;
+  availableBets?:AvailableBet[];
   referee?:{name?:string;yellowsPerGame?:number|null}|null;error?:string
 }
 
@@ -359,6 +365,80 @@ function selectionsFrom(data:Scorecard|null){
   return out
 }
 
+function boardSelectionFamily(kind:string){
+  if(["result","double-chance","draw-no-bet"].includes(kind))return "result"
+  if(["total-goals","team-goals","first-team-score"].includes(kind))return "goals"
+  if(["corners","corners-handicap"].includes(kind))return "corners"
+  if(kind==="btts")return "btts"
+  if(kind==="bookings")return "bookings"
+  if(kind==="goal")return "scorer"
+  return kind
+}
+function broadBetToSelection(bet:AvailableBet,fixture:Fixture):Selection{
+  const p=Math.max(.001,Math.min(.999,Number(bet.probability??(1/Math.max(1.01,bet.odd)))))
+  return {
+    id:["board",bet.kind,bet.label].join("|").toLowerCase(),
+    player:"",team:fixture.home+" v "+fixture.away,market:"board:"+bet.kind,label:bet.label,
+    probability:p,fairOdds:Math.round((1/p)*1000)/1000,bookmakerOdds:Number(bet.odd),bookmakerName:"Bet365",
+    edge:null,confidence:p>=.72?"A":p>=.58?"B":p>=.45?"C":"D",
+    reason:bet.probabilityBasis==="no-vig"?"Verified Bet365 market · de-vigged market probability":"Verified Bet365 market · bookmaker implied probability",
+  }
+}
+function buildBroadTargetBuilders(rows:Selection[]):RiskBuilder[]{
+  const configs=[
+    {id:"broad-safe-3-1",title:"Safe 3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4,minP:.46,max:6},
+    {id:"broad-balanced-10-1",title:"Balanced 10/1",risk:"Balanced" as const,targetFractional:"10/1",targetDecimal:11,minP:.24,max:7},
+    {id:"broad-high-20-1",title:"High Risk 20/1+",risk:"High Risk" as const,targetFractional:"20/1+",targetDecimal:21,minP:.13,max:8},
+  ]
+  const candidates=rows
+    .filter(r=>verifiedBet365Odd(r)!=null&&r.probability>0&&Number(r.bookmakerOdds)<8&&Number(r.bookmakerOdds)>=1.12)
+    .sort((a,b)=>b.probability-a.probability)
+  return configs.map(cfg=>{
+    type State={legs:Selection[];product:number;prob:number;families:Set<string>}
+    let states:State[]=[{legs:[],product:1,prob:1,families:new Set()}]
+    for(const row of candidates.filter(r=>r.probability>=cfg.minP)){
+      const family=row.market.startsWith("board:")?boardSelectionFamily(row.market.slice(6)):row.market.startsWith("goal")?"scorer":row.market.startsWith("foul")||row.market==="card"?"discipline":row.market
+      const next=[...states]
+      for(const state of states){
+        if(state.legs.length>=cfg.max||state.families.has(family))continue
+        const odd=Number(verifiedBet365Odd(row))
+        const product=state.product*odd
+        if(product>cfg.targetDecimal*1.55&&state.legs.length>=1)continue
+        next.push({
+          legs:[...state.legs,row],product,prob:state.prob*row.probability,
+          families:new Set([...state.families,family]),
+        })
+      }
+      states=next.sort((a,b)=>{
+        const ag=a.product>=cfg.targetDecimal,bg=b.product>=cfg.targetDecimal
+        if(ag!==bg)return ag?-1:1
+        if(ag&&bg&&Math.abs(a.prob-b.prob)>.002)return b.prob-a.prob
+        const ad=Math.abs(Math.log(Math.max(1.01,a.product))-Math.log(cfg.targetDecimal))
+        const bd=Math.abs(Math.log(Math.max(1.01,b.product))-Math.log(cfg.targetDecimal))
+        return ad-bd
+      }).slice(0,900)
+    }
+    const best=states.filter(s=>s.legs.length>=2&&s.product>=cfg.targetDecimal)
+      .sort((a,b)=>Math.abs(a.prob-b.prob)>.002?b.prob-a.prob:Math.abs(a.product-cfg.targetDecimal)-Math.abs(b.product-cfg.targetDecimal))[0]
+    if(!best)return {
+      id:cfg.id,title:cfg.title,risk:cfg.risk,targetFractional:cfg.targetFractional,targetDecimal:cfg.targetDecimal,
+      legs:[],referenceProductOdds:null,averageLegProbability:null,minimumLegProbability:null,modelAllHitProbability:null,
+      conservativeAllHitProbability:null,safetyScore:null,exactPriced:false,bookmaker:"Bet365",
+      verifiedBet365LegPrices:false,exactBet365BuilderPrice:false,pricingBasis:"none" as const,
+      note:"Bet365 has markets available, but there is not a strong enough verified route to this target yet."
+    }
+    return {
+      id:cfg.id,title:cfg.title,risk:cfg.risk,targetFractional:cfg.targetFractional,targetDecimal:cfg.targetDecimal,
+      legs:best.legs,referenceProductOdds:Math.round(best.product*100)/100,
+      averageLegProbability:best.legs.reduce((s,x)=>s+x.probability,0)/best.legs.length,
+      minimumLegProbability:Math.min(...best.legs.map(x=>x.probability)),
+      modelAllHitProbability:best.prob,conservativeAllHitProbability:best.prob,safetyScore:best.prob,
+      exactPriced:true,bookmaker:"Bet365",verifiedBet365LegPrices:true,exactBet365BuilderPrice:false,
+      pricingBasis:"bet365_singles_product" as const,
+      note:"Uses only currently verified Bet365 markets. Market-level probabilities use de-vigged Bet365 prices where Match Edge has no independent model. The final Bet Builder price can differ because of correlation."
+    }
+  })
+}
 function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuilder[]{
   const configs=[
     {id:"safe-3-1",title:"Safe 3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4,min:.40,max:6,minFamilies:1,maxPerFamily:4},
@@ -634,9 +714,35 @@ export default function BetBuilderPage(){
   const marketKinds=["goal","assist","card","foul","fouled","shot","sot"]
   const unavailableBet365Markets=marketKinds.filter(kind=>activeMarketAvailability?.[kind]==="unavailable")
   const availableBet365Markets=marketKinds.filter(kind=>activeMarketAvailability?.[kind]==="available")
-  const allBuilders=inPlay?clientRiskBuilders(allRows,true):(serverBuilders.length?serverBuilders:clientRiskBuilders(allRows))
+  const activeAvailableBets=(inPlay?(liveOdds?.availableBets??[]):(data?.availableBets??[]))
+  const broadRows=useMemo(()=>fixture?activeAvailableBets.map(b=>broadBetToSelection(b,fixture)):[],[activeAvailableBets,fixture])
+  const verifiedPlayerRows=useMemo(()=>allRows.filter(r=>verifiedBet365Odd(r)!=null),[allRows])
+  const broadTargetBuilders=useMemo(()=>buildBroadTargetBuilders([...broadRows,...verifiedPlayerRows]),[broadRows,verifiedPlayerRows])
+  const playerBuilders=inPlay?clientRiskBuilders(allRows,true):(serverBuilders.length?serverBuilders:clientRiskBuilders(allRows))
+  const allBuilders=playerBuilders.map((builder,index)=>{
+    const broad=broadTargetBuilders[index]
+    if(!broad?.legs.length)return builder
+    if(!builder?.legs.length)return broad
+    return (broad.conservativeAllHitProbability??0)>(builder.conservativeAllHitProbability??0)?broad:builder
+  })
   const disciplineBuilders=inPlay?clientRiskBuilders(disciplineRows,true):(disciplineServerBuilders.length?disciplineServerBuilders:clientRiskBuilders(disciplineRows))
   const builders=builderMode==="discipline"?disciplineBuilders:allBuilders
+  const bestAvailableBets=useMemo(()=>{
+    const byFamily=new Map<string,Selection>()
+    const candidates=[...broadRows,...verifiedPlayerRows]
+      .filter(r=>verifiedBet365Odd(r)!=null&&Number(verifiedBet365Odd(r))>=1.12&&Number(verifiedBet365Odd(r))<=8&&r.probability>=.18)
+      .sort((a,b)=>{
+        const qa=a.probability*Math.min(1.25,Math.sqrt(Number(verifiedBet365Odd(a)??1)))
+        const qb=b.probability*Math.min(1.25,Math.sqrt(Number(verifiedBet365Odd(b)??1)))
+        return qb-qa
+      })
+    for(const row of candidates){
+      const family=row.market.startsWith("board:")?boardSelectionFamily(row.market.slice(6)):row.market.startsWith("goal")?"scorer":row.market
+      if(!byFamily.has(family))byFamily.set(family,row)
+      if(byFamily.size>=6)break
+    }
+    return [...byFamily.values()]
+  },[broadRows,verifiedPlayerRows])
   useEffect(()=>{
     const valid=new Map(allRows.map(r=>[r.id,r]))
     setSelected(cur=>{
@@ -725,6 +831,11 @@ export default function BetBuilderPage(){
         <section className={"rounded-2xl border px-3 py-2.5 "+(liveBet365?"border-emerald-300/25 bg-emerald-400/[0.07]":verifiedBet365?"border-cyan-300/20 bg-cyan-300/[0.05]":"border-white/8 bg-white/[0.025]")}>
           <div className="flex items-center justify-between gap-3"><div><p className={"text-[0.52rem] font-black uppercase tracking-wide "+(liveBet365?"text-emerald-300":verifiedBet365?"text-cyan-200":"text-white/35")}>{liveBet365?"CONFIRMED LIVE BET365 ODDS":inPlay?"WAITING FOR LIVE BET365 PRICES":verifiedBet365?"VERIFIED BET365 ODDS":"NO VERIFIED BET365 PRICES"}</p><p className="mt-0.5 text-[0.5rem] text-white/30">{liveBet365?"Prices are from the current Odds-API.io Bet365 live feed and are rechecked every 15 seconds.":inPlay?(liveOdds?.note??"Live model probabilities remain visible, but 3/1, 10/1 and 20/1 target cards require fresh verified Bet365 live prices."):verifiedBet365?"Bet365 prices are verified but not inside the live freshness window.":"Model probabilities remain available, but target odds are not shown without Bet365 pricing."}</p></div>{data.oddsFreshness?<span className="rounded-full bg-white/6 px-2 py-1 font-mono text-[0.42rem] font-black text-white/35">{data.oddsFreshness}</span>:null}</div>
         </section>
+        {bestAvailableBets.length?<section className="rounded-3xl border border-cyan-300/12 bg-cyan-300/[0.045] p-4">
+          <div className="flex items-start justify-between gap-3"><div><p className="text-[0.52rem] font-black uppercase tracking-[0.13em] text-cyan-200">Best available Bet365 bets</p><h2 className="mt-1 text-lg font-black">Use what Bet365 actually offers</h2><p className="mt-1 text-[0.56rem] leading-relaxed text-white/35">These are ranked only from markets with a verified Bet365 price. Player bets use the Match Edge model where available; corners and other match markets use de-vigged Bet365 market probability until an independent model is available.</p></div><span className="rounded-full bg-cyan-300/10 px-2 py-1 text-[0.42rem] font-black text-cyan-100">{bestAvailableBets.length} PICKS</span></div>
+          <div className="mt-3 space-y-2">{bestAvailableBets.map((row,index)=><div key={row.id} className="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-2xl bg-black/20 px-3 py-2.5"><span className="flex size-7 items-center justify-center rounded-full bg-cyan-300/10 text-[0.5rem] font-black text-cyan-100">{index+1}</span><div className="min-w-0"><p className="truncate text-xs font-black">{row.label}</p><p className="mt-0.5 truncate text-[0.44rem] text-white/30">{row.market.startsWith("board:")?"Bet365 market consensus":"Match Edge player model"} · verified Bet365</p></div><div className="text-right"><p className="font-mono text-sm font-black text-emerald-200">{Number(row.bookmakerOdds).toFixed(2)}</p><p className="text-[0.42rem] font-black text-white/30">{percent(row.probability)} chance</p></div></div>)}</div>
+        </section>:null}
+
         <section className="rounded-3xl border border-emerald-300/12 bg-gradient-to-br from-emerald-400/[0.09] to-black/25 p-4">
           <div className="flex items-start justify-between gap-3"><div><div className="flex items-center gap-2 text-emerald-300"><Sparkles className="size-4"/><p className="text-[0.54rem] font-black uppercase tracking-[0.13em]">Suggested Bet365 slips</p></div><h2 className="mt-1 text-lg font-black">{builderMode==="discipline"?"Fouls & cards":"All markets"}</h2><p className="mt-1 text-[0.6rem] leading-relaxed text-white/40">{builderMode==="discipline"?"Only yellow cards, fouls committed and fouls drawn are considered. Within those markets the model still chooses the highest-probability route to each target.":inPlay?"These are rebuilt from the remaining live markets after anything already landed is removed.":"Goals, assists, shots, SOT, cards, fouls and fouls drawn can all be used. The model chooses whichever combination has the highest conservative all-hit probability."}</p></div><span className={"rounded-full px-2 py-1 text-[0.46rem] font-black "+(data.lineupMode==="confirmed"?"bg-emerald-400/10 text-emerald-300":"bg-amber-300/10 text-amber-200")}>{data.lineupMode==="confirmed"?"XI CONFIRMED":"PREDICTED XI"}</span></div>
           <div className="mt-4 grid grid-cols-2 gap-2"><button onClick={()=>setBuilderMode("all")} className={"rounded-xl border px-3 py-2.5 text-[0.55rem] font-black "+(builderMode==="all"?"border-emerald-300/30 bg-emerald-300 text-emerald-950":"border-white/8 bg-white/[0.04] text-white/45")}>ALL MARKETS</button><button onClick={()=>setBuilderMode("discipline")} className={"rounded-xl border px-3 py-2.5 text-[0.55rem] font-black "+(builderMode==="discipline"?"border-amber-300/30 bg-amber-300 text-amber-950":"border-white/8 bg-white/[0.04] text-white/45")}>FOULS & CARDS</button></div>
