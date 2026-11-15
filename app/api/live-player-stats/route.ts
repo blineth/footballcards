@@ -6,7 +6,8 @@ export const revalidate=0
 type Competition="Premier League"|"Championship"|"League One"|"League Two"|"International"
 type LivePlayerStat={
   player:string;team:string;minutes:number|null;foulsCommitted:number;foulsDrawn:number;shots:number;shotsOnTarget:number;
-  goals:number;assists:number;yellowCards:number;redCards:number;subbedOff:boolean
+  goals:number;assists:number;yellowCards:number;redCards:number;subbedOff:boolean;
+  tackles:number;interceptions:number;blocks:number;duelsTotal:number;duelsWon:number
 }
 type LivePayload={
   ok:boolean;source:string|null;status:"scheduled"|"live"|"halftime"|"finished"|"unknown";elapsed:number;
@@ -85,6 +86,11 @@ async function espnLive(input:{date:string;home:string;away:string;competition:C
             assists:espnStat(row,"goalAssists"),
             yellowCards:espnStat(row,"yellowCards"),
             redCards:espnStat(row,"redCards"),
+            tackles:Math.max(espnStat(row,"tackles"),espnStat(row,"totalTackles"),espnStat(row,"wonTackles")),
+            interceptions:Math.max(espnStat(row,"interceptions"),espnStat(row,"totalInterceptions")),
+            blocks:Math.max(espnStat(row,"blocks"),espnStat(row,"blockedShots")),
+            duelsTotal:Math.max(espnStat(row,"duels"),espnStat(row,"totalDuels")),
+            duelsWon:Math.max(espnStat(row,"duelsWon"),espnStat(row,"wonDuels")),
             subbedOff:false,
           })
         }
@@ -129,6 +135,35 @@ function apiStatus(short:string):LivePayload["status"]{
   if(["NS","TBD"].includes(short))return "scheduled"
   return "unknown"
 }
+
+function mergeLivePlayers(primary:LivePayload,secondary:LivePayload|null){
+  if(!secondary?.players?.length)return primary
+  const secondaryMap=new Map(secondary.players.map(p=>[norm(p.player),p]))
+  const merged=primary.players.map(player=>{
+    const other=secondaryMap.get(norm(player.player))
+    if(!other)return player
+    return {
+      ...player,
+      tackles:Math.max(Number(player.tackles??0),Number(other.tackles??0)),
+      interceptions:Math.max(Number(player.interceptions??0),Number(other.interceptions??0)),
+      blocks:Math.max(Number(player.blocks??0),Number(other.blocks??0)),
+      duelsTotal:Math.max(Number(player.duelsTotal??0),Number(other.duelsTotal??0)),
+      duelsWon:Math.max(Number(player.duelsWon??0),Number(other.duelsWon??0)),
+      foulsCommitted:Math.max(Number(player.foulsCommitted??0),Number(other.foulsCommitted??0)),
+      foulsDrawn:Math.max(Number(player.foulsDrawn??0),Number(other.foulsDrawn??0)),
+      shots:Math.max(Number(player.shots??0),Number(other.shots??0)),
+      shotsOnTarget:Math.max(Number(player.shotsOnTarget??0),Number(other.shotsOnTarget??0)),
+      yellowCards:Math.max(Number(player.yellowCards??0),Number(other.yellowCards??0)),
+      redCards:Math.max(Number(player.redCards??0),Number(other.redCards??0)),
+    }
+  })
+  return {
+    ...primary,
+    players:merged,
+    source:secondary.source?primary.source+" + defensive stats "+secondary.source:primary.source,
+  }
+}
+
 async function apiFootballLive(input:{date:string;home:string;away:string;competition:Competition},key:string):Promise<LivePayload|null>{
   try{
     const params:Record<string,string>={date:input.date,timezone:"Europe/London"}
@@ -154,6 +189,11 @@ async function apiFootballLive(input:{date:string;home:string;away:string;compet
           assists:Number(s?.goals?.assists??0)||0,
           yellowCards:Number(s?.cards?.yellow??0)||0,
           redCards:Number(s?.cards?.red??0)||0,
+          tackles:Number(s?.tackles?.total??0)||0,
+          interceptions:Number(s?.tackles?.interceptions??0)||0,
+          blocks:Number(s?.tackles?.blocks??0)||0,
+          duelsTotal:Number(s?.duels?.total??0)||0,
+          duelsWon:Number(s?.duels?.won??0)||0,
           subbedOff:false,
         })
       }
@@ -177,8 +217,10 @@ export async function GET(request:Request){
   if(cached&&cached.expires>Date.now())return NextResponse.json({...cached.payload,cached:true})
 
   let payload=await espnLive({date,home,away,competition})
-  if((!payload||!payload.players.length)&&process.env.API_FOOTBALL_KEY){
-    payload=await apiFootballLive({date,home,away,competition},process.env.API_FOOTBALL_KEY)
+  if(process.env.API_FOOTBALL_KEY){
+    const apiPayload=await apiFootballLive({date,home,away,competition},process.env.API_FOOTBALL_KEY)
+    if(payload?.players?.length)payload=mergeLivePlayers(payload,apiPayload)
+    else if(apiPayload?.players?.length)payload=apiPayload
   }
   if(!payload){
     payload={ok:true,source:null,status:"unknown",elapsed:0,score:{home:null,away:null},players:[],updatedAt:new Date().toISOString()}
