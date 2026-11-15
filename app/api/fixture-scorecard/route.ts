@@ -839,70 +839,143 @@ type RiskBuilder = {
 
 function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
   const configs=[
-    {id:"safe-3-1",title:"Safe 3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4,minProb:.62,maxLegs:5},
-    {id:"balanced-10-1",title:"Balanced 10/1",risk:"Balanced" as const,targetFractional:"10/1",targetDecimal:11,minProb:.48,maxLegs:6},
-    {id:"high-20-1",title:"High Risk 20/1+",risk:"High Risk" as const,targetFractional:"20/1+",targetDecimal:21,minProb:.14,maxLegs:9},
+    {id:"safe-3-1",title:"Safe 3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4,minProb:.42,maxLegs:5,minFamilies:2,maxPerFamily:2},
+    {id:"balanced-10-1",title:"Balanced 10/1",risk:"Balanced" as const,targetFractional:"10/1",targetDecimal:11,minProb:.16,maxLegs:6,minFamilies:3,maxPerFamily:2},
+    {id:"high-20-1",title:"High Risk 20/1+",risk:"High Risk" as const,targetFractional:"20/1+",targetDecimal:21,minProb:.10,maxLegs:7,minFamilies:3,maxPerFamily:2},
   ]
-  const marketOrder:MarketKey[]=["goal1","shot1","sot1","foul1","fouled1","card","shot2","sot2","foul2","foul3"]
-  const pool=players.flatMap(player=>marketOrder.map(m=>marketLeg(player,m)))
-    .filter(leg=>leg.confidence!=="D"&&leg.probability>=.20)
-    .filter(leg=>leg.expectedValue==null||leg.expectedValue>=-.10)
-    .sort((a,b)=>legRank(b)-legRank(a))
+  const baseMarkets:MarketKey[]=["goal1","assist1","shot1","sot1","foul1","fouled1","card"]
+  const familyLines:Record<string,MarketKey[]>={
+    goal:["goal1"],assist:["assist1"],shot:["shot1","shot2"],sot:["sot1","sot2"],
+    foul:["foul1","foul2","foul3"],fouled:["fouled1"],card:["card"],
+  }
+  const family=(market:string)=>market.startsWith("goal")?"goal":market.startsWith("assist")?"assist":market.startsWith("fouled")?"fouled":market.startsWith("foul")?"foul":market.startsWith("sot")?"sot":market.startsWith("shot")?"shot":"card"
+  const floor=(market:string)=>{
+    if(market==="card")return {green:.20,amber:.14}
+    if(market==="goal1")return {green:.32,amber:.18}
+    if(market==="assist1")return {green:.24,amber:.14}
+    if(market==="shot1")return {green:.72,amber:.48}
+    if(market==="sot1")return {green:.42,amber:.25}
+    if(market==="foul1")return {green:.68,amber:.48}
+    if(market==="fouled1")return {green:.62,amber:.42}
+    return {green:.30,amber:.15}
+  }
+  const percentile=(values:number[],value:number)=>{
+    if(values.length<=1)return .5
+    const below=values.filter(v=>v<value).length
+    const equal=values.filter(v=>v===value).length
+    return Math.max(0,Math.min(1,(below+equal*.5)/values.length))
+  }
+
+  const baseLegs=players.flatMap(player=>baseMarkets.map(m=>marketLeg(player,m)))
+    .filter(leg=>leg.confidence!=="D"&&leg.probability>=.05)
+    .filter(leg=>leg.expectedValue==null||leg.expectedValue>=-.12)
+  const peers=new Map<string,number[]>()
+  for(const leg of baseLegs){
+    const arr=peers.get(leg.market)??[]
+    arr.push(leg.probability)
+    peers.set(leg.market,arr)
+  }
+  const signal=(leg:SlipLeg)=>{
+    const f=floor(leg.market)
+    const rel=Math.max(-.5,Math.min(1.5,(leg.probability-f.amber)/Math.max(.04,f.green-f.amber)))
+    const pct=percentile(peers.get(leg.market)??[],leg.probability)
+    const confidence=leg.confidence==="A"?.08:leg.confidence==="B"?.05:leg.confidence==="C"?.02:0
+    const edge=Math.max(0,Number(leg.edge??0))*.20
+    return pct*.55+Math.max(0,rel)*.25+leg.probability*.12+confidence+edge
+  }
+
+  // Choose the action family where each player stands out most versus the other
+  // players in that same market. A 22% card can therefore outrank a 40% shot
+  // when the card is elite for cards and the shot is weak for shots.
+  const preferredFamily=new Map<string,{family:string;signal:number}>()
+  for(const player of players){
+    const options=baseMarkets.map(m=>marketLeg(player,m))
+      .filter(l=>l.confidence!=="D"&&l.probability>=.05)
+      .filter(l=>l.expectedValue==null||l.expectedValue>=-.12)
+      .map(l=>({family:family(l.market),signal:signal(l)}))
+      .sort((a,b)=>b.signal-a.signal)
+    if(options[0])preferredFamily.set(norm(player.name),options[0])
+  }
+
+  const candidates=players.flatMap(player=>{
+    const preferred=preferredFamily.get(norm(player.name))
+    if(!preferred)return []
+    return (familyLines[preferred.family]??[]).map(m=>({leg:marketLeg(player,m),family:preferred.family,signal:preferred.signal}))
+  })
+    .filter(x=>x.leg.confidence!=="D"&&x.leg.probability>=.08)
+    .filter(x=>x.leg.expectedValue==null||x.leg.expectedValue>=-.12)
+    .filter(x=>referenceOdd(x.leg)>1)
+    .sort((a,b)=>(b.signal-a.signal)||(legRank(b.leg)-legRank(a.leg)))
 
   return configs.map(config=>{
-    type State={legs:SlipLeg[];product:number;quality:number;prob:number;players:Set<string>}
-    let states:State[]=[{legs:[],product:1,quality:0,prob:1,players:new Set()}]
-    for(const leg of pool.filter(l=>l.probability>=config.minProb)){
+    type State={legs:SlipLeg[];product:number;quality:number;prob:number;players:Set<string>;families:Record<string,number>}
+    let states:State[]=[{legs:[],product:1,quality:0,prob:1,players:new Set(),families:{}}]
+    for(const option of candidates.filter(x=>x.leg.probability>=config.minProb||x.signal>=.82)){
       const next=[...states]
       for(const state of states){
         if(state.legs.length>=config.maxLegs)continue
-        const pkey=norm(leg.player)
+        const pkey=norm(option.leg.player)
         if(state.players.has(pkey))continue
-        const odd=referenceOdd(leg)
+        const familyCount=state.families[option.family]??0
+        if(familyCount>=config.maxPerFamily)continue
+        const odd=referenceOdd(option.leg)
         if(!(odd>1))continue
         const product=state.product*odd
-        if(product>config.targetDecimal*1.8&&state.legs.length>=1)continue
+        if(product>config.targetDecimal*1.45&&state.legs.length>=1)continue
         next.push({
-          legs:[...state.legs,leg],
+          legs:[...state.legs,option.leg],
           product,
-          quality:state.quality+legRank(leg),
-          prob:state.prob*leg.probability,
+          quality:state.quality+option.signal+legRank(option.leg)*.35,
+          prob:state.prob*option.leg.probability,
           players:new Set([...state.players,pkey]),
+          families:{...state.families,[option.family]:familyCount+1},
         })
       }
       const score=(s:State)=>{
         if(!s.legs.length)return 999
         const distance=Math.abs(Math.log(Math.max(1.01,s.product))-Math.log(config.targetDecimal))
-        const under=s.product<config.targetDecimal*.82?.55:0
+        const diversity=Object.keys(s.families).length
         const avg=s.quality/s.legs.length
         const weak=Math.min(...s.legs.map(l=>l.probability))
-        return distance*1.7+under-avg*.34-weak*.22
+        const under=s.product<config.targetDecimal?.7:0
+        return distance*2+under-avg*.34-weak*.12-diversity*.07+s.legs.length*.025
       }
-      states=next.sort((a,b)=>score(a)-score(b)).slice(0,260)
+      states=next.sort((a,b)=>score(a)-score(b)).slice(0,650)
     }
-    const validStates=states.filter(s=>s.legs.length>=2&&s.product>=config.targetDecimal)
+    const validStates=states.filter(s=>
+      s.legs.length>=2&&
+      s.product>=config.targetDecimal&&
+      Object.keys(s.families).length>=config.minFamilies
+    )
     const best=validStates.sort((a,b)=>{
-      const sa=Math.abs(Math.log(a.product)-Math.log(config.targetDecimal))-(a.quality/Math.max(1,a.legs.length))*.16
-      const sb=Math.abs(Math.log(b.product)-Math.log(config.targetDecimal))-(b.quality/Math.max(1,b.legs.length))*.16
-      return sa-sb
+      const da=Math.abs(Math.log(a.product)-Math.log(config.targetDecimal))
+      const db=Math.abs(Math.log(b.product)-Math.log(config.targetDecimal))
+      if(Math.abs(da-db)>.015)return da-db
+      const qa=a.quality/Math.max(1,a.legs.length)
+      const qb=b.quality/Math.max(1,b.legs.length)
+      if(Math.abs(qa-qb)>.01)return qb-qa
+      if(a.legs.length!==b.legs.length)return a.legs.length-b.legs.length
+      return b.prob-a.prob
     })[0]
     if(!best)return {
       id:config.id,title:config.title,risk:config.risk,targetFractional:config.targetFractional,targetDecimal:config.targetDecimal,
       legs:[],referenceProductOdds:null,averageLegProbability:null,minimumLegProbability:null,modelAllHitProbability:null,
-      exactPriced:false,bookmaker:null,note:"No qualifying combination actually reaches this odds target yet. The builder will not label a lower-priced slip as this target."
+      exactPriced:false,bookmaker:null,note:"No strong, market-diverse combination actually reaches this odds target yet."
     }
     const books=[...new Set(best.legs.map(l=>l.bookmakerName).filter(Boolean))] as string[]
     const exactPriced=best.legs.every(l=>l.bookmakerOdds!=null)&&books.length===1
     const avg=best.legs.reduce((s,l)=>s+l.probability,0)/best.legs.length
     const min=Math.min(...best.legs.map(l=>l.probability))
+    const families=[...new Set(best.legs.map(l=>family(l.market)))]
     return {
       id:config.id,title:config.title,risk:config.risk,targetFractional:config.targetFractional,targetDecimal:config.targetDecimal,
       legs:best.legs,referenceProductOdds:Math.round(best.product*100)/100,
       averageLegProbability:Math.round(avg*1000)/1000,minimumLegProbability:Math.round(min*1000)/1000,
       modelAllHitProbability:Math.round(best.prob*10000)/10000,exactPriced,bookmaker:exactPriced?books[0]:null,
-      note:exactPriced
-        ?"All displayed singles have exact prices at "+books[0]+". The bookmaker's final same-game Builder price can still differ because of correlation."
-        :"Target uses exact singles where available and model fair odds otherwise. It is a guide to the strongest route toward "+config.targetFractional+", not a quoted bookmaker Builder price."
+      note:(exactPriced
+        ?"All displayed singles have exact prices at "+books[0]+". "
+        :"Displayed odds use exact singles where available and model fair odds otherwise. ")
+        +"The builder first chooses each player's strongest market family, then requires market variety ("+families.join(", ")+") while actually reaching "+config.targetFractional+". Same-game bookmaker correlation can still change the final quoted Builder price."
     }
   })
 }
