@@ -144,7 +144,9 @@ async function officialLineupForFixture(f:Fixture):Promise<OfficialLineup>{
 type LivePlayerStat={
   player:string;team:string;foulsCommitted:number;foulsDrawn:number;shots:number;shotsOnTarget:number;
   goals:number;assists:number;yellowCards:number;redCards:number;starter:boolean;subbedOn:boolean;subbedOff:boolean;minutes:number;
-  tackles:number;interceptions:number;blocks:number;duelsTotal:number;duelsWon:number;defensiveInterventions:number
+  tackles:number;interceptions:number;blocks:number;duelsTotal:number;duelsWon:number;defensiveInterventions:number;
+  recentFouls10:number;recentFouls15:number;recentFouled10:number;disciplineHeat:number;
+  aggressionScore:number;aggressionSignals:string[];lastAggressionMinute:number|null
 }
 function espnStat(row:any,name:string){
   const found=(row?.stats??[]).find((s:any)=>String(s?.name??"")===name)
@@ -171,6 +173,10 @@ async function livePlayerStatsForFixture(f:Fixture){
         starter:row.starter===true,subbedOn:row.subbedOn===true,subbedOff:row.subbedOff===true,minutes:Number(row.minutes??0),
         tackles:Number(row.tackles??0),interceptions:Number(row.interceptions??0),blocks:Number(row.blocks??0),
         duelsTotal:Number(row.duelsTotal??0),duelsWon:Number(row.duelsWon??0),defensiveInterventions:Number(row.defensiveInterventions??0),
+        recentFouls10:Number(row.recentFouls10??0),recentFouls15:Number(row.recentFouls15??0),recentFouled10:Number(row.recentFouled10??0),
+        disciplineHeat:Number(row.disciplineHeat??0),aggressionScore:Number(row.aggressionScore??0),
+        aggressionSignals:Array.isArray(row.aggressionSignals)?row.aggressionSignals.map(String).slice(0,4):[],
+        lastAggressionMinute:Number.isFinite(Number(row.lastAggressionMinute))?Number(row.lastAggressionMinute):null,
       }]))
     }
   }catch{
@@ -1082,7 +1088,9 @@ function buildLivePlayerProps(scorecard:Scorecard|null,elapsed:number,liveStats:
           :fouls>=2?player.yellowConditionals?.after2PlusFouls
           :fouls>=1?player.yellowConditionals?.after1PlusFouls:null
         const overall=player.yellowConditionals?.overall
-        let delta=Math.min(.78,.16*fouls+Math.max(0,oppDrawRate-7)*.012)
+        const disciplineHeat=Math.max(0,Math.min(1,Number(stat.disciplineHeat??0)))
+        const recentBurst=Math.min(.34,Number(stat.recentFouls10??0)*.17+Math.max(0,Number(stat.recentFouls15??0)-Number(stat.recentFouls10??0))*.07)
+        let delta=Math.min(1.05,.14*fouls+Math.max(0,oppDrawRate-7)*.010+disciplineHeat*.52+recentBurst)
         if(cond?.rate!=null&&Number(overall?.rate)>0&&Number(cond.matches??0)>=2){
           const reliability=Math.min(1,Number(cond.matches??0)/10)
           const observed=logit(Number(cond.rate))-logit(Math.max(.02,Number(overall!.rate)))
@@ -1093,7 +1101,10 @@ function buildLivePlayerProps(scorecard:Scorecard|null,elapsed:number,liveStats:
         }
         probability=logistic(logit(probability)+delta)
         probability=Math.max(.001,Math.min(.95,probability))
-        pressureNote+=(pressureNote?" ":"")+`Opponent fouls drawn running at ${oppDrawRate.toFixed(1)}/90.`
+        const liveSignals=(stat.aggressionSignals??[]).slice(0,2)
+        if(Number(stat.recentFouls10??0)>0)pressureNote+=(pressureNote?" ":"")+`${stat.recentFouls10} new foul${stat.recentFouls10===1?"":"s"} in the recent 10-minute window.`
+        if(liveSignals.length)pressureNote+=(pressureNote?" ":"")+`Live discipline signal: ${liveSignals.join(", ")}.`
+        pressureNote+=(pressureNote?" ":"")+`Discipline heat ${Math.round(disciplineHeat*100)}/100; opponent fouls drawn ${oppDrawRate.toFixed(1)}/90.`
       }else if(marketKey==="foul1"&&stat){
         const delta=Math.min(.58,stat.foulsCommitted*.12+Math.max(0,oppDrawRate-7)*.012)
         probability=logistic(logit(probability)+delta)
@@ -1115,9 +1126,11 @@ function buildLivePlayerProps(scorecard:Scorecard|null,elapsed:number,liveStats:
         marketKey==="shot1"?"shot":marketKey==="sot1"?"sot":marketKey==="goal1"?"goal":"assist"
       const status=(scorecard.marketAvailability as any)?.[marketGroup]??"unknown"
       const historicalRank=Math.max(0,Math.min(1,Number(market.recommendationScore??base)))
-      const liveFoulRank=stat?Math.min(.28,stat.foulsCommitted*.07)+Math.min(.05,stat.foulsDrawn*.012):0
+      const liveFoulRank=stat?Math.min(.24,stat.foulsCommitted*.055)+Math.min(.04,stat.foulsDrawn*.010):0
+      const heat=stat?Math.max(0,Math.min(1,Number(stat.disciplineHeat??0))):0
+      const burst=stat?Math.min(.16,Number(stat.recentFouls10??0)*.08):0
       const rankScore=marketKey==="card"
-        ?Math.max(0,Math.min(1,probability*.55+historicalRank*.35+liveFoulRank))
+        ?Math.max(0,Math.min(1,probability*.40+historicalRank*.28+liveFoulRank+heat*.22+burst))
         :probability
 
       candidates.push({
@@ -1134,6 +1147,8 @@ function buildLivePlayerProps(scorecard:Scorecard|null,elapsed:number,liveStats:
         currentShots:stat?.shots??null,currentSot:stat?.shotsOnTarget??null,
         currentGoals:stat?.goals??null,currentAssists:stat?.assists??null,
         currentYellowCards:stat?.yellowCards??null,currentRedCards:stat?.redCards??null,
+        disciplineHeat:stat?.disciplineHeat??0,recentFouls10:stat?.recentFouls10??0,recentFouls15:stat?.recentFouls15??0,
+        aggressionSignals:stat?.aggressionSignals??[],lastAggressionMinute:stat?.lastAggressionMinute??null,
         reason:"Remaining-match estimate from the active-player model and current match events. "+pressureNote,
       })
     }
