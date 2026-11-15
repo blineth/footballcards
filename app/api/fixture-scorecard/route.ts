@@ -1645,16 +1645,50 @@ async function buildVerifiedBet365SnapshotFallback(input:{request:Request;date:s
   }
 }
 
+function compactBuilderScorecard(payload:any){
+  if(!payload?.ok)return payload
+  const compactMarkets=(markets:any)=>{
+    if(!markets||typeof markets!=="object")return markets
+    const out:Record<string,any>={}
+    for(const [key,m] of Object.entries(markets) as Array<[string,any]>){
+      if(!m)continue
+      out[key]={
+        key:m.key,label:m.label,probability:m.probability,fairOdds:m.fairOdds,confidence:m.confidence,
+        bookmakerOdds:m.bookmakerOdds,bookmakerName:m.bookmakerName,edge:m.edge,expectedValue:m.expectedValue,
+        recent5HitRate:m.recent5HitRate,seasonHitRate:m.seasonHitRate,h2hHitRate:m.h2hHitRate,
+        recommendationScore:m.recommendationScore,reasons:Array.isArray(m.reasons)?m.reasons.slice(0,2):[],
+      }
+    }
+    return out
+  }
+  return {
+    ok:true,
+    competition:payload.competition,date:payload.date,home:payload.home,away:payload.away,
+    lineupsConfirmed:payload.lineupsConfirmed,lineupMode:payload.lineupMode,lineupSource:payload.lineupSource,
+    status:payload.status,snapshotFallback:payload.snapshotFallback,fallbackReason:payload.fallbackReason,
+    bookmaker:payload.bookmaker,oddsSource:payload.oddsSource,oddsCapturedAt:payload.oddsCapturedAt,
+    oddsAgeSeconds:payload.oddsAgeSeconds,oddsFreshness:payload.oddsFreshness,priceAvailable:payload.priceAvailable,
+    marketAvailability:payload.marketAvailability,bookmakerAvailability:payload.bookmakerAvailability,
+    eligibleBooks:payload.eligibleBooks,availableBets:Array.isArray(payload.availableBets)?payload.availableBets:[],
+    referee:payload.referee??null,
+    players:(Array.isArray(payload.players)?payload.players:[]).map((p:any)=>({
+      name:p.name,dbName:p.dbName,team:p.team,position:p.position,expectedMinutes:p.expectedMinutes,
+      yellowConditionals:p.yellowConditionals,markets:compactMarkets(p.markets),
+    })),
+  }
+}
+
 export async function GET(request: Request) {
   const url = new URL(request.url)
   const date = url.searchParams.get("date") ?? ""
   const home = url.searchParams.get("home") ?? ""
   const away = url.searchParams.get("away") ?? ""
   const competition = url.searchParams.get("competition") ?? "Premier League"
+  const builderView = url.searchParams.get("view")==="builder"
   if (!date || !home || !away) return NextResponse.json({ ok: false, error: "Invalid fixture parameters" }, { status: 400 })
   if (!isDatabaseConfigured) {
     try {
-      return NextResponse.json(await buildVerifiedBet365SnapshotFallback({request,date,home,away,competition}))
+      return NextResponse.json(compactBuilderScorecard(await buildVerifiedBet365SnapshotFallback({request,date,home,away,competition})))
     } catch {
       return NextResponse.json({ ok: false, error: "Database not connected and snapshot fallback unavailable" }, { status: 503 })
     }
@@ -1664,7 +1698,7 @@ export async function GET(request: Request) {
     await ensureResearchSchema()
   } catch (error) {
     try {
-      return NextResponse.json(await buildVerifiedBet365SnapshotFallback({request,date,home,away,competition}))
+      return NextResponse.json(compactBuilderScorecard(await buildVerifiedBet365SnapshotFallback({request,date,home,away,competition})))
     } catch {
       return NextResponse.json({
         ok:false,
@@ -1679,7 +1713,7 @@ export async function GET(request: Request) {
     radarResponse = await radarGET(request)
   } catch (error) {
     try {
-      return NextResponse.json(await buildVerifiedBet365SnapshotFallback({request,date,home,away,competition}))
+      return NextResponse.json(compactBuilderScorecard(await buildVerifiedBet365SnapshotFallback({request,date,home,away,competition})))
     } catch {
       return NextResponse.json({
         ok:false,
@@ -2353,7 +2387,7 @@ export async function GET(request: Request) {
   const foulTargetSlips = recommendationsAllowed ? foulRecommendations : []
   const previewFoulTargetSlips: typeof foulRecommendations = []
 
-  return NextResponse.json({
+  const payload={
     ok: true,
     competition,
     date,
@@ -2423,5 +2457,6 @@ export async function GET(request: Request) {
       priceFreshness: "Exact prices come from the preferred bookmaker feed. When a bookmaker's foul market is verified but a specific threshold price is missing, a clearly labelled estimate is derived from the model probability and that bookmaker's observed margin on the player's other foul lines.",
     },
     generatedAt: new Date().toISOString(),
-  })
+  }
+  return NextResponse.json(builderView?compactBuilderScorecard(payload):payload)
 }
