@@ -23,6 +23,8 @@ type OddSelection = {
   kind: string
   label: string
   odd: number | null
+  underOdd?: number | null
+  noVigProbability?: number | null
   bookmaker?: string | null
   previousOdd?: number | null
   movement?: number | null
@@ -74,6 +76,7 @@ type ScoreMarket = {
   bookmakerMovement: number | null
   bookmakerLabel: string | null
   impliedProbability: number | null
+  bookmakerNoVigProbability?: number | null
   edge: number | null
   expectedValue: number | null
   sampleMatches: number
@@ -142,6 +145,7 @@ type SlipLeg = {
   confidence: "A" | "B" | "C" | "D"
   reason: string
   priceSource?: "exact" | "estimated" | null
+  bookmakerProbability?: number | null
 }
 
 type FoulTargetSlip = {
@@ -625,7 +629,7 @@ function marketLeg(player: ScorePlayer, market: MarketKey): SlipLeg {
     return {
       player:player.name,dbPlayerName:player.dbName,team:player.team,market,label:MARKET_LABELS[market],
       probability:0,fairOdds:null,bookmakerOdds:null,bookmakerName:null,previousBookmakerOdds:null,
-      bookmakerMovement:null,edge:null,expectedValue:null,confidence:"D",reason:"Market unavailable",priceSource:null,
+      bookmakerMovement:null,edge:null,expectedValue:null,confidence:"D",reason:"Market unavailable",priceSource:null,bookmakerProbability:null,
     }
   }
   return {
@@ -645,6 +649,7 @@ function marketLeg(player: ScorePlayer, market: MarketKey): SlipLeg {
     confidence: m.confidence,
     reason: m.reasons[0] ?? "",
     priceSource: m.bookmakerOdds!=null && m.bookmakerName==="Bet365" ? "exact" : null,
+    bookmakerProbability:m.bookmakerNoVigProbability??m.impliedProbability,
   }
 }
 function legRank(leg: SlipLeg) {
@@ -859,9 +864,9 @@ type RiskBuilder = {
 
 function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
   const configs=[
-    {id:"safe-3-1",title:"Safe 3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4,minProb:.36,maxLegs:10,minFamilies:1,maxPerFamily:8},
-    {id:"balanced-10-1",title:"Balanced 10/1",risk:"Balanced" as const,targetFractional:"10/1",targetDecimal:11,minProb:.15,maxLegs:7,minFamilies:2,maxPerFamily:3},
-    {id:"high-20-1",title:"High Risk 20/1+",risk:"High Risk" as const,targetFractional:"20/1+",targetDecimal:21,minProb:.09,maxLegs:8,minFamilies:2,maxPerFamily:3},
+    {id:"safe-3-1",title:"Safe 3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4,minSafety:.50,maxLegs:10},
+    {id:"balanced-10-1",title:"Balanced 10/1",risk:"Balanced" as const,targetFractional:"10/1",targetDecimal:11,minSafety:.38,maxLegs:10},
+    {id:"high-20-1",title:"High Risk 20/1+",risk:"High Risk" as const,targetFractional:"20/1+",targetDecimal:21,minSafety:.28,maxLegs:10},
   ]
   const baseMarkets:MarketKey[]=["goal1","assist1","shot1","sot1","foul1","fouled1","card"]
   const allPricedMarkets:MarketKey[]=["goal1","assist1","shot1","shot2","sot1","sot2","foul1","foul2","foul3","foul4","foul5","fouled1","card"]
@@ -920,15 +925,17 @@ function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
     return .97
   }
   const safetyLegProbability=(leg:SlipLeg)=>{
-    const model=Math.max(.01,Math.min(.99,Number(leg.probability??0)))
+    const model=clamp(Number(leg.probability??0),.01,.99)
     const price=bet365Odd(leg)
     if(!(price>1))return model
-    const implied=Math.max(.01,Math.min(.99,1/price))
-    // Safe bets should not rely on a huge disagreement with the bookmaker.
-    // Allow the model a modest edge, but cap extreme optimism such as a model
-    // saying 63% when Bet365 prices the event around 36%.
-    const marketSanityCap=Math.min(.99,implied+.08)
-    return Math.min(model,marketSanityCap)
+    const book=clamp(Number(leg.bookmakerProbability??(1/price)),.01,.99)
+    const modelWeight=leg.confidence==="A"?.66:leg.confidence==="B"?.58:leg.confidence==="C"?.50:.42
+    let consensus=model*modelWeight+book*(1-modelWeight)
+    // Large disagreement is uncertainty, not free edge. Penalise only the
+    // excess disagreement beyond eight percentage points.
+    const disagreement=Math.abs(model-book)
+    consensus-=Math.max(0,disagreement-.08)*.32
+    return clamp(consensus,.01,.99)
   }
   const conservativeJoint=(legs:SlipLeg[],_raw:number)=>{
     if(!legs.length)return 0
@@ -984,16 +991,14 @@ function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
     .sort((a,b)=>(b.safeP-a.safeP)||(b.leg.probability-a.leg.probability))
 
   return configs.map(config=>{
-    const sourceCandidates=config.risk==="Safe"?safeCandidates:preferredCandidates
-    const safeFloors=config.risk==="Safe"?[.78,.74,.70,.66,.62,.60]:[0]
+    const sourceCandidates=safeCandidates
+    const safeFloors=[config.minSafety]
     type State={legs:SlipLeg[];product:number;quality:number;prob:number;conservative:number;players:Set<string>;families:Record<string,number>}
     let best:State|undefined
     let usedSafeFloor:number|null=null
 
     for(const safeFloor of safeFloors){
-      const candidates=sourceCandidates.filter(x=>config.risk==="Safe"
-        ? safetyLegProbability(x.leg)>=safeFloor
-        : (x.leg.probability>=config.minProb||x.signal>=.82))
+      const candidates=sourceCandidates.filter(x=>safetyLegProbability(x.leg)>=safeFloor)
       let states:State[]=[{legs:[],product:1,quality:0,prob:1,conservative:1,players:new Set(),families:{}}]
 
       for(const option of candidates){
@@ -1003,7 +1008,6 @@ function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
           const pkey=norm(option.leg.player)
           if(state.players.has(pkey))continue
           const familyCount=state.families[option.family]??0
-          if(familyCount>=config.maxPerFamily)continue
           const odd=bet365Odd(option.leg)
           if(!(odd>1))continue
           const product=state.product*odd
@@ -1027,36 +1031,29 @@ function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
           const avg=state.quality/state.legs.length
           const weakest=Math.min(...state.legs.map(l=>safetyLegProbability(l)))
           const under=state.product<config.targetDecimal?1:0
-          if(config.risk==="Safe"){
-            return under*1.5+distance*.16-state.conservative*5-weakest*.65+state.legs.length*.001
-          }
-          return distance*1.15+under*.8-state.conservative*2.1-avg*.18-weakest*.08-diversity*.05+state.legs.length*.015
+          return under*1.25+distance*.12-state.conservative*5.5-weakest*.55-avg*.05+state.legs.length*.001
         }
-        if(config.risk==="Safe"){
-          // Preserve a probability frontier across the whole odds range rather than
-          // globally pruning to the few states closest to 4.00. This lets a
-          // 3-6 leg combination beat a shorter route when its joint hit chance is better.
-          const buckets=new Map<string,State[]>()
-          for(const state of next){
-            const oddsBucket=Math.floor(Math.log(Math.max(1,state.product))*120)
-            const key=oddsBucket+"|"+state.legs.length
-            const rows=buckets.get(key)??[]
-            rows.push(state)
-            rows.sort((a,b)=>b.conservative-a.conservative||score(a)-score(b))
-            buckets.set(key,rows.slice(0,10))
-          }
-          states=[...buckets.values()].flat()
-            .sort((a,b)=>score(a)-score(b))
-            .slice(0,6000)
-        }else{
-          states=next.sort((a,b)=>score(a)-score(b)).slice(0,650)
+        // Preserve the best probability states across the whole odds range.
+        // This is essential: a longer set of very likely foul/shot legs must be
+        // allowed to beat a shorter speculative scorer/card route.
+        const buckets=new Map<string,State[]>()
+        for(const state of next){
+          const oddsBucket=Math.floor(Math.log(Math.max(1,state.product))*120)
+          const key=oddsBucket+"|"+state.legs.length
+          const rows=buckets.get(key)??[]
+          rows.push(state)
+          rows.sort((a,b)=>b.conservative-a.conservative||score(a)-score(b))
+          buckets.set(key,rows.slice(0,12))
         }
+        states=[...buckets.values()].flat()
+          .sort((a,b)=>score(a)-score(b))
+          .slice(0,7000)
       }
 
       const valid=states.filter(state=>
         state.legs.length>=2&&
         state.product>=config.targetDecimal&&
-        Object.keys(state.families).length>=config.minFamilies
+        true
       )
       const candidateBest=valid.sort((a,b)=>{
         if(Math.abs(a.conservative-b.conservative)>.0005)return b.conservative-a.conservative
@@ -1102,7 +1099,7 @@ function buildRiskBuilders(players:ScorePlayer[]):RiskBuilder[]{
       pricingBasis:"bet365_singles_product" as const,
       note:config.risk==="Safe"
         ?"Every leg has a verified Bet365 price. Safe first tries to reach the target using only 78%+ consensus-safety legs, then 74%, 70%, 66%, 62% and finally 60% only if necessary. Within the highest tier that can reach the target it maximises conservative joint hit probability; leg count is only a tie-breaker. This allows several short-priced fouls/shots to beat a speculative two-leg shortcut. Large model-vs-Bet365 disagreements are capped."
-        :"Every displayed leg price is a verified Bet365 price. The target is built from live Bet365 singles ("+families.join(", ")+") and ranked by conservative all-hit probability. Bet365 can reprice correlated legs inside Bet Builder, so this is not labelled as the final Builder quote."
+        :"Every verified Bet365 player market is searched across goals, assists, cards, fouls, fouls drawn, shots and SOT. The model chooses the combination with the highest conservative all-hit probability that reaches the target; market type and leg count do not get preference. Bet365 can reprice correlated legs inside Bet Builder, so this is not labelled as the final Builder quote."
     }
   })
 }
@@ -1137,7 +1134,9 @@ async function buildVerifiedBet365SnapshotFallback(input:{request:Request;date:s
       marketRow.bookmakerMovement=odd.movement==null?null:Number(odd.movement)
       marketRow.bookmakerLabel=odd.label??null
       marketRow.impliedProbability=Math.round((1/price)*1000)/1000
-      marketRow.edge=Math.round((probability-1/price)*1000)/1000
+      marketRow.bookmakerNoVigProbability=odd.noVigProbability==null?null:Math.round(Number(odd.noVigProbability)*1000)/1000
+      const bookmakerConsensus=marketRow.bookmakerNoVigProbability??marketRow.impliedProbability
+      marketRow.edge=Math.round((probability-bookmakerConsensus)*1000)/1000
       marketRow.expectedValue=Math.round((probability*price-1)*1000)/1000
     }
   }
@@ -1264,7 +1263,9 @@ export async function GET(request: Request) {
             marketRow.bookmakerMovement=odd.movement==null?null:Number(odd.movement)
             marketRow.bookmakerLabel=odd.label??null
             marketRow.impliedProbability=price>0?Math.round((1/price)*1000)/1000:null
-            marketRow.edge=price>0?Math.round((probability-1/price)*1000)/1000:null
+            marketRow.bookmakerNoVigProbability=odd.noVigProbability==null?null:Math.round(Number(odd.noVigProbability)*1000)/1000
+            const bookmakerConsensus=marketRow.bookmakerNoVigProbability??marketRow.impliedProbability
+            marketRow.edge=bookmakerConsensus==null?null:Math.round((probability-bookmakerConsensus)*1000)/1000
             marketRow.expectedValue=price>0?Math.round((probability*price-1)*1000)/1000:null
           }
         }
@@ -1480,7 +1481,9 @@ export async function GET(request: Request) {
       const previousBookmakerOdds = odd?.previousOdd == null ? null : Number(odd.previousOdd)
       const bookmakerMovement = odd?.movement == null ? null : Number(odd.movement)
       const impliedProbability = bookmakerOdds ? 1 / bookmakerOdds : null
-      const edge = impliedProbability == null ? null : probability - impliedProbability
+      const bookmakerNoVigProbability = odd?.noVigProbability==null?null:clamp(Number(odd.noVigProbability))
+      const bookmakerConsensus = bookmakerNoVigProbability??impliedProbability
+      const edge = bookmakerConsensus == null ? null : probability - bookmakerConsensus
       const expectedValue = bookmakerOdds == null ? null : probability * bookmakerOdds - 1
 
       markets[market] = {
