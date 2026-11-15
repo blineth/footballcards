@@ -201,7 +201,7 @@ async function cachedSnapshot(input:{date:string;home:string;away:string;competi
     const latestBucket = new Date(latest.snapshotBucket).getTime()
     const sameBucket = rows.filter(row =>
       new Date(row.snapshotBucket).getTime() === latestBucket &&
-      preferredBookmakerName(row.bookmaker) != null
+      preferredBookmakerName(row.bookmaker) === "Bet365"
     )
     if (!sameBucket.length) return null
     const rawSelections = sameBucket.map(row => ({
@@ -631,7 +631,7 @@ async function fromApiFootball(input: { date: string; home: string; away: string
     for (const book of row?.bookmakers ?? []) {
       const rawBookmakerName=String(book?.name ?? "")
       const bookmakerName=preferredBookmakerName(rawBookmakerName)
-      if (!bookmakerName) continue
+      if (bookmakerName!=="Bet365") continue
       books.add(bookmakerName)
       for (const bet of book?.bets ?? []) {
         const kind = marketKind(String(bet?.name ?? ""))
@@ -730,9 +730,29 @@ export async function GET(request: Request) {
       }
     }
 
-    // 4) Recent last-good snapshot before falling back to broad/free odds.
+    // 4) Recent last-good Bet365 snapshot.
     const cached = await cachedSnapshot({ date, home, away, competition })
     if (cached) return NextResponse.json(cached)
+
+    // When the paid Bet365 feed is configured, never substitute a different
+    // bookmaker and present it as Bet365. A provider miss means no verified price.
+    if(oddsApiIoKey){
+      return NextResponse.json({
+        connected:true,
+        bookmaker:"Bet365",
+        bookmakers:["Bet365"],
+        source:"Odds-API.io",
+        selections:[],
+        priceAvailable:false,
+        freeTier:false,
+        cached:false,
+        maxUsableAgeSeconds:300,
+        marketAvailability:marketAvailability([],true),
+        bookmakerAvailability:bookmakerAvailability([],["Bet365"]),
+        providerStatus:{oddsApiIo:true,oddsApiDev:Boolean(oddsApiDevKey),ukOddsApi:Boolean(ukOddsKey),apiFootball:Boolean(apiKey)},
+        note:"Odds-API.io is connected, but Bet365 has not returned a verified board for this fixture/market yet.",
+      })
+    }
 
     // 5) API-Football is only a broad fallback. It is not treated as the primary player-props feed.
     const apiKey = process.env.API_FOOTBALL_KEY
