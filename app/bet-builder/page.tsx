@@ -264,29 +264,31 @@ function clientRiskBuilders(rows:Selection[]):RiskBuilder[]{
     return Math.max(0,Math.min(.99,raw*reliability*concentration*Math.pow(.985,Math.max(0,legs.length-2))))
   }
 
-  const preferred=new Map<string,{family:string;score:number}>()
-  const playerNames=[...new Set(rows.map(r=>normPlayer(r.player)))]
-  for(const player of playerNames){
-    const options=rows.filter(r=>normPlayer(r.player)===player&&baseMarket(r.market)&&r.confidence!=="D"&&verifiedBet365Odd(r)!=null)
-      .map(r=>{
+  function buildOne(cfg:(typeof configs)[number],verifiedOnly:boolean):RiskBuilder{
+    const preferred=new Map<string,{family:string;score:number}>()
+    const playerNames=[...new Set(rows.map(r=>normPlayer(r.player)))]
+    for(const player of playerNames){
+      const options=rows.filter(r=>
+        normPlayer(r.player)===player&&baseMarket(r.market)&&r.confidence!=="D"&&
+        (verifiedOnly?verifiedBet365Odd(r)!=null:Number(r.fairOdds??0)>1)
+      ).map(r=>{
         const t=trafficFor(r,rows)
         const trafficScore=t==="high"?1:t==="average"?.58:.18
         const rankScore=trafficScore+r.probability*.22+Math.max(0,r.edge??0)*.15
         return {family:family(r.market),score:rankScore}
       }).sort((a,b)=>b.score-a.score)
-    if(options[0])preferred.set(player,options[0])
-  }
+      if(options[0])preferred.set(player,options[0])
+    }
 
-  const candidateRows=rows
-    .filter(r=>r.confidence!=="D"&&verifiedBet365Odd(r)!=null)
-    .filter(r=>{
-      const pref=preferred.get(normPlayer(r.player))
-      return Boolean(pref&&family(r.market)===pref.family)
-    })
-    .map(r=>({row:r,family:family(r.market),signal:preferred.get(normPlayer(r.player))?.score??0}))
-    .sort((a,b)=>(b.signal-a.signal)||(b.row.probability-a.row.probability))
+    const candidateRows=rows
+      .filter(r=>r.confidence!=="D"&&(verifiedOnly?verifiedBet365Odd(r)!=null:Number(r.fairOdds??0)>1))
+      .filter(r=>{
+        const pref=preferred.get(normPlayer(r.player))
+        return Boolean(pref&&family(r.market)===pref.family)
+      })
+      .map(r=>({row:r,family:family(r.market),signal:preferred.get(normPlayer(r.player))?.score??0}))
+      .sort((a,b)=>(b.signal-a.signal)||(b.row.probability-a.row.probability))
 
-  return configs.map(cfg=>{
     type State={legs:Selection[];product:number;prob:number;conservative:number;players:Set<string>;quality:number;families:Record<string,number>}
     let states:State[]=[{legs:[],product:1,prob:1,conservative:1,players:new Set(),quality:0,families:{}}]
     for(const option of candidateRows.filter(x=>x.row.probability>=cfg.min||x.signal>=.88)){
@@ -297,7 +299,8 @@ function clientRiskBuilders(rows:Selection[]):RiskBuilder[]{
         if(state.legs.length>=cfg.max||state.players.has(pkey))continue
         const count=state.families[option.family]??0
         if(count>=cfg.maxPerFamily)continue
-        const odd=referenceOdd(leg);if(!(odd>1))continue
+        const odd=verifiedOnly?referenceOdd(leg):Number(leg.fairOdds??0)
+        if(!(odd>1))continue
         const product=state.product*odd
         if(product>cfg.targetDecimal*1.45&&state.legs.length>=1)continue
         const legs=[...state.legs,leg]
@@ -318,8 +321,9 @@ function clientRiskBuilders(rows:Selection[]):RiskBuilder[]{
           return gap*1.15+(x.product<cfg.targetDecimal?.8:0)-x.conservative*2.1-avg*.18-diversity*(cfg.risk==="Safe"?.01:.05)+x.legs.length*.015
         }
         return score(a)-score(b)
-      }).slice(0,650)
+      }).slice(0,900)
     }
+
     const best=states.filter(s=>s.legs.length>=2&&s.product>=cfg.targetDecimal&&Object.keys(s.families).length>=cfg.minFamilies)
       .sort((a,b)=>{
         if(Math.abs(a.conservative-b.conservative)>.002)return b.conservative-a.conservative
@@ -328,19 +332,34 @@ function clientRiskBuilders(rows:Selection[]):RiskBuilder[]{
         if(Math.abs(da-db)>.015)return da-db
         return a.legs.length-b.legs.length
       })[0]
-    if(!best)return {id:cfg.id,title:cfg.title,risk:cfg.risk,targetFractional:cfg.targetFractional,targetDecimal:cfg.targetDecimal,legs:[],referenceProductOdds:null,averageLegProbability:null,minimumLegProbability:null,modelAllHitProbability:null,conservativeAllHitProbability:null,safetyScore:null,exactPriced:false,bookmaker:null,verifiedBet365LegPrices:false,exactBet365BuilderPrice:false,pricingBasis:"none" as const,note:"No combination of verified Bet365 prices reaches this target yet."}
-    const books=[...new Set(best.legs.map(x=>x.bookmakerName).filter(Boolean))] as string[]
-    const exactPriced=best.legs.every(x=>x.bookmakerOdds!=null)&&books.length===1
-    const families=[...new Set(best.legs.map(x=>family(x.market)))]
+
+    if(!best)return {
+      id:cfg.id,title:cfg.title,risk:cfg.risk,targetFractional:cfg.targetFractional,targetDecimal:cfg.targetDecimal,
+      legs:[],referenceProductOdds:null,averageLegProbability:null,minimumLegProbability:null,
+      modelAllHitProbability:null,conservativeAllHitProbability:null,safetyScore:null,
+      exactPriced:false,bookmaker:null,verifiedBet365LegPrices:false,exactBet365BuilderPrice:false,pricingBasis:"none" as const,
+      note:verifiedOnly?"No combination of verified Bet365 prices reaches this target yet.":"No model combination reaches this target yet."
+    }
+
     return {
       id:cfg.id,title:cfg.title,risk:cfg.risk,targetFractional:cfg.targetFractional,targetDecimal:cfg.targetDecimal,
       legs:best.legs,referenceProductOdds:Math.round(best.product*100)/100,
       averageLegProbability:best.legs.reduce((s,x)=>s+x.probability,0)/best.legs.length,
       minimumLegProbability:Math.min(...best.legs.map(x=>x.probability)),
       modelAllHitProbability:best.prob,conservativeAllHitProbability:best.conservative,safetyScore:best.conservative,
-      exactPriced:true,bookmaker:"Bet365",verifiedBet365LegPrices:true,exactBet365BuilderPrice:false,pricingBasis:"bet365_singles_product" as const,
-      note:"Every leg uses a verified Bet365 price. The displayed combined number is the product of those Bet365 singles; Bet365 can reprice correlated legs in Bet Builder, so it is not claimed as the final Builder quote."
+      exactPriced:verifiedOnly,bookmaker:verifiedOnly?"Bet365":null,
+      verifiedBet365LegPrices:verifiedOnly,exactBet365BuilderPrice:false,
+      pricingBasis:verifiedOnly?"bet365_singles_product" as const:"none" as const,
+      note:verifiedOnly
+        ?"Every leg uses a verified Bet365 price. The displayed combined number is the product of those Bet365 singles; Bet365 can reprice correlated legs in Bet Builder, so it is not claimed as the final Builder quote."
+        :"Model-target route only. The displayed product is derived from model fair odds, not a Bet365 price. Check the actual live Bet365 markets before placing."
     }
+  }
+
+  return configs.map(cfg=>{
+    const verified=buildOne(cfg,true)
+    if(verified.legs.length)return verified
+    return buildOne(cfg,false)
   })
 }
 
