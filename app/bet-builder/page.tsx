@@ -791,6 +791,7 @@ export default function BetBuilderPage(){
   const[live,setLive]=useState<LiveData|null>(null)
   const[liveOdds,setLiveOdds]=useState<LiveOddsData|null>(null)
   const[loading,setLoading]=useState(true)
+  const[baselineRetry,setBaselineRetry]=useState(0)
   const[category,setCategory]=useState<Category>("popular")
   const[selected,setSelected]=useState<Record<string,Selection>>({})
   const[trayOpen,setTrayOpen]=useState(false)
@@ -818,7 +819,7 @@ export default function BetBuilderPage(){
     }
 
     const controller=new AbortController()
-    const timeout=window.setTimeout(()=>controller.abort(),force?12_000:8_000)
+    const timeout=window.setTimeout(()=>controller.abort(),force?15_000:12_000)
     try{
       const r=await fetch(scorecardUrl(f,force),{cache:force?"no-store":"default",signal:controller.signal})
       const next=await r.json().catch(()=>({ok:false,error:"Unable to load match model."})) as Scorecard
@@ -831,9 +832,17 @@ export default function BetBuilderPage(){
     }catch(error){
       if(!cached){
         const timedOut=error instanceof DOMException&&error.name==="AbortError"
-        setData({ok:false,error:timedOut
-          ?"The fresh match model timed out. Tap refresh to retry; live match data will keep updating."
-          :"Unable to load the match model. Tap refresh to retry."} as Scorecard)
+        const inPlayNow=Number.isFinite(kickoff)&&Date.now()>=kickoff&&Date.now()<=kickoff+4*60*60*1000
+        if(inPlayNow){
+          // Keep live shell active and retry the now-CDN-cacheable baseline rather
+          // than turning a transient cold start into a permanent unavailable card.
+          setData(null)
+          setBaselineRetry(v=>v+1)
+        }else{
+          setData({ok:false,error:timedOut
+            ?"The match model timed out. Tap refresh to retry."
+            :"Unable to load the match model. Tap refresh to retry."} as Scorecard)
+        }
       }
     }finally{
       window.clearTimeout(timeout)
@@ -841,6 +850,11 @@ export default function BetBuilderPage(){
     }
   },[])
   useEffect(()=>{if(fixture)void load(fixture,false)},[fixture,load])
+  useEffect(()=>{
+    if(!fixture||data?.ok||baselineRetry<=0)return
+    const t=window.setTimeout(()=>void load(fixture,false),1500)
+    return()=>window.clearTimeout(t)
+  },[fixture,data?.ok,baselineRetry,load])
   useEffect(()=>{
     if(!fixture||!(live?.status==="live"||live?.status==="halftime"))return
     const t=window.setInterval(()=>void load(fixture,false),60000)
