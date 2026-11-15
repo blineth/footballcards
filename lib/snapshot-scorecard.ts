@@ -149,10 +149,15 @@ export async function confirmedStartersForFixture(input:{
           }
         }catch{}
       }
-      await Promise.all([
-        fetchRoster(homeCompetitor?.team?.id,homeSquad),
-        fetchRoster(awayCompetitor?.team?.id,awaySquad),
-      ])
+      // Domestic roster endpoints are suitable as a probable-XI pool. For
+      // internationals they can be a broad national-player directory, so never
+      // use them as proof of the current call-up.
+      if(input.competition!=="International"){
+        await Promise.all([
+          fetchRoster(homeCompetitor?.team?.id,homeSquad),
+          fetchRoster(awayCompetitor?.team?.id,awaySquad),
+        ])
+      }
 
       return {
         confirmed:homeCount>=11&&awayCount>=11,
@@ -508,6 +513,26 @@ export async function buildSnapshotScorecard(input:{
   const official=await confirmedStartersForFixture(input)
 
   if(input.competition==="International"){
+    const squadVerified=official.squadCounts.home>=12&&official.squadCounts.away>=12
+    if(!official.confirmed&&!squadVerified){
+      return {
+        ...baseResponse("squad"),
+        lineupSource:"Waiting for verified current senior matchday squad",
+        playerCount:0,
+        players:[],
+        slips:[],
+        riskBuilders:[],
+        squadEligibility:{
+          source:official.source,
+          eventId:official.eventId,
+          homeSquadCount:official.squadCounts.home,
+          awaySquadCount:official.squadCounts.away,
+          verified:false,
+          rule:"International player recommendations are blocked until the current senior matchday squad is verified.",
+        },
+        fallbackReason:"Snapshot data is available, but player betting recommendations are intentionally blocked because the current senior international squad is not verified.",
+      }
+    }
     const allProfiles=await internationalPlayersForFixture(input.home,input.away)
     const profiles=official.confirmed
       ? allProfiles.filter((p:any)=>official.starters.has(normName(String(p?.name??""))))
@@ -642,7 +667,8 @@ export async function buildSnapshotScorecard(input:{
         eventId:official.eventId,
         homeSquadCount:official.squadCounts.home,
         awaySquadCount:official.squadCounts.away,
-        rule:"Only current senior-squad players are eligible when ESPN roster coverage is available.",
+        verified:true,
+        rule:"Only players in the verified current senior matchday squad are eligible before confirmed lineups.",
       },
       players:playerRows,
       slips,
