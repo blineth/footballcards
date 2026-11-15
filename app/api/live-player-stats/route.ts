@@ -97,15 +97,34 @@ async function espnLive(input:{date:string;home:string;away:string;competition:C
       }
       for(const ev of summary?.keyEvents??[]){
         const type=String(ev?.type?.type??ev?.type?.text??"").toLowerCase()
-        const text=String(ev?.text??ev?.shortText??"").toLowerCase()
+        const rawText=String(ev?.text??ev?.shortText??"")
+        const text=rawText.toLowerCase()
         const isYellow=type.includes("yellow")||text.includes("yellow card")
         const isRed=type.includes("red")||text.includes("red card")
+        const isSub=type.includes("substitution")||type.includes("subst")||text.includes("substitution")||text.includes("replaces")
         if(isYellow||isRed){
           for(const p of ev?.participants??[]){
             const name=String(p?.athlete?.displayName??p?.athlete?.fullName??"").trim()
             const row=map.get(norm(name));if(!row)continue
             if(isYellow)row.yellowCards=Math.max(1,row.yellowCards)
             if(isRed)row.redCards=Math.max(1,row.redCards)
+          }
+        }
+        if(isSub){
+          // ESPN wording commonly uses "X replaces Y"; Y is the player leaving.
+          const replaces=rawText.match(/replaces\s+([^,.]+(?:\s+[^,.]+){0,3})/i)
+          if(replaces?.[1]){
+            const outgoing=map.get(norm(replaces[1]))
+            if(outgoing)outgoing.subbedOff=true
+          }
+          // Some feeds expose participant roles/order instead of useful text.
+          for(const p of ev?.participants??[]){
+            const name=String(p?.athlete?.displayName??p?.athlete?.fullName??"").trim()
+            const role=String(p?.type??p?.role??p?.participantType??"").toLowerCase()
+            if(!name)continue
+            const row=map.get(norm(name))
+            if(!row)continue
+            if(role.includes("out")||role.includes("replaced")||role.includes("subbed off"))row.subbedOff=true
           }
         }
       }
@@ -155,6 +174,7 @@ function mergeLivePlayers(primary:LivePayload,secondary:LivePayload|null){
       shotsOnTarget:Math.max(Number(player.shotsOnTarget??0),Number(other.shotsOnTarget??0)),
       yellowCards:Math.max(Number(player.yellowCards??0),Number(other.yellowCards??0)),
       redCards:Math.max(Number(player.redCards??0),Number(other.redCards??0)),
+      subbedOff:Boolean(player.subbedOff||other.subbedOff),
     }
   })
   return {
@@ -172,7 +192,20 @@ async function apiFootballLive(input:{date:string;home:string;away:string;compet
     const fixtures=await apiFootball("/fixtures",params,key)
     const fixture=fixtures.find((x:any)=>sameTeam(String(x?.teams?.home?.name??""),input.home)&&sameTeam(String(x?.teams?.away?.name??""),input.away))
     const id=String(fixture?.fixture?.id??"");if(!id)return null
-    const playerRows=await apiFootball("/fixtures/players",{fixture:id},key)
+    const [playerRows,eventRows]=await Promise.all([
+      apiFootball("/fixtures/players",{fixture:id},key),
+      apiFootball("/fixtures/events",{fixture:id},key).catch(()=>[]),
+    ])
+    const subbedOffNames=new Set<string>()
+    for(const event of eventRows??[]){
+      const type=String(event?.type??"").toLowerCase()
+      const detail=String(event?.detail??"").toLowerCase()
+      if(type==="subst"||type.includes("subst")||detail.includes("substitution")){
+        // API-Football substitution events use player = outgoing, assist = incoming.
+        const outgoing=String(event?.player?.name??"").trim()
+        if(outgoing)subbedOffNames.add(norm(outgoing))
+      }
+    }
     const players:LivePlayerStat[]=[]
     for(const teamRow of playerRows??[]){
       const team=String(teamRow?.team?.name??"")
@@ -194,7 +227,7 @@ async function apiFootballLive(input:{date:string;home:string;away:string;compet
           blocks:Number(s?.tackles?.blocks??0)||0,
           duelsTotal:Number(s?.duels?.total??0)||0,
           duelsWon:Number(s?.duels?.won??0)||0,
-          subbedOff:false,
+          subbedOff:subbedOffNames.has(norm(player)),
         })
       }
     }
