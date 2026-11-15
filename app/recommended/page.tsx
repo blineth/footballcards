@@ -171,7 +171,7 @@ function avgProbability(slip:Slip){
 function londonToday(){
   return new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/London",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date())
 }
-function multiCacheKey(){return "match-edge:multi:"+londonToday()}
+function multiCacheKey(){return "match-edge:multi:v3:"+londonToday()}
 function readMultiCache():Response|null{
   try{
     const raw=window.localStorage.getItem(multiCacheKey())
@@ -182,7 +182,8 @@ function readMultiCache():Response|null{
 }
 function writeMultiCache(data:Response){
   try{
-    if(data?.ok)window.localStorage.setItem(multiCacheKey(),JSON.stringify({savedAt:new Date().toISOString(),data}))
+    const hasBuild=(data?.multiMatchBuild?.matchBuilders?.length??0)>0||(data?.multiMatchBuild?.tiers??[]).some(t=>(t.matchBuilders?.length??0)>0)
+    if(data?.ok&&hasBuild)window.localStorage.setItem(multiCacheKey(),JSON.stringify({savedAt:new Date().toISOString(),data}))
   }catch{}
 }
 
@@ -199,8 +200,14 @@ export default function RecommendedPage(){
       const url="/api/recommended?mode=multi"+(force?"&refresh=1":"")
       const r=await fetch(url,{cache:"no-store",signal:controller.signal})
       const next=r.ok?await r.json() as Response:{ok:false,error:"Multi-match scan failed"}
-      setData(next)
-      if(next.ok)writeMultiCache(next)
+      const hasBuild=(next?.multiMatchBuild?.matchBuilders?.length??0)>0||(next?.multiMatchBuild?.tiers??[]).some(t=>(t.matchBuilders?.length??0)>0)
+      if(next.ok&&!hasBuild){
+        const cached=readMultiCache()
+        setData(cached??next)
+      }else{
+        setData(next)
+        if(next.ok)writeMultiCache(next)
+      }
     }catch(error){
       const timedOut=error instanceof DOMException&&error.name==="AbortError"
       setData(cur=>cur??{
