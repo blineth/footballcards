@@ -37,7 +37,7 @@ type Selection={
 }
 type LivePlayerStat={
   player:string;team:string;minutes:number|null;foulsCommitted:number;foulsDrawn:number;shots:number;shotsOnTarget:number;
-  goals:number;assists:number;yellowCards:number;redCards:number;starter?:boolean;subbedOff:boolean;
+  goals:number;assists:number;yellowCards:number;redCards:number;starter?:boolean;subbedOn?:boolean;subbedOff:boolean;
   tackles:number;interceptions:number;blocks:number;duelsTotal:number;duelsWon:number;defensiveInterventions:number
 }
 type LiveData={
@@ -191,10 +191,17 @@ function verifiedBet365Odd(s:Selection){
 }
 function referenceOdd(s:Selection){return Number(verifiedBet365Odd(s)??0)}
 function liveUrl(f:Fixture){return "/api/live-player-stats?"+new URLSearchParams({date:f.date,home:f.home,away:f.away,competition:f.competition})}
+function livePlayerIsActive(p:LivePlayerStat){
+  if(p.subbedOff)return false
+  return p.starter===true||p.subbedOn===true||Number(p.minutes??0)>0||
+    Number(p.foulsCommitted??0)>0||Number(p.foulsDrawn??0)>0||Number(p.shots??0)>0||
+    Number(p.shotsOnTarget??0)>0||Number(p.goals??0)>0||Number(p.assists??0)>0||
+    Number(p.yellowCards??0)>0||Number(p.redCards??0)>0
+}
 function liveBaselineUrl(f:Fixture,live:LiveData){
   const q=new URLSearchParams({date:f.date,home:f.home,away:f.away,competition:f.competition})
-  const starters=(live.players??[]).filter(p=>p.starter===true)
-  for(const p of starters)q.append("starter",p.player)
+  const active=(live.players??[]).filter(livePlayerIsActive)
+  for(const p of active)q.append("starter",p.player)
   return "/api/live-player-baseline?"+q.toString()
 }
 function lineupStatusUrl(f:Fixture){return "/api/lineup-status?"+new URLSearchParams({id:f.id,date:f.date,home:f.home,away:f.away,competition:f.competition})}
@@ -254,7 +261,7 @@ function applyLive(rows:Selection[],live:LiveData|null,scorecard:Scorecard|null=
 
   const teamTotals=new Map<string,{fc:number;fd:number;shots:number;sot:number;cards:number;duels:number;tackles:number}>()
   for(const stat of live.players){
-    if(stat.starter===false&&Number(stat.minutes??0)<=0)continue
+    if(!livePlayerIsActive(stat))continue
     const key=teamNorm(stat.team)
     const cur=teamTotals.get(key)??{fc:0,fd:0,shots:0,sot:0,cards:0,duels:0,tackles:0}
     cur.fc+=Number(stat.foulsCommitted??0)
@@ -1078,10 +1085,13 @@ export default function BetBuilderPage(){
     }
   },[])
   useEffect(()=>{if(!fixture)return;void loadLive(fixture);const t=window.setInterval(()=>void loadLive(fixture),30000);return()=>window.clearInterval(t)},[fixture,loadLive])
+  const liveActiveRosterSignature=useMemo(()=>live
+    ? live.players.filter(livePlayerIsActive).map(p=>normPlayer(p.player)).sort().join("|")
+    : "",[live])
   const loadLiveBaseline=useCallback(async(f:Fixture,currentLive:LiveData)=>{
     if(!(currentLive.status==="live"||currentLive.status==="halftime")||!currentLive.players?.length)return
-    const starters=currentLive.players.filter(p=>p.starter===true)
-    if(starters.length<20)return
+    const active=currentLive.players.filter(livePlayerIsActive)
+    if(active.length<20)return
     try{
       const r=await fetch(liveBaselineUrl(f,currentLive),{cache:"default"})
       if(!r.ok)return
@@ -1094,9 +1104,9 @@ export default function BetBuilderPage(){
     }catch{}
   },[])
   useEffect(()=>{
-    if(!fixture||!live||data?.ok)return
+    if(!fixture||!live||!liveActiveRosterSignature)return
     void loadLiveBaseline(fixture,live)
-  },[fixture,live,data?.ok,loadLiveBaseline])
+  },[fixture,liveActiveRosterSignature,loadLiveBaseline])
   const loadLiveOdds=useCallback(async(f:Fixture)=>{
     try{
       const r=await fetch(liveOddsUrl(f),{cache:"no-store"})
