@@ -250,6 +250,7 @@ function buildTargetOddsSlips(recommendations:Recommendation[],fixtureId:string)
   }
 
   const family=(market:string)=>market.startsWith("goal")?"goal":market.startsWith("assist")?"assist":market.startsWith("fouled")?"fouled":market.startsWith("foul")?"foul":market.startsWith("sot")?"sot":market.startsWith("shot")?"shot":"card"
+  const baseMarket=(market:string)=>market==="goal1"||market==="assist1"||market==="foul1"||market==="fouled1"||market==="card"||market==="shot1"||market==="sot1"
   function search(targetDecimal:number,bookmaker:"Bet365"){
     const minFamilies=targetDecimal>=16?3:2
     type State={legs:Candidate[];odds:number;prob:number;players:Set<string>;families:Record<string,number>}
@@ -497,61 +498,68 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
     if(!scorecard)return null
     const candidates=directPlayerCandidates(scorecard)
       .filter(leg=>leg.bookmakerName==="Bet365"&&leg.bookmakerOdds!=null&&Number(leg.bookmakerOdds)>1&&leg.probability>=.40)
-      .sort((a,b)=>b.probability-a.probability||Number(a.bookmakerOdds)-Number(b.bookmakerOdds))
-      .slice(0,70)
+      .sort((a,b)=>b.probability-a.probability||((baseMarket(a.market)?0:1)-(baseMarket(b.market)?0:1))||Number(a.bookmakerOdds)-Number(b.bookmakerOdds))
+      .slice(0,90)
 
     type State={legs:SlipLeg[];product:number;raw:number;conservative:number;players:Set<string>;families:Record<string,number>}
-    let states:State[]=[{legs:[],product:1,raw:1,conservative:1,players:new Set(),families:{}}]
 
-    for(const leg of candidates){
-      const next=[...states]
-      for(const state of states){
-        if(state.legs.length>=8)continue
-        const pkey=normName(leg.player)
-        if(state.players.has(pkey))continue
-        const fam=family(leg.market)
-        const familyCount=state.families[fam]??0
-        if(familyCount>=4)continue
-        const price=Number(leg.bookmakerOdds)
-        const product=state.product*price
-        if(product>6.2&&state.legs.length>=1)continue
-        const legs=[...state.legs,leg]
-        const raw=state.raw*leg.probability
-        next.push({
-          legs,product,raw,conservative:conservativeJoint(legs,raw),
-          players:new Set([...state.players,pkey]),
-          families:{...state.families,[fam]:familyCount+1},
-        })
+    const runSearch=(pool:SlipLeg[])=>{
+      let states:State[]=[{legs:[],product:1,raw:1,conservative:1,players:new Set(),families:{}}]
+      for(const leg of pool){
+        const next=[...states]
+        for(const state of states){
+          if(state.legs.length>=8)continue
+          const pkey=normName(leg.player)
+          if(state.players.has(pkey))continue
+          const fam=family(leg.market)
+          const familyCount=state.families[fam]??0
+          if(familyCount>=6)continue
+          const price=Number(leg.bookmakerOdds)
+          const product=state.product*price
+          if(product>6.2&&state.legs.length>=1)continue
+          const legs=[...state.legs,leg]
+          const raw=state.raw*leg.probability
+          next.push({
+            legs,product,raw,conservative:conservativeJoint(legs,raw),
+            players:new Set([...state.players,pkey]),
+            families:{...state.families,[fam]:familyCount+1},
+          })
+        }
+        states=next
+          .sort((a,b)=>{
+            const ar=a.product>=4,br=b.product>=4
+            if(ar!==br)return ar?-1:1
+            if(ar&&br){
+              if(Math.abs(a.raw-b.raw)>.002)return b.raw-a.raw
+              if(Math.abs(a.conservative-b.conservative)>.002)return b.conservative-a.conservative
+              return Math.abs(a.product-4)-Math.abs(b.product-4)
+            }
+            const aProgress=Math.min(1,a.product/4)
+            const bProgress=Math.min(1,b.product/4)
+            const aScore=a.raw*Math.pow(aProgress,.32)
+            const bScore=b.raw*Math.pow(bProgress,.32)
+            if(Math.abs(aScore-bScore)>.0005)return bScore-aScore
+            return b.conservative-a.conservative
+          })
+          .slice(0,2600)
       }
-      states=next
+
+      return states
+        .filter(s=>s.legs.length>=2&&s.product>=4&&s.product<=5.8)
         .sort((a,b)=>{
-          const ar=a.product>=4,br=b.product>=4
-          if(ar!==br)return ar?-1:1
-          if(ar&&br){
-            if(Math.abs(a.raw-b.raw)>.002)return b.raw-a.raw
-            if(Math.abs(a.conservative-b.conservative)>.002)return b.conservative-a.conservative
-            return Math.abs(a.product-4)-Math.abs(b.product-4)
-          }
-          const aProgress=Math.min(1,a.product/4)
-          const bProgress=Math.min(1,b.product/4)
-          const aScore=a.raw*Math.pow(aProgress,.32)
-          const bScore=b.raw*Math.pow(bProgress,.32)
-          if(Math.abs(aScore-bScore)>.0005)return bScore-aScore
-          return b.conservative-a.conservative
-        })
-        .slice(0,2600)
+          if(Math.abs(a.raw-b.raw)>.002)return b.raw-a.raw
+          if(Math.abs(a.conservative-b.conservative)>.002)return b.conservative-a.conservative
+          const weakA=Math.min(...a.legs.map(x=>x.probability))
+          const weakB=Math.min(...b.legs.map(x=>x.probability))
+          if(Math.abs(weakA-weakB)>.005)return weakB-weakA
+          return Math.abs(a.product-4)-Math.abs(b.product-4)
+        })[0]
     }
 
-    const best=states
-      .filter(s=>s.legs.length>=2&&s.product>=4&&s.product<=5.8)
-      .sort((a,b)=>{
-        if(Math.abs(a.raw-b.raw)>.002)return b.raw-a.raw
-        if(Math.abs(a.conservative-b.conservative)>.002)return b.conservative-a.conservative
-        const weakA=Math.min(...a.legs.map(x=>x.probability))
-        const weakB=Math.min(...b.legs.map(x=>x.probability))
-        if(Math.abs(weakA-weakB)>.005)return weakB-weakA
-        return Math.abs(a.product-4)-Math.abs(b.product-4)
-      })[0]
+    // First try only the safer low thresholds spread across different players.
+    // Escalated thresholds are fallback-only if those cannot reach ~3/1.
+    let best=runSearch(candidates.filter(leg=>baseMarket(leg.market)))
+    if(!best)best=runSearch(candidates)
     if(!best)return null
 
     const legs:MultiMatchLeg[]=best.legs.map(leg=>({
