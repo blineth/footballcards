@@ -15,7 +15,9 @@ type LivePlayerStat={
 type RefereeLiveContext={
   name:string|null;source:string|null;matches:number|null;historicalYellowsPerGame:number|null;historicalFoulsPerGame:number|null;
   liveFouls:number;liveYellows:number;liveReds:number;liveFoulsPer90:number|null;liveYellowsPer90:number|null;
-  liveCardPerFoul:number|null;historicalCardPerFoul:number|null;strictnessScore:number;strictnessLabel:"strict"|"average"|"lenient";
+  liveCardPerFoul:number|null;historicalCardPerFoul:number|null;
+  recent10YellowsPerGame:number|null;recent10FoulsPerGame:number|null;recent10CardsPerFoul:number|null;profileStrictnessScore:number|null;
+  strictnessScore:number;strictnessLabel:"strict"|"average"|"lenient";
   historicalModifier:number;liveDecisionModifier:number
 }
 type LivePayload={
@@ -189,6 +191,11 @@ async function enrichRefereeContext(payload:LivePayload,competition?:string){
   const historical=name?await cachedRefereeProfile(name,competition):null
   const histY=Number.isFinite(Number(historical?.yellowsPerGame))?Number(historical.yellowsPerGame):null
   const histF=Number.isFinite(Number(historical?.foulsPerGame))?Number(historical.foulsPerGame):null
+  const storedCpf=Number.isFinite(Number(historical?.cardsPerFoul))?Number(historical.cardsPerFoul):null
+  const recent10Y=Number.isFinite(Number(historical?.recent10YellowsPerGame))?Number(historical.recent10YellowsPerGame):null
+  const recent10F=Number.isFinite(Number(historical?.recent10FoulsPerGame))?Number(historical.recent10FoulsPerGame):null
+  const recent10Cpf=Number.isFinite(Number(historical?.recent10CardsPerFoul))?Number(historical.recent10CardsPerFoul):null
+  const profileStrict=Number.isFinite(Number(historical?.strictnessScore))?Number(historical.strictnessScore):null
   const liveFouls=payload.players.reduce((s,p)=>s+Number(p.foulsCommitted??0),0)
   const liveYellows=payload.players.reduce((s,p)=>s+Number(p.yellowCards??0),0)
   const liveReds=payload.players.reduce((s,p)=>s+Number(p.redCards??0),0)
@@ -196,12 +203,21 @@ async function enrichRefereeContext(payload:LivePayload,competition?:string){
   const liveFoulsPer90=liveFouls>0?liveFouls*90/elapsed:0
   const liveYellowsPer90=(liveYellows+liveReds*.55)*90/elapsed
   const liveCardPerFoul=liveFouls>0?(liveYellows+liveReds*.55)/liveFouls:null
-  const historicalCardPerFoul=histY!=null&&histF!=null&&histF>0?histY/histF:null
+  const historicalCardPerFoul=storedCpf??(histY!=null&&histF!=null&&histF>0?histY/histF:null)
 
-  // Historical temperament establishes the prior. The live modifier is relative
-  // to that referee's own norm, so we do not simply double-count a naturally strict ref.
-  const historicalModifier=Math.max(-.18,Math.min(.18,
-    (histY==null?0:(histY-4.2)*.055)+(histF==null?0:(histF-22)*.006)
+  // The stored strictness score is normalized inside the referee's own competition,
+  // which matters for internationals because source coverage differs from English
+  // league feeds. Recent-10 form and card-per-foul conversion then tilt that prior.
+  const normalizedPrior=profileStrict==null?0:(profileStrict-.5)*.36
+  const legacyPrior=profileStrict==null
+    ?(histY==null?0:(histY-4.2)*.045)+(histF==null?0:(histF-22)*.004)
+    :0
+  const recentYellowShift=recent10Y!=null&&histY!=null?(recent10Y-histY)*.025:0
+  const recentConversionShift=recent10Cpf!=null&&historicalCardPerFoul!=null
+    ?(recent10Cpf-historicalCardPerFoul)*.40
+    :0
+  const historicalModifier=Math.max(-.22,Math.min(.22,
+    normalizedPrior+legacyPrior+recentYellowShift+recentConversionShift
   ))
   const reliability=Math.min(1,elapsed/50)*Math.min(1,.25+liveFouls/14+(liveYellows+liveReds)/6)
   const yellowBase=histY??4.2
@@ -226,6 +242,10 @@ async function enrichRefereeContext(payload:LivePayload,competition?:string){
     liveYellowsPer90:Math.round(liveYellowsPer90*10)/10,
     liveCardPerFoul:liveCardPerFoul==null?null:Math.round(liveCardPerFoul*1000)/1000,
     historicalCardPerFoul:historicalCardPerFoul==null?null:Math.round(historicalCardPerFoul*1000)/1000,
+    recent10YellowsPerGame:recent10Y==null?null:Math.round(recent10Y*100)/100,
+    recent10FoulsPerGame:recent10F==null?null:Math.round(recent10F*100)/100,
+    recent10CardsPerFoul:recent10Cpf==null?null:Math.round(recent10Cpf*1000)/1000,
+    profileStrictnessScore:profileStrict==null?null:Math.round(profileStrict*1000)/1000,
     strictnessScore:Math.round(strictnessScore*1000)/1000,strictnessLabel,
     historicalModifier:Math.round(historicalModifier*1000)/1000,
     liveDecisionModifier:Math.round(liveDecisionModifier*1000)/1000,
@@ -356,6 +376,7 @@ async function espnLive(input:{date:string;home:string;away:string;competition:C
         referee:refereeName?{
           name:refereeName,source:"ESPN",matches:null,historicalYellowsPerGame:null,historicalFoulsPerGame:null,
           liveFouls:0,liveYellows:0,liveReds:0,liveFoulsPer90:null,liveYellowsPer90:null,liveCardPerFoul:null,historicalCardPerFoul:null,
+          recent10YellowsPerGame:null,recent10FoulsPerGame:null,recent10CardsPerFoul:null,profileStrictnessScore:null,
           strictnessScore:.5,strictnessLabel:"average",historicalModifier:0,liveDecisionModifier:0,
         }:null,
       }
