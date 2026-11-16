@@ -837,6 +837,9 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
           seasonHitRate:Number.isFinite(Number(src?.seasonHitRate))?Number(src?.seasonHitRate):null,
           h2hHitRate:Number.isFinite(Number(src?.h2hHitRate))?Number(src?.h2hHitRate):null,
           h2hMatches:Number(src?.h2hMatches??0),sampleMatches:Number(src?.sampleMatches??0),
+          h2hLineupOverlap:Number.isFinite(Number(src?.h2hLineupOverlap))?Number(src?.h2hLineupOverlap):null,
+          h2hSimilarity:Number.isFinite(Number(src?.h2hSimilarity))?Number(src?.h2hSimilarity):null,
+          reason:src?.reason??"Recent, season and matchup evidence",
         }
       })
       const cardLeg=sourceTarget.find(l=>family(l.market)==="card")??null
