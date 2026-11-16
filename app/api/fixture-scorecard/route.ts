@@ -923,6 +923,9 @@ function marketReasons(input: {
   h2hN: number
   h2hCards?: number
   h2hLineupOverlap?: number | null
+  h2hSimilarity?: number | null
+  competition?: string | null
+  internationalSample?: number | null
   sameMatchupMeetings?: number
   sameMatchupCards?: number
   sameMatchupFouls?: number
@@ -945,7 +948,11 @@ function marketReasons(input: {
   }
   if(input.market==="card"&&Number(input.h2hCards??0)>0){
     const overlap=input.h2hLineupOverlap==null?"":" · "+Math.round(Number(input.h2hLineupOverlap)*100)+"% current-opponent lineup overlap"
-    reasons.push("Booked in "+input.h2hCards+"/"+input.h2hN+" previous meetings"+overlap)
+    const similarity=input.h2hSimilarity==null?"":" · "+Math.round(Number(input.h2hSimilarity)*100)+"% H2H similarity"
+    reasons.push("Booked in "+input.h2hCards+"/"+input.h2hN+" previous meetings"+overlap+similarity)
+  }
+  if(input.market==="card"&&input.competition==="International"&&Number(input.internationalSample??0)===0){
+    reasons.push("No prior senior international rows in our tracked sample; card risk leans more on club discipline, role, matchup and Bet365")
   }
   if((input.market.startsWith("foul")&&!input.market.startsWith("fouled"))&&Number(input.sameMatchupMeetings??0)>0&&Number(input.sameMatchupFouls??0)>0){
     reasons.push("Same likely direct opponent appeared in "+input.sameMatchupMeetings+" H2H meeting"+(input.sameMatchupMeetings===1?"":"s")+" · "+input.sameMatchupFouls+" fouls committed")
@@ -1042,18 +1049,27 @@ function routeSelectionSafety(legs:SlipLeg[],joint:number){
   const foulOneCount=legs.filter(leg=>leg.market==="foul1").length
   const lowThresholdCount=legs.filter(leg=>lowThresholdMarket(leg.market)).length
   const repeatEventBonus=1+Math.min(.09,foulOneCount*.018+Math.max(0,lowThresholdCount-foulOneCount)*.006)
-  return joint*stabilityGeo*repeatEventBonus
+  const families=legs.map(leg=>leg.market.startsWith("goal")?"goal":leg.market.startsWith("assist")?"assist":leg.market.startsWith("fouled")?"fouled":leg.market.startsWith("foul")?"foul":leg.market.startsWith("sot")?"sot":leg.market.startsWith("shot")?"shot":"card")
+  const uniqueFamilies=new Set(families).size
+  const familyCounts=families.reduce((acc,f)=>{acc[f]=(acc[f]??0)+1;return acc},{} as Record<string,number>)
+  const maxFamily=Math.max(...Object.values(familyCounts))
+  const diversityBonus=1+Math.min(.04,Math.max(0,uniqueFamilies-1)*.009)
+  const overConcentrated=legs.length>=4&&maxFamily/legs.length>=.75
+  return joint*stabilityGeo*repeatEventBonus*diversityBonus*(overConcentrated?.97:1)
 }
 function evidenceSupport(leg:SlipLeg){
   const recent=Number(leg.recent5HitRate)
   const season=Number(leg.seasonHitRate)
   const h2h=Number(leg.h2hHitRate)
   const h2hN=Number(leg.h2hMatches??0)
+  const similarity=Number(leg.h2hSimilarity)
+  const overlap=Number(leg.h2hLineupOverlap)
   let weighted=0,weight=0
-  if(Number.isFinite(recent)){weighted+=recent*.34;weight+=.34}
-  if(Number.isFinite(season)){weighted+=season*.46;weight+=.46}
-  if(h2hN>=2&&Number.isFinite(h2h)){
-    const hw=Math.min(.20,.08+.03*Math.min(4,h2hN))
+  if(Number.isFinite(recent)){weighted+=recent*.32;weight+=.32}
+  if(Number.isFinite(season)){weighted+=season*.43;weight+=.43}
+  if(h2hN>=1&&Number.isFinite(h2h)){
+    const similarityLift=(Number.isFinite(similarity)?similarity:0)*.10+(Number.isFinite(overlap)?overlap:0)*.06
+    const hw=Math.min(.31,.08+.035*Math.min(5,h2hN)+similarityLift)
     weighted+=h2h*hw;weight+=hw
   }
   return weight>0?clamp(weighted/weight,0,1):clamp(Number(leg.probability??0),0,1)
@@ -1324,6 +1340,11 @@ function buildRiskBuilders(players:ScorePlayer[],scope:"all"|"discipline"="all")
       {id:"discipline-balanced-15-1",title:"Fouls & Cards 15/1",risk:"Balanced" as const,targetFractional:"15/1",targetDecimal:16,minSafety:.26,maxLegs:12},
       {id:"discipline-high-20-1",title:"Fouls & Cards 20/1",risk:"High Risk" as const,targetFractional:"20/1",targetDecimal:21,minSafety:.20,maxLegs:12},
       {id:"discipline-high-25-1",title:"Fouls & Cards 25/1",risk:"High Risk" as const,targetFractional:"25/1",targetDecimal:26,minSafety:.18,maxLegs:12},
+      {id:"discipline-high-30-1",title:"Fouls & Cards 30/1",risk:"High Risk" as const,targetFractional:"30/1",targetDecimal:31,minSafety:.16,maxLegs:12},
+      {id:"discipline-high-40-1",title:"Fouls & Cards 40/1",risk:"High Risk" as const,targetFractional:"40/1",targetDecimal:41,minSafety:.14,maxLegs:12},
+      {id:"discipline-high-50-1",title:"Fouls & Cards 50/1",risk:"High Risk" as const,targetFractional:"50/1",targetDecimal:51,minSafety:.12,maxLegs:12},
+      {id:"discipline-high-75-1",title:"Fouls & Cards 75/1",risk:"High Risk" as const,targetFractional:"75/1",targetDecimal:76,minSafety:.10,maxLegs:12},
+      {id:"discipline-high-100-1",title:"Fouls & Cards 100/1",risk:"High Risk" as const,targetFractional:"100/1",targetDecimal:101,minSafety:.08,maxLegs:12},
     ]
     :[
       {id:"safe-3-1",title:"Safe 3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4,minSafety:.50,maxLegs:12},
@@ -1332,6 +1353,11 @@ function buildRiskBuilders(players:ScorePlayer[],scope:"all"|"discipline"="all")
       {id:"balanced-15-1",title:"Balanced 15/1",risk:"Balanced" as const,targetFractional:"15/1",targetDecimal:16,minSafety:.34,maxLegs:12},
       {id:"high-20-1",title:"Risky 20/1",risk:"High Risk" as const,targetFractional:"20/1",targetDecimal:21,minSafety:.28,maxLegs:12},
       {id:"high-25-1",title:"Risky 25/1",risk:"High Risk" as const,targetFractional:"25/1",targetDecimal:26,minSafety:.25,maxLegs:12},
+      {id:"high-30-1",title:"Risky 30/1",risk:"High Risk" as const,targetFractional:"30/1",targetDecimal:31,minSafety:.22,maxLegs:12},
+      {id:"high-40-1",title:"Risky 40/1",risk:"High Risk" as const,targetFractional:"40/1",targetDecimal:41,minSafety:.20,maxLegs:12},
+      {id:"high-50-1",title:"Risky 50/1",risk:"High Risk" as const,targetFractional:"50/1",targetDecimal:51,minSafety:.18,maxLegs:12},
+      {id:"high-75-1",title:"Risky 75/1",risk:"High Risk" as const,targetFractional:"75/1",targetDecimal:76,minSafety:.16,maxLegs:12},
+      {id:"high-100-1",title:"Risky 100/1",risk:"High Risk" as const,targetFractional:"100/1",targetDecimal:101,minSafety:.14,maxLegs:12},
     ]
   const baseMarkets:MarketKey[]=["goal1","assist1","shot1","sot1","foul1","fouled1","card"]
   const allPricedMarkets:MarketKey[]=scope==="discipline"
@@ -2315,6 +2341,9 @@ export async function GET(request: Request) {
           h2hN: h2hRows.length,
           h2hCards:h2hContext.cards,
           h2hLineupOverlap:h2hContext.averageLineupOverlap,
+          h2hSimilarity:h2hContext.averageSimilarity,
+          competition,
+          internationalSample:internationalRows.length,
           sameMatchupMeetings:h2hContext.sameMatchupMeetings,
           sameMatchupCards:h2hContext.sameMatchupCards,
           sameMatchupFouls:h2hContext.sameMatchupFouls,
