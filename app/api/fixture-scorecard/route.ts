@@ -1010,7 +1010,7 @@ function marketLeg(player: ScorePlayer, market: MarketKey): SlipLeg {
     edge: m.edge,
     expectedValue: m.expectedValue,
     confidence: m.confidence,
-    reason: m.reasons[0] ?? "",
+    reason: (m.reasons??[]).join(" · "),
     priceSource: m.bookmakerOdds!=null && m.bookmakerName==="Bet365" ? "exact" : null,
     bookmakerProbability:m.bookmakerNoVigProbability??m.impliedProbability,
     recent5HitRate:Number.isFinite(Number(m.recent5HitRate))?Number(m.recent5HitRate):null,
