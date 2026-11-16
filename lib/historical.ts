@@ -51,13 +51,23 @@ export async function getPlayerH2H(playerName: string, opponent: string) {
     .orderBy(desc(playerH2H.matchDate))
 }
 
-export async function getRefereeByName(name: string) {
+export async function getRefereeByName(name: string, competition?: string) {
   if (!isDatabaseConfigured) return null
   await ensureResearchSchema()
-  const exact = await db.select().from(referees).where(eq(referees.refereeName, name)).orderBy(desc(referees.season))
+  const exact = competition
+    ? await db.select().from(referees).where(and(eq(referees.refereeName, name),eq(referees.competition,competition))).orderBy(desc(referees.season))
+    : await db.select().from(referees).where(eq(referees.refereeName, name)).orderBy(desc(referees.season))
   if (exact[0]) return exact[0]
-  const rows = await db.select().from(referees).orderBy(desc(referees.season))
-  return rows.find((row) => refereeNameMatch(row.refereeName, name)) ?? null
+  const rows = competition
+    ? await db.select().from(referees).where(eq(referees.competition,competition)).orderBy(desc(referees.season))
+    : await db.select().from(referees).orderBy(desc(referees.season))
+  const fuzzy = rows.find((row) => refereeNameMatch(row.refereeName, name))
+  if (fuzzy) return fuzzy
+  if (competition) {
+    const all = await db.select().from(referees).orderBy(desc(referees.season))
+    return all.find((row) => refereeNameMatch(row.refereeName, name)) ?? null
+  }
+  return null
 }
 
 export async function getPlayerRefereeHistory(refereeName: string, playerName: string) {
