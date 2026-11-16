@@ -1648,13 +1648,16 @@ async function buildVerifiedBet365SnapshotFallback(input:{request:Request;date:s
 function scorecardJson(payload:any,builderView:boolean,status=200){
   if(!builderView)return NextResponse.json(payload,{status})
   const compact=compactBuilderScorecard(payload)
+  const confirmed=payload?.lineupsConfirmed===true||payload?.lineupMode==="confirmed"
+  const maxAge=confirmed?60:15
   return NextResponse.json(compact,{
     status,
     headers:{
-      // The scorecard is the pre-match/confirmed-XI baseline. Live match events
-      // are fetched separately and applied client-side, so this can be cached.
-      "Cache-Control":"public, max-age=0, s-maxage=21600, stale-while-revalidate=86400",
-      "Vercel-CDN-Cache-Control":"public, s-maxage=21600, stale-while-revalidate=86400",
+      // Before kickoff the lineup can change from predicted to confirmed at any
+      // moment, so never let a long CDN cache hold the old XI. A verified XI can
+      // be cached briefly because it is immutable once published.
+      "Cache-Control":`public, max-age=0, s-maxage=${maxAge}, stale-while-revalidate=${confirmed?300:30}`,
+      "Vercel-CDN-Cache-Control":`public, s-maxage=${maxAge}, stale-while-revalidate=${confirmed?300:30}`,
     },
   })
 }
