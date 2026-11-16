@@ -181,6 +181,55 @@ function matchResult(market:string,score:{home:number;away:number}){
   return null
 }
 
+export async function backfillLegacyPredictionLedger(){
+  if(!isDatabaseConfigured)return {runs:0,legs:0}
+  await ensureResearchSchema()
+  const runs=await pool.query(`
+    INSERT INTO prediction_runs (
+      snapshot_key,surface,fixture_id,competition,fixture_date,kickoff,home_team,away_team,
+      slip_id,slip_title,bookmaker,lineup_confirmed,live,captured_at
+    )
+    SELECT
+      'legacy|'||recommendation_key,'legacy_recommended',max(fixture_id),max(competition),max(fixture_date),
+      max(kickoff),max(home_team),max(away_team),max(slip_id),max(slip_title),max(bookmaker),
+      bool_or(lineup_confirmed),false,min(captured_at)
+    FROM recommendation_snapshots
+    GROUP BY recommendation_key
+    ON CONFLICT (snapshot_key) DO NOTHING
+    RETURNING id
+  `)
+  const legs=await pool.query(`
+    INSERT INTO prediction_legs (
+      run_id,leg_index,fixture_id,competition,fixture_date,kickoff,home_team,away_team,
+      player_name,db_player_name,player_team,opponent_team,market,threshold,label,
+      model_probability,fair_odds,bookmaker_odds,confidence,result_value,outcome,graded_at,created_at
+    )
+    SELECT r.id,
+      row_number() OVER(PARTITION BY s.recommendation_key ORDER BY s.id)-1,
+      s.fixture_id,s.competition,s.fixture_date,s.kickoff,s.home_team,s.away_team,
+      s.player_name,s.db_player_name,s.player_team,s.opponent_team,s.market,s.threshold,s.label,
+      s.model_probability,s.fair_odds,s.bookmaker_odds,s.confidence,s.result_value,s.outcome,s.graded_at,s.captured_at
+    FROM recommendation_snapshots s
+    JOIN prediction_runs r ON r.snapshot_key='legacy|'||s.recommendation_key
+    ON CONFLICT (run_id,leg_index) DO NOTHING
+    RETURNING id
+  `)
+  await pool.query(`
+    UPDATE prediction_runs r SET
+      fully_graded=x.fully_graded,
+      won=CASE WHEN x.fully_graded THEN x.won ELSE NULL END,
+      graded_at=CASE WHEN x.fully_graded THEN COALESCE(r.graded_at,now()) ELSE r.graded_at END
+    FROM (
+      SELECT run_id,
+        count(*)>0 AND count(*)=count(*) FILTER(WHERE graded_at IS NOT NULL) fully_graded,
+        bool_and(COALESCE(outcome,false)) FILTER(WHERE graded_at IS NOT NULL) won
+      FROM prediction_legs GROUP BY run_id
+    ) x
+    WHERE r.id=x.run_id AND r.surface='legacy_recommended'
+  `)
+  return {runs:runs.rowCount??0,legs:legs.rowCount??0}
+}
+
 export async function gradePredictionLedger(limit=1500){
   if(!isDatabaseConfigured)return {graded:0,runsUpdated:0}
   await ensureResearchSchema()
