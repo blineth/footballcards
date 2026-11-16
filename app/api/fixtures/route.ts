@@ -151,7 +151,7 @@ async function enrichReferees(fixtures: Fixture[]) {
   return Promise.all(
     fixtures.map(async (f) => {
       if (!f.referee?.name) return f
-      const ref = await getRefereeByName(f.referee.name)
+      const ref = await getRefereeByName(f.referee.name,f.competition)
       if (!ref) return f
       return {
         ...f,
