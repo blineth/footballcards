@@ -174,19 +174,19 @@ function refereeNameFromEspn(summary:any,event:any){
   }
   return null
 }
-async function cachedRefereeProfile(name:string){
-  const key=norm(name)
+async function cachedRefereeProfile(name:string,competition?:string){
+  const key=norm(name)+"|"+norm(competition)
   const cached=refereeProfileCache.get(key)
   if(cached&&cached.expires>Date.now())return cached.profile
   let profile:any=null
-  try{profile=await getRefereeByName(name)}catch{}
+  try{profile=await getRefereeByName(name,competition)}catch{}
   refereeProfileCache.set(key,{expires:Date.now()+6*60*60*1000,profile})
   return profile
 }
 function clamp01(v:number){return Math.max(0,Math.min(1,v))}
-async function enrichRefereeContext(payload:LivePayload){
+async function enrichRefereeContext(payload:LivePayload,competition?:string){
   const name=payload.referee?.name??null
-  const historical=name?await cachedRefereeProfile(name):null
+  const historical=name?await cachedRefereeProfile(name,competition):null
   const histY=Number.isFinite(Number(historical?.yellowsPerGame))?Number(historical.yellowsPerGame):null
   const histF=Number.isFinite(Number(historical?.foulsPerGame))?Number(historical.foulsPerGame):null
   const liveFouls=payload.players.reduce((s,p)=>s+Number(p.foulsCommitted??0),0)
@@ -507,7 +507,7 @@ export async function GET(request:Request){
     payload={ok:true,source:null,status:"unknown",elapsed:0,score:{home:null,away:null},players:[],updatedAt:new Date().toISOString()}
   }
   if(payload.players.length)applyRollingDiscipline(key,payload)
-  payload=await enrichRefereeContext(payload)
+  payload=await enrichRefereeContext(payload,competition)
   const ttl=payload.status==="live"||payload.status==="halftime"?45_000:payload.status==="scheduled"?120_000:300_000
   cache.set(key,{expires:Date.now()+ttl,payload})
   return NextResponse.json(payload)
