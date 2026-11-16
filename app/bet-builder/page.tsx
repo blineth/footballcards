@@ -884,10 +884,16 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
 function scorecardCacheKey(f:Fixture){return "match-edge:scorecard:"+[f.date,f.competition,f.home,f.away].join("|").toLowerCase()}
 function readScorecardCache(f:Fixture):Scorecard|null{
   try{
-    const raw=window.localStorage.getItem(scorecardCacheKey(f))
+    const key=scorecardCacheKey(f)
+    const raw=window.localStorage.getItem(key)
     if(!raw)return null
     const parsed=JSON.parse(raw)
-    return parsed?.data?.ok?parsed.data as Scorecard:null
+    const data=parsed?.data as Scorecard|undefined
+    if(data?.snapshotFallback){
+      window.localStorage.removeItem(key)
+      return null
+    }
+    return data?.ok?data:null
   }catch{return null}
 }
 function writeScorecardCache(f:Fixture,data:Scorecard){
@@ -961,69 +967,41 @@ export default function BetBuilderPage(){
     const inPlayWindow=Number.isFinite(kickoff)&&now>=kickoff&&now<=kickoff+4*60*60*1000
     const cached=readScorecardCache(f)
 
-    const cachedIsFastFallback=Boolean(cached?.snapshotFallback)
     if(cached){
-      setData(current=>current?.ok?current:cached)
+      setData(current=>current?.ok&&!current.snapshotFallback?current:cached)
       setLoading(false)
-      if(!force&&!cachedIsFastFallback)return
+      if(!force)return
     }else{
       setLoading(true)
+      setData(current=>current?.ok&&!current.snapshotFallback?current:null)
     }
 
-    // Once kickoff has passed, never invoke the heavy historical scorecard route.
-    // The fast live baseline endpoint is loaded as soon as live starter data arrives.
+    // Once kickoff has passed, the live path takes over. Pre-match recommendations
+    // must always come from the full evidenced scorecard, never the fast snapshot.
     if(inPlayWindow){
       setLoading(!cached)
       return
     }
 
-    // Pre-match bootstrap is deliberately two-stage:
-    // 1) render the fast snapshot model immediately;
-    // 2) keep loading the full H2H/referee/Bet365 scorecard and replace it when ready.
-    // A slow upstream source must never leave the page on "match model timed out".
-    let fastResolved:Scorecard|null=null
-    const fastPromise=(async()=>{
-      try{
-        const r=await fetch(fastBaselineUrl(f),{cache:"default"})
-        if(!r.ok)return null
-        const next=await r.json() as Scorecard
-        if(!next?.ok||!next.players?.length)return null
-        fastResolved=next
-        setData(current=>{
-          if(current?.ok&&!current.snapshotFallback)return current
-          writeScorecardCache(f,next)
-          return next
-        })
-        setLoading(false)
-        return next
-      }catch{return null}
-    })()
-
     const controller=new AbortController()
-    const timeout=window.setTimeout(()=>controller.abort(),force?35_000:30_000)
+    const timeout=window.setTimeout(()=>controller.abort(),force?45_000:40_000)
     try{
       const r=await fetch(scorecardUrl(f,force),{cache:force?"no-store":"default",signal:controller.signal})
-      const next=await r.json().catch(()=>({ok:false,error:"Unable to load match model."})) as Scorecard
-      if(next?.ok){
+      const next=await r.json().catch(()=>({ok:false,error:"Unable to load evidenced match model."})) as Scorecard
+      if(next?.ok&&!next.snapshotFallback){
         setData(next)
         writeScorecardCache(f,next)
-      }else if(!cached&&!fastResolved){
-        const fast=await fastPromise
-        if(!fast)setData(next)
+      }else if(!cached){
+        // Never publish a snapshot fallback as a prediction. Keep the evidenced
+        // model loading and automatically retry instead.
+        setData(null)
+        setBaselineRetry(v=>v+1)
       }
-    }catch(error){
-      const fast=fastResolved??await fastPromise
-      if(!cached&&!fast){
-        const inPlayNow=Number.isFinite(kickoff)&&Date.now()>=kickoff&&Date.now()<=kickoff+4*60*60*1000
-        if(inPlayNow){
-          setData(null)
-          setBaselineRetry(v=>v+1)
-        }else{
-          setData({ok:false,error:"Unable to load the match model. Tap refresh to retry."} as Scorecard)
-        }
+    }catch{
+      if(!cached){
+        setData(null)
+        setBaselineRetry(v=>v+1)
       }
-      // If a cached/full/fast model already exists, keep it. The full request can
-      // fail without taking a usable match model away from the user.
     }finally{
       window.clearTimeout(timeout)
       setLoading(false)
@@ -1031,10 +1009,11 @@ export default function BetBuilderPage(){
   },[])
   useEffect(()=>{if(fixture)void load(fixture,false)},[fixture,load])
   useEffect(()=>{
-    if(!fixture||data?.ok||baselineRetry<=0)return
-    const t=window.setTimeout(()=>void load(fixture,false),1500)
+    if(!fixture||(data?.ok&&!data.snapshotFallback)||baselineRetry<=0)return
+    setLoading(true)
+    const t=window.setTimeout(()=>void load(fixture,true),2500)
     return()=>window.clearTimeout(t)
-  },[fixture,data?.ok,baselineRetry,load])
+  },[fixture,data?.ok,data?.snapshotFallback,baselineRetry,load])
   useEffect(()=>{
     if(!fixture||data?.lineupsConfirmed===true||data?.lineupMode==="confirmed")return
     const kickoff=new Date(fixture.kickoff).getTime()
@@ -1260,7 +1239,7 @@ export default function BetBuilderPage(){
     return [...byFamily.values()]
   },[broadRows,verifiedPlayerRows])
   useEffect(()=>{
-    if(!fixture||!data?.ok)return
+    if(!fixture||!data?.ok||data.snapshotFallback)return
     const fixtureInfo={id:fixture.id,competition:fixture.competition,kickoff:fixture.kickoff,date:fixture.date,home:fixture.home,away:fixture.away}
     const ref=live?.referee??null
     const base={
@@ -1383,7 +1362,7 @@ export default function BetBuilderPage(){
 
     <div className="mx-auto max-w-3xl space-y-5 px-4 py-4">
       {h2hOpen?<H2HPanel data={h2hData} loading={h2hLoading} home={fixture.home} away={fixture.away}/>:null}
-      {loading&&!data&&!inPlay?<section className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center"><RefreshCw className="mx-auto mb-3 size-5 animate-spin text-emerald-300"/><p className="font-black">Ranking player markets…</p></section>:null}
+      {loading&&!data&&!inPlay?<section className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center"><RefreshCw className="mx-auto mb-3 size-5 animate-spin text-emerald-300"/><p className="font-black">Building evidenced model…</p><p className="mx-auto mt-2 max-w-md text-xs leading-relaxed text-white/35">Loading the full recent-form, season, H2H, lineup, referee and market model. Snapshot probabilities are not shown as recommendations.</p></section>:null}
       {loading&&!data&&inPlay?<section className="rounded-3xl border border-emerald-300/12 bg-emerald-400/[0.045] p-4"><div className="flex items-center gap-3"><RefreshCw className="size-4 animate-spin text-emerald-300"/><div><p className="text-sm font-black">Loading live player model…</p><p className="mt-1 text-[0.54rem] text-white/35">Current score and live events are already connected. Player rankings will appear as soon as the cached or fresh scorecard is available.</p></div></div></section>:null}
       {data&&!data.ok?<section className="rounded-3xl border border-rose-300/15 bg-rose-400/5 p-5"><p className="font-black">Match model unavailable</p><p className="mt-1 text-sm text-white/40">{data.error}</p></section>:null}
 
@@ -1397,7 +1376,7 @@ export default function BetBuilderPage(){
         {unavailableBet365Markets.length?<div className="mt-2"><p className="text-[0.42rem] font-black uppercase text-rose-300/80">Not available in verified Bet365 feed</p><div className="mt-1 flex flex-wrap gap-1.5">{unavailableBet365Markets.map(kind=><span key={kind} className="rounded-full bg-rose-300/10 px-2 py-1 text-[0.42rem] font-black text-rose-200">{marketLabel(kind)}</span>)}</div></div>:null}
       </section>:null}
 
-      {data?.ok&&(data.lineupMode==="confirmed"||data.lineupMode==="predicted"||data.lineupsConfirmed)?<>
+      {data?.ok&&!data.snapshotFallback&&(data.lineupMode==="confirmed"||data.lineupMode==="predicted"||data.lineupsConfirmed)?<>
         <section className={"rounded-2xl border px-3 py-2.5 "+(liveBet365?"border-emerald-300/25 bg-emerald-400/[0.07]":verifiedBet365?"border-cyan-300/20 bg-cyan-300/[0.05]":"border-white/8 bg-white/[0.025]")}>
           <div className="flex items-center justify-between gap-3"><div><p className={"text-[0.52rem] font-black uppercase tracking-wide "+(liveBet365?"text-emerald-300":verifiedBet365?"text-cyan-200":"text-white/35")}>{liveBet365?"CONFIRMED LIVE BET365 ODDS":inPlay?"WAITING FOR LIVE BET365 PRICES":verifiedBet365?"VERIFIED BET365 ODDS":"NO VERIFIED BET365 PRICES"}</p><p className="mt-0.5 text-[0.5rem] text-white/30">{liveBet365?"Prices are from the current Odds-API.io Bet365 live feed and are rechecked every 15 seconds.":inPlay?(liveOdds?.note??"Live model probabilities remain visible, but 3/1, 10/1 and 20/1 target cards require fresh verified Bet365 live prices."):verifiedBet365?"Bet365 prices are verified but not inside the live freshness window.":"Model probabilities remain available, but target odds are not shown without Bet365 pricing."}</p></div>{data.oddsFreshness?<span className="rounded-full bg-white/6 px-2 py-1 font-mono text-[0.42rem] font-black text-white/35">{data.oddsFreshness}</span>:null}</div>
         </section>
@@ -1427,7 +1406,7 @@ export default function BetBuilderPage(){
           <LikelihoodBoard rows={visible} allRows={allRows} category={category==="popular"?"fouls":category} fixture={fixture} inPlay={inPlay}/>
         </section>
 
-        {data.snapshotFallback?<section className="rounded-2xl border border-violet-300/15 bg-violet-400/[0.04] p-3 text-[0.58rem] leading-relaxed text-white/40">Snapshot fallback is active. Probabilities are still ranked; Bet365 prices are shown as live or reference prices where captured.</section>:null}
+
       </>:null}
     </div>
 
