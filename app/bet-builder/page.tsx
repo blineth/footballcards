@@ -1212,16 +1212,18 @@ export default function BetBuilderPage(){
     :[],[activeAvailableBets,fixture])
   const verifiedPlayerRows=useMemo(()=>allRows.filter(r=>verifiedBet365Odd(r)!=null),[allRows])
   const broadTargetBuilders=useMemo(()=>buildBroadTargetBuilders([...broadRows,...verifiedPlayerRows]),[broadRows,verifiedPlayerRows])
-  const playerBuilders=clientRiskBuilders(allRows,true)
-  const disciplineBuilders=clientRiskBuilders(disciplineRows,true)
+  const playerBuilders=!inPlay&&serverBuilders.length?serverBuilders:clientRiskBuilders(allRows,true)
+  const disciplineBuilders=!inPlay&&disciplineServerBuilders.length?disciplineServerBuilders:clientRiskBuilders(disciplineRows,true)
   const broadHasBuild=broadTargetBuilders.some(b=>b.legs?.length)
   const builders=builderMode==="discipline"
     ?disciplineBuilders
     :builderMode==="player"
       ?playerBuilders
-      :broadHasBuild
-        ?broadTargetBuilders
-        :playerBuilders
+      :!inPlay&&serverBuilders.length
+        ?serverBuilders
+        :broadHasBuild
+          ?broadTargetBuilders
+          :playerBuilders
   const bestAvailableBets=useMemo(()=>{
     const byFamily=new Map<string,Selection>()
     const candidates=[...broadRows,...verifiedPlayerRows]
