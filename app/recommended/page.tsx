@@ -115,6 +115,19 @@ type LineupResponse={
 }
 
 function percent(v:number|null|undefined){return v==null?"—":Math.round(v*100)+"%"}
+function postPredictionRuns(runs:any[]){
+  if(!runs.length)return
+  void fetch("/api/prediction-ledger",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({runs}),keepalive:true}).catch(()=>{})
+}
+function multiLedgerLeg(leg:MultiMatchLeg){
+  return {
+    fixture:{id:leg.fixtureId,competition:leg.competition,kickoff:leg.kickoff,home:leg.home,away:leg.away},
+    playerName:leg.player,dbPlayerName:leg.player,team:leg.team,market:leg.market,label:leg.label,
+    modelProbability:leg.probability,fairOdds:leg.probability>0?1/leg.probability:null,bookmakerOdds:leg.bookmakerOdds,
+    confidence:leg.confidence,recent5HitRate:leg.recent5HitRate,seasonHitRate:leg.seasonHitRate,
+    h2hHitRate:leg.h2hHitRate,h2hMatches:leg.h2hMatches,sampleMatches:leg.sampleMatches,
+  }
+}
 const TEAM_CODES:Record<string,string>={
   england:"ENG",spain:"ESP",germany:"GER",france:"FRA",italy:"ITA",portugal:"POR",netherlands:"NED",
   belgium:"BEL",brazil:"BRA",argentina:"ARG",croatia:"CRO",denmark:"DEN",sweden:"SWE",norway:"NOR",
@@ -269,6 +282,34 @@ export default function RecommendedPage(){
   const matchBuilders=activeTier?.matchBuilders??[]
   const liveMatches=data?.liveMatches??[]
   const liveMode=liveMatches.length>0
+
+  useEffect(()=>{
+    if(!data?.ok||liveMode||!tiers.length)return
+    const runs:any[]=[]
+    for(const tier of tiers){
+      if(!tier.available)continue
+      const aggregateLegs=(tier.legs??[]).map(multiLedgerLeg)
+      if(aggregateLegs.length)runs.push({
+        surface:"multi_combined",
+        slip:{id:"multi-"+tier.id,title:"Multi · "+tier.title,tier:tier.id,oddsTarget:tier.targetFractionalPerMatch,
+          combinedOdds:tier.combinedBet365Odds,modelJointProbability:tier.conservativeAllHitProbability,bookmaker:"Bet365"},
+        lineupConfirmed:(tier.matchBuilders??[]).every(b=>b.lineupsConfirmed===true),live:false,legs:aggregateLegs,
+      })
+      for(const builder of tier.matchBuilders??[]){
+        const legs=(builder.legs??[]).map(multiLedgerLeg)
+        if(!legs.length)continue
+        runs.push({
+          surface:"multi_match",
+          fixture:{id:builder.fixtureId,competition:builder.competition,kickoff:builder.kickoff,home:builder.home,away:builder.away},
+          slip:{id:"multi-"+tier.id+"-"+builder.fixtureId,title:tier.title+" · "+builder.home+" v "+builder.away,tier:tier.id,
+            oddsTarget:tier.targetFractionalPerMatch,combinedOdds:builder.referenceOdds,
+            modelJointProbability:builder.conservativeAllHitProbability,bookmaker:"Bet365"},
+          lineupConfirmed:builder.lineupsConfirmed===true,live:false,legs,
+        })
+      }
+    }
+    postPredictionRuns(runs)
+  },[data?.ok,liveMode,tiers])
 
   return <main className="min-h-screen bg-[#07120e] pb-24 text-white">
     <header className="sticky top-0 z-30 border-b border-white/10 bg-[#07120e]/95 backdrop-blur-xl">
@@ -508,6 +549,34 @@ function LiveNowSection({matches}:{matches:LiveMatch[]}){
     {market:"assist1",label:"Assists"},
   ]
   const active=categories.find(x=>x.market===market)??categories[0]
+  useEffect(()=>{
+    const runs:any[]=[]
+    for(const match of matches){
+      const picks=(match.livePlayerProps??[])
+        .filter(p=>p.market===market)
+        .sort((a,b)=>Number(b.rankScore??b.probability)-Number(a.rankScore??a.probability)||b.probability-a.probability)
+        .slice(0,5)
+      if(!picks.length)continue
+      runs.push({
+        surface:"multi_live_"+market,
+        fixture:{id:match.id,competition:match.competition,kickoff:match.kickoff,home:match.home,away:match.away},
+        slip:{id:"live-"+market+"-"+match.id,title:"Live "+active.label+" · "+match.home+" v "+match.away,tier:"top-5",oddsTarget:null,
+          combinedOdds:null,modelJointProbability:null,bookmaker:"Bet365"},
+        lineupConfirmed:true,live:true,liveMinute:match.elapsed??null,
+        referee:match.referee?{name:match.referee.name,strictnessScore:match.referee.strictnessScore}:null,
+        legs:picks.map(p=>({
+          fixture:{id:match.id,competition:match.competition,kickoff:match.kickoff,home:match.home,away:match.away},
+          playerName:p.player,dbPlayerName:p.player,team:p.team,market:p.market,label:p.label,modelProbability:p.probability,
+          fairOdds:p.fairOdds,bookmakerOdds:p.bookmakerOdds??null,confidence:p.confidence,
+          recent5HitRate:p.recent5HitRate??null,seasonHitRate:p.seasonHitRate??null,h2hHitRate:p.h2hHitRate??null,
+          h2hMatches:p.h2hMatches??0,sampleMatches:p.sampleMatches??0,disciplineHeat:p.disciplineHeat??null,
+          recentFouls10:p.recentFouls10??null,liveCurrentCount:p.currentCount??null,
+          liveFouls:p.currentFouls??null,liveFouled:p.currentFouled??null,liveShots:p.currentShots??null,liveSot:p.currentSot??null,
+        })),
+      })
+    }
+    postPredictionRuns(runs)
+  },[matches,market,active.label])
   return <section className="space-y-3">
     <div className="px-1"><p className="font-black">Live most likely</p><p className="text-[0.6rem] text-white/35">Choose one market. Every live game then shows its top 5 players for that category using current match events plus player history.</p></div>
     <div className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none]"><div className="flex min-w-max gap-2 pb-1">{categories.map(item=><button key={item.market} onClick={()=>setMarket(item.market)} className={"rounded-full border px-3.5 py-2.5 text-xs font-black "+(market===item.market?"border-violet-300/35 bg-violet-300 text-violet-950":"border-white/8 bg-white/[0.04] text-white/50")}>{item.label}</button>)}</div></div>
