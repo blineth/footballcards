@@ -233,6 +233,8 @@ const TARGET_ODDS=[
   {fractional:"30/1",decimal:31},
   {fractional:"40/1",decimal:41},
   {fractional:"50/1",decimal:51},
+  {fractional:"75/1",decimal:76},
+  {fractional:"100/1",decimal:101},
 ] as const
 const TARGET_BOOKS=["Bet365"] as const
 
