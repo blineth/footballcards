@@ -591,7 +591,13 @@ function routeSelectionSafety(legs:SlipLeg[],joint:number){
   const foulOneCount=legs.filter(leg=>leg.market==="foul1").length
   const lowThresholdCount=legs.filter(leg=>lowThresholdMarket(leg.market)).length
   const repeatEventBonus=1+Math.min(.09,foulOneCount*.018+Math.max(0,lowThresholdCount-foulOneCount)*.006)
-  return joint*stabilityGeo*repeatEventBonus
+  const families=legs.map(leg=>leg.market.startsWith("goal")?"goal":leg.market.startsWith("assist")?"assist":leg.market.startsWith("fouled")?"fouled":leg.market.startsWith("foul")?"foul":leg.market.startsWith("sot")?"sot":leg.market.startsWith("shot")?"shot":"card")
+  const uniqueFamilies=new Set(families).size
+  const familyCounts=families.reduce((acc,f)=>{acc[f]=(acc[f]??0)+1;return acc},{} as Record<string,number>)
+  const maxFamily=Math.max(...Object.values(familyCounts))
+  const diversityBonus=1+Math.min(.04,Math.max(0,uniqueFamilies-1)*.009)
+  const overConcentrated=legs.length>=4&&maxFamily/legs.length>=.75
+  return joint*stabilityGeo*repeatEventBonus*diversityBonus*(overConcentrated?.97:1)
 }
 function evidenceSupport(leg:SlipLeg){
   const recent=Number(leg.recent5HitRate),season=Number(leg.seasonHitRate)
