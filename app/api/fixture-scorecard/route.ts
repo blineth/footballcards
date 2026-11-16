@@ -1424,7 +1424,7 @@ function buildRiskBuilders(players:ScorePlayer[],scope:"all"|"discipline"="all")
         // correlation coefficient. Same-team attacking events and related foul
         // pressure should not be multiplied as fully independent.
         if(sameTeam&&(af==="shot"||af==="sot")&&(bf==="shot"||bf==="sot"))penalty*=.985
-        else if(sameTeam&&af===bf)penalty*=af==="foul"||af==="fouled"?.993:.988
+        else if(sameTeam&&af===bf)penalty*=(af==="foul"||af==="fouled") ? .993 : .988
         else if(!sameTeam&&((af==="foul"&&bf==="fouled")||(af==="fouled"&&bf==="foul")))penalty*=.992
         else if((af==="goal"&&bf==="assist")||(af==="assist"&&bf==="goal"))penalty*=.97
       }
@@ -1443,7 +1443,7 @@ function buildRiskBuilders(players:ScorePlayer[],scope:"all"|"discipline"="all")
     let concentrationPenalty=1
     for(const [f,count] of Object.entries(counts)){
       if(count<=1)continue
-      const perExtra=(f==="foul"||f==="fouled")?.997:f==="shot"?.995:.985
+      const perExtra=(f==="foul"||f==="fouled") ? .997 : f==="shot" ? .995 : .985
       concentrationPenalty*=Math.pow(perExtra,count-1)
     }
     return Math.max(0,Math.min(.99,conservative*concentrationPenalty*correlationPenalty(legs)))
