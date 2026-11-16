@@ -10,6 +10,7 @@ import recommendationBacktest from "@/data/model/recommendation-backtest.json"
 import calibrationSnapshot from "@/data/model/calibration.json"
 import { snapshotPlayersForFixture, internationalPlayersForFixture } from "@/lib/current-season-snapshot"
 import { buildSnapshotScorecard } from "@/lib/snapshot-scorecard"
+import { getOfficialLineup } from "@/lib/official-lineup"
 
 export const dynamic="force-dynamic"
 export const revalidate=120
@@ -95,11 +96,7 @@ type TargetOddsGame={
 
 const competitions:Competition[]=["Premier League","Championship","League One","League Two","International"]
 
-const ESPN_INTL_SLUGS=["uefa.euro","uefa.nations","fifa.friendly","fifa.world","fifa.worldq.uefa","fifa.worldq.conmebol","fifa.worldq.concacaf","fifa.worldq.afc","fifa.worldq.caf"]
-const ESPN_LEAGUE_SLUGS:Partial<Record<Competition,string>>={
-  "Premier League":"eng.1",Championship:"eng.2","League One":"eng.3","League Two":"eng.4",
-}
-type OfficialLineup={confirmed:boolean;starters:Set<string>}
+type OfficialLineup={confirmed:boolean;starters:Set<string>;source?:string;checkedAt?:string;cachedConfirmed?:boolean}
 function normName(value:string){
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim()
 }
@@ -108,39 +105,16 @@ function sameTeamName(a:string,b:string){
   return Boolean(x&&y&&(x===y||x.includes(y)||y.includes(x)))
 }
 async function officialLineupForFixture(f:Fixture):Promise<OfficialLineup>{
-  const slugs=f.competition==="International"?ESPN_INTL_SLUGS:[ESPN_LEAGUE_SLUGS[f.competition]].filter(Boolean) as string[]
-  const date=fixtureDate(f).replaceAll("-","")
-  for(const slug of slugs){
-    try{
-      const scoreboard=await fetch("https://site.api.espn.com/apis/site/v2/sports/soccer/"+slug+"/scoreboard?dates="+date+"&limit=300",{next:{revalidate:30},signal:AbortSignal.timeout(4500)})
-      if(!scoreboard.ok)continue
-      const data=await scoreboard.json()
-      const event=(data?.events??[]).find((e:any)=>{
-        const comps=e?.competitions?.[0]?.competitors??[]
-        const h=comps.find((x:any)=>x.homeAway==="home")
-        const a=comps.find((x:any)=>x.homeAway==="away")
-        return sameTeamName(String(h?.team?.displayName??""),f.home.name)&&sameTeamName(String(a?.team?.displayName??""),f.away.name)
-      })
-      if(!event?.id)continue
-      const summaryRes=await fetch("https://site.api.espn.com/apis/site/v2/sports/soccer/"+slug+"/summary?event="+event.id,{next:{revalidate:30},signal:AbortSignal.timeout(4500)})
-      if(!summaryRes.ok)continue
-      const summary=await summaryRes.json()
-      const starters=new Set<string>()
-      let homeCount=0,awayCount=0
-      for(const section of summary?.rosters??[]){
-        for(const row of section?.roster??[]){
-          if(row?.starter!==true)continue
-          const name=String(row?.athlete?.displayName??row?.athlete?.fullName??"")
-          if(!name)continue
-          starters.add(normName(name))
-          if(section.homeAway==="home")homeCount++
-          else if(section.homeAway==="away")awayCount++
-        }
-      }
-      return {confirmed:homeCount>=11&&awayCount>=11,starters}
-    }catch{}
-  }
-  return {confirmed:false,starters:new Set()}
+  try{
+    const lineup=await getOfficialLineup({
+      date:fixtureDate(f),home:f.home.name,away:f.away.name,competition:f.competition,eventId:f.id,force:true,
+    })
+    const starters=new Set<string>([
+      ...(lineup.homeLineup?.starters??[]).map((p:any)=>normName(String(p.name??""))),
+      ...(lineup.awayLineup?.starters??[]).map((p:any)=>normName(String(p.name??""))),
+    ].filter(Boolean))
+    return {confirmed:lineup.confirmed&&starters.size===22,starters,source:lineup.source,checkedAt:lineup.checkedAt,cachedConfirmed:lineup.cachedConfirmed}
+  }catch{return {confirmed:false,starters:new Set()}}
 }
 
 type LivePlayerStat={
