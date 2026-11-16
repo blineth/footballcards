@@ -51,7 +51,8 @@ type LivePlayerProp={
   currentCount?:number;liveStatsAvailable?:boolean;
   currentFouls?:number|null;currentFouled?:number|null;currentShots?:number|null;currentSot?:number|null;
   currentGoals?:number|null;currentAssists?:number|null;currentYellowCards?:number|null;currentRedCards?:number|null;
-  disciplineHeat?:number;recentFouls10?:number;recentFouls15?:number;aggressionSignals?:string[];lastAggressionMinute?:number|null
+  disciplineHeat?:number;recentFouls10?:number;recentFouls15?:number;aggressionSignals?:string[];lastAggressionMinute?:number|null;
+  recent5HitRate?:number|null;seasonHitRate?:number|null;h2hHitRate?:number|null;h2hMatches?:number;sampleMatches?:number
 }
 type LiveMatch={
   id:string;competition:string;kickoff:string;status?:string;inPlay?:boolean;elapsed?:number|null;
@@ -515,6 +516,18 @@ function LiveNowSection({matches}:{matches:LiveMatch[]}){
   </section>
 }
 
+function livePropEvidence(prop:LivePlayerProp){
+  const sample=Math.max(0,Number(prop.sampleMatches??0))
+  const recentN=Math.min(5,sample||5)
+  const h2hN=Math.max(0,Number(prop.h2hMatches??0))
+  const recent=Number(prop.recent5HitRate),season=Number(prop.seasonHitRate),h2h=Number(prop.h2hHitRate)
+  const bits:string[]=[]
+  if(Number.isFinite(recent)&&recentN>0)bits.push("Recent "+Math.max(0,Math.min(recentN,Math.round(recent*recentN)))+"/"+recentN)
+  if(Number.isFinite(season)&&sample>0)bits.push("Season "+Math.max(0,Math.min(sample,Math.round(season*sample)))+"/"+sample)
+  if(Number.isFinite(h2h)&&h2hN>0)bits.push("H2H "+Math.max(0,Math.min(h2hN,Math.round(h2h*h2hN)))+"/"+h2hN)
+  return bits.length?bits.join(" · "):null
+}
+
 function liveCountBadge(prop:LivePlayerProp){
   if(prop.market==="card")return {label:"FOULS",value:Number(prop.currentFouls??0),secondary:"FOULED "+Number(prop.currentFouled??0)}
   if(prop.market==="foul1")return {label:"FOULS",value:Number(prop.currentFouls??0),secondary:null}
@@ -548,7 +561,7 @@ function LiveMatchCard({match,market,title}:{match:LiveMatch;market:LivePlayerPr
 
       {picks.length?<div className="mt-3 space-y-1.5">{picks.map((prop,index)=>{const count=liveCountBadge(prop);return <div key={prop.player+"|"+prop.market} className="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-xl bg-white/[0.045] px-3 py-2.5">
         <span className={"flex size-7 items-center justify-center rounded-full font-mono text-[0.55rem] font-black "+(index===0?"bg-cyan-300 text-cyan-950":"bg-white/7 text-white/45")}>{index+1}</span>
-        <div className="min-w-0"><div className="flex flex-wrap items-center gap-1.5"><p className="text-xs font-black">{prop.player} · {prop.label}</p><TeamBadge team={prop.team} home={match.home} away={match.away} homeCrest={match.homeCrest} awayCrest={match.awayCrest}/></div><div className="mt-1.5 flex flex-wrap items-center gap-1.5"><span className="rounded-full bg-cyan-300/12 px-2 py-1 text-[0.44rem] font-black text-cyan-100">{count.label} {count.value}</span>{count.secondary?<span className="rounded-full bg-white/6 px-2 py-1 text-[0.42rem] font-black text-white/45">{count.secondary}</span>:null}{prop.market==="card"&&prop.disciplineHeat!=null?<span className="rounded-full bg-amber-300/10 px-2 py-1 text-[0.42rem] font-black text-amber-100">HEAT {Math.round(Number(prop.disciplineHeat)*100)}</span>:null}{prop.market==="card"&&Number(prop.recentFouls10??0)>0?<span className="rounded-full bg-rose-300/10 px-2 py-1 text-[0.42rem] font-black text-rose-100">+{Number(prop.recentFouls10)} RECENT FOUL{Number(prop.recentFouls10)===1?"":"S"}</span>:null}{prop.market==="card"&&(prop.aggressionSignals??[]).slice(0,1).map(signal=><span key={signal} className="rounded-full bg-orange-300/10 px-2 py-1 text-[0.42rem] font-black text-orange-100">{signal.toUpperCase()}</span>)}<span className="text-[0.42rem] text-white/20">Grade {prop.confidence}</span></div></div>
+        <div className="min-w-0"><div className="flex flex-wrap items-center gap-1.5"><p className="text-xs font-black">{prop.player} · {prop.label}</p><TeamBadge team={prop.team} home={match.home} away={match.away} homeCrest={match.homeCrest} awayCrest={match.awayCrest}/></div>{livePropEvidence(prop)?<p className="mt-1 text-[0.43rem] font-bold text-cyan-100/55">{livePropEvidence(prop)}</p>:null}<div className="mt-1.5 flex flex-wrap items-center gap-1.5"><span className="rounded-full bg-cyan-300/12 px-2 py-1 text-[0.44rem] font-black text-cyan-100">{count.label} {count.value}</span>{count.secondary?<span className="rounded-full bg-white/6 px-2 py-1 text-[0.42rem] font-black text-white/45">{count.secondary}</span>:null}{prop.market==="card"&&prop.disciplineHeat!=null?<span className="rounded-full bg-amber-300/10 px-2 py-1 text-[0.42rem] font-black text-amber-100">HEAT {Math.round(Number(prop.disciplineHeat)*100)}</span>:null}{prop.market==="card"&&Number(prop.recentFouls10??0)>0?<span className="rounded-full bg-rose-300/10 px-2 py-1 text-[0.42rem] font-black text-rose-100">+{Number(prop.recentFouls10)} RECENT FOUL{Number(prop.recentFouls10)===1?"":"S"}</span>:null}{prop.market==="card"&&(prop.aggressionSignals??[]).slice(0,1).map(signal=><span key={signal} className="rounded-full bg-orange-300/10 px-2 py-1 text-[0.42rem] font-black text-orange-100">{signal.toUpperCase()}</span>)}<span className="text-[0.42rem] text-white/20">Grade {prop.confidence}</span></div></div>
         <div className="text-right"><p className="font-mono text-sm font-black">{percent(prop.probability)}</p><p className="text-[0.4rem] text-white/20">remaining</p>{prop.bookmakerOdds?<p className={"mt-0.5 text-[0.4rem] font-black "+(prop.bookmakerPriceState==="live"?"text-emerald-200":"text-amber-200/75")}>B365 {fractionalOdds(prop.bookmakerOdds)}{prop.bookmakerPriceState==="reference"?" ref":""}</p>:null}</div>
       </div>})}</div>:<p className="mt-3 rounded-xl bg-white/[0.035] px-3 py-5 text-center text-xs text-white/30">No qualifying active players in this market right now.</p>}
 
