@@ -30,7 +30,9 @@ type Tracking={
 type TargetOddsLeg={
   fixtureId:string;competition:string;kickoff:string;home:string;away:string;player:string;team:string;
   market:string;label:string;probability:number;conservativeProbability?:number;price:number;priceSource:"exact"|"model";
-  bookmaker:string|null;confidence:"A"|"B"|"C"|"D"
+  bookmaker:string|null;confidence:"A"|"B"|"C"|"D";
+  recent5HitRate?:number|null;seasonHitRate?:number|null;h2hHitRate?:number|null;h2hMatches?:number;
+  h2hLineupOverlap?:number|null;h2hSimilarity?:number|null;sampleMatches?:number;reason?:string
 }
 type TargetOddsSlip={
   id:string;targetFractional:string;targetDecimal:number;available:boolean;referenceOdds:number|null;
@@ -71,7 +73,8 @@ type MultiMatchLeg={
   fixtureId:string;competition:string;kickoff:string;home:string;away:string;
   player:string;team:string;market:string;label:string;probability:number;
   bookmakerOdds:number;bookmaker:"Bet365";confidence:"A"|"B"|"C"|"D";
-  recent5HitRate:number|null;seasonHitRate:number|null;h2hHitRate:number|null;h2hMatches:number;sampleMatches:number
+  recent5HitRate:number|null;seasonHitRate:number|null;h2hHitRate:number|null;h2hMatches:number;sampleMatches:number;
+  h2hLineupOverlap?:number|null;h2hSimilarity?:number|null;reason?:string
 }
 type MultiMatchRiskTier=string
 type MultiMatchGameBuilder={
