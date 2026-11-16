@@ -16,13 +16,16 @@ export async function GET(request:Request){
   try{
     const snapshot:any=await buildSnapshotScorecard({
       date,home,away,competition:competition as any,
-      confirmedStarterNames:starterNames.length>=20?starterNames:undefined,
+      // A partial live roster should improve the baseline rather than block it.
+      // With fewer than eight recognised active players we keep the full checked-in
+      // snapshot; from eight onward we narrow to the players the live feed has seen.
+      confirmedStarterNames:starterNames.length>=8?starterNames:undefined,
     })
     const payload={
       ok:Boolean(snapshot?.ok),
       competition,date,home,away,
-      lineupsConfirmed:snapshot?.lineupsConfirmed===true,
-      lineupMode:snapshot?.lineupMode,
+      lineupsConfirmed:starterNames.length>=20&&snapshot?.lineupsConfirmed===true,
+      lineupMode:starterNames.length>=20&&snapshot?.lineupsConfirmed===true?"confirmed":snapshot?.lineupMode,
       lineupSource:snapshot?.lineupSource,
       status:snapshot?.status,
       snapshotFallback:true,
