@@ -139,8 +139,17 @@ function playerResult(row:any,market:string,threshold:number|null){
   return null
 }
 
+function safeFixtureDate(value:any,kickoff?:any){
+  const raw=String(value??"").slice(0,10)
+  if(/^\d{4}-\d{2}-\d{2}$/.test(raw))return raw
+  if(kickoff){
+    const d=new Date(kickoff)
+    if(Number.isFinite(d.getTime()))return d.toISOString().slice(0,10)
+  }
+  return null
+}
 async function matchScore(leg:any){
-  const date=String(leg.fixture_date??"").slice(0,10)
+  const date=safeFixtureDate(leg.fixture_date,leg.kickoff)
   const home=String(leg.home_team??""),away=String(leg.away_team??"")
   if(!date||!home||!away)return null
   try{
@@ -279,7 +288,7 @@ export async function gradePredictionLedger(limit=1500){
     let result:any=null
     if(leg.player_name){
       const name=leg.db_player_name||leg.player_name
-      const date=String(leg.fixture_date??"").slice(0,10)
+      const date=safeFixtureDate(leg.fixture_date,leg.kickoff)
       if(date){
         const rows=(await pool.query(
           `SELECT * FROM player_h2h WHERE player_name=$1 AND match_date=$2 ORDER BY minutes DESC NULLS LAST`,
