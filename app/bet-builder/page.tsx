@@ -1245,7 +1245,7 @@ export default function BetBuilderPage(){
     return [...byFamily.values()]
   },[broadRows,verifiedPlayerRows])
   useEffect(()=>{
-    if(!fixture||!data?.ok||data.snapshotFallback)return
+    if(!fixture||!data?.ok||(!inPlay&&data.snapshotFallback))return
     const fixtureInfo={id:fixture.id,competition:fixture.competition,kickoff:fixture.kickoff,date:fixture.date,home:fixture.home,away:fixture.away}
     const ref=live?.referee??null
     const base={
@@ -1382,7 +1382,7 @@ export default function BetBuilderPage(){
         {unavailableBet365Markets.length?<div className="mt-2"><p className="text-[0.42rem] font-black uppercase text-rose-300/80">Not available in verified Bet365 feed</p><div className="mt-1 flex flex-wrap gap-1.5">{unavailableBet365Markets.map(kind=><span key={kind} className="rounded-full bg-rose-300/10 px-2 py-1 text-[0.42rem] font-black text-rose-200">{marketLabel(kind)}</span>)}</div></div>:null}
       </section>:null}
 
-      {data?.ok&&!data.snapshotFallback&&(data.lineupMode==="confirmed"||data.lineupMode==="predicted"||data.lineupsConfirmed)?<>
+      {data?.ok&&(inPlay||!data.snapshotFallback)&&(data.lineupMode==="confirmed"||data.lineupMode==="predicted"||data.lineupsConfirmed)?<>
         <section className={"rounded-2xl border px-3 py-2.5 "+(liveBet365?"border-emerald-300/25 bg-emerald-400/[0.07]":verifiedBet365?"border-cyan-300/20 bg-cyan-300/[0.05]":"border-white/8 bg-white/[0.025]")}>
           <div className="flex items-center justify-between gap-3"><div><p className={"text-[0.52rem] font-black uppercase tracking-wide "+(liveBet365?"text-emerald-300":verifiedBet365?"text-cyan-200":"text-white/35")}>{liveBet365?"CONFIRMED LIVE BET365 ODDS":inPlay?"WAITING FOR LIVE BET365 PRICES":verifiedBet365?"VERIFIED BET365 ODDS":"NO VERIFIED BET365 PRICES"}</p><p className="mt-0.5 text-[0.5rem] text-white/30">{liveBet365?"Prices are from the current Odds-API.io Bet365 live feed and are rechecked every 15 seconds.":inPlay?(liveOdds?.note??"Live model probabilities remain visible, but 3/1, 10/1 and 20/1 target cards require fresh verified Bet365 live prices."):verifiedBet365?"Bet365 prices are verified but not inside the live freshness window.":"Model probabilities remain available, but target odds are not shown without Bet365 pricing."}</p></div>{data.oddsFreshness?<span className="rounded-full bg-white/6 px-2 py-1 font-mono text-[0.42rem] font-black text-white/35">{data.oddsFreshness}</span>:null}</div>
         </section>
