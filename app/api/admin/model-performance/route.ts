@@ -9,7 +9,10 @@ export async function GET(request:Request){
   const days=Math.max(1,Math.min(365,Number(url.searchParams.get("days")??30)||30))
   const grade=url.searchParams.get("grade")!=="0"
   try{
-    const backfill=await backfillLegacyPredictionLedger()
+    let backfill:any={runs:0,legs:0}
+    try{backfill=await backfillLegacyPredictionLedger()}catch(error){
+      backfill={runs:0,legs:0,warning:error instanceof Error?error.message:"Legacy backfill skipped"}
+    }
     const grading=grade?await gradePredictionLedger(2000):{graded:0,runsUpdated:0}
     const performance=await predictionPerformanceSummary(days)
     return NextResponse.json({ok:true,backfill,grading,performance,updatedAt:new Date().toISOString()},{
