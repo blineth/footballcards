@@ -31,6 +31,25 @@ export async function GET(_request:Request,{params}:{params:Promise<{id:string}>
   const provider=getProvider()
   let fixture:any=null
   try{fixture=provider.isConfigured()?await provider.getFixture(id):null}catch{}
+  if(!fixture&&id.includes(":")){
+    const [slug,eventId]=id.split(":")
+    try{
+      const response=await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${slug}/summary?event=${encodeURIComponent(eventId)}`,{cache:"no-store",signal:AbortSignal.timeout(6500)})
+      if(response.ok){
+        const data=await response.json()
+        const contest=data?.header?.competitions?.[0]??{}
+        const homeRow=(contest?.competitors??[]).find((x:any)=>x?.homeAway==="home")
+        const awayRow=(contest?.competitors??[]).find((x:any)=>x?.homeAway==="away")
+        const homeName=String(homeRow?.team?.displayName??homeRow?.team?.name??"")
+        const awayName=String(awayRow?.team?.displayName??awayRow?.team?.name??"")
+        const kickoff=String(contest?.date??data?.header?.season?.startDate??"")
+        if(homeName&&awayName&&kickoff)fixture={
+          id,competition:"International",kickoff,
+          home:{name:homeName},away:{name:awayName},
+        }
+      }
+    }catch{}
+  }
   if(!fixture){
     return NextResponse.json({connected:provider.isConfigured(),updatedAt:new Date().toISOString(),matchId:id,status:"unavailable",home:null,away:null,source:null,checkedAt:new Date().toISOString()} satisfies LineupsResponse)
   }
