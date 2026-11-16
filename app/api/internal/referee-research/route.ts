@@ -49,6 +49,8 @@ async function api(path:string,params:Record<string,string>={}){
   return {
     response:Array.isArray(body?.response)?body.response:body?.response,
     paging:body?.paging??null,
+    errors:body?.errors??null,
+    results:body?.results??null,
     remaining:res.headers.get("x-ratelimit-requests-remaining")??res.headers.get("x-ratelimit-remaining"),
     limit:res.headers.get("x-ratelimit-requests-limit")??res.headers.get("x-ratelimit-limit"),
   }
@@ -314,7 +316,13 @@ export async function GET(request:Request){
 
   if(mode==="quota"){
     const status=await api("/status")
-    return NextResponse.json({ok:true,status:status.response,remaining:status.remaining,limit:status.limit})
+    return NextResponse.json({ok:true,status:status.response,errors:status.errors,results:status.results,remaining:status.remaining,limit:status.limit})
+  }
+  if(mode==="probe"){
+    const id=url.searchParams.get("id")??"39"
+    const season=url.searchParams.get("season")??"2026"
+    const row=await api("/leagues",{id,season})
+    return NextResponse.json({ok:true,id,season,response:row.response,errors:row.errors,results:row.results,remaining:row.remaining,limit:row.limit})
   }
 
   if(mode==="discover"){
