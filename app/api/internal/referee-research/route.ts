@@ -252,6 +252,84 @@ async function refreshRefereeProfiles(competition:string,season:string){
       external_player_id=EXCLUDED.external_player_id,updated_at=now()
   `,[competition,season])
 }
+function parseCsv(text:string){
+  const rows:string[][]=[]
+  let row:string[]=[],field="",quoted=false
+  for(let i=0;i<text.length;i++){
+    const ch=text[i]
+    if(ch==='"'){
+      if(quoted&&text[i+1]==='"'){field+='"';i++}
+      else quoted=!quoted
+    }else if(ch===","&&!quoted){row.push(field);field=""}
+    else if((ch==="\n"||ch==="\r")&&!quoted){
+      if(ch==="\r"&&text[i+1]==="\n")i++
+      row.push(field);field=""
+      if(row.some(x=>x!==""))rows.push(row)
+      row=[]
+    }else field+=ch
+  }
+  if(field||row.length){row.push(field);if(row.some(x=>x!==""))rows.push(row)}
+  const headers=(rows.shift()??[]).map(x=>x.trim())
+  return rows.map(values=>Object.fromEntries(headers.map((h,i)=>[h,String(values[i]??"").trim()])))
+}
+function footballDataSeasonLabel(code:string){
+  if(!/^\d{4}$/.test(code))return code
+  return `20${code.slice(0,2)}/${code.slice(2)}`
+}
+async function importFootballDataDivision(seasonCode:string,division:string){
+  const competition=division==="E0"?"Premier League":division==="E1"?"Championship":division==="E2"?"League One":division==="E3"?"League Two":null
+  if(!competition)throw new Error("Unsupported division")
+  const url=`https://www.football-data.co.uk/mmz4281/${seasonCode}/${division}.csv`
+  const res=await fetch(url,{
+    cache:"no-store",
+    signal:AbortSignal.timeout(30000),
+    headers:{
+      accept:"text/csv,text/plain,*/*",
+      "user-agent":"Mozilla/5.0 (compatible; MatchEdgeRefereeResearch/1.0)",
+      referer:"https://www.football-data.co.uk/englandm.php",
+    },
+  })
+  if(!res.ok)throw new Error(`Football-Data ${division} ${seasonCode} failed: ${res.status}`)
+  const rows=parseCsv(await res.text())
+  const season=footballDataSeasonLabel(seasonCode)
+  let imported=0
+  for(const row of rows){
+    const ref=String(row.Referee??"").trim()
+    const dateRaw=String(row.Date??"").trim()
+    const home=String(row.HomeTeam??"").trim(),away=String(row.AwayTeam??"").trim()
+    if(!ref||!dateRaw||!home||!away)continue
+    const parts=dateRaw.split(/[\/\-]/).map(x=>x.trim())
+    let date=""
+    if(parts.length===3){
+      const [d,m,y]=parts
+      const year=Number(y)<100?2000+Number(y):Number(y)
+      date=`${year}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`
+    }
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(date))continue
+    const hf=Number(row.HF??0)||0,af=Number(row.AF??0)||0
+    const hy=Number(row.HY??0)||0,ay=Number(row.AY??0)||0
+    const hr=Number(row.HR??0)||0,ar=Number(row.AR??0)||0
+    const fthg=n(row.FTHG),ftag=n(row.FTAG)
+    const fixtureId=`fd:${seasonCode}:${division}:${date}:${home}:${away}`
+    await pool.query(`
+      INSERT INTO referee_match_history (
+        fixture_id,referee_name,fixture_date,competition,season,home_team,away_team,home_score,away_score,
+        home_fouls,away_fouls,total_fouls,home_yellows,away_yellows,total_yellows,
+        home_reds,away_reds,total_reds,source,updated_at
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,'Football-Data.co.uk',now())
+      ON CONFLICT (fixture_id) DO UPDATE SET
+        referee_name=EXCLUDED.referee_name,fixture_date=EXCLUDED.fixture_date,competition=EXCLUDED.competition,season=EXCLUDED.season,
+        home_team=EXCLUDED.home_team,away_team=EXCLUDED.away_team,home_score=EXCLUDED.home_score,away_score=EXCLUDED.away_score,
+        home_fouls=EXCLUDED.home_fouls,away_fouls=EXCLUDED.away_fouls,total_fouls=EXCLUDED.total_fouls,
+        home_yellows=EXCLUDED.home_yellows,away_yellows=EXCLUDED.away_yellows,total_yellows=EXCLUDED.total_yellows,
+        home_reds=EXCLUDED.home_reds,away_reds=EXCLUDED.away_reds,total_reds=EXCLUDED.total_reds,source=EXCLUDED.source,updated_at=now()
+    `,[fixtureId,ref,date,competition,season,home,away,fthg,ftag,hf,af,hf+af,hy,ay,hy+ay,hr,ar,hr+ar])
+    imported++
+  }
+  if(imported)await refreshRefereeProfiles(competition,season)
+  return {competition,season,division,rows:rows.length,imported,url}
+}
+
 async function refreshInternationalRolling(){
   const season="rolling"
   await pool.query(`
@@ -339,6 +417,15 @@ export async function GET(request:Request){
     }
     const dedup=[...new Map(international.map(x=>[x.id,x])).values()]
     return NextResponse.json({ok:true,domestic,international:dedup})
+  }
+
+  if(mode==="football-data"){
+    const seasonCode=url.searchParams.get("seasonCode")??"2627"
+    const division=url.searchParams.get("division")??"all"
+    const divisions=division==="all"?["E0","E1","E2","E3"]:[division]
+    const results:any[]=[]
+    for(const d of divisions)results.push(await importFootballDataDivision(seasonCode,d))
+    return NextResponse.json({ok:true,source:"Football-Data.co.uk",results})
   }
 
   if(mode==="summary"){
