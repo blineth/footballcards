@@ -1670,6 +1670,7 @@ function compactBuilderScorecard(payload:any){
         key:m.key,label:m.label,probability:m.probability,fairOdds:m.fairOdds,confidence:m.confidence,
         bookmakerOdds:m.bookmakerOdds,bookmakerName:m.bookmakerName,edge:m.edge,expectedValue:m.expectedValue,
         recent5HitRate:m.recent5HitRate,seasonHitRate:m.seasonHitRate,h2hHitRate:m.h2hHitRate,
+        h2hMatches:m.h2hMatches,sampleMatches:m.sampleMatches,
         recommendationScore:m.recommendationScore,reasons:Array.isArray(m.reasons)?m.reasons.slice(0,2):[],
       }
     }
