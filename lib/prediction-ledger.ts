@@ -60,7 +60,7 @@ function bucketKey(run:LedgerRun,now=Date.now()){
   const live=Boolean(run.live)
   const bucketMs=live?2*60*1000:15*60*1000
   const bucket=new Date(Math.floor(now/bucketMs)*bucketMs).toISOString()
-  const fixturePart=run.fixture?.id??[run.fixture?.date,run.fixture?.home,run.fixture?.away].filter(Boolean).join("|")||"multi"
+  const fixturePart=run.fixture?.id??([run.fixture?.date,run.fixture?.home,run.fixture?.away].filter(Boolean).join("|")||"multi")
   return [run.surface,fixturePart,run.slip.id,run.liveMinute??"",bucket].join("|")
 }
 
