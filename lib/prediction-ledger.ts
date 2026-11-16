@@ -190,8 +190,660 @@ export async function backfillLegacyPredictionLedger(){
       slip_id,slip_title,bookmaker,lineup_confirmed,live,captured_at
     )
     SELECT
-      'legacy|'||recommendation_key,'legacy_recommended',max(fixture_id),max(competition),(max(kickoff) AT TIME ZONE 'Europe/London')::date,
-      max(kickoff),max(home_team),max(away_team),max(slip_id),max(slip_title),max(bookmaker),
+      'legacy|'||recommendation_key,'legacy_recommended',max(fixture_id),max(competition),
+      CASE WHEN max(fixture_date::text) ~ '^\\d{4}-\\d{2}-\\d{2}
+      bool_or(lineup_confirmed),false,min(captured_at)
+    FROM recommendation_snapshots
+    GROUP BY recommendation_key
+    ON CONFLICT (snapshot_key) DO NOTHING
+    RETURNING id
+  `)
+  const legs=await pool.query(`
+    INSERT INTO prediction_legs (
+      run_id,leg_index,fixture_id,competition,fixture_date,kickoff,home_team,away_team,
+      player_name,db_player_name,player_team,opponent_team,market,threshold,label,
+      model_probability,fair_odds,bookmaker_odds,confidence,result_value,outcome,graded_at,created_at
+    )
+    SELECT r.id,
+      row_number() OVER(PARTITION BY s.recommendation_key ORDER BY s.id)-1,
+      s.fixture_id,s.competition,
+      CASE WHEN s.fixture_date::text ~ '^\\d{4}-\\d{2}-\\d{2}
+      s.player_name,s.db_player_name,s.player_team,s.opponent_team,s.market,s.threshold,s.label,
+      s.model_probability,s.fair_odds,s.bookmaker_odds,s.confidence,s.result_value,s.outcome,s.graded_at,s.captured_at
+    FROM recommendation_snapshots s
+    JOIN prediction_runs r ON r.snapshot_key='legacy|'||s.recommendation_key
+    ON CONFLICT (run_id,leg_index) DO NOTHING
+    RETURNING id
+  `)
+  await pool.query(`
+    UPDATE prediction_runs r SET
+      fully_graded=x.fully_graded,
+      won=CASE WHEN x.fully_graded THEN x.won ELSE NULL END,
+      graded_at=CASE WHEN x.fully_graded THEN COALESCE(r.graded_at,now()) ELSE r.graded_at END
+    FROM (
+      SELECT run_id,
+        count(*)>0 AND count(*)=count(*) FILTER(WHERE graded_at IS NOT NULL) fully_graded,
+        bool_and(COALESCE(outcome,false)) FILTER(WHERE graded_at IS NOT NULL) won
+      FROM prediction_legs GROUP BY run_id
+    ) x
+    WHERE r.id=x.run_id AND r.surface='legacy_recommended'
+  `)
+  return {runs:runs.rowCount??0,legs:legs.rowCount??0}
+}
+
+export async function gradePredictionLedger(limit=1500){
+  if(!isDatabaseConfigured)return {graded:0,runsUpdated:0}
+  await ensureResearchSchema()
+  const pending=(await pool.query(
+    `SELECT l.*,r.surface
+     FROM prediction_legs l
+     JOIN prediction_runs r ON r.id=l.run_id
+     WHERE l.graded_at IS NULL
+       AND COALESCE(l.kickoff,r.kickoff) < now()-interval '105 minutes'
+     ORDER BY COALESCE(l.kickoff,r.kickoff) ASC NULLS LAST
+     LIMIT $1`,[limit],
+  )).rows
+  let graded=0
+  const touched=new Set<number>()
+  for(const leg of pending){
+    let result:any=null
+    if(leg.player_name){
+      const name=leg.db_player_name||leg.player_name
+      const date=String(leg.fixture_date??"").slice(0,10)
+      if(date){
+        const rows=(await pool.query(
+          `SELECT * FROM player_h2h WHERE player_name=$1 AND match_date=$2 ORDER BY minutes DESC NULLS LAST`,
+          [name,date],
+        )).rows
+        let match=rows.find((r:any)=>{
+          if(!leg.opponent_team)return true
+          const a=norm(r.opponent),b=norm(leg.opponent_team)
+          return a===b||a.includes(b)||b.includes(a)
+        })??rows[0]
+        if(!match&&leg.player_name!==name){
+          const alt=(await pool.query(
+            `SELECT * FROM player_h2h WHERE player_name=$1 AND match_date=$2 ORDER BY minutes DESC NULLS LAST`,
+            [leg.player_name,date],
+          )).rows
+          match=alt[0]
+        }
+        if(match)result=playerResult(match,leg.market,leg.threshold==null?null:Number(leg.threshold))
+      }
+    }else{
+      const score=await matchScore(leg)
+      if(score)result=matchResult(leg.market,score)
+    }
+    if(!result)continue
+    await pool.query(
+      `UPDATE prediction_legs SET outcome=$1,result_value=$2,graded_at=now() WHERE id=$3`,
+      [result.outcome,result.value,leg.id],
+    )
+    graded++
+    touched.add(Number(leg.run_id))
+  }
+  let runsUpdated=0
+  for(const runId of touched){
+    const state=(await pool.query(
+      `SELECT count(*)::int total,
+              count(*) FILTER(WHERE graded_at IS NOT NULL)::int graded,
+              bool_and(COALESCE(outcome,false)) FILTER(WHERE graded_at IS NOT NULL) won
+       FROM prediction_legs WHERE run_id=$1`,[runId],
+    )).rows[0]
+    const fully=Number(state?.total??0)>0&&Number(state?.graded??0)===Number(state?.total??0)
+    if(fully){
+      await pool.query(`UPDATE prediction_runs SET fully_graded=true,won=$1,graded_at=now() WHERE id=$2`,[Boolean(state?.won),runId])
+      runsUpdated++
+    }
+  }
+  return {graded,runsUpdated}
+}
+
+function n(v:any){return v==null?null:Number(v)}
+function rowsToStats(rows:any[]){
+  return rows.map(r=>{
+    const sample=Number(r.sample??0),hits=Number(r.hits??0)
+    const hitRate=sample?hits/sample:null
+    const avgProbability=n(r.avg_probability)
+    return {...r,sample,hits,hitRate,avgProbability,gap:hitRate!=null&&avgProbability!=null?hitRate-avgProbability:null}
+  })
+}
+
+export async function predictionPerformanceSummary(days=30){
+  if(!isDatabaseConfigured)return {available:false,days}
+  await ensureResearchSchema()
+  const [overall,byMarket,bySurface,byTier,byBand,byConfidence,recentMisses,recentRuns]=await Promise.all([
+    pool.query(`SELECT
+      count(*) FILTER(WHERE l.graded_at IS NOT NULL)::int graded_legs,
+      count(*) FILTER(WHERE l.outcome IS TRUE)::int hits,
+      avg(l.model_probability::numeric) FILTER(WHERE l.graded_at IS NOT NULL) avg_probability,
+      avg((l.model_probability::numeric-CASE WHEN l.outcome THEN 1 ELSE 0 END)^2) FILTER(WHERE l.graded_at IS NOT NULL) brier,
+      count(DISTINCT r.id) FILTER(WHERE r.fully_graded)::int graded_runs,
+      count(DISTINCT r.id) FILTER(WHERE r.fully_graded AND r.won)::int winning_runs,
+      count(DISTINCT r.id)::int total_runs
+      FROM prediction_runs r LEFT JOIN prediction_legs l ON l.run_id=r.id
+      WHERE r.captured_at>=now()-($1::int*interval '1 day')`,[days]),
+    pool.query(`SELECT CASE
+        WHEN market LIKE 'foul%' AND market NOT LIKE 'fouled%' THEN 'fouls'
+        WHEN market LIKE 'fouled%' THEN 'fouled'
+        WHEN market LIKE 'sot%' THEN 'sot'
+        WHEN market LIKE 'shot%' THEN 'shots'
+        WHEN market LIKE 'goal%' THEN 'goals'
+        WHEN market LIKE 'assist%' THEN 'assists'
+        WHEN market='card' THEN 'cards'
+        WHEN market IN ('homeWin','awayWin','draw') THEN 'match result'
+        WHEN market LIKE 'btts%' THEN 'btts'
+        ELSE market END market_group,
+      count(*)::int sample,count(*) FILTER(WHERE outcome IS TRUE)::int hits,
+      avg(model_probability::numeric) avg_probability,
+      avg(bookmaker_odds::numeric) FILTER(WHERE bookmaker_odds IS NOT NULL) avg_bookmaker_odds
+      FROM prediction_legs l JOIN prediction_runs r ON r.id=l.run_id
+      WHERE l.graded_at IS NOT NULL AND r.captured_at>=now()-($1::int*interval '1 day')
+      GROUP BY 1 ORDER BY sample DESC`,[days]),
+    pool.query(`SELECT r.surface,
+      count(*)::int sample,count(*) FILTER(WHERE l.outcome IS TRUE)::int hits,
+      avg(l.model_probability::numeric) avg_probability,
+      count(DISTINCT r.id) FILTER(WHERE r.fully_graded)::int graded_runs,
+      count(DISTINCT r.id) FILTER(WHERE r.fully_graded AND r.won)::int winning_runs
+      FROM prediction_legs l JOIN prediction_runs r ON r.id=l.run_id
+      WHERE l.graded_at IS NOT NULL AND r.captured_at>=now()-($1::int*interval '1 day')
+      GROUP BY r.surface ORDER BY sample DESC`,[days]),
+    pool.query(`SELECT COALESCE(r.odds_target,r.tier,r.slip_title) tier,
+      count(DISTINCT r.id) FILTER(WHERE r.fully_graded)::int sample,
+      count(DISTINCT r.id) FILTER(WHERE r.fully_graded AND r.won)::int hits,
+      avg(r.model_joint_probability::numeric) FILTER(WHERE r.fully_graded) avg_probability,
+      avg(r.combined_odds::numeric) FILTER(WHERE r.fully_graded) avg_odds
+      FROM prediction_runs r
+      WHERE r.captured_at>=now()-($1::int*interval '1 day')
+      GROUP BY 1 HAVING count(DISTINCT r.id) FILTER(WHERE r.fully_graded)>0
+      ORDER BY sample DESC`,[days]),
+    pool.query(`SELECT
+      (floor((model_probability::numeric*100)/10)*10)::int lower_bound,
+      count(*)::int sample,count(*) FILTER(WHERE outcome IS TRUE)::int hits,
+      avg(model_probability::numeric) avg_probability
+      FROM prediction_legs l JOIN prediction_runs r ON r.id=l.run_id
+      WHERE l.graded_at IS NOT NULL AND r.captured_at>=now()-($1::int*interval '1 day')
+      GROUP BY 1 ORDER BY 1`,[days]),
+    pool.query(`SELECT COALESCE(confidence,'Unknown') confidence,
+      count(*)::int sample,count(*) FILTER(WHERE outcome IS TRUE)::int hits,
+      avg(model_probability::numeric) avg_probability
+      FROM prediction_legs l JOIN prediction_runs r ON r.id=l.run_id
+      WHERE l.graded_at IS NOT NULL AND r.captured_at>=now()-($1::int*interval '1 day')
+      GROUP BY 1 ORDER BY 1`,[days]),
+    pool.query(`SELECT r.surface,r.captured_at,r.slip_title,r.odds_target,l.fixture_date,l.home_team,l.away_team,
+      l.player_name,l.market,l.label,l.model_probability,l.bookmaker_odds,l.result_value,
+      l.recent5_hit_rate,l.season_hit_rate,l.h2h_hit_rate,l.h2h_matches,l.discipline_heat
+      FROM prediction_legs l JOIN prediction_runs r ON r.id=l.run_id
+      WHERE l.graded_at IS NOT NULL AND l.outcome IS FALSE
+        AND r.captured_at>=now()-($1::int*interval '1 day')
+      ORDER BY l.model_probability::numeric DESC,r.captured_at DESC LIMIT 40`,[days]),
+    pool.query(`SELECT r.id,r.surface,r.captured_at,r.slip_title,r.odds_target,r.combined_odds,r.model_joint_probability,
+      r.live,r.live_minute,r.fully_graded,r.won,r.home_team,r.away_team,
+      count(l.id)::int legs,count(l.id) FILTER(WHERE l.outcome IS TRUE)::int hits,
+      count(l.id) FILTER(WHERE l.graded_at IS NOT NULL)::int graded
+      FROM prediction_runs r LEFT JOIN prediction_legs l ON l.run_id=r.id
+      WHERE r.captured_at>=now()-($1::int*interval '1 day')
+      GROUP BY r.id ORDER BY r.captured_at DESC LIMIT 60`,[days]),
+  ])
+  const o=overall.rows[0]??{}
+  const gradedLegs=Number(o.graded_legs??0),hits=Number(o.hits??0)
+  const gradedRuns=Number(o.graded_runs??0),winningRuns=Number(o.winning_runs??0)
+  const markets=rowsToStats(byMarket.rows)
+  const surfaces=bySurface.rows.map(r=>{
+    const sample=Number(r.sample??0),h=Number(r.hits??0),gr=Number(r.graded_runs??0),wr=Number(r.winning_runs??0)
+    return {surface:r.surface,sample,hits:h,hitRate:sample?h/sample:null,avgProbability:n(r.avg_probability),
+      gradedRuns:gr,winningRuns:wr,runHitRate:gr?wr/gr:null}
+  })
+  const tiers=rowsToStats(byTier.rows)
+  const probabilityBands=rowsToStats(byBand.rows).map(r=>({...r,label:String(r.lower_bound)+"–"+String(Number(r.lower_bound)+9)+"%"}))
+  const confidence=rowsToStats(byConfidence.rows)
+  const improvement=markets
+    .filter(r=>r.sample>=5&&r.gap!=null)
+    .sort((a,b)=>(a.gap??0)-(b.gap??0))
+    .map(r=>({
+      area:r.market_group,sample:r.sample,hitRate:r.hitRate,avgProbability:r.avgProbability,gap:r.gap,
+      status:(r.gap??0)<-.12?"needs work":(r.gap??0)<-.05?"watch":"healthy",
+    }))
+  return {
+    available:true,days,totalRuns:Number(o.total_runs??0),gradedLegs,hits,
+    hitRate:gradedLegs?hits/gradedLegs:null,avgProbability:n(o.avg_probability),brier:n(o.brier),
+    gradedRuns,winningRuns,runHitRate:gradedRuns?winningRuns/gradedRuns:null,
+    byMarket:markets,bySurface:surfaces,byTier:tiers,probabilityBands,byConfidence:confidence,
+    improvement,recentMisses:recentMisses.rows,recentRuns:recentRuns.rows,
+  }
+}
+
+        THEN max(fixture_date::text)::date
+        ELSE (min(captured_at) AT TIME ZONE 'Europe/London')::date END,
+      NULL,max(home_team),max(away_team),max(slip_id),max(slip_title),max(bookmaker),
+      bool_or(lineup_confirmed),false,min(captured_at)
+    FROM recommendation_snapshots
+    GROUP BY recommendation_key
+    ON CONFLICT (snapshot_key) DO NOTHING
+    RETURNING id
+  `)
+  const legs=await pool.query(`
+    INSERT INTO prediction_legs (
+      run_id,leg_index,fixture_id,competition,fixture_date,kickoff,home_team,away_team,
+      player_name,db_player_name,player_team,opponent_team,market,threshold,label,
+      model_probability,fair_odds,bookmaker_odds,confidence,result_value,outcome,graded_at,created_at
+    )
+    SELECT r.id,
+      row_number() OVER(PARTITION BY s.recommendation_key ORDER BY s.id)-1,
+      s.fixture_id,s.competition,(s.kickoff AT TIME ZONE 'Europe/London')::date,s.kickoff,s.home_team,s.away_team,
+      s.player_name,s.db_player_name,s.player_team,s.opponent_team,s.market,s.threshold,s.label,
+      s.model_probability,s.fair_odds,s.bookmaker_odds,s.confidence,s.result_value,s.outcome,s.graded_at,s.captured_at
+    FROM recommendation_snapshots s
+    JOIN prediction_runs r ON r.snapshot_key='legacy|'||s.recommendation_key
+    ON CONFLICT (run_id,leg_index) DO NOTHING
+    RETURNING id
+  `)
+  await pool.query(`
+    UPDATE prediction_runs r SET
+      fully_graded=x.fully_graded,
+      won=CASE WHEN x.fully_graded THEN x.won ELSE NULL END,
+      graded_at=CASE WHEN x.fully_graded THEN COALESCE(r.graded_at,now()) ELSE r.graded_at END
+    FROM (
+      SELECT run_id,
+        count(*)>0 AND count(*)=count(*) FILTER(WHERE graded_at IS NOT NULL) fully_graded,
+        bool_and(COALESCE(outcome,false)) FILTER(WHERE graded_at IS NOT NULL) won
+      FROM prediction_legs GROUP BY run_id
+    ) x
+    WHERE r.id=x.run_id AND r.surface='legacy_recommended'
+  `)
+  return {runs:runs.rowCount??0,legs:legs.rowCount??0}
+}
+
+export async function gradePredictionLedger(limit=1500){
+  if(!isDatabaseConfigured)return {graded:0,runsUpdated:0}
+  await ensureResearchSchema()
+  const pending=(await pool.query(
+    `SELECT l.*,r.surface
+     FROM prediction_legs l
+     JOIN prediction_runs r ON r.id=l.run_id
+     WHERE l.graded_at IS NULL
+       AND COALESCE(l.kickoff,r.kickoff) < now()-interval '105 minutes'
+     ORDER BY COALESCE(l.kickoff,r.kickoff) ASC NULLS LAST
+     LIMIT $1`,[limit],
+  )).rows
+  let graded=0
+  const touched=new Set<number>()
+  for(const leg of pending){
+    let result:any=null
+    if(leg.player_name){
+      const name=leg.db_player_name||leg.player_name
+      const date=String(leg.fixture_date??"").slice(0,10)
+      if(date){
+        const rows=(await pool.query(
+          `SELECT * FROM player_h2h WHERE player_name=$1 AND match_date=$2 ORDER BY minutes DESC NULLS LAST`,
+          [name,date],
+        )).rows
+        let match=rows.find((r:any)=>{
+          if(!leg.opponent_team)return true
+          const a=norm(r.opponent),b=norm(leg.opponent_team)
+          return a===b||a.includes(b)||b.includes(a)
+        })??rows[0]
+        if(!match&&leg.player_name!==name){
+          const alt=(await pool.query(
+            `SELECT * FROM player_h2h WHERE player_name=$1 AND match_date=$2 ORDER BY minutes DESC NULLS LAST`,
+            [leg.player_name,date],
+          )).rows
+          match=alt[0]
+        }
+        if(match)result=playerResult(match,leg.market,leg.threshold==null?null:Number(leg.threshold))
+      }
+    }else{
+      const score=await matchScore(leg)
+      if(score)result=matchResult(leg.market,score)
+    }
+    if(!result)continue
+    await pool.query(
+      `UPDATE prediction_legs SET outcome=$1,result_value=$2,graded_at=now() WHERE id=$3`,
+      [result.outcome,result.value,leg.id],
+    )
+    graded++
+    touched.add(Number(leg.run_id))
+  }
+  let runsUpdated=0
+  for(const runId of touched){
+    const state=(await pool.query(
+      `SELECT count(*)::int total,
+              count(*) FILTER(WHERE graded_at IS NOT NULL)::int graded,
+              bool_and(COALESCE(outcome,false)) FILTER(WHERE graded_at IS NOT NULL) won
+       FROM prediction_legs WHERE run_id=$1`,[runId],
+    )).rows[0]
+    const fully=Number(state?.total??0)>0&&Number(state?.graded??0)===Number(state?.total??0)
+    if(fully){
+      await pool.query(`UPDATE prediction_runs SET fully_graded=true,won=$1,graded_at=now() WHERE id=$2`,[Boolean(state?.won),runId])
+      runsUpdated++
+    }
+  }
+  return {graded,runsUpdated}
+}
+
+function n(v:any){return v==null?null:Number(v)}
+function rowsToStats(rows:any[]){
+  return rows.map(r=>{
+    const sample=Number(r.sample??0),hits=Number(r.hits??0)
+    const hitRate=sample?hits/sample:null
+    const avgProbability=n(r.avg_probability)
+    return {...r,sample,hits,hitRate,avgProbability,gap:hitRate!=null&&avgProbability!=null?hitRate-avgProbability:null}
+  })
+}
+
+export async function predictionPerformanceSummary(days=30){
+  if(!isDatabaseConfigured)return {available:false,days}
+  await ensureResearchSchema()
+  const [overall,byMarket,bySurface,byTier,byBand,byConfidence,recentMisses,recentRuns]=await Promise.all([
+    pool.query(`SELECT
+      count(*) FILTER(WHERE l.graded_at IS NOT NULL)::int graded_legs,
+      count(*) FILTER(WHERE l.outcome IS TRUE)::int hits,
+      avg(l.model_probability::numeric) FILTER(WHERE l.graded_at IS NOT NULL) avg_probability,
+      avg((l.model_probability::numeric-CASE WHEN l.outcome THEN 1 ELSE 0 END)^2) FILTER(WHERE l.graded_at IS NOT NULL) brier,
+      count(DISTINCT r.id) FILTER(WHERE r.fully_graded)::int graded_runs,
+      count(DISTINCT r.id) FILTER(WHERE r.fully_graded AND r.won)::int winning_runs,
+      count(DISTINCT r.id)::int total_runs
+      FROM prediction_runs r LEFT JOIN prediction_legs l ON l.run_id=r.id
+      WHERE r.captured_at>=now()-($1::int*interval '1 day')`,[days]),
+    pool.query(`SELECT CASE
+        WHEN market LIKE 'foul%' AND market NOT LIKE 'fouled%' THEN 'fouls'
+        WHEN market LIKE 'fouled%' THEN 'fouled'
+        WHEN market LIKE 'sot%' THEN 'sot'
+        WHEN market LIKE 'shot%' THEN 'shots'
+        WHEN market LIKE 'goal%' THEN 'goals'
+        WHEN market LIKE 'assist%' THEN 'assists'
+        WHEN market='card' THEN 'cards'
+        WHEN market IN ('homeWin','awayWin','draw') THEN 'match result'
+        WHEN market LIKE 'btts%' THEN 'btts'
+        ELSE market END market_group,
+      count(*)::int sample,count(*) FILTER(WHERE outcome IS TRUE)::int hits,
+      avg(model_probability::numeric) avg_probability,
+      avg(bookmaker_odds::numeric) FILTER(WHERE bookmaker_odds IS NOT NULL) avg_bookmaker_odds
+      FROM prediction_legs l JOIN prediction_runs r ON r.id=l.run_id
+      WHERE l.graded_at IS NOT NULL AND r.captured_at>=now()-($1::int*interval '1 day')
+      GROUP BY 1 ORDER BY sample DESC`,[days]),
+    pool.query(`SELECT r.surface,
+      count(*)::int sample,count(*) FILTER(WHERE l.outcome IS TRUE)::int hits,
+      avg(l.model_probability::numeric) avg_probability,
+      count(DISTINCT r.id) FILTER(WHERE r.fully_graded)::int graded_runs,
+      count(DISTINCT r.id) FILTER(WHERE r.fully_graded AND r.won)::int winning_runs
+      FROM prediction_legs l JOIN prediction_runs r ON r.id=l.run_id
+      WHERE l.graded_at IS NOT NULL AND r.captured_at>=now()-($1::int*interval '1 day')
+      GROUP BY r.surface ORDER BY sample DESC`,[days]),
+    pool.query(`SELECT COALESCE(r.odds_target,r.tier,r.slip_title) tier,
+      count(DISTINCT r.id) FILTER(WHERE r.fully_graded)::int sample,
+      count(DISTINCT r.id) FILTER(WHERE r.fully_graded AND r.won)::int hits,
+      avg(r.model_joint_probability::numeric) FILTER(WHERE r.fully_graded) avg_probability,
+      avg(r.combined_odds::numeric) FILTER(WHERE r.fully_graded) avg_odds
+      FROM prediction_runs r
+      WHERE r.captured_at>=now()-($1::int*interval '1 day')
+      GROUP BY 1 HAVING count(DISTINCT r.id) FILTER(WHERE r.fully_graded)>0
+      ORDER BY sample DESC`,[days]),
+    pool.query(`SELECT
+      (floor((model_probability::numeric*100)/10)*10)::int lower_bound,
+      count(*)::int sample,count(*) FILTER(WHERE outcome IS TRUE)::int hits,
+      avg(model_probability::numeric) avg_probability
+      FROM prediction_legs l JOIN prediction_runs r ON r.id=l.run_id
+      WHERE l.graded_at IS NOT NULL AND r.captured_at>=now()-($1::int*interval '1 day')
+      GROUP BY 1 ORDER BY 1`,[days]),
+    pool.query(`SELECT COALESCE(confidence,'Unknown') confidence,
+      count(*)::int sample,count(*) FILTER(WHERE outcome IS TRUE)::int hits,
+      avg(model_probability::numeric) avg_probability
+      FROM prediction_legs l JOIN prediction_runs r ON r.id=l.run_id
+      WHERE l.graded_at IS NOT NULL AND r.captured_at>=now()-($1::int*interval '1 day')
+      GROUP BY 1 ORDER BY 1`,[days]),
+    pool.query(`SELECT r.surface,r.captured_at,r.slip_title,r.odds_target,l.fixture_date,l.home_team,l.away_team,
+      l.player_name,l.market,l.label,l.model_probability,l.bookmaker_odds,l.result_value,
+      l.recent5_hit_rate,l.season_hit_rate,l.h2h_hit_rate,l.h2h_matches,l.discipline_heat
+      FROM prediction_legs l JOIN prediction_runs r ON r.id=l.run_id
+      WHERE l.graded_at IS NOT NULL AND l.outcome IS FALSE
+        AND r.captured_at>=now()-($1::int*interval '1 day')
+      ORDER BY l.model_probability::numeric DESC,r.captured_at DESC LIMIT 40`,[days]),
+    pool.query(`SELECT r.id,r.surface,r.captured_at,r.slip_title,r.odds_target,r.combined_odds,r.model_joint_probability,
+      r.live,r.live_minute,r.fully_graded,r.won,r.home_team,r.away_team,
+      count(l.id)::int legs,count(l.id) FILTER(WHERE l.outcome IS TRUE)::int hits,
+      count(l.id) FILTER(WHERE l.graded_at IS NOT NULL)::int graded
+      FROM prediction_runs r LEFT JOIN prediction_legs l ON l.run_id=r.id
+      WHERE r.captured_at>=now()-($1::int*interval '1 day')
+      GROUP BY r.id ORDER BY r.captured_at DESC LIMIT 60`,[days]),
+  ])
+  const o=overall.rows[0]??{}
+  const gradedLegs=Number(o.graded_legs??0),hits=Number(o.hits??0)
+  const gradedRuns=Number(o.graded_runs??0),winningRuns=Number(o.winning_runs??0)
+  const markets=rowsToStats(byMarket.rows)
+  const surfaces=bySurface.rows.map(r=>{
+    const sample=Number(r.sample??0),h=Number(r.hits??0),gr=Number(r.graded_runs??0),wr=Number(r.winning_runs??0)
+    return {surface:r.surface,sample,hits:h,hitRate:sample?h/sample:null,avgProbability:n(r.avg_probability),
+      gradedRuns:gr,winningRuns:wr,runHitRate:gr?wr/gr:null}
+  })
+  const tiers=rowsToStats(byTier.rows)
+  const probabilityBands=rowsToStats(byBand.rows).map(r=>({...r,label:String(r.lower_bound)+"–"+String(Number(r.lower_bound)+9)+"%"}))
+  const confidence=rowsToStats(byConfidence.rows)
+  const improvement=markets
+    .filter(r=>r.sample>=5&&r.gap!=null)
+    .sort((a,b)=>(a.gap??0)-(b.gap??0))
+    .map(r=>({
+      area:r.market_group,sample:r.sample,hitRate:r.hitRate,avgProbability:r.avgProbability,gap:r.gap,
+      status:(r.gap??0)<-.12?"needs work":(r.gap??0)<-.05?"watch":"healthy",
+    }))
+  return {
+    available:true,days,totalRuns:Number(o.total_runs??0),gradedLegs,hits,
+    hitRate:gradedLegs?hits/gradedLegs:null,avgProbability:n(o.avg_probability),brier:n(o.brier),
+    gradedRuns,winningRuns,runHitRate:gradedRuns?winningRuns/gradedRuns:null,
+    byMarket:markets,bySurface:surfaces,byTier:tiers,probabilityBands,byConfidence:confidence,
+    improvement,recentMisses:recentMisses.rows,recentRuns:recentRuns.rows,
+  }
+}
+
+        THEN s.fixture_date::text::date
+        ELSE (s.captured_at AT TIME ZONE 'Europe/London')::date END,
+      NULL,s.home_team,s.away_team,
+      s.player_name,s.db_player_name,s.player_team,s.opponent_team,s.market,s.threshold,s.label,
+      s.model_probability,s.fair_odds,s.bookmaker_odds,s.confidence,s.result_value,s.outcome,s.graded_at,s.captured_at
+    FROM recommendation_snapshots s
+    JOIN prediction_runs r ON r.snapshot_key='legacy|'||s.recommendation_key
+    ON CONFLICT (run_id,leg_index) DO NOTHING
+    RETURNING id
+  `)
+  await pool.query(`
+    UPDATE prediction_runs r SET
+      fully_graded=x.fully_graded,
+      won=CASE WHEN x.fully_graded THEN x.won ELSE NULL END,
+      graded_at=CASE WHEN x.fully_graded THEN COALESCE(r.graded_at,now()) ELSE r.graded_at END
+    FROM (
+      SELECT run_id,
+        count(*)>0 AND count(*)=count(*) FILTER(WHERE graded_at IS NOT NULL) fully_graded,
+        bool_and(COALESCE(outcome,false)) FILTER(WHERE graded_at IS NOT NULL) won
+      FROM prediction_legs GROUP BY run_id
+    ) x
+    WHERE r.id=x.run_id AND r.surface='legacy_recommended'
+  `)
+  return {runs:runs.rowCount??0,legs:legs.rowCount??0}
+}
+
+export async function gradePredictionLedger(limit=1500){
+  if(!isDatabaseConfigured)return {graded:0,runsUpdated:0}
+  await ensureResearchSchema()
+  const pending=(await pool.query(
+    `SELECT l.*,r.surface
+     FROM prediction_legs l
+     JOIN prediction_runs r ON r.id=l.run_id
+     WHERE l.graded_at IS NULL
+       AND COALESCE(l.kickoff,r.kickoff) < now()-interval '105 minutes'
+     ORDER BY COALESCE(l.kickoff,r.kickoff) ASC NULLS LAST
+     LIMIT $1`,[limit],
+  )).rows
+  let graded=0
+  const touched=new Set<number>()
+  for(const leg of pending){
+    let result:any=null
+    if(leg.player_name){
+      const name=leg.db_player_name||leg.player_name
+      const date=String(leg.fixture_date??"").slice(0,10)
+      if(date){
+        const rows=(await pool.query(
+          `SELECT * FROM player_h2h WHERE player_name=$1 AND match_date=$2 ORDER BY minutes DESC NULLS LAST`,
+          [name,date],
+        )).rows
+        let match=rows.find((r:any)=>{
+          if(!leg.opponent_team)return true
+          const a=norm(r.opponent),b=norm(leg.opponent_team)
+          return a===b||a.includes(b)||b.includes(a)
+        })??rows[0]
+        if(!match&&leg.player_name!==name){
+          const alt=(await pool.query(
+            `SELECT * FROM player_h2h WHERE player_name=$1 AND match_date=$2 ORDER BY minutes DESC NULLS LAST`,
+            [leg.player_name,date],
+          )).rows
+          match=alt[0]
+        }
+        if(match)result=playerResult(match,leg.market,leg.threshold==null?null:Number(leg.threshold))
+      }
+    }else{
+      const score=await matchScore(leg)
+      if(score)result=matchResult(leg.market,score)
+    }
+    if(!result)continue
+    await pool.query(
+      `UPDATE prediction_legs SET outcome=$1,result_value=$2,graded_at=now() WHERE id=$3`,
+      [result.outcome,result.value,leg.id],
+    )
+    graded++
+    touched.add(Number(leg.run_id))
+  }
+  let runsUpdated=0
+  for(const runId of touched){
+    const state=(await pool.query(
+      `SELECT count(*)::int total,
+              count(*) FILTER(WHERE graded_at IS NOT NULL)::int graded,
+              bool_and(COALESCE(outcome,false)) FILTER(WHERE graded_at IS NOT NULL) won
+       FROM prediction_legs WHERE run_id=$1`,[runId],
+    )).rows[0]
+    const fully=Number(state?.total??0)>0&&Number(state?.graded??0)===Number(state?.total??0)
+    if(fully){
+      await pool.query(`UPDATE prediction_runs SET fully_graded=true,won=$1,graded_at=now() WHERE id=$2`,[Boolean(state?.won),runId])
+      runsUpdated++
+    }
+  }
+  return {graded,runsUpdated}
+}
+
+function n(v:any){return v==null?null:Number(v)}
+function rowsToStats(rows:any[]){
+  return rows.map(r=>{
+    const sample=Number(r.sample??0),hits=Number(r.hits??0)
+    const hitRate=sample?hits/sample:null
+    const avgProbability=n(r.avg_probability)
+    return {...r,sample,hits,hitRate,avgProbability,gap:hitRate!=null&&avgProbability!=null?hitRate-avgProbability:null}
+  })
+}
+
+export async function predictionPerformanceSummary(days=30){
+  if(!isDatabaseConfigured)return {available:false,days}
+  await ensureResearchSchema()
+  const [overall,byMarket,bySurface,byTier,byBand,byConfidence,recentMisses,recentRuns]=await Promise.all([
+    pool.query(`SELECT
+      count(*) FILTER(WHERE l.graded_at IS NOT NULL)::int graded_legs,
+      count(*) FILTER(WHERE l.outcome IS TRUE)::int hits,
+      avg(l.model_probability::numeric) FILTER(WHERE l.graded_at IS NOT NULL) avg_probability,
+      avg((l.model_probability::numeric-CASE WHEN l.outcome THEN 1 ELSE 0 END)^2) FILTER(WHERE l.graded_at IS NOT NULL) brier,
+      count(DISTINCT r.id) FILTER(WHERE r.fully_graded)::int graded_runs,
+      count(DISTINCT r.id) FILTER(WHERE r.fully_graded AND r.won)::int winning_runs,
+      count(DISTINCT r.id)::int total_runs
+      FROM prediction_runs r LEFT JOIN prediction_legs l ON l.run_id=r.id
+      WHERE r.captured_at>=now()-($1::int*interval '1 day')`,[days]),
+    pool.query(`SELECT CASE
+        WHEN market LIKE 'foul%' AND market NOT LIKE 'fouled%' THEN 'fouls'
+        WHEN market LIKE 'fouled%' THEN 'fouled'
+        WHEN market LIKE 'sot%' THEN 'sot'
+        WHEN market LIKE 'shot%' THEN 'shots'
+        WHEN market LIKE 'goal%' THEN 'goals'
+        WHEN market LIKE 'assist%' THEN 'assists'
+        WHEN market='card' THEN 'cards'
+        WHEN market IN ('homeWin','awayWin','draw') THEN 'match result'
+        WHEN market LIKE 'btts%' THEN 'btts'
+        ELSE market END market_group,
+      count(*)::int sample,count(*) FILTER(WHERE outcome IS TRUE)::int hits,
+      avg(model_probability::numeric) avg_probability,
+      avg(bookmaker_odds::numeric) FILTER(WHERE bookmaker_odds IS NOT NULL) avg_bookmaker_odds
+      FROM prediction_legs l JOIN prediction_runs r ON r.id=l.run_id
+      WHERE l.graded_at IS NOT NULL AND r.captured_at>=now()-($1::int*interval '1 day')
+      GROUP BY 1 ORDER BY sample DESC`,[days]),
+    pool.query(`SELECT r.surface,
+      count(*)::int sample,count(*) FILTER(WHERE l.outcome IS TRUE)::int hits,
+      avg(l.model_probability::numeric) avg_probability,
+      count(DISTINCT r.id) FILTER(WHERE r.fully_graded)::int graded_runs,
+      count(DISTINCT r.id) FILTER(WHERE r.fully_graded AND r.won)::int winning_runs
+      FROM prediction_legs l JOIN prediction_runs r ON r.id=l.run_id
+      WHERE l.graded_at IS NOT NULL AND r.captured_at>=now()-($1::int*interval '1 day')
+      GROUP BY r.surface ORDER BY sample DESC`,[days]),
+    pool.query(`SELECT COALESCE(r.odds_target,r.tier,r.slip_title) tier,
+      count(DISTINCT r.id) FILTER(WHERE r.fully_graded)::int sample,
+      count(DISTINCT r.id) FILTER(WHERE r.fully_graded AND r.won)::int hits,
+      avg(r.model_joint_probability::numeric) FILTER(WHERE r.fully_graded) avg_probability,
+      avg(r.combined_odds::numeric) FILTER(WHERE r.fully_graded) avg_odds
+      FROM prediction_runs r
+      WHERE r.captured_at>=now()-($1::int*interval '1 day')
+      GROUP BY 1 HAVING count(DISTINCT r.id) FILTER(WHERE r.fully_graded)>0
+      ORDER BY sample DESC`,[days]),
+    pool.query(`SELECT
+      (floor((model_probability::numeric*100)/10)*10)::int lower_bound,
+      count(*)::int sample,count(*) FILTER(WHERE outcome IS TRUE)::int hits,
+      avg(model_probability::numeric) avg_probability
+      FROM prediction_legs l JOIN prediction_runs r ON r.id=l.run_id
+      WHERE l.graded_at IS NOT NULL AND r.captured_at>=now()-($1::int*interval '1 day')
+      GROUP BY 1 ORDER BY 1`,[days]),
+    pool.query(`SELECT COALESCE(confidence,'Unknown') confidence,
+      count(*)::int sample,count(*) FILTER(WHERE outcome IS TRUE)::int hits,
+      avg(model_probability::numeric) avg_probability
+      FROM prediction_legs l JOIN prediction_runs r ON r.id=l.run_id
+      WHERE l.graded_at IS NOT NULL AND r.captured_at>=now()-($1::int*interval '1 day')
+      GROUP BY 1 ORDER BY 1`,[days]),
+    pool.query(`SELECT r.surface,r.captured_at,r.slip_title,r.odds_target,l.fixture_date,l.home_team,l.away_team,
+      l.player_name,l.market,l.label,l.model_probability,l.bookmaker_odds,l.result_value,
+      l.recent5_hit_rate,l.season_hit_rate,l.h2h_hit_rate,l.h2h_matches,l.discipline_heat
+      FROM prediction_legs l JOIN prediction_runs r ON r.id=l.run_id
+      WHERE l.graded_at IS NOT NULL AND l.outcome IS FALSE
+        AND r.captured_at>=now()-($1::int*interval '1 day')
+      ORDER BY l.model_probability::numeric DESC,r.captured_at DESC LIMIT 40`,[days]),
+    pool.query(`SELECT r.id,r.surface,r.captured_at,r.slip_title,r.odds_target,r.combined_odds,r.model_joint_probability,
+      r.live,r.live_minute,r.fully_graded,r.won,r.home_team,r.away_team,
+      count(l.id)::int legs,count(l.id) FILTER(WHERE l.outcome IS TRUE)::int hits,
+      count(l.id) FILTER(WHERE l.graded_at IS NOT NULL)::int graded
+      FROM prediction_runs r LEFT JOIN prediction_legs l ON l.run_id=r.id
+      WHERE r.captured_at>=now()-($1::int*interval '1 day')
+      GROUP BY r.id ORDER BY r.captured_at DESC LIMIT 60`,[days]),
+  ])
+  const o=overall.rows[0]??{}
+  const gradedLegs=Number(o.graded_legs??0),hits=Number(o.hits??0)
+  const gradedRuns=Number(o.graded_runs??0),winningRuns=Number(o.winning_runs??0)
+  const markets=rowsToStats(byMarket.rows)
+  const surfaces=bySurface.rows.map(r=>{
+    const sample=Number(r.sample??0),h=Number(r.hits??0),gr=Number(r.graded_runs??0),wr=Number(r.winning_runs??0)
+    return {surface:r.surface,sample,hits:h,hitRate:sample?h/sample:null,avgProbability:n(r.avg_probability),
+      gradedRuns:gr,winningRuns:wr,runHitRate:gr?wr/gr:null}
+  })
+  const tiers=rowsToStats(byTier.rows)
+  const probabilityBands=rowsToStats(byBand.rows).map(r=>({...r,label:String(r.lower_bound)+"–"+String(Number(r.lower_bound)+9)+"%"}))
+  const confidence=rowsToStats(byConfidence.rows)
+  const improvement=markets
+    .filter(r=>r.sample>=5&&r.gap!=null)
+    .sort((a,b)=>(a.gap??0)-(b.gap??0))
+    .map(r=>({
+      area:r.market_group,sample:r.sample,hitRate:r.hitRate,avgProbability:r.avgProbability,gap:r.gap,
+      status:(r.gap??0)<-.12?"needs work":(r.gap??0)<-.05?"watch":"healthy",
+    }))
+  return {
+    available:true,days,totalRuns:Number(o.total_runs??0),gradedLegs,hits,
+    hitRate:gradedLegs?hits/gradedLegs:null,avgProbability:n(o.avg_probability),brier:n(o.brier),
+    gradedRuns,winningRuns,runHitRate:gradedRuns?winningRuns/gradedRuns:null,
+    byMarket:markets,bySurface:surfaces,byTier:tiers,probabilityBands,byConfidence:confidence,
+    improvement,recentMisses:recentMisses.rows,recentRuns:recentRuns.rows,
+  }
+}
+
+        THEN max(fixture_date::text)::date
+        ELSE (min(captured_at) AT TIME ZONE 'Europe/London')::date END,
+      NULL,max(home_team),max(away_team),max(slip_id),max(slip_title),max(bookmaker),
       bool_or(lineup_confirmed),false,min(captured_at)
     FROM recommendation_snapshots
     GROUP BY recommendation_key
