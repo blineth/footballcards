@@ -510,7 +510,8 @@ async function scorecardFor(f:Fixture,refresh:boolean){
 type MultiMatchLeg={
   fixtureId:string;competition:Competition;kickoff:string;home:string;away:string;
   player:string;team:string;market:string;label:string;probability:number;
-  bookmakerOdds:number;bookmaker:"Bet365";confidence:SlipLeg["confidence"]
+  bookmakerOdds:number;bookmaker:"Bet365";confidence:SlipLeg["confidence"];
+  recent5HitRate:number|null;seasonHitRate:number|null;h2hHitRate:number|null;h2hMatches:number;sampleMatches:number
 }
 type MultiMatchRiskTier=string
 type MultiMatchGameBuilder={
@@ -797,24 +798,47 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
   const routesByFixture=new Map<string,Map<string,MultiMatchGameBuilder>>()
   for(const scan of eligible){
     const scorecard=scan.scorecard!
-    const bestByPlayer=new Map<string,SlipLeg>()
-    for(const leg of directPlayerCandidates(scorecard)){
-      if(leg.bookmakerName!=="Bet365"||leg.bookmakerOdds==null||Number(leg.bookmakerOdds)<=1||leg.confidence==="D")continue
-      if(safetyLegProbability(leg)<.10)continue
-      const key=normName(leg.player)
-      const current=bestByPlayer.get(key)
-      const score=safetyLegProbability(leg)*marketStabilityFactor(leg)
-      const currentScore=current?safetyLegProbability(current)*marketStabilityFactor(current):-1
-      if(!current||score>currentScore)bestByPlayer.set(key,leg)
-    }
-    const pool=[...bestByPlayer.values()]
+    const eligibleLegs=directPlayerCandidates(scorecard)
+      .filter(leg=>leg.bookmakerName==="Bet365"&&leg.bookmakerOdds!=null&&Number(leg.bookmakerOdds)>1&&leg.confidence!=="D")
+      .filter(leg=>safetyLegProbability(leg)>=.10)
       .sort((a,b)=>{
         const sa=safetyLegProbability(a)*marketStabilityFactor(a)
         const sb=safetyLegProbability(b)*marketStabilityFactor(b)
         if(Math.abs(sa-sb)>.000001)return sb-sa
         return b.probability-a.probability||Number(a.bookmakerOdds)-Number(b.bookmakerOdds)
       })
-      .slice(0,12)
+
+    const pool:SlipLeg[]=[]
+    const seenPlayers=new Set<string>()
+    const usedPlayerFamilies=new Set<string>()
+
+    // Match Builder parity: strongest event for each player first.
+    for(const leg of eligibleLegs){
+      const player=normName(leg.player)
+      if(!player||seenPlayers.has(player))continue
+      seenPlayers.add(player)
+      usedPlayerFamilies.add(player+"|"+family(leg.market))
+      pool.push(leg)
+    }
+
+    // Then keep extending with different event families for the same player.
+    // Nested thresholds from one family are not treated as separate "safe" legs.
+    const perPlayerCount=new Map<string,number>()
+    for(const leg of pool){
+      const p=normName(leg.player)
+      if(p)perPlayerCount.set(p,(perPlayerCount.get(p)??0)+1)
+    }
+    for(const leg of eligibleLegs){
+      const player=normName(leg.player)
+      if(!player)continue
+      const key=player+"|"+family(leg.market)
+      if(usedPlayerFamilies.has(key))continue
+      if((perPlayerCount.get(player)??0)>=3)continue
+      usedPlayerFamilies.add(key)
+      perPlayerCount.set(player,(perPlayerCount.get(player)??0)+1)
+      pool.push(leg)
+      if(pool.length>=36)break
+    }
 
     const chosen:SlipLeg[]=[]
     let product=1
@@ -844,6 +868,10 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
         home:scan.fixture.home.name,away:scan.fixture.away.name,
         player:leg.player,team:leg.team,market:leg.market,label:leg.label,
         probability:leg.probability,bookmakerOdds:Number(leg.bookmakerOdds),bookmaker:"Bet365",confidence:leg.confidence,
+        recent5HitRate:Number.isFinite(Number(leg.recent5HitRate))?Number(leg.recent5HitRate):null,
+        seasonHitRate:Number.isFinite(Number(leg.seasonHitRate))?Number(leg.seasonHitRate):null,
+        h2hHitRate:Number.isFinite(Number(leg.h2hHitRate))?Number(leg.h2hHitRate):null,
+        h2hMatches:Number(leg.h2hMatches??0),sampleMatches:Number(leg.sampleMatches??0),
       }))
       byTier.set(cfg.id,{
         fixtureId:scan.fixture.id,competition:scan.fixture.competition,kickoff:scan.fixture.kickoff,
