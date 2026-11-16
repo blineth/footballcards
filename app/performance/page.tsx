@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
+import Link from "next/link"
 import { Activity, BarChart3, CheckCircle2, Clock3, RefreshCw, ShieldCheck, TrendingUp, Trash2, XCircle } from "lucide-react"
 import { betProfit, betReturn, getTrackedBets, removeTrackedBet, settleTrackedBet, trackedBetEventName, type TrackedBet } from "@/lib/tracked-bets"
 
@@ -76,7 +77,7 @@ export default function PerformancePage(){
             <h1 className="mt-1 text-2xl font-black">Results & calibration</h1>
             <p className="mt-1 text-xs text-white/45">The model's record stays visible — winners and losers.</p>
           </div>
-          <button onClick={()=>void load(true)} className="rounded-xl bg-emerald-400 p-2.5 text-emerald-950"><RefreshCw className={"size-4 "+(loading?"animate-spin":"")}/></button>
+          <div className="flex items-center gap-2"><Link href="/admin/model-performance" className="rounded-xl border border-violet-300/20 bg-violet-300/10 px-3 py-2.5 text-[0.5rem] font-black text-violet-200">ADMIN LAB</Link><button onClick={()=>void load(true)} className="rounded-xl bg-emerald-400 p-2.5 text-emerald-950"><RefreshCw className={"size-4 "+(loading?"animate-spin":"")}/></button></div>
         </div>
       </div>
     </header>
