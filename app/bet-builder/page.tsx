@@ -214,6 +214,9 @@ function livePlayerIsActive(p:LivePlayerStat){
     Number(p.shotsOnTarget??0)>0||Number(p.goals??0)>0||Number(p.assists??0)>0||
     Number(p.yellowCards??0)>0||Number(p.redCards??0)>0
 }
+function fastBaselineUrl(f:Fixture){
+  return "/api/live-player-baseline?"+new URLSearchParams({date:f.date,home:f.home,away:f.away,competition:f.competition})
+}
 function liveBaselineUrl(f:Fixture,live:LiveData){
   const q=new URLSearchParams({date:f.date,home:f.home,away:f.away,competition:f.competition})
   const active=(live.players??[]).filter(livePlayerIsActive)
@@ -928,10 +931,11 @@ export default function BetBuilderPage(){
     const inPlayWindow=Number.isFinite(kickoff)&&now>=kickoff&&now<=kickoff+4*60*60*1000
     const cached=readScorecardCache(f)
 
+    const cachedIsFastFallback=Boolean(cached?.snapshotFallback)
     if(cached){
       setData(current=>current?.ok?current:cached)
       setLoading(false)
-      if(!force)return
+      if(!force&&!cachedIsFastFallback)return
     }else{
       setLoading(true)
     }
@@ -943,32 +947,53 @@ export default function BetBuilderPage(){
       return
     }
 
+    // Pre-match bootstrap is deliberately two-stage:
+    // 1) render the fast snapshot model immediately;
+    // 2) keep loading the full H2H/referee/Bet365 scorecard and replace it when ready.
+    // A slow upstream source must never leave the page on "match model timed out".
+    let fastResolved:Scorecard|null=null
+    const fastPromise=(async()=>{
+      try{
+        const r=await fetch(fastBaselineUrl(f),{cache:"default"})
+        if(!r.ok)return null
+        const next=await r.json() as Scorecard
+        if(!next?.ok||!next.players?.length)return null
+        fastResolved=next
+        setData(current=>{
+          if(current?.ok&&!current.snapshotFallback)return current
+          writeScorecardCache(f,next)
+          return next
+        })
+        setLoading(false)
+        return next
+      }catch{return null}
+    })()
+
     const controller=new AbortController()
-    const timeout=window.setTimeout(()=>controller.abort(),force?15_000:12_000)
+    const timeout=window.setTimeout(()=>controller.abort(),force?35_000:30_000)
     try{
       const r=await fetch(scorecardUrl(f,force),{cache:force?"no-store":"default",signal:controller.signal})
       const next=await r.json().catch(()=>({ok:false,error:"Unable to load match model."})) as Scorecard
       if(next?.ok){
         setData(next)
         writeScorecardCache(f,next)
-      }else if(!cached){
-        setData(next)
+      }else if(!cached&&!fastResolved){
+        const fast=await fastPromise
+        if(!fast)setData(next)
       }
     }catch(error){
-      if(!cached){
-        const timedOut=error instanceof DOMException&&error.name==="AbortError"
+      const fast=fastResolved??await fastPromise
+      if(!cached&&!fast){
         const inPlayNow=Number.isFinite(kickoff)&&Date.now()>=kickoff&&Date.now()<=kickoff+4*60*60*1000
         if(inPlayNow){
-          // Keep live shell active and retry the now-CDN-cacheable baseline rather
-          // than turning a transient cold start into a permanent unavailable card.
           setData(null)
           setBaselineRetry(v=>v+1)
         }else{
-          setData({ok:false,error:timedOut
-            ?"The match model timed out. Tap refresh to retry."
-            :"Unable to load the match model. Tap refresh to retry."} as Scorecard)
+          setData({ok:false,error:"Unable to load the match model. Tap refresh to retry."} as Scorecard)
         }
       }
+      // If a cached/full/fast model already exists, keep it. The full request can
+      // fail without taking a usable match model away from the user.
     }finally{
       window.clearTimeout(timeout)
       setLoading(false)
