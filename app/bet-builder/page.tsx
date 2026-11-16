@@ -593,21 +593,44 @@ function buildBroadTargetBuilders(rows:Selection[]):RiskBuilder[]{
     .filter(r=>verifiedBet365Odd(r)!=null&&r.probability>0&&Number(r.bookmakerOdds)<12&&Number(r.bookmakerOdds)>=1.02&&r.confidence!=="D")
     .sort((a,b)=>(b.probability*stability(b))-(a.probability*stability(a))||b.probability-a.probability)
 
+  const family=(market:string)=>market.startsWith("goal")?"goal":market.startsWith("assist")?"assist":market.startsWith("fouled")?"fouled":market.startsWith("foul")?"foul":market.startsWith("sot")?"sot":market.startsWith("shot")?"shot":market==="card"?"card":"board"
   const pool:Selection[]=[]
-  const seenPlayers=new Set<string>()
+  const primaryPlayers=new Set<string>()
+  const usedPlayerFamilies=new Set<string>()
   let usedBtts=false
+
+  // Pass 1: diversify first. Take the strongest single event for each player.
   for(const row of candidates){
     if(row.market.startsWith("board:")){
-      if(row.market!=="board:btts"||usedBtts)continue
-      usedBtts=true
-      pool.push(row)
+      if(row.market==="board:btts"&&!usedBtts){pool.push(row);usedBtts=true}
       continue
     }
-    const key=normPlayer(row.player)
-    if(!key||seenPlayers.has(key))continue
-    seenPlayers.add(key)
+    const player=normPlayer(row.player)
+    if(!player||primaryPlayers.has(player))continue
+    primaryPlayers.add(player)
+    usedPlayerFamilies.add(player+"|"+family(row.market))
     pool.push(row)
-    if(pool.length>=12)break
+  }
+
+  // Pass 2: once the distinct-player route is exhausted, keep extending with
+  // genuinely different high-probability event families for those players.
+  // Never count nested thresholds from the same family as separate safe legs.
+  const perPlayerCount=new Map<string,number>()
+  for(const row of pool){
+    const p=normPlayer(row.player)
+    if(p)perPlayerCount.set(p,(perPlayerCount.get(p)??0)+1)
+  }
+  for(const row of candidates){
+    if(row.market.startsWith("board:"))continue
+    const player=normPlayer(row.player)
+    if(!player)continue
+    const key=player+"|"+family(row.market)
+    if(usedPlayerFamilies.has(key))continue
+    if((perPlayerCount.get(player)??0)>=3)continue
+    usedPlayerFamilies.add(key)
+    perPlayerCount.set(player,(perPlayerCount.get(player)??0)+1)
+    pool.push(row)
+    if(pool.length>=36)break
   }
 
   const chosen:Selection[]=[]
@@ -635,7 +658,7 @@ function buildBroadTargetBuilders(rows:Selection[]):RiskBuilder[]{
       legs:[],referenceProductOdds:null,averageLegProbability:null,minimumLegProbability:null,modelAllHitProbability:null,
       conservativeAllHitProbability:null,safetyScore:null,exactPriced:false,bookmaker:"Bet365",
       verifiedBet365LegPrices:false,exactBet365BuilderPrice:false,pricingBasis:"none" as const,
-      note:"No verified Bet365 route reaches this odds floor with the remaining high-likelihood selections."
+      note:"The verified high-likelihood shots/fouls/player events do not reach this odds floor without forcing a weaker leg."
     }
     return {
       id:cfg.id,title:cfg.title,risk:cfg.risk,targetFractional:cfg.targetFractional,targetDecimal:cfg.targetDecimal,
@@ -726,21 +749,46 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
     return true
   }
   const choosePool=(mode:PriceMode)=>{
-    const bestByPlayer=new Map<string,Selection>()
-    for(const row of rows.filter(r=>validFor(r,mode))){
-      const key=normPlayer(row.player)
-      if(!key)continue
-      const current=bestByPlayer.get(key)
-      if(!current||likelihoodScore(row)>likelihoodScore(current))bestByPlayer.set(key,row)
-    }
-    return [...bestByPlayer.values()].sort((a,b)=>{
+    const eligible=rows.filter(r=>validFor(r,mode)).sort((a,b)=>{
       const scoreDiff=likelihoodScore(b)-likelihoodScore(a)
       if(Math.abs(scoreDiff)>.0001)return scoreDiff
       return b.probability-a.probability
     })
+    const pool:Selection[]=[]
+    const seenPlayers=new Set<string>()
+    const usedPlayerFamilies=new Set<string>()
+
+    // First use the best event for each distinct player.
+    for(const row of eligible){
+      const player=normPlayer(row.player)
+      if(!player||seenPlayers.has(player))continue
+      seenPlayers.add(player)
+      usedPlayerFamilies.add(player+"|"+family(row.market))
+      pool.push(row)
+    }
+
+    // Then extend the same probability route with other event families for the
+    // same players. Nested thresholds in the same family are deliberately skipped.
+    const perPlayerCount=new Map<string,number>()
+    for(const row of pool){
+      const p=normPlayer(row.player)
+      if(p)perPlayerCount.set(p,(perPlayerCount.get(p)??0)+1)
+    }
+    for(const row of eligible){
+      const player=normPlayer(row.player)
+      if(!player)continue
+      const key=player+"|"+family(row.market)
+      if(usedPlayerFamilies.has(key))continue
+      if((perPlayerCount.get(player)??0)>=3)continue
+      usedPlayerFamilies.add(key)
+      perPlayerCount.set(player,(perPlayerCount.get(player)??0)+1)
+      pool.push(row)
+      if(pool.length>=36)break
+    }
+    return pool
   }
   const productOf=(pool:Selection[],mode:PriceMode,count:number)=>pool.slice(0,count).reduce((v,row)=>v*oddFor(row,mode),1)
-  const canReach=(pool:Selection[],mode:PriceMode,target:number)=>pool.length>=2&&productOf(pool,mode,Math.min(pool.length,12))>=target
+  const canReach=(pool:Selection[],mode:PriceMode,target:number)=>pool.length>=2&&productOf(pool,mode,pool.length)>=target
 
   let mode:PriceMode="model"
   const livePool=choosePool("live")
@@ -750,7 +798,7 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
   else if(canReach(livePool,"live",21))mode="live"
   else if(canReach(refPool,"reference",21))mode="reference"
 
-  const pool=choosePool(mode).slice(0,12)
+  const pool=choosePool(mode).slice(0,36)
   const chosen:Selection[]=[]
   let product=1
   let raw=1
@@ -778,7 +826,7 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
         modelAllHitProbability:null,conservativeAllHitProbability:null,safetyScore:null,
         exactPriced:false,bookmaker:null,verifiedBet365LegPrices:false,referenceBet365LegPrices:false,
         exactBet365BuilderPrice:false,pricingBasis:"none" as const,
-        note:"Not enough remaining high-likelihood selections reach this odds floor."
+        note:"The available high-likelihood shots/fouls/player events do not reach this odds floor without forcing a weaker leg."
       }
     }
     const conservative=conservativeJoint(legs,raw)
