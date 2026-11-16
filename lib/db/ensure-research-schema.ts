@@ -199,6 +199,87 @@ export function ensureResearchSchema() {
     `)
 
     await pool.query(`
+      CREATE TABLE IF NOT EXISTS prediction_runs (
+        id serial PRIMARY KEY,
+        snapshot_key text NOT NULL UNIQUE,
+        surface text NOT NULL,
+        fixture_id text,
+        competition text,
+        fixture_date date,
+        kickoff timestamptz,
+        home_team text,
+        away_team text,
+        slip_id text NOT NULL,
+        slip_title text,
+        tier text,
+        odds_target text,
+        combined_odds numeric,
+        model_joint_probability numeric,
+        bookmaker text,
+        lineup_confirmed boolean NOT NULL DEFAULT false,
+        live boolean NOT NULL DEFAULT false,
+        live_minute integer,
+        referee_name text,
+        referee_strictness numeric,
+        fully_graded boolean NOT NULL DEFAULT false,
+        won boolean,
+        captured_at timestamptz NOT NULL DEFAULT now(),
+        graded_at timestamptz
+      )
+    `)
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS prediction_runs_time_idx
+      ON prediction_runs (captured_at DESC)
+    `)
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS prediction_runs_surface_idx
+      ON prediction_runs (surface, captured_at DESC)
+    `)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS prediction_legs (
+        id serial PRIMARY KEY,
+        run_id integer NOT NULL REFERENCES prediction_runs(id) ON DELETE CASCADE,
+        leg_index integer NOT NULL,
+        player_name text,
+        db_player_name text,
+        player_team text,
+        opponent_team text,
+        market text NOT NULL,
+        threshold integer,
+        label text NOT NULL,
+        model_probability numeric NOT NULL,
+        fair_odds numeric,
+        bookmaker_odds numeric,
+        confidence text,
+        recent5_hit_rate numeric,
+        season_hit_rate numeric,
+        h2h_hit_rate numeric,
+        h2h_matches integer,
+        sample_matches integer,
+        discipline_heat numeric,
+        recent_fouls_10 integer,
+        live_current_count integer,
+        live_fouls integer,
+        live_fouled integer,
+        live_shots integer,
+        live_sot integer,
+        result_value numeric,
+        outcome boolean,
+        graded_at timestamptz,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        UNIQUE (run_id, leg_index)
+      )
+    `)
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS prediction_legs_ungraded_idx
+      ON prediction_legs (graded_at, market)
+    `)
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS prediction_legs_market_idx
+      ON prediction_legs (market, graded_at)
+    `)
+
+    await pool.query(`
       UPDATE player_referee_history
       SET competition = COALESCE(competition, 'Premier League'),
           season = COALESCE(season, '2025/26')
