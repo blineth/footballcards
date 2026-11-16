@@ -190,7 +190,7 @@ export async function backfillLegacyPredictionLedger(){
       slip_id,slip_title,bookmaker,lineup_confirmed,live,captured_at
     )
     SELECT
-      'legacy|'||recommendation_key,'legacy_recommended',max(fixture_id),max(competition),max(fixture_date),
+      'legacy|'||recommendation_key,'legacy_recommended',max(fixture_id),max(competition),(max(kickoff) AT TIME ZONE 'Europe/London')::date,
       max(kickoff),max(home_team),max(away_team),max(slip_id),max(slip_title),max(bookmaker),
       bool_or(lineup_confirmed),false,min(captured_at)
     FROM recommendation_snapshots
@@ -206,7 +206,7 @@ export async function backfillLegacyPredictionLedger(){
     )
     SELECT r.id,
       row_number() OVER(PARTITION BY s.recommendation_key ORDER BY s.id)-1,
-      s.fixture_id,s.competition,s.fixture_date,s.kickoff,s.home_team,s.away_team,
+      s.fixture_id,s.competition,(s.kickoff AT TIME ZONE 'Europe/London')::date,s.kickoff,s.home_team,s.away_team,
       s.player_name,s.db_player_name,s.player_team,s.opponent_team,s.market,s.threshold,s.label,
       s.model_probability,s.fair_odds,s.bookmaker_odds,s.confidence,s.result_value,s.outcome,s.graded_at,s.captured_at
     FROM recommendation_snapshots s
