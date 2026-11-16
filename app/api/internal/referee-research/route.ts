@@ -330,6 +330,145 @@ async function importFootballDataDivision(seasonCode:string,division:string){
   return {competition,season,division,rows:rows.length,imported,url}
 }
 
+const ESPN_ROOT="https://site.api.espn.com/apis/site/v2/sports/soccer"
+const ESPN_INTL_DATASETS:Record<string,{label:string;sources:Array<{slug:string;months:string[]}>}>={
+  euro:{label:"UEFA European Championship",sources:[{slug:"uefa.euro",months:["202106","202107","202406","202407"]}]},
+  "euro-qualifiers":{label:"UEFA European Championship Qualifying",sources:[{slug:"uefa.euroq",months:["202303","202306","202309","202310","202311","202403"]}]},
+  nations:{label:"UEFA Nations League",sources:[{slug:"uefa.nations",months:["202206","202209","202306","202409","202410","202411","202503","202506","202609","202610","202611"]}]},
+  "world-cup":{label:"FIFA World Cup",sources:[{slug:"fifa.world",months:["202211","202212","202606","202607"]}]},
+  "world-cup-uefa-qualifiers":{label:"FIFA World Cup Qualifying - UEFA",sources:[{slug:"fifa.worldq.uefa",months:["202503","202506","202509","202510","202511","202603"]}]},
+  friendlies:{label:"International Friendly",sources:[{slug:"fifa.friendly",months:[
+    "202401","202402","202403","202404","202405","202406","202407","202408","202409","202410","202411","202412",
+    "202501","202502","202503","202504","202505","202506","202507","202508","202509","202510","202511","202512",
+    "202601","202602","202603","202604","202605","202606","202607","202608","202609","202610","202611"
+  ]}]},
+}
+async function espn(slug:string,path:string){
+  const r=await fetch(`${ESPN_ROOT}/${slug}/${path}`,{cache:"no-store",signal:AbortSignal.timeout(15000),headers:{accept:"application/json"}})
+  if(!r.ok)throw new Error(`ESPN ${slug} ${r.status}`)
+  return r.json()
+}
+function espnStat(row:any,name:string){
+  const found=(row?.stats??[]).find((s:any)=>s?.name===name)
+  return Number(found?.value??found?.displayValue??0)||0
+}
+function espnReferee(summary:any,event:any){
+  const arrays=[
+    summary?.gameInfo?.officials,
+    summary?.header?.competitions?.[0]?.officials,
+    summary?.officials,
+    event?.competitions?.[0]?.officials,
+  ].filter(Array.isArray)
+  for(const list of arrays){
+    const main=list.find((o:any)=>{
+      const role=String(o?.position?.displayName??o?.position?.name??o?.role??o?.type??"").toLowerCase()
+      return role==="referee"||role.includes("main referee")||role.includes("match referee")
+    })??list[0]
+    const name=String(main?.fullName??main?.displayName??main?.name??main?.athlete?.displayName??"").trim()
+    if(name)return name
+  }
+  const simple=String(summary?.gameInfo?.referee?.displayName??summary?.gameInfo?.referee??"").trim()
+  return simple||""
+}
+function espnMinute(ev:any){
+  const seconds=Number(ev?.clock?.value??NaN)
+  if(Number.isFinite(seconds))return Math.max(0,Math.min(130,Math.floor(seconds/60)))
+  const m=String(ev?.clock?.displayValue??ev?.time?.displayValue??"").match(/(\d{1,3})/)
+  return m?Math.max(0,Math.min(130,Number(m[1]))):null
+}
+async function espnCompletedEvents(dataset:string){
+  const config=ESPN_INTL_DATASETS[dataset]
+  if(!config)throw new Error("Unknown ESPN international dataset")
+  const map=new Map<string,any>()
+  for(const source of config.sources){
+    for(const month of source.months){
+      try{
+        const data=await espn(source.slug,`scoreboard?dates=${month}&limit=500`)
+        for(const event of data?.events??[]){
+          const id=String(event?.id??"")
+          const completed=event?.status?.type?.completed===true||String(event?.status?.type?.state??"")==="post"
+          if(id&&completed)map.set(`${source.slug}:${id}`,{...event,__slug:source.slug,__label:config.label})
+        }
+      }catch{}
+    }
+  }
+  return [...map.values()].sort((a,b)=>String(a?.date??"").localeCompare(String(b?.date??"")))
+}
+async function importEspnInternationalEvent(event:any){
+  const id=String(event?.id??""),slug=String(event?.__slug??"")
+  if(!id||!slug)return {ok:false,reason:"missing id"}
+  const summary=await espn(slug,`summary?event=${id}`)
+  const ref=espnReferee(summary,event)
+  if(!ref)return {ok:false,reason:"no referee"}
+  const comp=summary?.header?.competitions?.[0]??event?.competitions?.[0]??{}
+  const competitors=comp?.competitors??[]
+  const homeRow=competitors.find((x:any)=>x?.homeAway==="home"),awayRow=competitors.find((x:any)=>x?.homeAway==="away")
+  const home=String(homeRow?.team?.displayName??homeRow?.team?.name??"")
+  const away=String(awayRow?.team?.displayName??awayRow?.team?.name??"")
+  const date=String(event?.date??comp?.date??"").slice(0,10)
+  if(!home||!away||!date)return {ok:false,reason:"missing fixture identity"}
+  const fixtureId=`espn:${slug}:${id}`
+  let homeFouls=0,awayFouls=0,homeY=0,awayY=0,homeR=0,awayR=0
+  const playerRows:any[]=[]
+  for(const section of summary?.rosters??[]){
+    const team=String(section?.team?.displayName??section?.team?.name??"")
+    const isHome=team===home
+    const opponent=isHome?away:home
+    for(const row of section?.roster??[]){
+      const player=String(row?.athlete?.displayName??row?.athlete?.fullName??"").trim()
+      if(!player)continue
+      const fc=espnStat(row,"foulsCommitted"),fd=espnStat(row,"foulsSuffered")
+      const y=espnStat(row,"yellowCards"),r=espnStat(row,"redCards")
+      const minutes=Number((row?.stats??[]).find((s:any)=>s?.name==="minutes")?.value??(row?.starter===true?90:0))||0
+      const appeared=row?.starter===true||minutes>0||fc>0||fd>0||y>0||r>0
+      if(!appeared)continue
+      if(isHome){homeFouls+=fc;homeY+=y;homeR+=r}else{awayFouls+=fc;awayY+=y;awayR+=r}
+      playerRows.push({player,team,opponent,fc,fd,y:y>0,r:r>0,minutes,starter:row?.starter===true,position:String(row?.position?.abbreviation??row?.position?.displayName??row?.athlete?.position?.abbreviation??"")||null,externalPlayerId:String(row?.athlete?.id??"")||null})
+    }
+  }
+  const cards=(summary?.keyEvents??[]).filter((e:any)=>{
+    const t=String(e?.type?.type??e?.type?.text??"").toLowerCase()
+    return t.includes("yellow")||t.includes("red")||t.includes("card")
+  })
+  const cardMinutes=cards.map(espnMinute).filter((x:any):x is number=>Number.isFinite(x))
+  const yellowMinutes=(summary?.keyEvents??[]).filter((e:any)=>String(e?.type?.type??e?.type?.text??"").toLowerCase().includes("yellow")).map(espnMinute).filter((x:any):x is number=>Number.isFinite(x))
+  const season=date.slice(0,4)
+  await pool.query(`
+    INSERT INTO referee_match_history (
+      fixture_id,referee_name,fixture_date,competition,season,round,home_team,away_team,home_score,away_score,
+      home_fouls,away_fouls,total_fouls,home_yellows,away_yellows,total_yellows,home_reds,away_reds,total_reds,
+      first_half_yellows,second_half_yellows,first_card_minute,last_card_minute,source,updated_at
+    ) VALUES ($1,$2,$3,'International',$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,'ESPN',now())
+    ON CONFLICT (fixture_id) DO UPDATE SET
+      referee_name=EXCLUDED.referee_name,fixture_date=EXCLUDED.fixture_date,competition=EXCLUDED.competition,season=EXCLUDED.season,
+      round=EXCLUDED.round,home_team=EXCLUDED.home_team,away_team=EXCLUDED.away_team,home_score=EXCLUDED.home_score,away_score=EXCLUDED.away_score,
+      home_fouls=EXCLUDED.home_fouls,away_fouls=EXCLUDED.away_fouls,total_fouls=EXCLUDED.total_fouls,
+      home_yellows=EXCLUDED.home_yellows,away_yellows=EXCLUDED.away_yellows,total_yellows=EXCLUDED.total_yellows,
+      home_reds=EXCLUDED.home_reds,away_reds=EXCLUDED.away_reds,total_reds=EXCLUDED.total_reds,
+      first_half_yellows=EXCLUDED.first_half_yellows,second_half_yellows=EXCLUDED.second_half_yellows,
+      first_card_minute=EXCLUDED.first_card_minute,last_card_minute=EXCLUDED.last_card_minute,source=EXCLUDED.source,updated_at=now()
+  `,[
+    fixtureId,ref,date,season,String(event?.__label??"International"),home,away,
+    n(homeRow?.score),n(awayRow?.score),homeFouls,awayFouls,homeFouls+awayFouls,homeY,awayY,homeY+awayY,homeR,awayR,homeR+awayR,
+    yellowMinutes.filter((m:number)=>m<=45).length,yellowMinutes.filter((m:number)=>m>45).length,
+    cardMinutes.length?Math.min(...cardMinutes):null,cardMinutes.length?Math.max(...cardMinutes):null,
+  ])
+  for(const p of playerRows){
+    await pool.query(`
+      INSERT INTO player_referee_match_history (
+        fixture_id,referee_name,fixture_date,player_name,team,opponent,competition,season,minutes,starter,position,
+        fouls_committed,fouls_drawn,yellow_card,red_card,external_player_id,updated_at
+      ) VALUES ($1,$2,$3,$4,$5,$6,'International',$7,$8,$9,$10,$11,$12,$13,$14,$15,now())
+      ON CONFLICT (fixture_id,player_name,team) DO UPDATE SET
+        referee_name=EXCLUDED.referee_name,fixture_date=EXCLUDED.fixture_date,opponent=EXCLUDED.opponent,competition=EXCLUDED.competition,
+        season=EXCLUDED.season,minutes=EXCLUDED.minutes,starter=EXCLUDED.starter,position=EXCLUDED.position,
+        fouls_committed=EXCLUDED.fouls_committed,fouls_drawn=EXCLUDED.fouls_drawn,yellow_card=EXCLUDED.yellow_card,
+        red_card=EXCLUDED.red_card,external_player_id=EXCLUDED.external_player_id,updated_at=now()
+    `,[fixtureId,ref,date,p.player,p.team,p.opponent,season,p.minutes,p.starter,p.position,p.fc,p.fd,p.y,p.r,p.externalPlayerId])
+  }
+  return {ok:true,referee:ref,date,home,away,players:playerRows.length}
+}
+
 async function refreshInternationalRolling(){
   const season="rolling"
   await pool.query(`
@@ -383,6 +522,28 @@ async function refreshInternationalRolling(){
       'International',$1,now()
     FROM base b CROSS JOIN comp LEFT JOIN r10 USING(referee_name) LEFT JOIN r25 USING(referee_name)
   `,[season])
+
+  await pool.query(`
+    INSERT INTO player_referee_history (
+      referee_name,player_name,team,competition,season,matches_together,yellow_cards,red_cards,
+      fouls_committed,fouls_drawn,minutes,card_rate,fouls_per_match,cards_per_foul,external_player_id,updated_at
+    )
+    SELECT referee_name,player_name,max(team),'International','rolling',count(*)::int,
+      sum(CASE WHEN yellow_card THEN 1 ELSE 0 END)::int,sum(CASE WHEN red_card THEN 1 ELSE 0 END)::int,
+      sum(COALESCE(fouls_committed,0))::int,sum(COALESCE(fouls_drawn,0))::int,sum(COALESCE(minutes,0))::int,
+      sum(CASE WHEN yellow_card OR red_card THEN 1 ELSE 0 END)::numeric/NULLIF(count(*),0),
+      sum(COALESCE(fouls_committed,0))::numeric/NULLIF(count(*),0),
+      sum(CASE WHEN yellow_card OR red_card THEN 1 ELSE 0 END)::numeric/NULLIF(sum(COALESCE(fouls_committed,0)),0),
+      max(external_player_id),now()
+    FROM player_referee_match_history
+    WHERE competition='International' AND fixture_date>=CURRENT_DATE-INTERVAL '4 years'
+    GROUP BY referee_name,player_name
+    ON CONFLICT (referee_name,player_name,competition,season) DO UPDATE SET
+      team=EXCLUDED.team,matches_together=EXCLUDED.matches_together,yellow_cards=EXCLUDED.yellow_cards,red_cards=EXCLUDED.red_cards,
+      fouls_committed=EXCLUDED.fouls_committed,fouls_drawn=EXCLUDED.fouls_drawn,minutes=EXCLUDED.minutes,
+      card_rate=EXCLUDED.card_rate,fouls_per_match=EXCLUDED.fouls_per_match,cards_per_foul=EXCLUDED.cards_per_foul,
+      external_player_id=EXCLUDED.external_player_id,updated_at=now()
+  `)
 }
 
 export async function GET(request:Request){
@@ -417,6 +578,26 @@ export async function GET(request:Request){
     }
     const dedup=[...new Map(international.map(x=>[x.id,x])).values()]
     return NextResponse.json({ok:true,domestic,international:dedup})
+  }
+
+  if(mode==="espn-international"){
+    const dataset=url.searchParams.get("dataset")??"nations"
+    const all=await espnCompletedEvents(dataset)
+    const offset=Math.max(0,Number(url.searchParams.get("offset")??0)||0)
+    const limit=Math.max(1,Math.min(30,Number(url.searchParams.get("limit")??12)||12))
+    const selected=all.slice(offset,offset+limit)
+    const results:any[]=[]
+    for(const event of selected){
+      try{results.push(await importEspnInternationalEvent(event))}
+      catch(error){results.push({ok:false,event:String(event?.id??""),error:error instanceof Error?error.message:String(error)})}
+    }
+    if(results.some(x=>x.ok))await refreshInternationalRolling()
+    const nextOffset=offset+selected.length
+    return NextResponse.json({
+      ok:true,dataset,totalFixtures:all.length,offset,processed:selected.length,imported:results.filter(x=>x.ok).length,
+      skipped:results.filter(x=>!x.ok),matches:results.filter(x=>x.ok),nextOffset,done:nextOffset>=all.length,
+      availableDatasets:Object.keys(ESPN_INTL_DATASETS),
+    })
   }
 
   if(mode==="football-data"){
