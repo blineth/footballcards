@@ -127,6 +127,15 @@ export function ensureResearchSchema() {
         created_at timestamptz NOT NULL DEFAULT now()
       )
     `)
+    await pool.query(`
+      DELETE FROM player_referee_match_history a
+      USING player_referee_match_history b
+      WHERE a.id>b.id
+        AND a.fixture_id=b.fixture_id
+        AND a.player_name=b.player_name
+        AND COALESCE(a.team,'')=COALESCE(b.team,'')
+    `)
+    await pool.query(`DROP INDEX IF EXISTS player_referee_match_history_unique`)
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS player_referee_match_history_unique ON player_referee_match_history (fixture_id, player_name, team)`)
     await pool.query(`CREATE INDEX IF NOT EXISTS player_referee_match_history_ref_player_idx ON player_referee_match_history (referee_name, player_name, fixture_date DESC)`)
     await pool.query(`
