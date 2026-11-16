@@ -240,6 +240,12 @@ export function ensureResearchSchema() {
         id serial PRIMARY KEY,
         run_id integer NOT NULL REFERENCES prediction_runs(id) ON DELETE CASCADE,
         leg_index integer NOT NULL,
+        fixture_id text,
+        competition text,
+        fixture_date date,
+        kickoff timestamptz,
+        home_team text,
+        away_team text,
         player_name text,
         db_player_name text,
         player_team text,
@@ -270,6 +276,12 @@ export function ensureResearchSchema() {
         UNIQUE (run_id, leg_index)
       )
     `)
+    await pool.query(`ALTER TABLE prediction_legs ADD COLUMN IF NOT EXISTS fixture_id text`)
+    await pool.query(`ALTER TABLE prediction_legs ADD COLUMN IF NOT EXISTS competition text`)
+    await pool.query(`ALTER TABLE prediction_legs ADD COLUMN IF NOT EXISTS fixture_date date`)
+    await pool.query(`ALTER TABLE prediction_legs ADD COLUMN IF NOT EXISTS kickoff timestamptz`)
+    await pool.query(`ALTER TABLE prediction_legs ADD COLUMN IF NOT EXISTS home_team text`)
+    await pool.query(`ALTER TABLE prediction_legs ADD COLUMN IF NOT EXISTS away_team text`)
     await pool.query(`
       CREATE INDEX IF NOT EXISTS prediction_legs_ungraded_idx
       ON prediction_legs (graded_at, market)
