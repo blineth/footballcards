@@ -91,6 +91,28 @@ export default function AccumulatorPage(){
   const balancedSlip=(data?.slips??[]).find(s=>s.id==="fold-7"&&s.available!==false)??null
   const riskySlip=(data?.slips??[]).find(s=>s.id==="fold-10"&&s.available!==false)??null
 
+  useEffect(()=>{
+    if(!data?.ok)return
+    const runs:any[]=[]
+    for(const slip of data.slips??[]){
+      if(slip.available===false||!slip.legs?.length)continue
+      runs.push({
+        surface:slip.containsLive?"acca_live":"acca",
+        slip:{id:slip.id,title:slip.title,tier:slip.id,oddsTarget:slip.requiredLegs?String(slip.requiredLegs)+"-fold":null,
+          combinedOdds:slip.exactCombinedOdds??slip.fairCombinedOdds??null,
+          modelJointProbability:slip.adjustedAllHitProbability??slip.modelAllHitProbability??null,
+          bookmaker:slip.bookmaker??null},
+        live:Boolean(slip.containsLive),
+        legs:slip.legs.map(leg=>({
+          fixture:{id:leg.fixtureId,competition:leg.competition,kickoff:leg.kickoff,home:leg.home,away:leg.away},
+          playerName:null,team:null,market:leg.market,label:leg.label,modelProbability:leg.probability,
+          fairOdds:leg.fairOdds,bookmakerOdds:leg.bookmakerOdds,confidence:leg.grade,
+        })),
+      })
+    }
+    if(runs.length)void fetch("/api/prediction-ledger",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({runs}),keepalive:true}).catch(()=>{})
+  },[data?.ok,data?.generatedAt,data?.slips])
+
   const manualPicks=useMemo(()=>{
     const rows:(Prediction&{outcome:Outcome;label:string;probability:number;fairOdds:number;bookmakerOdds:number|null})[]=[]
     for(const p of data?.predictions??[]){
