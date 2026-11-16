@@ -27,6 +27,108 @@ export function ensureResearchSchema() {
     await pool.query(`ALTER TABLE player_baselines ADD COLUMN IF NOT EXISTS shots_on_target_per_90 numeric`)
     await pool.query(`ALTER TABLE player_referee_history ADD COLUMN IF NOT EXISTS competition text`)
     await pool.query(`ALTER TABLE player_referee_history ADD COLUMN IF NOT EXISTS season text`)
+    await pool.query(`ALTER TABLE player_referee_history ADD COLUMN IF NOT EXISTS fouls_drawn integer`)
+    await pool.query(`ALTER TABLE player_referee_history ADD COLUMN IF NOT EXISTS minutes integer`)
+    await pool.query(`ALTER TABLE player_referee_history ADD COLUMN IF NOT EXISTS card_rate numeric`)
+    await pool.query(`ALTER TABLE player_referee_history ADD COLUMN IF NOT EXISTS fouls_per_match numeric`)
+    await pool.query(`ALTER TABLE player_referee_history ADD COLUMN IF NOT EXISTS cards_per_foul numeric`)
+    await pool.query(`ALTER TABLE player_referee_history ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now()`)
+
+    await pool.query(`ALTER TABLE referees ADD COLUMN IF NOT EXISTS fouls_called integer`)
+    await pool.query(`ALTER TABLE referees ADD COLUMN IF NOT EXISTS penalties_awarded integer`)
+    await pool.query(`ALTER TABLE referees ADD COLUMN IF NOT EXISTS first_half_yellows integer`)
+    await pool.query(`ALTER TABLE referees ADD COLUMN IF NOT EXISTS second_half_yellows integer`)
+    await pool.query(`ALTER TABLE referees ADD COLUMN IF NOT EXISTS zero_card_matches integer`)
+    await pool.query(`ALTER TABLE referees ADD COLUMN IF NOT EXISTS five_plus_card_matches integer`)
+    await pool.query(`ALTER TABLE referees ADD COLUMN IF NOT EXISTS seven_plus_card_matches integer`)
+    await pool.query(`ALTER TABLE referees ADD COLUMN IF NOT EXISTS reds_per_game numeric`)
+    await pool.query(`ALTER TABLE referees ADD COLUMN IF NOT EXISTS cards_per_foul numeric`)
+    await pool.query(`ALTER TABLE referees ADD COLUMN IF NOT EXISTS fouls_per_card numeric`)
+    await pool.query(`ALTER TABLE referees ADD COLUMN IF NOT EXISTS penalties_per_game numeric`)
+    await pool.query(`ALTER TABLE referees ADD COLUMN IF NOT EXISTS first_half_yellows_per_game numeric`)
+    await pool.query(`ALTER TABLE referees ADD COLUMN IF NOT EXISTS second_half_yellows_per_game numeric`)
+    await pool.query(`ALTER TABLE referees ADD COLUMN IF NOT EXISTS average_first_card_minute numeric`)
+    await pool.query(`ALTER TABLE referees ADD COLUMN IF NOT EXISTS home_yellows_per_game numeric`)
+    await pool.query(`ALTER TABLE referees ADD COLUMN IF NOT EXISTS away_yellows_per_game numeric`)
+    await pool.query(`ALTER TABLE referees ADD COLUMN IF NOT EXISTS home_card_share numeric`)
+    await pool.query(`ALTER TABLE referees ADD COLUMN IF NOT EXISTS zero_card_rate numeric`)
+    await pool.query(`ALTER TABLE referees ADD COLUMN IF NOT EXISTS five_plus_card_rate numeric`)
+    await pool.query(`ALTER TABLE referees ADD COLUMN IF NOT EXISTS seven_plus_card_rate numeric`)
+    await pool.query(`ALTER TABLE referees ADD COLUMN IF NOT EXISTS recent10_yellows_per_game numeric`)
+    await pool.query(`ALTER TABLE referees ADD COLUMN IF NOT EXISTS recent10_fouls_per_game numeric`)
+    await pool.query(`ALTER TABLE referees ADD COLUMN IF NOT EXISTS recent10_cards_per_foul numeric`)
+    await pool.query(`ALTER TABLE referees ADD COLUMN IF NOT EXISTS recent25_yellows_per_game numeric`)
+    await pool.query(`ALTER TABLE referees ADD COLUMN IF NOT EXISTS recent25_fouls_per_game numeric`)
+    await pool.query(`ALTER TABLE referees ADD COLUMN IF NOT EXISTS recent25_cards_per_foul numeric`)
+    await pool.query(`ALTER TABLE referees ADD COLUMN IF NOT EXISTS strictness_score numeric`)
+    await pool.query(`ALTER TABLE referees ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now()`)
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS referee_match_history (
+        id serial PRIMARY KEY,
+        fixture_id text NOT NULL UNIQUE,
+        referee_name text NOT NULL,
+        fixture_date date NOT NULL,
+        competition text,
+        league_id integer,
+        season text,
+        round text,
+        home_team text,
+        away_team text,
+        home_score integer,
+        away_score integer,
+        home_fouls integer,
+        away_fouls integer,
+        total_fouls integer,
+        home_yellows integer,
+        away_yellows integer,
+        total_yellows integer,
+        home_reds integer,
+        away_reds integer,
+        total_reds integer,
+        first_half_yellows integer,
+        second_half_yellows integer,
+        first_card_minute integer,
+        last_card_minute integer,
+        home_penalties integer,
+        away_penalties integer,
+        total_penalties integer,
+        source text,
+        updated_at timestamptz NOT NULL DEFAULT now(),
+        created_at timestamptz NOT NULL DEFAULT now()
+      )
+    `)
+    await pool.query(`CREATE INDEX IF NOT EXISTS referee_match_history_ref_idx ON referee_match_history (referee_name, fixture_date DESC)`)
+    await pool.query(`CREATE INDEX IF NOT EXISTS referee_match_history_comp_idx ON referee_match_history (competition, season, fixture_date DESC)`)
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS player_referee_match_history (
+        id serial PRIMARY KEY,
+        fixture_id text NOT NULL,
+        referee_name text NOT NULL,
+        fixture_date date NOT NULL,
+        player_name text NOT NULL,
+        team text,
+        opponent text,
+        competition text,
+        season text,
+        minutes integer,
+        starter boolean,
+        position text,
+        fouls_committed integer,
+        fouls_drawn integer,
+        yellow_card boolean,
+        red_card boolean,
+        tackles integer,
+        duels_total integer,
+        duels_won integer,
+        external_player_id text,
+        updated_at timestamptz NOT NULL DEFAULT now(),
+        created_at timestamptz NOT NULL DEFAULT now()
+      )
+    `)
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS player_referee_match_history_unique ON player_referee_match_history (fixture_id, player_name, COALESCE(team,''))`)
+    await pool.query(`CREATE INDEX IF NOT EXISTS player_referee_match_history_ref_player_idx ON player_referee_match_history (referee_name, player_name, fixture_date DESC)`)
     await pool.query(`
       CREATE TABLE IF NOT EXISTS odds_snapshots (
         id serial PRIMARY KEY,
