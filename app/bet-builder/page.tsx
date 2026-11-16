@@ -196,6 +196,31 @@ function parseFixture():Fixture|null{
 function scorecardUrl(f:Fixture,force=false){const q=new URLSearchParams({date:f.date,home:f.home,away:f.away,competition:f.competition,view:"builder"});if(force)q.set("refresh",String(Date.now()));return "/api/fixture-scorecard?"+q}
 function time(kickoff:string){return kickoff?new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/London",weekday:"short",day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit",hour12:false}).format(new Date(kickoff)):""}
 function keyOf(s:Pick<Selection,"player"|"market"|"label">){return [s.player,s.market,s.label].join("|").toLowerCase()}
+function ledgerMarket(row:Selection){
+  if(!row.market.startsWith("board:"))return row.market
+  if(row.market==="board:btts"){
+    const l=String(row.label??"").toLowerCase()
+    return l.includes("no")?"bttsNo":l.includes("yes")?"bttsYes":null
+  }
+  return null
+}
+function ledgerLeg(row:Selection,fixture:Fixture){
+  const market=ledgerMarket(row)
+  if(!market)return null
+  return {
+    fixture:{id:fixture.id,competition:fixture.competition,kickoff:fixture.kickoff,date:fixture.date,home:fixture.home,away:fixture.away},
+    playerName:row.market.startsWith("board:")?null:row.player,
+    dbPlayerName:row.market.startsWith("board:")?null:(row.dbPlayerName??row.player),
+    team:row.market.startsWith("board:")?null:row.team,
+    market,label:row.label,modelProbability:row.probability,fairOdds:row.fairOdds,
+    bookmakerOdds:displayedBet365Odd(row)?.odd??row.bookmakerOdds??null,confidence:row.confidence,
+    recent5HitRate:row.recent5HitRate??null,seasonHitRate:row.seasonHitRate??null,
+    h2hHitRate:row.h2hHitRate??null,h2hMatches:row.h2hMatches??0,sampleMatches:row.sampleMatches??0,
+    disciplineHeat:row.disciplineHeat??null,recentFouls10:row.recentFouls10??null,
+    liveFouls:row.liveFoulsCommitted??null,liveFouled:row.liveFoulsDrawn??null,
+    liveShots:row.liveShots??null,liveSot:row.liveShotsOnTarget??null,
+  }
+}
 function verifiedBet365Odd(s:Selection){
   return s.bookmakerName==="Bet365"&&s.bookmakerOdds!=null&&Number(s.bookmakerOdds)>1?Number(s.bookmakerOdds):null
 }
@@ -1229,6 +1254,51 @@ export default function BetBuilderPage(){
     }
     return [...byFamily.values()]
   },[broadRows,verifiedPlayerRows])
+  useEffect(()=>{
+    if(!fixture||!data?.ok)return
+    const fixtureInfo={id:fixture.id,competition:fixture.competition,kickoff:fixture.kickoff,date:fixture.date,home:fixture.home,away:fixture.away}
+    const ref=live?.referee??null
+    const base={
+      fixture:fixtureInfo,
+      lineupConfirmed:data.lineupMode==="confirmed"||data.lineupsConfirmed===true,
+      live:inPlay,
+      liveMinute:inPlay?Number(live?.elapsed??0):null,
+      referee:ref?{name:ref.name??null,strictnessScore:ref.strictnessScore??null}:null,
+    }
+    const runs:any[]=[]
+    if(builderMode!=="discipline"){
+      for(const build of builders){
+        const legs=(build.legs??[]).map(row=>ledgerLeg(row,fixture)).filter(Boolean)
+        if(!legs.length)continue
+        runs.push({
+          ...base,
+          surface:inPlay?"match_builder_live":"match_builder",
+          slip:{
+            id:build.id,title:build.title,tier:build.risk,oddsTarget:build.targetFractional,
+            combinedOdds:build.referenceProductOdds??null,
+            modelJointProbability:build.conservativeAllHitProbability??build.modelAllHitProbability??null,
+            bookmaker:build.bookmaker??null,
+          },
+          legs,
+        })
+      }
+    }else if(cardRiskRows.length){
+      const legs=cardRiskRows.slice(0,8).map(row=>ledgerLeg(row,fixture)).filter(Boolean)
+      if(legs.length)runs.push({
+        ...base,surface:"match_card_risk",
+        slip:{id:"card-risk",title:"Live Card Risk",tier:"ranking",oddsTarget:null,combinedOdds:null,modelJointProbability:null,bookmaker:"Bet365"},
+        legs,
+      })
+    }
+    const likelihoodLegs=visible.slice(0,20).map(row=>ledgerLeg(row,fixture)).filter(Boolean)
+    if(likelihoodLegs.length)runs.push({
+      ...base,surface:inPlay?"match_likelihood_live":"match_likelihood",
+      slip:{id:"likelihood-"+category,title:(inPlay?"Live ":"")+"Likelihood · "+category,tier:"ranking",oddsTarget:null,combinedOdds:null,modelJointProbability:null,bookmaker:"Bet365"},
+      legs:likelihoodLegs,
+    })
+    if(!runs.length)return
+    void fetch("/api/prediction-ledger",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({runs}),keepalive:true}).catch(()=>{})
+  },[fixture,data?.ok,data?.lineupMode,data?.lineupsConfirmed,builders,builderMode,cardRiskRows,visible,category,inPlay,live?.elapsed,live?.referee])
   useEffect(()=>{
     const valid=new Map(allRows.map(r=>[r.id,r]))
     setSelected(cur=>{
