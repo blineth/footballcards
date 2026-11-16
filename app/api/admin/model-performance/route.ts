@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { gradePredictionLedger, predictionPerformanceSummary } from "@/lib/prediction-ledger"
+import { backfillLegacyPredictionLedger, gradePredictionLedger, predictionPerformanceSummary } from "@/lib/prediction-ledger"
 
 export const dynamic="force-dynamic"
 export const revalidate=0
@@ -9,9 +9,10 @@ export async function GET(request:Request){
   const days=Math.max(1,Math.min(365,Number(url.searchParams.get("days")??30)||30))
   const grade=url.searchParams.get("grade")!=="0"
   try{
+    const backfill=await backfillLegacyPredictionLedger()
     const grading=grade?await gradePredictionLedger(2000):{graded:0,runsUpdated:0}
     const performance=await predictionPerformanceSummary(days)
-    return NextResponse.json({ok:true,grading,performance,updatedAt:new Date().toISOString()},{
+    return NextResponse.json({ok:true,backfill,grading,performance,updatedAt:new Date().toISOString()},{
       headers:{"Cache-Control":"no-store"}
     })
   }catch(error){
