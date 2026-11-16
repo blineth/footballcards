@@ -602,11 +602,13 @@ function routeSelectionSafety(legs:SlipLeg[],joint:number){
 function evidenceSupport(leg:SlipLeg){
   const recent=Number(leg.recent5HitRate),season=Number(leg.seasonHitRate)
   const h2h=Number(leg.h2hHitRate),h2hN=Number(leg.h2hMatches??0)
+  const similarity=Number(leg.h2hSimilarity),overlap=Number(leg.h2hLineupOverlap)
   let weighted=0,weight=0
-  if(Number.isFinite(recent)){weighted+=recent*.34;weight+=.34}
-  if(Number.isFinite(season)){weighted+=season*.46;weight+=.46}
-  if(h2hN>=2&&Number.isFinite(h2h)){
-    const hw=Math.min(.20,.08+.03*Math.min(4,h2hN))
+  if(Number.isFinite(recent)){weighted+=recent*.32;weight+=.32}
+  if(Number.isFinite(season)){weighted+=season*.43;weight+=.43}
+  if(h2hN>=1&&Number.isFinite(h2h)){
+    const similarityLift=(Number.isFinite(similarity)?similarity:0)*.10+(Number.isFinite(overlap)?overlap:0)*.06
+    const hw=Math.min(.31,.08+.035*Math.min(5,h2hN)+similarityLift)
     weighted+=h2h*hw;weight+=hw
   }
   return weight>0?Math.max(0,Math.min(1,weighted/weight)):Math.max(0,Math.min(1,Number(leg.probability??0)))
