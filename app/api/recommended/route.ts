@@ -740,44 +740,9 @@ function buildMultiGameBoards(scans:FixtureScan[]):MultiGameBoard[]{
 
 function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
   const eligible=scans.filter(x=>x.scorecard?.ok&&usablePlayerPropCoverage(x.scorecard.marketAvailability))
-  const family=(market:string)=>market.startsWith("goal")?"goal":market.startsWith("assist")?"assist":market.startsWith("fouled")?"fouled":market.startsWith("foul")?"foul":market.startsWith("sot")?"sot":market.startsWith("shot")?"shot":"card"
-  const confidenceReliability=(leg:SlipLeg)=>leg.confidence==="A"?1:leg.confidence==="B"?.99:leg.confidence==="C"?.965:.90
-  const marketReliability=(leg:SlipLeg)=>{
-    const f=family(leg.market)
-    if(f==="foul")return .998
-    if(f==="fouled")return .997
-    if(f==="shot")return .995
-    if(f==="sot")return .975
-    if(f==="card")return .90
-    if(f==="goal")return .90
-    if(f==="assist")return .86
-    return .95
-  }
-  const safetyLegProbability=(leg:SlipLeg)=>{
-    const model=Math.max(.01,Math.min(.99,Number(leg.probability)))
-    const price=Number(leg.bookmakerOdds??0)
-    const book=Math.max(.01,Math.min(.99,Number(leg.bookmakerProbability??(price>1?1/price:model))))
-    const uplift=leg.confidence==="A"?1.18:leg.confidence==="B"?1.12:leg.confidence==="C"?1.07:1
-    return Math.max(.01,Math.min(.99,Math.min(model,book*uplift)*evidenceReliability(leg)))
-  }
-  const conservativeJoint=(legs:SlipLeg[])=>{
-    const counts:Record<string,number>={}
-    let conservative=1
-    for(const leg of legs){
-      const f=family(leg.market)
-      counts[f]=(counts[f]??0)+1
-      conservative*=safetyLegProbability(leg)*confidenceReliability(leg)*marketReliability(leg)
-    }
-    let concentration=1
-    for(const [f,count] of Object.entries(counts)){
-      if(count<=1)continue
-      concentration*=Math.pow(f==="foul"||f==="fouled"?.997:f==="shot"?.995:.985,count-1)
-    }
-    return Math.max(0,Math.min(.99,conservative*concentration))
-  }
-
   const tierConfigs=[
     {id:"most-likely",title:"Most Likely",targetFractional:"Best",targetDecimal:0},
+    {id:"3-1",title:"3/1",targetFractional:"3/1",targetDecimal:4},
     {id:"5-1",title:"5/1",targetFractional:"5/1",targetDecimal:6},
     {id:"10-1",title:"10/1",targetFractional:"10/1",targetDecimal:11},
     {id:"15-1",title:"15/1",targetFractional:"15/1",targetDecimal:16},
@@ -789,103 +754,82 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
     {id:"75-1",title:"75/1",targetFractional:"75/1",targetDecimal:76},
     {id:"100-1",title:"100/1",targetFractional:"100/1",targetDecimal:101},
   ] as const
-
+  const family=(market:string)=>market.startsWith("goal")?"goal":market.startsWith("assist")?"assist":market.startsWith("fouled")?"fouled":market.startsWith("foul")?"foul":market.startsWith("sot")?"sot":market.startsWith("shot")?"shot":"card"
   const routesByFixture=new Map<string,Map<string,MultiMatchGameBuilder>>()
+
   for(const scan of eligible){
     const scorecard=scan.scorecard!
-    const eligibleLegs=directPlayerCandidates(scorecard)
-      .filter(leg=>leg.bookmakerName==="Bet365"&&leg.bookmakerOdds!=null&&Number(leg.bookmakerOdds)>1&&leg.confidence!=="D")
-      .filter(leg=>safetyLegProbability(leg)>=.10)
-      .sort((a,b)=>{
-        const sa=safetyLegProbability(a)*marketStabilityFactor(a)
-        const sb=safetyLegProbability(b)*marketStabilityFactor(b)
-        if(Math.abs(sa-sb)>.000001)return sb-sa
-        return b.probability-a.probability||Number(a.bookmakerOdds)-Number(b.bookmakerOdds)
-      })
-
-    const pool:SlipLeg[]=[]
-    const seenPlayers=new Set<string>()
-    const usedPlayerFamilies=new Set<string>()
-
-    // Match Builder parity: strongest event for each player first.
-    for(const leg of eligibleLegs){
-      const player=normName(leg.player)
-      if(!player||seenPlayers.has(player))continue
-      seenPlayers.add(player)
-      usedPlayerFamilies.add(player+"|"+family(leg.market))
-      pool.push(leg)
-    }
-
-    // Then keep extending with different event families for the same player.
-    // Nested thresholds from one family are not treated as separate "safe" legs.
-    const perPlayerCount=new Map<string,number>()
-    for(const leg of pool){
-      const p=normName(leg.player)
-      if(p)perPlayerCount.set(p,(perPlayerCount.get(p)??0)+1)
-    }
-    for(const leg of eligibleLegs){
-      const player=normName(leg.player)
-      if(!player)continue
-      const key=player+"|"+family(leg.market)
-      if(usedPlayerFamilies.has(key))continue
-      if((perPlayerCount.get(player)??0)>=3)continue
-      usedPlayerFamilies.add(key)
-      perPlayerCount.set(player,(perPlayerCount.get(player)??0)+1)
-      pool.push(leg)
-      if(pool.length>=36)break
-    }
-
-    const chosen:SlipLeg[]=[]
-    let product=1
+    const sourceLegs=directPlayerCandidates(scorecard)
+    const sourceByKey=new Map(sourceLegs.map(leg=>[normName(leg.player)+"|"+leg.market,leg]))
     const byTier=new Map<string,MultiMatchGameBuilder>()
-    const addNext=()=>{
-      const next=pool[chosen.length]
-      if(!next)return false
-      chosen.push(next)
-      product*=Number(next.bookmakerOdds)
-      return true
-    }
 
-    for(const cfg of tierConfigs){
-      if(cfg.id==="most-likely"){
-        while(chosen.length<Math.min(2,pool.length))if(!addNext())break
-      }else{
-        while(product<cfg.targetDecimal&&chosen.length<pool.length)if(!addNext())break
-      }
-      const reached=cfg.id==="most-likely"?chosen.length>=1:product>=cfg.targetDecimal
-      if(!reached)continue
-      const legs=[...chosen]
-      const raw=legs.reduce((v,l)=>v*l.probability,1)
-      const conservative=conservativeJoint(legs)
-      const cardLeg=legs.find(l=>family(l.market)==="card")??null
-      const mapped:MultiMatchLeg[]=legs.map(leg=>({
+    // Most Likely remains a natural-price route: two highest-stability distinct
+    // player events. Every explicit odds target below uses the exact same search
+    // function as the individual Target Odds builder.
+    const natural=sourceLegs
+      .filter(leg=>leg.bookmakerName==="Bet365"&&leg.bookmakerOdds!=null&&Number(leg.bookmakerOdds)>1&&leg.confidence!=="D")
+      .sort((a,b)=>(b.probability*marketStabilityFactor(b))-(a.probability*marketStabilityFactor(a))||b.probability-a.probability)
+    const most:SlipLeg[]=[]
+    const seen=new Set<string>()
+    for(const leg of natural){
+      const key=normName(leg.player)
+      if(!key||seen.has(key))continue
+      seen.add(key);most.push(leg)
+      if(most.length>=2)break
+    }
+    if(most.length){
+      const product=most.reduce((v,l)=>v*Number(l.bookmakerOdds),1)
+      const raw=most.reduce((v,l)=>v*l.probability,1)
+      const mapped:MultiMatchLeg[]=most.map(leg=>({
         fixtureId:scan.fixture.id,competition:scan.fixture.competition,kickoff:scan.fixture.kickoff,
-        home:scan.fixture.home.name,away:scan.fixture.away.name,
-        player:leg.player,team:leg.team,market:leg.market,label:leg.label,
+        home:scan.fixture.home.name,away:scan.fixture.away.name,player:leg.player,team:leg.team,market:leg.market,label:leg.label,
         probability:leg.probability,bookmakerOdds:Number(leg.bookmakerOdds),bookmaker:"Bet365",confidence:leg.confidence,
         recent5HitRate:Number.isFinite(Number(leg.recent5HitRate))?Number(leg.recent5HitRate):null,
         seasonHitRate:Number.isFinite(Number(leg.seasonHitRate))?Number(leg.seasonHitRate):null,
         h2hHitRate:Number.isFinite(Number(leg.h2hHitRate))?Number(leg.h2hHitRate):null,
         h2hMatches:Number(leg.h2hMatches??0),sampleMatches:Number(leg.sampleMatches??0),
       }))
-      byTier.set(cfg.id,{
+      byTier.set("most-likely",{
         fixtureId:scan.fixture.id,competition:scan.fixture.competition,kickoff:scan.fixture.kickoff,
         home:scan.fixture.home.name,away:scan.fixture.away.name,homeCrest:scan.fixture.home.crest??null,awayCrest:scan.fixture.away.crest??null,
-        riskTier:cfg.id,targetFractional:cfg.targetFractional,targetDecimal:cfg.targetDecimal,
-        referenceOdds:Math.round(product*100)/100,
-        modelAllHitProbability:Math.round(raw*10000)/10000,
-        conservativeAllHitProbability:Math.round(conservative*10000)/10000,
-        includesCard:Boolean(cardLeg),cardPick:cardLeg?cardLeg.player:null,lineupsConfirmed:Boolean(scorecard.lineupsConfirmed),
-        preMatchSnapshot:new Date(scan.fixture.kickoff).getTime()<=Date.now(),legs:mapped,
+        riskTier:"most-likely",targetFractional:"Best",targetDecimal:0,referenceOdds:Math.round(product*100)/100,
+        modelAllHitProbability:Math.round(raw*10000)/10000,conservativeAllHitProbability:Math.round(raw*10000)/10000,
+        includesCard:most.some(l=>family(l.market)==="card"),cardPick:most.find(l=>family(l.market)==="card")?.player??null,
+        lineupsConfirmed:Boolean(scorecard.lineupsConfirmed),preMatchSnapshot:new Date(scan.fixture.kickoff).getTime()<=Date.now(),legs:mapped,
+      })
+    }
+
+    const targets=buildTargetOddsSlips(scorecard,scan.fixture)
+    for(const target of targets){
+      if(!target.available||!target.legs.length)continue
+      const sourceTarget=target.legs.map(t=>sourceByKey.get(normName(t.player)+"|"+t.market)).filter(Boolean) as SlipLeg[]
+      const mapped:MultiMatchLeg[]=target.legs.map(t=>{
+        const src=sourceByKey.get(normName(t.player)+"|"+t.market)
+        return {
+          fixtureId:scan.fixture.id,competition:scan.fixture.competition,kickoff:scan.fixture.kickoff,
+          home:scan.fixture.home.name,away:scan.fixture.away.name,player:t.player,team:t.team,market:t.market,label:t.label,
+          probability:t.probability,bookmakerOdds:t.price,bookmaker:"Bet365",confidence:t.confidence,
+          recent5HitRate:Number.isFinite(Number(src?.recent5HitRate))?Number(src?.recent5HitRate):null,
+          seasonHitRate:Number.isFinite(Number(src?.seasonHitRate))?Number(src?.seasonHitRate):null,
+          h2hHitRate:Number.isFinite(Number(src?.h2hHitRate))?Number(src?.h2hHitRate):null,
+          h2hMatches:Number(src?.h2hMatches??0),sampleMatches:Number(src?.sampleMatches??0),
+        }
+      })
+      const cardLeg=sourceTarget.find(l=>family(l.market)==="card")??null
+      byTier.set(target.targetFractional.replace("/","-"),{
+        fixtureId:scan.fixture.id,competition:scan.fixture.competition,kickoff:scan.fixture.kickoff,
+        home:scan.fixture.home.name,away:scan.fixture.away.name,homeCrest:scan.fixture.home.crest??null,awayCrest:scan.fixture.away.crest??null,
+        riskTier:target.targetFractional.replace("/","-"),targetFractional:target.targetFractional,targetDecimal:target.targetDecimal,
+        referenceOdds:Number(target.referenceOdds??0),modelAllHitProbability:Number(target.modelAllHitProbability??0),
+        conservativeAllHitProbability:Number(target.conservativeAllHitProbability??0),includesCard:Boolean(cardLeg),cardPick:cardLeg?.player??null,
+        lineupsConfirmed:Boolean(scorecard.lineupsConfirmed),preMatchSnapshot:new Date(scan.fixture.kickoff).getTime()<=Date.now(),legs:mapped,
       })
     }
     routesByFixture.set(scan.fixture.id,byTier)
   }
 
   const tiers:MultiMatchTier[]=tierConfigs.map(cfg=>{
-    const built=eligible
-      .map(scan=>routesByFixture.get(scan.fixture.id)?.get(cfg.id)??null)
-      .filter(Boolean) as MultiMatchGameBuilder[]
+    const built=eligible.map(scan=>routesByFixture.get(scan.fixture.id)?.get(cfg.id)??null).filter(Boolean) as MultiMatchGameBuilder[]
     built.sort((a,b)=>b.conservativeAllHitProbability-a.conservativeAllHitProbability||b.modelAllHitProbability-a.modelAllHitProbability)
     const matchBuilders=built.slice(0,10)
     const legs=matchBuilders.flatMap(x=>x.legs)
@@ -894,32 +838,25 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
     return {
       id:cfg.id,title:cfg.title,
       description:cfg.id==="most-likely"
-        ?"The highest-probability two-leg route available in each match. The odds are whatever those safest selections naturally produce."
-        :`The highest-probability route in each match that clears ${cfg.targetFractional}. Every higher tier keeps the safer route below it and adds only the next-best selection.`,
+        ?"The strongest natural-price player-prop route in each match."
+        :`The same probability-first, correlation-aware player-prop search as Match Builder, clearing ${cfg.targetFractional} in each match.`,
       targetFractionalPerMatch:cfg.targetFractional,targetDecimalPerMatch:cfg.targetDecimal,
       available:matchBuilders.length>=1,matchBuilders,legs,
       combinedBet365Odds:combined==null?null:Math.round(combined*100)/100,
       conservativeAllHitProbability:allHit==null?null:Math.round(allHit*10000)/10000,
       note:cfg.id==="most-likely"
-        ?"Start here: this is the strongest estimated win chance from the verified player markets."
-        :`Probability first, odds floor second. This tier only grows the safer route until it clears ${cfg.targetFractional}.`,
+        ?"Start here for the strongest estimated win chance from verified Bet365 player markets."
+        :`Probability first, odds floor second. No weaker selection is forced when ${cfg.targetFractional} cannot be reached safely.`,
     }
   })
 
   const first=tiers.find(t=>t.id==="most-likely")??tiers[0]
   return {
-    available:Boolean(first?.available),
-    targetFractionalPerMatch:first?.targetFractionalPerMatch??"Best",
-    maxMatches:10,
-    eligibleFixtureCount:eligible.length,
-    matchBuilders:first?.matchBuilders??[],
-    legs:first?.legs??[],
-    combinedBet365Odds:first?.combinedBet365Odds??null,
-    modelAllHitProbability:first?.conservativeAllHitProbability??null,
-    conservativeAllHitProbability:first?.conservativeAllHitProbability??null,
-    tiers,
-    defaultTier:"most-likely",
-    note:"Multi-Match now uses a nested probability-first odds ladder: Most Likely, then 5/1 through 100/1. Each higher tier keeps the safer selections below it and only adds the next-highest probability player event. Live games still switch to the separate live intelligence and yellow-card model.",
+    available:Boolean(first?.available),targetFractionalPerMatch:first?.targetFractionalPerMatch??"Best",maxMatches:10,
+    eligibleFixtureCount:eligible.length,matchBuilders:first?.matchBuilders??[],legs:first?.legs??[],
+    combinedBet365Odds:first?.combinedBet365Odds??null,modelAllHitProbability:first?.conservativeAllHitProbability??null,
+    conservativeAllHitProbability:first?.conservativeAllHitProbability??null,tiers,defaultTier:"most-likely",
+    note:"Multi-Match now reuses the individual probability-first, correlation-aware target search for 3/1 through 100/1. Confirmed starters and verified Bet365 player markets remain hard eligibility gates.",
   }
 }
 function buildYellowCardWatchFromScans(scans:FixtureScan[]):YellowCardWatchRow[]{
