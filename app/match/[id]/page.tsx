@@ -46,7 +46,8 @@ export default function MatchPage({
     isValidating: lineupsSyncing,
     mutate: mutateLineups,
   } = useSWR<LineupsResponse>(`/api/lineups/${id}`, fetcher, {
-    refreshInterval: 120_000,
+    refreshInterval: (latest) => latest?.status === "confirmed" ? 120_000 : 30_000,
+    revalidateOnFocus: true,
   })
 
   const {
