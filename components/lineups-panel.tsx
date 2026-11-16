@@ -27,7 +27,7 @@ export function LineupsPanel({
           {confirmed ? (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-strong/12 px-3 py-1 text-sm font-bold text-strong">
               <CheckCircle2 className="size-4" />
-              Confirmed XI
+              {data?.cachedConfirmed ? "Confirmed XI · cached" : "Confirmed XI"}
             </span>
           ) : (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-accent px-3 py-1 text-sm font-bold text-accent-foreground">
@@ -46,6 +46,14 @@ export function LineupsPanel({
           Sync Lineups
         </button>
       </div>
+
+      {data?.checkedAt || data?.source ? (
+        <div className="rounded-xl border border-border/70 bg-card/60 px-3 py-2 text-[0.7rem] leading-relaxed text-muted-foreground">
+          <span className="font-semibold text-foreground">{data.source ?? "Official lineup feed"}</span>
+          {data.checkedAt ? ` · checked ${new Intl.DateTimeFormat("en-GB",{hour:"2-digit",minute:"2-digit",second:"2-digit"}).format(new Date(data.checkedAt))}` : ""}
+          {data.cachedConfirmed ? " · last verified XI retained while live provider is unavailable" : ""}
+        </div>
+      ) : null}
 
       {isLoading ? (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -76,7 +84,7 @@ export function LineupsPanel({
 function TeamLineupCard({ lineup }: { lineup: TeamLineup }) {
   return (
     <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-      <h3 className="mb-3 truncate text-sm font-bold text-foreground">{lineup.team.name}</h3>
+      <div className="mb-3 flex items-center justify-between gap-2"><h3 className="truncate text-sm font-bold text-foreground">{lineup.team.name}</h3>{lineup.formation ? <span className="rounded-full bg-secondary px-2 py-1 font-mono text-[0.62rem] font-bold text-secondary-foreground">{lineup.formation}</span> : null}</div>
       <ul className="space-y-1">
         {lineup.startingXI.map((p) => (
           <li key={p.id} className="flex items-center gap-2.5 rounded-lg px-1 py-1">
