@@ -1113,6 +1113,10 @@ function buildLivePlayerProps(scorecard:Scorecard|null,elapsed:number,liveStats:
         currentYellowCards:stat?.yellowCards??null,currentRedCards:stat?.redCards??null,
         disciplineHeat:stat?.disciplineHeat??0,recentFouls10:stat?.recentFouls10??0,recentFouls15:stat?.recentFouls15??0,
         aggressionSignals:stat?.aggressionSignals??[],lastAggressionMinute:stat?.lastAggressionMinute??null,
+        recent5HitRate:Number.isFinite(Number(market.recent5HitRate))?Number(market.recent5HitRate):null,
+        seasonHitRate:Number.isFinite(Number(market.seasonHitRate))?Number(market.seasonHitRate):null,
+        h2hHitRate:Number.isFinite(Number(market.h2hHitRate))?Number(market.h2hHitRate):null,
+        h2hMatches:Number(market.h2hMatches??0),sampleMatches:Number(market.sampleMatches??0),
         referee:referee?{name:referee.name,strictnessScore:referee.strictnessScore,strictnessLabel:referee.strictnessLabel,historicalYellowsPerGame:referee.historicalYellowsPerGame,liveYellowsPer90:referee.liveYellowsPer90,liveFoulsPer90:referee.liveFoulsPer90}:null,
         reason:"Remaining-match estimate from the active-player model and current match events. "+pressureNote,
       })
