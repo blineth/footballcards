@@ -127,7 +127,7 @@ export function ensureResearchSchema() {
         created_at timestamptz NOT NULL DEFAULT now()
       )
     `)
-    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS player_referee_match_history_unique ON player_referee_match_history (fixture_id, player_name, COALESCE(team,''))`)
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS player_referee_match_history_unique ON player_referee_match_history (fixture_id, player_name, team)`)
     await pool.query(`CREATE INDEX IF NOT EXISTS player_referee_match_history_ref_player_idx ON player_referee_match_history (referee_name, player_name, fixture_date DESC)`)
     await pool.query(`
       CREATE TABLE IF NOT EXISTS odds_snapshots (
