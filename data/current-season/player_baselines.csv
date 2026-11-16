@@ -2878,7 +2878,7 @@ Nathan Tella,Bayer Leverkusen,Bundesliga,2026/27,3,1,111,0,0,0,0,0,2,5,1,0.0,0.0
 Patrik Schick,Bayer Leverkusen,Bundesliga,2026/27,9,8,702,8,2,1,0,9,8,35,15,1.1538,0.1282,4.4872,1.9231,Forward,212330
 Robert Andrich,Bayer Leverkusen,Bundesliga,2026/27,6,1,174,1,0,0,0,5,3,3,2,2.5862,0.0,1.5517,1.0345,Substitute,180998
 Victor Boniface,Bayer Leverkusen,Bundesliga,2026/27,2,0,14,0,0,0,0,0,0,4,1,0.0,0.0,25.7143,6.4286,Substitute,287276
-Aleksandar Pavlovic,Bayern Munich,Bundesliga,2026/27,8,8,632,2,1,1,0,11,4,8,3,1.5665,0.1424,1.1392,0.4272,Left Midfielder,359370
+Aleksandar Pavlović,Bayern Munich,Bundesliga,2026/27,8,8,632,2,1,1,0,11,4,8,3,1.5665,0.1424,1.1392,0.4272,Left Midfielder,359370
 Alphonso Davies,Bayern Munich,Bundesliga,2026/27,8,5,493,0,2,0,0,2,7,4,1,0.3651,0.0,0.7302,0.1826,Left Back,236721
 Dayot Upamecano,Bayern Munich,Bundesliga,2026/27,9,9,765,3,0,2,0,14,2,12,7,1.6471,0.2353,1.4118,0.8235,Center Right Defender,222793
 Harry Kane,Bayern Munich,Bundesliga,2026/27,9,8,712,4,8,0,0,4,8,43,11,0.5056,0.0,5.4354,1.3904,Forward,142200
@@ -4568,8 +4568,7 @@ Brahim Ghalidi,NAC Breda,Eerste Divisie,2026/27,8,0,262,0,0,1,0,0,12,5,1,0.0,0.3
 Charles-Andreas Brym,NAC Breda,Eerste Divisie,2026/27,12,12,797,9,0,1,0,14,23,24,14,1.5809,0.1129,2.7102,1.5809,Attacking Midfielder Left,291194
 Cherrion Valerius,NAC Breda,Eerste Divisie,2026/27,4,4,268,0,0,0,0,2,6,4,2,0.6716,0.0,1.3433,0.6716,Right Back,379184
 Elijah Ikpia,NAC Breda,Eerste Divisie,2026/27,1,0,16,0,0,0,0,3,0,2,1,16.875,0.0,11.25,5.625,,3121192
-Fredrik Jensen,NAC Breda,Eerste Divisie,2026/27,8,4,401,0,0,1,0,3,6,5,2,0.6733,0.2244,1.1222,0.4489,Substitute,221227
-Fredrik Oldrup Jensen,NAC Breda,Eerste Divisie,2026/27,5,4,363,0,0,1,0,3,5,2,0,0.7438,0.2479,0.4959,0.0,Center Right Midfielder,221227
+Fredrik Jensen,NAC Breda,Eerste Divisie,2026/27,13,8,764,0,0,2,0,6,11,7,2,0.7068,0.2356,0.8246,0.2356,Substitute,221227
 Gabriel Misehouy,NAC Breda,Eerste Divisie,2026/27,6,2,227,0,3,0,0,5,7,10,5,1.9824,0.0,3.9648,1.9824,Substitute,335208
 Imran Nazih,NAC Breda,Eerste Divisie,2026/27,9,1,195,1,0,1,0,2,3,3,2,0.9231,0.4615,1.3846,0.9231,Substitute,331056
 Jan Van den Bergh,NAC Breda,Eerste Divisie,2026/27,15,15,1310,0,0,4,0,17,12,17,3,1.1679,0.2748,1.1679,0.2061,Left Back,272350
@@ -5192,8 +5191,7 @@ Bruma,Aris,Greek Super League,2026/27,4,3,217,1,1,0,0,3,3,3,1,1.2442,0.0,1.2442,
 Christian Kouamé,Aris,Greek Super League,2026/27,9,5,553,2,0,0,0,8,12,15,4,1.302,0.0,2.4412,0.651,Substitute,241415
 Diallo Sanoussi,Aris,Greek Super League,2026/27,1,0,1,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Substitute,396736
 Fabiano,Aris,Greek Super League,2026/27,9,9,810,4,0,2,0,11,1,18,8,1.2222,0.2222,2.0,0.8889,Center Right Defender,131983
-Fredrik Jensen,Aris,Greek Super League,2026/27,8,4,424,0,0,0,0,7,5,0,0,1.4858,0.0,0.0,0.0,Substitute,221227
-Fredrik Oldrup Jensen,Aris,Greek Super League,2026/27,2,2,180,0,0,0,0,2,1,1,1,1.0,0.0,0.5,0.5,Center Left Defender,221227
+Fredrik Jensen,Aris,Greek Super League,2026/27,10,6,604,0,0,0,0,9,6,1,1,1.3411,0.0,0.149,0.149,Center Left Defender,221227
 Giannis Gianniotas,Aris,Greek Super League,2026/27,7,5,427,1,0,1,0,5,14,11,3,1.0539,0.2108,2.3185,0.6323,Attacking Midfielder Left,178726
 Jeremy Petris,Aris,Greek Super League,2026/27,8,6,554,1,1,2,0,10,10,3,1,1.6245,0.3249,0.4874,0.1625,Right Back,291712
 Konstantinos Charoupas,Aris,Greek Super League,2026/27,1,0,16,0,0,0,0,1,0,0,0,5.625,0.0,0.0,0.0,Substitute,403412
@@ -6627,30 +6625,30 @@ Sergio González,Burgos,La Liga 2,2026/27,8,4,448,0,0,1,0,7,8,3,0,1.4062,0.2009,
 Unai Vencedor,Burgos,La Liga 2,2026/27,11,10,892,0,0,3,0,23,12,5,1,2.3206,0.3027,0.5045,0.1009,Center Left Midfielder,302945
 Victor Mollejo,Burgos,La Liga 2,2026/27,13,1,317,0,1,2,0,9,11,8,2,2.5552,0.5678,2.2713,0.5678,Substitute,261183
 Álex Lizancos,Burgos,La Liga 2,2026/27,7,6,541,0,0,2,0,6,15,8,2,0.9982,0.3327,1.3309,0.3327,Right Back,375963
-Alain Ribeiro,CD Sabadell,La Liga 2,2026/27,6,1,152,0,0,0,0,3,0,6,0,1.7763,0.0,3.5526,0.0,Substitute,300303
-Arthur Bonaldo,CD Sabadell,La Liga 2,2026/27,8,7,577,0,0,2,0,14,4,8,0,2.1837,0.312,1.2478,0.0,Center Left Defender,253008
-Diego Fuoli,CD Sabadell,La Liga 2,2026/27,13,13,1170,0,0,0,0,1,0,0,0,0.0769,0.0,0.0,0.0,Goalkeeper,306293
-Edgar González,CD Sabadell,La Liga 2,2026/27,10,10,817,1,0,6,1,14,6,7,1,1.5422,0.7711,0.7711,0.1102,Center Defender,128669
+Alain Ribeiro,CD Sabadell,La Liga 2,2026/27,7,1,175,0,0,0,0,4,0,6,0,2.0571,0.0,3.0857,0.0,Substitute,300303
+Arthur Bonaldo,CD Sabadell,La Liga 2,2026/27,9,8,610,0,0,2,0,15,4,8,0,2.2131,0.2951,1.1803,0.0,Center Left Defender,253008
+Diego Fuoli,CD Sabadell,La Liga 2,2026/27,14,14,1260,0,0,0,0,1,0,0,0,0.0714,0.0,0.0,0.0,Goalkeeper,306293
+Edgar González,CD Sabadell,La Liga 2,2026/27,11,11,907,1,0,6,1,14,8,7,1,1.3892,0.6946,0.6946,0.0992,Center Right Defender,128669
 Eneko Aguilar,CD Sabadell,La Liga 2,2026/27,12,1,353,1,0,2,0,7,1,6,1,1.7847,0.5099,1.5297,0.255,Substitute,300776
-Gastón Valles,CD Sabadell,La Liga 2,2026/27,8,5,436,1,0,2,0,12,2,12,4,2.4771,0.4128,2.4771,0.8257,Center Left Forward,380822
-Gerard Fornés,CD Sabadell,La Liga 2,2026/27,1,1,67,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Left Back,300270
-Javi López,CD Sabadell,La Liga 2,2026/27,7,1,266,0,0,0,0,2,0,12,3,0.6767,0.0,4.0602,1.015,Substitute,347354
-Joel Priego,CD Sabadell,La Liga 2,2026/27,13,13,1054,0,1,2,0,10,3,26,7,0.8539,0.1708,2.2201,0.5977,Center Right Forward,307709
-José Luis Català Vázquez,CD Sabadell,La Liga 2,2026/27,13,7,646,0,0,2,0,10,5,4,1,1.3932,0.2786,0.5573,0.1393,Substitute,376662
-Juan Carlos Lázaro Cervera,CD Sabadell,La Liga 2,2026/27,2,0,18,0,0,0,0,0,1,0,0,0.0,0.0,0.0,0.0,Substitute,242434
+Gastón Valles,CD Sabadell,La Liga 2,2026/27,9,6,481,1,0,2,0,14,3,12,4,2.6195,0.3742,2.2453,0.7484,Center Left Forward,380822
+Gerard Fornés,CD Sabadell,La Liga 2,2026/27,2,2,157,0,0,1,0,2,0,1,0,1.1465,0.5732,0.5732,0.0,Left Back,300270
+Javi López,CD Sabadell,La Liga 2,2026/27,8,2,311,0,0,0,0,2,2,12,3,0.5788,0.0,3.4727,0.8682,Substitute,347354
+Joel Priego,CD Sabadell,La Liga 2,2026/27,14,14,1121,0,1,2,0,10,4,26,7,0.8029,0.1606,2.0874,0.562,Center Right Forward,307709
+José Luis Català Vázquez,CD Sabadell,La Liga 2,2026/27,14,7,647,0,0,2,1,11,5,4,1,1.5301,0.4173,0.5564,0.1391,Substitute,376662
+Juan Carlos Lázaro Cervera,CD Sabadell,La Liga 2,2026/27,3,0,63,0,0,0,0,0,1,0,0,0.0,0.0,0.0,0.0,Substitute,242434
 Miquel Codina,CD Sabadell,La Liga 2,2026/27,9,8,623,0,0,1,0,8,6,8,3,1.1557,0.1445,1.1557,0.4334,Left Back,356085
 Nicholas Gioacchini,CD Sabadell,La Liga 2,2026/27,5,4,307,3,0,2,0,11,8,15,6,3.2248,0.5863,4.3974,1.759,Center Left Forward,296749
-Nikolai Óbolo,CD Sabadell,La Liga 2,2026/27,10,1,244,0,0,2,0,11,6,8,2,4.0574,0.7377,2.9508,0.7377,Substitute,218510
-Pere Pons,CD Sabadell,La Liga 2,2026/27,13,10,796,0,1,2,0,16,10,11,2,1.809,0.2261,1.2437,0.2261,Center Left Midfielder,178565
+Nikolai Óbolo,CD Sabadell,La Liga 2,2026/27,11,1,258,0,0,2,0,12,6,8,2,4.186,0.6977,2.7907,0.6977,Substitute,218510
+Pere Pons,CD Sabadell,La Liga 2,2026/27,14,11,872,0,1,2,0,16,10,11,2,1.6514,0.2064,1.1353,0.2064,Center Left Midfielder,178565
 Pipa,CD Sabadell,La Liga 2,2026/27,5,1,183,0,0,0,0,3,1,1,0,1.4754,0.0,0.4918,0.0,Substitute,260245
 Quadri Liameed,CD Sabadell,La Liga 2,2026/27,13,13,961,0,3,2,0,16,16,8,3,1.4984,0.1873,0.7492,0.281,Center Right Midfielder,287445
-Ton Ripoll,CD Sabadell,La Liga 2,2026/27,13,13,975,0,4,2,0,15,9,11,3,1.3846,0.1846,1.0154,0.2769,Right Midfielder,300272
+Ton Ripoll,CD Sabadell,La Liga 2,2026/27,14,14,1065,0,4,2,0,15,10,12,3,1.2676,0.169,1.0141,0.2535,Right Midfielder,300272
 Urri,CD Sabadell,La Liga 2,2026/27,12,12,1080,1,1,4,0,28,14,7,2,2.3333,0.3333,0.5833,0.1667,Center Right Midfielder,345216
 Xavi Moreno,CD Sabadell,La Liga 2,2026/27,2,0,51,0,0,0,0,0,0,1,0,0.0,0.0,1.7647,0.0,Substitute,403617
 Yanis Rahmani,CD Sabadell,La Liga 2,2026/27,10,3,344,0,0,0,0,8,4,13,2,2.093,0.0,3.4012,0.5233,Substitute,245840
-Yussif Owusu,CD Sabadell,La Liga 2,2026/27,1,0,23,0,0,0,0,1,2,0,0,3.913,0.0,0.0,0.0,Substitute,388399
-Ángel Baena,CD Sabadell,La Liga 2,2026/27,10,7,712,3,1,1,0,12,18,20,6,1.5169,0.1264,2.5281,0.7584,Substitute,303843
-Óscar Sanz,CD Sabadell,La Liga 2,2026/27,12,12,977,2,0,5,0,23,6,15,4,2.1187,0.4606,1.3818,0.3685,Center Right Defender,155283
+Yussif Owusu,CD Sabadell,La Liga 2,2026/27,2,0,68,0,0,0,0,3,2,1,0,3.9706,0.0,1.3235,0.0,Substitute,388399
+Ángel Baena,CD Sabadell,La Liga 2,2026/27,11,8,802,3,1,1,0,12,19,21,6,1.3466,0.1122,2.3566,0.6733,Substitute,303843
+Óscar Sanz,CD Sabadell,La Liga 2,2026/27,13,13,1067,2,0,6,0,25,7,16,4,2.1087,0.5061,1.3496,0.3374,Center Right Defender,155283
 Adam Jakobsen,Castellón,La Liga 2,2026/27,10,9,718,4,1,3,0,7,13,18,8,0.8774,0.376,2.2563,1.0028,Center Left Forward,274984
 Agustín Sienra,Castellón,La Liga 2,2026/27,12,12,1059,2,0,2,0,5,7,5,2,0.4249,0.17,0.4249,0.17,Center Left Defender,303324
 Alberto,Castellón,La Liga 2,2026/27,13,13,1108,0,1,4,0,8,20,4,0,0.6498,0.3249,0.3249,0.0,Center Defender,192132
@@ -6708,36 +6706,36 @@ Redru,Ceuta,La Liga 2,2026/27,8,7,674,0,0,0,0,6,15,6,3,0.8012,0.0,0.8012,0.4006,
 Umaru,Ceuta,La Liga 2,2026/27,3,0,38,0,0,1,0,1,0,3,0,2.3684,2.3684,7.1053,0.0,Substitute,402185
 Yann Bodiger,Ceuta,La Liga 2,2026/27,10,9,683,1,0,2,0,11,10,1,1,1.4495,0.2635,0.1318,0.1318,Center Midfielder,207568
 Aimen Moueffek,Cádiz,La Liga 2,2026/27,5,3,202,1,1,0,0,1,9,3,1,0.4455,0.0,1.3366,0.4455,Substitute,291401
-Antonio Cordero,Cádiz,La Liga 2,2026/27,13,11,929,5,2,2,0,14,15,30,10,1.3563,0.1938,2.9064,0.9688,Attacking Midfielder Left,375875
+Antonio Cordero,Cádiz,La Liga 2,2026/27,14,12,1019,5,3,2,0,14,16,31,11,1.2365,0.1766,2.738,0.9715,Attacking Midfielder Left,375875
 Beñat De Jesús,Cádiz,La Liga 2,2026/27,5,2,182,0,0,2,0,9,2,0,0,4.4505,0.989,0.0,0.0,Substitute,374633
 Bojan Kovacevic,Cádiz,La Liga 2,2026/27,9,6,545,0,0,2,0,5,1,1,1,0.8257,0.3303,0.1651,0.1651,Center Right Defender,342140
-Borja Vázquez,Cádiz,La Liga 2,2026/27,13,5,504,1,1,3,0,21,17,17,3,3.75,0.5357,3.0357,0.5357,Substitute,384598
-Cristian Gutiérrez,Cádiz,La Liga 2,2026/27,6,2,230,0,0,1,0,1,3,0,0,0.3913,0.3913,0.0,0.0,Substitute,331977
-Damián Rodríguez,Cádiz,La Liga 2,2026/27,10,7,603,0,0,3,0,9,10,0,0,1.3433,0.4478,0.0,0.0,Substitute,341269
-David Gil,Cádiz,La Liga 2,2026/27,4,4,360,0,0,0,0,0,1,0,0,0.0,0.0,0.0,0.0,Goalkeeper,195604
-Dilan Zárate,Cádiz,La Liga 2,2026/27,10,8,709,0,1,3,0,6,7,5,2,0.7616,0.3808,0.6347,0.2539,Left Midfielder,387838
+Borja Vázquez,Cádiz,La Liga 2,2026/27,14,6,594,2,1,3,0,24,22,20,5,3.6364,0.4545,3.0303,0.7576,Substitute,384598
+Cristian Gutiérrez,Cádiz,La Liga 2,2026/27,7,2,249,0,0,1,0,1,3,0,0,0.3614,0.3614,0.0,0.0,Substitute,331977
+Damián Rodríguez,Cádiz,La Liga 2,2026/27,11,7,608,0,0,3,0,10,10,0,0,1.4803,0.4441,0.0,0.0,Substitute,341269
+David Gil,Cádiz,La Liga 2,2026/27,5,5,450,0,0,0,0,0,1,0,0,0.0,0.0,0.0,0.0,Goalkeeper,195604
+Dilan Zárate,Cádiz,La Liga 2,2026/27,11,9,799,0,1,3,0,7,8,6,2,0.7885,0.3379,0.6758,0.2253,Left Midfielder,387838
 Efe Ugiagbe,Cádiz,La Liga 2,2026/27,4,0,90,0,0,0,0,3,3,1,0,3.0,0.0,1.0,0.0,Substitute,409298
 García Pascual,Cádiz,La Liga 2,2026/27,8,5,469,0,1,3,0,9,14,12,5,1.7271,0.5757,2.3028,0.9595,Forward,397997
-Giorgi Gocholeishvili,Cádiz,La Liga 2,2026/27,4,3,215,0,0,1,0,2,3,1,0,0.8372,0.4186,0.4186,0.0,Right Back,306347
-Gonzalo Petit,Cádiz,La Liga 2,2026/27,1,0,9,0,0,0,0,2,0,0,0,20.0,0.0,0.0,0.0,Substitute,361366
-Ibon Sánchez,Cádiz,La Liga 2,2026/27,12,10,844,2,1,1,0,8,5,8,2,0.8531,0.1066,0.8531,0.2133,Attacking Midfielder,411758
+Giorgi Gocholeishvili,Cádiz,La Liga 2,2026/27,5,4,286,0,0,1,0,2,5,2,1,0.6294,0.3147,0.6294,0.3147,Right Back,306347
+Gonzalo Petit,Cádiz,La Liga 2,2026/27,2,0,28,0,0,0,0,2,1,0,0,6.4286,0.0,0.0,0.0,Substitute,361366
+Ibon Sánchez,Cádiz,La Liga 2,2026/27,13,10,849,2,1,1,0,8,5,8,2,0.8481,0.106,0.8481,0.212,Attacking Midfielder,411758
 Jandro Orellana,Cádiz,La Liga 2,2026/27,7,6,459,0,0,2,0,4,1,3,0,0.7843,0.3922,0.5882,0.0,Left Midfielder,290048
-Javi Ontiveros,Cádiz,La Liga 2,2026/27,6,2,216,0,0,0,0,5,10,3,0,2.0833,0.0,1.25,0.0,Substitute,230894
+Javi Ontiveros,Cádiz,La Liga 2,2026/27,7,2,250,0,0,0,0,5,11,3,0,1.8,0.0,1.08,0.0,Substitute,230894
 Javier Castro,Cádiz,La Liga 2,2026/27,12,12,1032,1,0,3,0,10,13,6,3,0.8721,0.2616,0.5233,0.2616,Center Right Defender,128374
 Joaquín Felipe González Rodríguez,Cádiz,La Liga 2,2026/27,3,1,116,0,0,0,0,3,2,2,0,2.3276,0.0,1.5517,0.0,Substitute,354788
 Jokin Ezkieta,Cádiz,La Liga 2,2026/27,9,9,810,0,0,0,0,0,1,0,0,0.0,0.0,0.0,0.0,Goalkeeper,209578
 José Antonio De La Rosa,Cádiz,La Liga 2,2026/27,2,2,141,0,1,0,0,1,2,5,2,0.6383,0.0,3.1915,1.2766,Right Forward,362125
 Juan Díaz,Cádiz,La Liga 2,2026/27,10,7,686,0,0,2,0,6,9,5,0,0.7872,0.2624,0.656,0.0,Right Back,397417
 Manuel Fernández,Cádiz,La Liga 2,2026/27,7,7,611,0,0,1,0,6,3,0,0,0.8838,0.1473,0.0,0.0,Center Left Defender,409477
-Manuel Rivera Domínguez,Cádiz,La Liga 2,2026/27,2,2,152,0,0,1,0,1,0,0,0,0.5921,0.5921,0.0,0.0,Left Back,3105656
-Marc-Oliver Doué,Cádiz,La Liga 2,2026/27,7,6,498,0,0,2,0,5,13,4,0,0.9036,0.3614,0.7229,0.0,Right Midfielder,291262
-Noah Ukwuije,Cádiz,La Liga 2,2026/27,4,3,266,0,0,0,0,3,0,1,0,1.015,0.0,0.3383,0.0,Center Left Defender,415372
+Manuel Rivera Domínguez,Cádiz,La Liga 2,2026/27,3,3,242,0,0,2,0,2,0,0,0,0.7438,0.7438,0.0,0.0,Center Left Defender,3105656
+Marc-Oliver Doué,Cádiz,La Liga 2,2026/27,8,7,583,0,0,2,0,7,16,4,0,1.0806,0.3087,0.6175,0.0,Right Midfielder,291262
+Noah Ukwuije,Cádiz,La Liga 2,2026/27,5,4,356,0,0,0,0,4,0,1,0,1.0112,0.0,0.2528,0.0,Center Left Defender,415372
 Roberto Rosado Márquez,Cádiz,La Liga 2,2026/27,1,0,28,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Substitute,3105657
 Rominigue Kouamé,Cádiz,La Liga 2,2026/27,2,1,93,0,0,2,0,3,4,3,0,2.9032,1.9355,2.9032,0.0,Right Midfielder,241661
-Sergio Arribas,Cádiz,La Liga 2,2026/27,9,8,753,0,0,3,0,12,4,9,3,1.4343,0.3586,1.0757,0.3586,Left Back,399240
+Sergio Arribas,Cádiz,La Liga 2,2026/27,10,9,824,0,0,4,0,15,4,9,3,1.6383,0.4369,0.983,0.3277,Left Back,399240
 Suso,Cádiz,La Liga 2,2026/27,1,0,21,0,0,0,0,0,1,0,0,0.0,0.0,0.0,0.0,Substitute,164800
-Urko Izeta,Cádiz,La Liga 2,2026/27,12,6,606,2,0,1,0,5,9,14,5,0.7426,0.1485,2.0792,0.7426,Substitute,354205
-Vladyslav Kopotun,Cádiz,La Liga 2,2026/27,10,5,492,2,1,1,0,12,10,15,8,2.1951,0.1829,2.7439,1.4634,Substitute,394420
+Urko Izeta,Cádiz,La Liga 2,2026/27,13,7,691,2,0,1,0,6,9,16,6,0.7815,0.1302,2.0839,0.7815,Substitute,354205
+Vladyslav Kopotun,Cádiz,La Liga 2,2026/27,11,6,548,2,1,1,0,14,10,15,8,2.2993,0.1642,2.4635,1.3139,Substitute,394420
 Adnane Ghailan,Córdoba,La Liga 2,2026/27,13,8,784,2,1,2,0,20,6,21,5,2.2959,0.2296,2.4107,0.574,Left Midfielder,395130
 Carlos Albarrán,Córdoba,La Liga 2,2026/27,7,1,187,0,0,0,0,5,1,0,0,2.4064,0.0,0.0,0.0,Substitute,264083
 Cristian Carracedo,Córdoba,La Liga 2,2026/27,13,13,1042,1,4,4,0,8,17,16,10,0.691,0.3455,1.382,0.8637,Right Forward,300285
@@ -6762,56 +6760,56 @@ Theo Zidane,Córdoba,La Liga 2,2026/27,6,0,60,0,0,1,0,2,3,2,1,3.0,1.5,3.0,1.5,Su
 Victor Sánchez,Córdoba,La Liga 2,2026/27,8,2,275,2,0,2,0,12,4,11,5,3.9273,0.6545,3.6,1.6364,Substitute,113187
 Youssouf Diarra,Córdoba,La Liga 2,2026/27,7,7,566,1,0,2,0,11,5,7,2,1.7491,0.318,1.1131,0.318,Right Midfielder,354360
 Álex Martín,Córdoba,La Liga 2,2026/27,10,8,629,0,0,4,1,11,7,2,1,1.5739,0.7154,0.2862,0.1431,Center Right Defender,289625
-Aleix Garrido,Eibar,La Liga 2,2026/27,12,11,979,1,1,1,0,11,6,7,2,1.0112,0.0919,0.6435,0.1839,Right Midfielder,361257
-Anaitz Arbilla,Eibar,La Liga 2,2026/27,11,11,975,0,0,4,0,9,2,13,3,0.8308,0.3692,1.2,0.2769,Center Left Defender,150806
-Ander Madariaga,Eibar,La Liga 2,2026/27,12,11,962,2,2,0,0,8,11,7,3,0.7484,0.0,0.6549,0.2807,Left Midfielder,367721
-Arana,Eibar,La Liga 2,2026/27,7,2,324,0,0,0,0,1,4,1,1,0.2778,0.0,0.2778,0.2778,Substitute,354555
+Aleix Garrido,Eibar,La Liga 2,2026/27,13,12,1048,1,1,1,0,13,7,9,4,1.1164,0.0859,0.7729,0.3435,Right Midfielder,361257
+Anaitz Arbilla,Eibar,La Liga 2,2026/27,12,12,1065,0,0,4,0,10,2,14,3,0.8451,0.338,1.1831,0.2535,Center Left Defender,150806
+Ander Madariaga,Eibar,La Liga 2,2026/27,13,12,1052,2,2,0,0,8,11,8,4,0.6844,0.0,0.6844,0.3422,Left Midfielder,367721
+Arana,Eibar,La Liga 2,2026/27,8,3,414,0,0,0,0,1,4,2,1,0.2174,0.0,0.4348,0.2174,Substitute,354555
 Elijah Gift,Eibar,La Liga 2,2026/27,3,1,43,0,0,0,0,0,3,2,1,0.0,0.0,4.186,2.093,Substitute,418212
 Eric Pérez,Eibar,La Liga 2,2026/27,1,0,30,0,0,0,0,1,0,0,0,3.0,0.0,0.0,0.0,Substitute,385027
 Imanol García de Albéniz,Eibar,La Liga 2,2026/27,2,1,96,0,0,1,0,1,0,0,0,0.9375,0.9375,0.0,0.0,Left Back,320987
-Iván Gil,Eibar,La Liga 2,2026/27,11,6,602,4,1,0,0,8,10,21,9,1.196,0.0,3.1395,1.3455,Attacking Midfielder,331283
+Iván Gil,Eibar,La Liga 2,2026/27,12,7,668,4,1,0,0,8,12,22,10,1.0778,0.0,2.9641,1.3473,Attacking Midfielder,331283
 Jair Amador Silos,Eibar,La Liga 2,2026/27,5,1,129,0,0,0,1,1,0,0,0,0.6977,0.6977,0.0,0.0,Substitute,238894
-Javier Martón,Eibar,La Liga 2,2026/27,12,3,433,1,2,1,0,5,9,14,6,1.0393,0.2079,2.9099,1.2471,Substitute,324351
-Jon Bautista,Eibar,La Liga 2,2026/27,12,9,676,1,1,1,0,14,4,26,8,1.8639,0.1331,3.4615,1.0651,Forward,234335
-Jon Guruzeta,Eibar,La Liga 2,2026/27,12,9,761,3,2,3,0,10,21,17,9,1.1827,0.3548,2.0105,1.0644,Attacking Midfielder Left,376033
-Jon Magunacelaya,Eibar,La Liga 2,2026/27,9,8,619,2,1,0,1,10,12,6,3,1.454,0.1454,0.8724,0.4362,Attacking Midfielder,325010
-Jon Mikel Magunagoitia,Eibar,La Liga 2,2026/27,12,12,1080,0,0,0,0,0,2,0,0,0.0,0.0,0.0,0.0,Goalkeeper,290751
+Javier Martón,Eibar,La Liga 2,2026/27,13,3,458,1,2,1,0,5,10,15,7,0.9825,0.1965,2.9476,1.3755,Substitute,324351
+Jon Bautista,Eibar,La Liga 2,2026/27,13,10,741,1,1,2,0,16,6,29,8,1.9433,0.2429,3.5223,0.9717,Forward,234335
+Jon Guruzeta,Eibar,La Liga 2,2026/27,13,10,842,4,2,3,0,13,21,20,11,1.3895,0.3207,2.1378,1.1758,Attacking Midfielder Left,376033
+Jon Magunacelaya,Eibar,La Liga 2,2026/27,10,8,643,2,1,0,1,11,12,6,3,1.5397,0.14,0.8398,0.4199,Attacking Midfielder,325010
+Jon Mikel Magunagoitia,Eibar,La Liga 2,2026/27,13,13,1170,0,0,0,0,0,3,0,0,0.0,0.0,0.0,0.0,Goalkeeper,290751
 Juan Bernat,Eibar,La Liga 2,2026/27,10,10,799,0,0,1,0,5,5,0,0,0.5632,0.1126,0.0,0.0,Left Back,164194
 Lucas Nuñez,Eibar,La Liga 2,2026/27,9,0,189,0,0,2,0,6,3,5,0,2.8571,0.9524,2.381,0.0,Substitute,307986
-Malcom Adu Ares,Eibar,La Liga 2,2026/27,10,9,687,2,4,5,0,14,17,16,8,1.8341,0.655,2.0961,1.048,Attacking Midfielder Right,347412
-Pejiño,Eibar,La Liga 2,2026/27,9,3,288,2,0,0,0,5,5,5,3,1.5625,0.0,1.5625,0.9375,Substitute,270597
-Peru Nolaskoain,Eibar,La Liga 2,2026/27,4,2,270,0,0,1,0,4,5,2,0,1.3333,0.3333,0.6667,0.0,Substitute,271822
+Malcom Adu Ares,Eibar,La Liga 2,2026/27,11,10,777,2,5,5,0,18,20,20,9,2.0849,0.5792,2.3166,1.0425,Attacking Midfielder Right,347412
+Pejiño,Eibar,La Liga 2,2026/27,10,3,297,2,0,0,0,5,6,6,4,1.5152,0.0,1.8182,1.2121,Substitute,270597
+Peru Nolaskoain,Eibar,La Liga 2,2026/27,5,3,360,0,0,1,0,4,6,2,0,1.0,0.25,0.5,0.0,Center Right Defender,271822
 Sergio Cubero,Eibar,La Liga 2,2026/27,6,3,327,0,1,1,0,1,4,5,1,0.2752,0.2752,1.3761,0.2752,Right Back,300512
-Sergio Álvarez,Eibar,La Liga 2,2026/27,2,2,105,0,0,0,0,1,2,1,0,0.8571,0.0,0.8571,0.0,Right Midfielder,87963
+Sergio Álvarez,Eibar,La Liga 2,2026/27,3,2,126,0,0,0,0,2,2,1,0,1.4286,0.0,0.7143,0.0,Right Midfielder,87963
 Unai Elgezabel,Eibar,La Liga 2,2026/27,9,9,675,0,0,3,0,9,4,1,0,1.2,0.4,0.1333,0.0,Center Right Defender,231214
-Álvaro Rodríguez Pérez,Eibar,La Liga 2,2026/27,10,9,781,2,1,0,0,1,4,5,3,0.1152,0.0,0.5762,0.3457,Right Back,251661
-Aingeru Olabarrieta,Eldense,La Liga 2,2026/27,10,7,690,2,1,0,0,2,11,17,6,0.2609,0.0,2.2174,0.7826,Attacking Midfielder Left,377833
+Álvaro Rodríguez Pérez,Eibar,La Liga 2,2026/27,11,10,871,2,1,0,0,2,5,5,3,0.2067,0.0,0.5166,0.31,Right Back,251661
+Aingeru Olabarrieta,Eldense,La Liga 2,2026/27,11,8,780,2,1,0,0,3,12,19,6,0.3462,0.0,2.1923,0.6923,Attacking Midfielder Left,377833
 Borja Calvo,Eldense,La Liga 2,2026/27,2,0,36,0,0,0,0,1,1,1,0,2.5,0.0,2.5,0.0,Substitute,354252
 Carlos Guirao,Eldense,La Liga 2,2026/27,12,8,638,0,1,2,0,15,3,7,2,2.116,0.2821,0.9875,0.2821,Substitute,389266
-David Ruiz Montero,Eldense,La Liga 2,2026/27,6,6,497,0,0,2,0,7,1,10,3,1.2676,0.3622,1.8109,0.5433,Left Back,412135
+David Ruiz Montero,Eldense,La Liga 2,2026/27,7,7,553,0,0,2,0,7,1,10,3,1.1392,0.3255,1.6275,0.4882,Left Back,412135
 Dinis Rodrigues,Eldense,La Liga 2,2026/27,1,0,10,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Substitute,407541
 Fidel,Eldense,La Liga 2,2026/27,13,13,994,2,0,3,0,7,13,15,6,0.6338,0.2716,1.3581,0.5433,Attacking Midfielder Right,147491
-Floris Smand,Eldense,La Liga 2,2026/27,12,12,1080,0,0,0,0,8,5,2,0,0.6667,0.0,0.1667,0.0,Center Left Defender,346837
+Floris Smand,Eldense,La Liga 2,2026/27,13,13,1170,0,0,0,0,8,5,2,0,0.6154,0.0,0.1538,0.0,Center Left Defender,346837
 Guillermo Macho,Eldense,La Liga 2,2026/27,8,5,452,1,0,1,0,6,13,11,5,1.1947,0.1991,2.1903,0.9956,Left Midfielder,393755
-Iker Ortega,Eldense,La Liga 2,2026/27,6,2,197,0,0,1,0,3,2,2,0,1.3706,0.4569,0.9137,0.0,Substitute,310837
-Javier Martínez,Eldense,La Liga 2,2026/27,11,5,491,1,1,1,0,11,16,15,4,2.0163,0.1833,2.7495,0.7332,Substitute,278205
+Iker Ortega,Eldense,La Liga 2,2026/27,7,3,287,0,0,1,0,4,2,2,0,1.2544,0.3136,0.6272,0.0,Substitute,310837
+Javier Martínez,Eldense,La Liga 2,2026/27,12,5,516,1,1,1,0,11,17,16,5,1.9186,0.1744,2.7907,0.8721,Substitute,278205
 Javier Olaizola,Eldense,La Liga 2,2026/27,2,2,180,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Center Left Defender,11719
-Jesus Clemente,Eldense,La Liga 2,2026/27,10,9,836,0,0,3,0,12,10,6,3,1.2919,0.323,0.6459,0.323,Right Back,311264
-Jordi Martín,Eldense,La Liga 2,2026/27,9,3,350,0,1,1,0,5,1,6,1,1.2857,0.2571,1.5429,0.2571,Substitute,331710
+Jesus Clemente,Eldense,La Liga 2,2026/27,11,10,909,1,0,4,0,13,11,7,4,1.2871,0.396,0.6931,0.396,Right Back,311264
+Jordi Martín,Eldense,La Liga 2,2026/27,10,4,440,0,2,1,0,5,2,6,1,1.0227,0.2045,1.2273,0.2045,Substitute,331710
 Jorge Rastrojo,Eldense,La Liga 2,2026/27,12,7,560,3,1,1,0,7,12,13,8,1.125,0.1607,2.0893,1.2857,Substitute,374618
 Juan Larios,Eldense,La Liga 2,2026/27,9,6,586,0,0,5,0,20,8,0,0,3.0717,0.7679,0.0,0.0,Left Back,325545
 Juan Palomares,Eldense,La Liga 2,2026/27,1,1,90,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Goalkeeper,331424
-Justin Smith,Eldense,La Liga 2,2026/27,11,11,911,1,0,6,0,22,12,4,1,2.1734,0.5928,0.3952,0.0988,Right Midfielder,113146
-Manuel Nieto,Eldense,La Liga 2,2026/27,9,4,387,0,0,1,0,9,4,14,2,2.093,0.2326,3.2558,0.4651,Substitute,299935
-Marcos Bustillo,Eldense,La Liga 2,2026/27,7,3,319,0,1,1,0,7,3,1,0,1.9749,0.2821,0.2821,0.0,Substitute,354251
-Mariano Carmona,Eldense,La Liga 2,2026/27,8,5,472,2,0,1,0,10,12,11,3,1.9068,0.1907,2.0975,0.572,Forward,395201
-Pau Cabanes,Eldense,La Liga 2,2026/27,3,1,124,0,0,0,0,1,2,4,2,0.7258,0.0,2.9032,1.4516,Substitute,384544
-Ramon Vila,Eldense,La Liga 2,2026/27,12,12,1080,0,1,0,0,0,3,0,0,0.0,0.0,0.0,0.0,Goalkeeper,354450
-Roberto López,Eldense,La Liga 2,2026/27,7,4,303,1,0,1,0,3,5,15,5,0.8911,0.297,4.4554,1.4851,Attacking Midfielder,308145
+Justin Smith,Eldense,La Liga 2,2026/27,12,12,976,1,0,7,0,22,12,4,1,2.0287,0.6455,0.3689,0.0922,Right Midfielder,113146
+Manuel Nieto,Eldense,La Liga 2,2026/27,10,4,404,0,0,1,0,9,4,15,3,2.005,0.2228,3.3416,0.6683,Substitute,299935
+Marcos Bustillo,Eldense,La Liga 2,2026/27,8,4,409,0,1,1,0,11,6,2,0,2.4205,0.22,0.4401,0.0,Substitute,354251
+Mariano Carmona,Eldense,La Liga 2,2026/27,9,6,545,3,0,1,0,11,15,13,4,1.8165,0.1651,2.1468,0.6606,Forward,395201
+Pau Cabanes,Eldense,La Liga 2,2026/27,4,2,180,0,1,0,0,2,2,4,2,1.0,0.0,2.0,1.0,Attacking Midfielder Left,384544
+Ramon Vila,Eldense,La Liga 2,2026/27,13,13,1170,0,1,0,0,0,3,0,0,0.0,0.0,0.0,0.0,Goalkeeper,354450
+Roberto López,Eldense,La Liga 2,2026/27,8,4,337,1,0,1,0,3,6,21,7,0.8012,0.2671,5.6083,1.8694,Substitute,308145
 Rodrigo Val,Eldense,La Liga 2,2026/27,2,0,23,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Substitute,311365
 Waldo Rubio,Eldense,La Liga 2,2026/27,5,1,156,0,0,0,0,1,0,2,1,0.5769,0.0,1.1538,0.5769,Substitute,269583
-Álex Ibarrondo,Eldense,La Liga 2,2026/27,6,4,334,0,0,1,0,3,2,2,1,0.8084,0.2695,0.5389,0.2695,Right Back,407406
-Álex Serra,Eldense,La Liga 2,2026/27,12,12,1074,0,0,4,0,15,18,4,1,1.257,0.3352,0.3352,0.0838,Center Right Defender,375724
+Álex Ibarrondo,Eldense,La Liga 2,2026/27,7,4,351,0,0,1,0,3,2,2,1,0.7692,0.2564,0.5128,0.2564,Right Back,407406
+Álex Serra,Eldense,La Liga 2,2026/27,13,12,1108,0,0,4,0,15,19,4,1,1.2184,0.3249,0.3249,0.0812,Center Right Defender,375724
 Andoni López,FC Andorra,La Liga 2,2026/27,4,3,213,0,0,1,0,4,0,3,0,1.6901,0.4225,1.2676,0.0,Left Back,236593
 Diego Alende,FC Andorra,La Liga 2,2026/27,11,11,947,0,0,6,1,22,6,10,2,2.0908,0.6653,0.9504,0.1901,Center Left Defender,219073
 Diego Diaz,FC Andorra,La Liga 2,2026/27,8,4,304,0,0,0,0,3,0,6,3,0.8882,0.0,1.7763,0.8882,Substitute,396027
