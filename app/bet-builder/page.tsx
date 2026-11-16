@@ -599,6 +599,7 @@ function broadBetToSelection(bet:AvailableBet,fixture:Fixture):Selection{
 function buildBroadTargetBuilders(rows:Selection[]):RiskBuilder[]{
   const configs=[
     {id:"broad-most-likely",title:"Most Likely",risk:"Safe" as const,targetFractional:"Best",targetDecimal:0},
+    {id:"broad-3-1",title:"3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4},
     {id:"broad-5-1",title:"5/1",risk:"Safe" as const,targetFractional:"5/1",targetDecimal:6},
     {id:"broad-10-1",title:"10/1",risk:"Safe" as const,targetFractional:"10/1",targetDecimal:11},
     {id:"broad-15-1",title:"15/1",risk:"Balanced" as const,targetFractional:"15/1",targetDecimal:16},
@@ -709,6 +710,7 @@ function buildBroadTargetBuilders(rows:Selection[]):RiskBuilder[]{
 function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuilder[]{
   const configs=[
     {id:"most-likely",title:"Most Likely",risk:"Safe" as const,targetFractional:"Best",targetDecimal:0},
+    {id:"target-3-1",title:"3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4},
     {id:"target-5-1",title:"5/1",risk:"Safe" as const,targetFractional:"5/1",targetDecimal:6},
     {id:"target-10-1",title:"10/1",risk:"Safe" as const,targetFractional:"10/1",targetDecimal:11},
     {id:"target-15-1",title:"15/1",risk:"Balanced" as const,targetFractional:"15/1",targetDecimal:16},
@@ -1038,8 +1040,8 @@ export default function BetBuilderPage(){
     const kickoff=new Date(fixture.kickoff).getTime()
     if(!Number.isFinite(kickoff))return
 
-    const windowStart=kickoff-60*60*1000
-    const windowEnd=kickoff-45*60*1000
+    const windowStart=kickoff-120*60*1000
+    const windowEnd=kickoff+10*60*1000
     let cancelled=false
     let timer:number|undefined
     let interval:number|undefined
@@ -1067,7 +1069,7 @@ export default function BetBuilderPage(){
     const begin=()=>{
       if(cancelled)return
       void check()
-      interval=window.setInterval(()=>void check(),90000)
+      interval=window.setInterval(()=>void check(),30000)
     }
 
     const now=Date.now()
@@ -1385,7 +1387,7 @@ export default function BetBuilderPage(){
       {loading&&!data&&inPlay?<section className="rounded-3xl border border-emerald-300/12 bg-emerald-400/[0.045] p-4"><div className="flex items-center gap-3"><RefreshCw className="size-4 animate-spin text-emerald-300"/><div><p className="text-sm font-black">Loading live player model…</p><p className="mt-1 text-[0.54rem] text-white/35">Current score and live events are already connected. Player rankings will appear as soon as the cached or fresh scorecard is available.</p></div></div></section>:null}
       {data&&!data.ok?<section className="rounded-3xl border border-rose-300/15 bg-rose-400/5 p-5"><p className="font-black">Match model unavailable</p><p className="mt-1 text-sm text-white/40">{data.error}</p></section>:null}
 
-      {data?.ok&&data.lineupMode==="predicted"?<section className="rounded-3xl border border-amber-300/15 bg-amber-300/[0.05] p-4"><div className="flex items-start gap-3"><Clock3 className="mt-0.5 size-5 shrink-0 text-amber-300"/><div><p className="font-black text-amber-100">Predicted XI active</p><p className="mt-1 text-[0.6rem] leading-relaxed text-white/40">{data.lineupSource??"Probable starters based on recent selection history and minutes."} The page checks for the official XI only between roughly 60 and 45 minutes before kickoff. Once confirmed, anyone benched is removed, all probabilities/slips are rebuilt once, and lineup polling stops for this match.</p></div></div></section>:data?.ok&&data.lineupMode==="squad"?<section className="rounded-3xl border border-amber-300/15 bg-amber-300/[0.05] p-6 text-center"><Clock3 className="mx-auto size-6 text-amber-300"/><p className="mt-3 font-black">No reliable XI yet</p><p className="mx-auto mt-1 max-w-lg text-xs leading-relaxed text-white/40">The match is still available, but player recommendations need a probable or confirmed starting XI.</p></section>:null}
+      {data?.ok&&data.lineupMode==="predicted"?<section className="rounded-3xl border border-amber-300/15 bg-amber-300/[0.05] p-4"><div className="flex items-start gap-3"><Clock3 className="mt-0.5 size-5 shrink-0 text-amber-300"/><div><p className="font-black text-amber-100">Predicted XI active</p><p className="mt-1 text-[0.6rem] leading-relaxed text-white/40">{data.lineupSource??"Probable starters based on recent selection history and minutes."} The page checks the official team sheet every 30 seconds from two hours before kickoff until confirmation. Once both starting XIs are verified, anyone benched is removed and every probability and slip is rebuilt from the confirmed starters.</p></div></div></section>:data?.ok&&data.lineupMode==="squad"?<section className="rounded-3xl border border-amber-300/15 bg-amber-300/[0.05] p-6 text-center"><Clock3 className="mx-auto size-6 text-amber-300"/><p className="mt-3 font-black">No reliable XI yet</p><p className="mx-auto mt-1 max-w-lg text-xs leading-relaxed text-white/40">The match is still available, but player recommendations need a probable or confirmed starting XI.</p></section>:null}
 
       {inPlay&&live?<section className="rounded-3xl border border-rose-300/15 bg-rose-400/[0.055] p-4"><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-black text-rose-200">Live recommendations adapting</p><p className="mt-1 text-[0.58rem] leading-relaxed text-white/40">Settled thresholds are removed automatically. If a player commits their first foul, 1+ disappears and the next available foul line moves up the ranking.</p></div><span className="shrink-0 rounded-full bg-rose-300 px-2 py-1 text-[0.45rem] font-black text-rose-950">{live.elapsed}'</span></div><p className="mt-2 text-[0.46rem] text-white/25">{live.source??"Live feed"} · refreshes every 30 seconds</p></section>:null}
 
