@@ -27,7 +27,8 @@ type SlipLeg={
   probability:number;fairOdds:number|null;bookmakerOdds:number|null;bookmakerName?:string|null;
   edge:number|null;confidence:"A"|"B"|"C"|"D";reason:string;priceSource?:"exact"|"estimated"|null;
   bookmakerProbability?:number|null;
-  recent5HitRate?:number|null;seasonHitRate?:number|null;h2hHitRate?:number|null;h2hMatches?:number;
+  recent5HitRate?:number|null;recent10HitRate?:number|null;seasonHitRate?:number|null;seasonPer90?:number|null;
+  h2hHitRate?:number|null;h2hMatches?:number;h2hLineupOverlap?:number|null;h2hSimilarity?:number|null;
   sampleMatches?:number;expectedMinutes?:number|null;position?:string|null
 }
 type BetSlip={
@@ -42,7 +43,8 @@ type FoulTargetSlip={
 type ScorecardMarket={
   key?:string;label:string;probability:number;fairOdds?:number|null;bookmakerOdds?:number|null;
   bookmakerName?:string|null;edge?:number|null;confidence:"A"|"B"|"C"|"D";reasons?:string[];
-  sampleMatches?:number;recent5HitRate?:number;seasonHitRate?:number;h2hHitRate?:number|null;h2hMatches?:number;recommendationScore?:number;
+  sampleMatches?:number;recent5HitRate?:number;recent10HitRate?:number;seasonHitRate?:number;seasonPer90?:number|null;
+  h2hHitRate?:number|null;h2hMatches?:number;h2hLineupOverlap?:number|null;h2hSimilarity?:number|null;recommendationScore?:number;
   impliedProbability?:number|null;bookmakerNoVigProbability?:number|null
 }
 type ScorecardPlayer={
@@ -272,6 +274,24 @@ function buildTargetOddsSlips(scorecard:Scorecard|null,fixture:Fixture):TargetOd
     .filter(x=>x.conservativeP>=.10)
 
   const bothTeamsAvailable=candidates.some(x=>x.teamKey==="home")&&candidates.some(x=>x.teamKey==="away")
+  const correlationPenalty=(legs:Candidate[])=>{
+    let penalty=1
+    for(let i=0;i<legs.length;i++){
+      for(let j=i+1;j<legs.length;j++){
+        const a=legs[i],b=legs[j],af=family(a.leg.market),bf=family(b.leg.market)
+        const sameTeam=a.teamKey===b.teamKey
+        if(sameTeam&&(af==="shot"||af==="sot")&&(bf==="shot"||bf==="sot"))penalty*=.985
+        else if(sameTeam&&af===bf)penalty*=(af==="foul"||af==="fouled")?.993:.988
+        else if(!sameTeam&&((af==="foul"&&bf==="fouled")||(af==="fouled"&&bf==="foul")))penalty*=.992
+        else if((af==="goal"&&bf==="assist")||(af==="assist"&&bf==="goal"))penalty*=.97
+      }
+    }
+    return Math.max(.78,penalty)
+  }
+  const conservativeJoint=(legs:Candidate[])=>{
+    const raw=legs.reduce((p,x)=>p*x.conservativeP,1)
+    return raw*correlationPenalty(legs)
+  }
 
   function stateSafety(state:{conservativeProb:number;legs:Candidate[]}){
     if(!state.legs.length)return 0
@@ -313,7 +333,7 @@ function buildTargetOddsSlips(scorecard:Scorecard|null,fixture:Fixture):TargetOd
           legs:[...state.legs,option],
           odds,
           modelProb:state.modelProb*option.modelP,
-          conservativeProb:state.conservativeProb*option.conservativeP,
+          conservativeProb:conservativeJoint([...state.legs,option]),
           players:new Set([...state.players,playerKey]),
           families:{...state.families,[fam]:familyCount+1},
           teamCounts:{...state.teamCounts,[option.teamKey]:teamCount+1},
