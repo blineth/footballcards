@@ -890,8 +890,13 @@ function readScorecardCache(f:Fixture):Scorecard|null{
     const parsed=JSON.parse(raw)
     const data=parsed?.data as Scorecard|undefined
     if(data?.snapshotFallback){
-      window.localStorage.removeItem(key)
-      return null
+      const kickoff=new Date(f.kickoff).getTime()
+      const now=Date.now()
+      const inPlay=Number.isFinite(kickoff)&&now>=kickoff-15*60*1000&&now<=kickoff+4*60*60*1000
+      if(!inPlay){
+        window.localStorage.removeItem(key)
+        return null
+      }
     }
     return data?.ok?data:null
   }catch{return null}
@@ -1089,7 +1094,6 @@ export default function BetBuilderPage(){
   const loadLiveBaseline=useCallback(async(f:Fixture,currentLive:LiveData)=>{
     if(!(currentLive.status==="live"||currentLive.status==="halftime")||!currentLive.players?.length)return
     const active=currentLive.players.filter(livePlayerIsActive)
-    if(active.length<20)return
     try{
       const r=await fetch(liveBaselineUrl(f,currentLive),{cache:"default"})
       if(!r.ok)return
