@@ -4,6 +4,7 @@ import { getRefereeByName } from "@/lib/historical"
 import { isDatabaseConfigured, pool } from "@/lib/db"
 import type { Competition, Fixture, FixturesResponse, MatchStatus } from "@/lib/types"
 import { NextResponse } from "next/server"
+import { getOfficialLineup } from "@/lib/official-lineup"
 
 export const dynamic = "force-dynamic"
 export const revalidate = 0
@@ -145,6 +146,21 @@ async function espnFixtures(date: string): Promise<Fixture[]> {
   }
   const all = await Promise.all(requests)
   return all.flat()
+}
+
+async function enrichLineupStatuses(fixtures:Fixture[]){
+  const now=Date.now()
+  return Promise.all(fixtures.map(async(f)=>{
+    if(!["scheduled","live","halftime"].includes(f.status))return f
+    const kickoff=new Date(f.kickoff).getTime()
+    if(!Number.isFinite(kickoff)||now<kickoff-2*60*60*1000||now>kickoff+4*60*60*1000)return f
+    try{
+      const official=await getOfficialLineup({
+        date:londonYmd(f.kickoff),home:f.home.name,away:f.away.name,competition:f.competition,eventId:f.id,
+      })
+      return {...f,lineupStatus:official.confirmed?"confirmed":"expected"} satisfies Fixture
+    }catch{return f}
+  }))
 }
 
 async function enrichReferees(fixtures: Fixture[]) {
@@ -293,12 +309,14 @@ export async function GET(request: Request) {
   try {
     let resolvedDate = requestedDate
     let fixtures = await fixturesForDate(resolvedDate)
+    fixtures = await enrichLineupStatuses(fixtures)
     let leagues = groupFixtures(await enrichReferees(fixtures))
 
     if (nextIfEmpty && targetCompetition && leagues[targetCompetition]?.length === 0) {
       for (let offset = 1; offset <= 21; offset++) {
         const candidateDate = addDays(requestedDate, offset)
-        const candidateFixtures = await fixturesForDate(candidateDate)
+        let candidateFixtures = await fixturesForDate(candidateDate)
+        candidateFixtures = await enrichLineupStatuses(candidateFixtures)
         const candidateLeagues = groupFixtures(await enrichReferees(candidateFixtures))
         if (candidateLeagues[targetCompetition]?.length) {
           resolvedDate = candidateDate
