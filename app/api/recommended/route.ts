@@ -281,7 +281,7 @@ function buildTargetOddsSlips(scorecard:Scorecard|null,fixture:Fixture):TargetOd
         const a=legs[i],b=legs[j],af=family(a.leg.market),bf=family(b.leg.market)
         const sameTeam=a.teamKey===b.teamKey
         if(sameTeam&&(af==="shot"||af==="sot")&&(bf==="shot"||bf==="sot"))penalty*=.985
-        else if(sameTeam&&af===bf)penalty*=(af==="foul"||af==="fouled")?.993:.988
+        else if(sameTeam&&af===bf)penalty*=(af==="foul"||af==="fouled") ? .993 : .988
         else if(!sameTeam&&((af==="foul"&&bf==="fouled")||(af==="fouled"&&bf==="foul")))penalty*=.992
         else if((af==="goal"&&bf==="assist")||(af==="assist"&&bf==="goal"))penalty*=.97
       }
