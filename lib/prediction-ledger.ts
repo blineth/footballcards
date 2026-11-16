@@ -45,10 +45,12 @@ function fixtureDate(f?:LedgerFixture|null){
 }
 function thresholdFromMarket(market:string,label:string,provided?:number|null){
   if(provided!=null&&Number.isFinite(Number(provided)))return Number(provided)
-  const explicit=String(market).match(/(?:foul|fouled|shot|sot|goal|assist)(\d+)$/i)
-  if(explicit)return Number(explicit[1])
+  // Live rows keep the base family key (e.g. foul1) while the displayed label
+  // advances to the next unsettled threshold (e.g. 4+ fouls). Grade what was shown.
   const plus=String(label).match(/(\d+)\s*\+/)
-  return plus?Number(plus[1]):null
+  if(plus)return Number(plus[1])
+  const explicit=String(market).match(/(?:foul|fouled|shot|sot|goal|assist)(\d+)$/i)
+  return explicit?Number(explicit[1]):null
 }
 function opponentFor(team:string|null|undefined,fixture?:LedgerFixture|null){
   const t=norm(team),h=norm(fixture?.home),a=norm(fixture?.away)
