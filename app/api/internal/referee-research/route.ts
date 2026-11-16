@@ -162,6 +162,9 @@ async function importFixture(fixture:any,competitionGroup:string,season:string){
   return {ok:true,players:playerCount,remaining:playersRes.remaining??eventsRes.remaining}
 }
 async function refreshRefereeProfiles(competition:string,season:string){
+  // Aggregates are fully derived from raw match history. Remove legacy/stale rows
+  // first so an older thin referee import cannot sit beside the rebuilt profile.
+  await pool.query(`DELETE FROM referees WHERE competition=$1 AND season=$2`,[competition,season])
   await pool.query(`
     WITH ranked AS (
       SELECT *,row_number() OVER (PARTITION BY referee_name ORDER BY fixture_date DESC,fixture_id DESC) rn
@@ -607,6 +610,22 @@ export async function GET(request:Request){
     const results:any[]=[]
     for(const d of divisions)results.push(await importFootballDataDivision(seasonCode,d))
     return NextResponse.json({ok:true,source:"Football-Data.co.uk",results})
+  }
+
+  if(mode==="rebuild-profiles"){
+    const groups=await pool.query(`
+      SELECT DISTINCT competition,season
+      FROM referee_match_history
+      WHERE competition IN ('Premier League','Championship','League One','League Two')
+      ORDER BY competition,season
+    `)
+    const rebuilt:any[]=[]
+    for(const row of groups.rows){
+      await refreshRefereeProfiles(String(row.competition),String(row.season))
+      rebuilt.push({competition:row.competition,season:row.season})
+    }
+    await refreshInternationalRolling()
+    return NextResponse.json({ok:true,rebuilt,international:"rolling"})
   }
 
   if(mode==="summary"){
