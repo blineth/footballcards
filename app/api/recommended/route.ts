@@ -429,6 +429,13 @@ function buildTargetOddsSlips(scorecard:Scorecard|null,fixture:Fixture):TargetOd
       market:x.leg.market,label:x.leg.label,probability:x.leg.probability,conservativeProbability:Math.round(x.conservativeP*1000)/1000,
       price:Math.round(x.exactPrice*1000)/1000,priceSource:"exact" as const,
       bookmaker:"Bet365" as const,confidence:x.leg.confidence,
+      recent5HitRate:Number.isFinite(Number(x.leg.recent5HitRate))?Number(x.leg.recent5HitRate):null,
+      seasonHitRate:Number.isFinite(Number(x.leg.seasonHitRate))?Number(x.leg.seasonHitRate):null,
+      h2hHitRate:Number.isFinite(Number(x.leg.h2hHitRate))?Number(x.leg.h2hHitRate):null,
+      h2hMatches:Number(x.leg.h2hMatches??0),
+      h2hLineupOverlap:Number.isFinite(Number(x.leg.h2hLineupOverlap))?Number(x.leg.h2hLineupOverlap):null,
+      h2hSimilarity:Number.isFinite(Number(x.leg.h2hSimilarity))?Number(x.leg.h2hSimilarity):null,
+      sampleMatches:Number(x.leg.sampleMatches??0),reason:x.leg.reason,
     }))
     return {
       id:"target-"+fixture.id+"-"+target.fractional.replace("/","-"),
