@@ -82,6 +82,7 @@ type ScoreMarket = {
   edge: number | null
   expectedValue: number | null
   sampleMatches: number
+  seasonMatches: number
   recent5HitRate: number
   recent10HitRate: number
   seasonHitRate: number
@@ -183,6 +184,7 @@ type SlipLeg = {
   h2hSimilarity?: number | null
   h2hMatches?: number
   sampleMatches?: number
+  seasonMatches?: number
   expectedMinutes?: number | null
   position?: string | null
 }
@@ -284,9 +286,20 @@ function hit(market: MarketKey, row: MatchRow) {
   if (market === "sot1") return Number(row.shotsOnTarget ?? 0) >= 1
   return Number(row.shotsOnTarget ?? 0) >= 2
 }
+function marketObserved(row:MatchRow,market:MarketKey){
+  if(market==="card")return row.yellowCard!=null
+  if(market.startsWith("goal"))return row.goals!=null
+  if(market.startsWith("assist"))return row.assists!=null
+  if(market.startsWith("fouled"))return row.foulsDrawn!=null
+  if(market.startsWith("foul"))return row.foulsCommitted!=null
+  if(market.startsWith("sot"))return row.shotsOnTarget!=null
+  return row.shots!=null
+}
+function observedRows(rows:MatchRow[],market:MarketKey){return rows.filter(row=>marketObserved(row,market))}
 function hitRate(rows: MatchRow[], market: MarketKey) {
-  if (!rows.length) return 0
-  return rows.filter(row => hit(market, row)).length / rows.length
+  const observed=observedRows(rows,market)
+  if (!observed.length) return 0
+  return observed.filter(row => hit(market, row)).length / observed.length
 }
 function rowDate(row:MatchRow){return String(row.matchDate??"").slice(0,10)}
 function playerNameMatch(a:string|null|undefined,b:string|null|undefined){
@@ -393,7 +406,7 @@ function betaSmoothed(hits: number, total: number, prior: number, priorStrength 
   return (hits + prior * priorStrength) / (total + priorStrength)
 }
 function empiricalProbability(rows: MatchRow[], market: MarketKey, priorOverride?:number) {
-  const ordered = [...rows].sort((a, b) => String(a.matchDate).localeCompare(String(b.matchDate)))
+  const ordered = observedRows(rows,market).sort((a, b) => String(a.matchDate).localeCompare(String(b.matchDate)))
   const recent5 = ordered.slice(-5)
   const recent10 = ordered.slice(-10)
   const allHits = ordered.filter(row => hit(market, row)).length
@@ -868,8 +881,8 @@ function dynamicFoulProbability(input:{
   expectedMinutes:number
   matchupFouled90:number|null
 }) {
-  const ordered=[...input.rows].sort((a,b)=>String(a.matchDate).localeCompare(String(b.matchDate)))
-  const hitFor=(row:MatchRow)=>Number(row.foulsCommitted??0)>=input.threshold
+  const ordered=input.rows.filter(row=>row.foulsCommitted!=null).sort((a,b)=>String(a.matchDate).localeCompare(String(b.matchDate)))
+  const hitFor=(row:MatchRow)=>Number(row.foulsCommitted)>=input.threshold
   const recent10=ordered.slice(-10)
   const recent5=ordered.slice(-5)
   const lambda=Math.max(0.01,input.per90*input.expectedMinutes/90)
@@ -1002,6 +1015,7 @@ function marketLeg(player: ScorePlayer, market: MarketKey): SlipLeg {
     h2hSimilarity:Number.isFinite(Number(m.h2hSimilarity))?Number(m.h2hSimilarity):null,
     h2hMatches:Number(m.h2hMatches??0),
     sampleMatches:Number(m.sampleMatches??player.sampleMatches??0),
+    seasonMatches:Number(m.seasonMatches??0),
     expectedMinutes:Number.isFinite(Number(player.expectedMinutes))?Number(player.expectedMinutes):null,
     position:player.position??null,
   }
@@ -2012,6 +2026,12 @@ export async function GET(request: Request) {
     const orderedRows = [...rows].sort((a, b) => String(a.matchDate).localeCompare(String(b.matchDate)))
     const recent5Rows = orderedRows.slice(-5)
     const recent10Rows = orderedRows.slice(-10)
+    const targetYear=Number(date.slice(0,4))
+    const targetMonth=Number(date.slice(5,7))
+    const seasonStart=competition==="International"
+      ? `${targetYear}-01-01`
+      : `${targetMonth>=8?targetYear:targetYear-1}-08-01`
+    const seasonRows=rows.filter(row=>rowDate(row)>=seasonStart)
     const sampleMinutes = rows.reduce((sum, row) => sum + Number(row.minutes ?? 0), 0)
     const intlStarts=internationalRows.filter(row=>row.starter===true).length
     const intlMinutes=internationalRows.reduce((sum,row)=>sum+Number(row.minutes??0),0)
@@ -2074,7 +2094,8 @@ export async function GET(request: Request) {
         : empiricalProbability(rows, market, marketPrior)
       const recent5HitRate = hitRate(recent5Rows, market)
       const recent10HitRate = hitRate(recent10Rows, market)
-      const seasonHitRate = hitRate(rows, market)
+      const seasonObserved=observedRows(seasonRows,market)
+      const seasonHitRate = hitRate(seasonRows, market)
       const h2hHitRate = h2hRows.length ? hitRate(h2hRows, market) : null
       const weightedH2HRate=h2hContext.weightedRate(market)
       const overlap=h2hContext.averageLineupOverlap??0
@@ -2097,8 +2118,11 @@ export async function GET(request: Request) {
       const minutesScale = expectedMinutes / 90
       const historicGoal90 = sampleMinutes>0 ? (rows.reduce((sum,row)=>sum+Number(row.goals??0),0)*90)/sampleMinutes : 0
       const historicAssist90 = sampleMinutes>0 ? (rows.reduce((sum,row)=>sum+Number(row.assists??0),0)*90)/sampleMinutes : 0
-      const rowPer90=(key:"shots"|"shotsOnTarget"|"foulsDrawn"|"foulsCommitted")=>
-        sampleMinutes>0?(rows.reduce((sum,row)=>sum+Number((row as any)?.[key]??0),0)*90)/sampleMinutes:0
+      const rowPer90=(key:"shots"|"shotsOnTarget"|"foulsDrawn"|"foulsCommitted")=>{
+        const observed=seasonRows.filter(row=>(row as any)?.[key]!=null&&Number(row.minutes??0)>0)
+        const minutes=observed.reduce((sum,row)=>sum+Number(row.minutes??0),0)
+        return minutes>0?(observed.reduce((sum,row)=>sum+Number((row as any)[key]),0)*90)/minutes:0
+      }
       const internationalFirst=competition==="International"&&internationalRows.length>=2
       const per90 = market.startsWith("goal")
         ? historicGoal90
@@ -2272,6 +2296,7 @@ export async function GET(request: Request) {
         edge: edge == null ? null : Math.round(edge * 1000) / 1000,
         expectedValue: expectedValue == null ? null : Math.round(expectedValue * 1000) / 1000,
         sampleMatches: rows.length,
+        seasonMatches: seasonObserved.length,
         recent5HitRate: Math.round(recent5HitRate * 1000) / 1000,
         recent10HitRate: Math.round(recent10HitRate * 1000) / 1000,
         seasonHitRate: Math.round(seasonHitRate * 1000) / 1000,
