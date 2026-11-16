@@ -671,6 +671,8 @@ function directPlayerCandidates(scorecard:Scorecard){
         seasonHitRate:Number.isFinite(Number(market.seasonHitRate))?Number(market.seasonHitRate):null,
         h2hHitRate:Number.isFinite(Number(market.h2hHitRate))?Number(market.h2hHitRate):null,
         h2hMatches:Number(market.h2hMatches??0),
+        h2hLineupOverlap:Number.isFinite(Number(market.h2hLineupOverlap))?Number(market.h2hLineupOverlap):null,
+        h2hSimilarity:Number.isFinite(Number(market.h2hSimilarity))?Number(market.h2hSimilarity):null,
         sampleMatches:Number(market.sampleMatches??0),
         expectedMinutes:Number.isFinite(Number(player.expectedMinutes))?Number(player.expectedMinutes):null,
         position:player.position??null,
