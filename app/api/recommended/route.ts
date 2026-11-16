@@ -5,6 +5,7 @@ import { GET as matchAccaGET } from "../match-acca/route"
 import { GET as livePlayerStatsGET } from "../live-player-stats/route"
 import { GET as betBuilderOddsGET } from "../bet-builder-odds/route"
 import { gradeHistoricalRecommendations, recommendationTrackingSummary, saveRecommendationSnapshots } from "@/lib/recommendation-tracking"
+import { gradePredictionLedger } from "@/lib/prediction-ledger"
 import recommendationBacktest from "@/data/model/recommendation-backtest.json"
 import calibrationSnapshot from "@/data/model/calibration.json"
 import { snapshotPlayersForFixture, internationalPlayersForFixture } from "@/lib/current-season-snapshot"
@@ -1216,7 +1217,7 @@ async function maybeGradeRecommendations(){
   const now=Date.now()
   if(now-lastGradeAt<TRACKING_CACHE_MS)return
   lastGradeAt=now
-  try{await gradeHistoricalRecommendations(250)}catch{}
+  try{await Promise.all([gradeHistoricalRecommendations(250),gradePredictionLedger(750)])}catch{}
 }
 async function cachedTrackingSummary(){
   const now=Date.now()
