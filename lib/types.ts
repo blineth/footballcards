@@ -69,6 +69,8 @@ export interface LineupPlayer {
 export interface TeamLineup {
   team: TeamRef
   status: LineupStatus
+  formation?: string | null
+  formationSource?: "official-feed" | "position-inferred" | null
   startingXI: LineupPlayer[]
   substitutes: LineupPlayer[]
 }
@@ -80,6 +82,9 @@ export interface LineupsResponse {
   status: LineupStatus
   home: TeamLineup | null
   away: TeamLineup | null
+  source?: string | null
+  checkedAt?: string | null
+  cachedConfirmed?: boolean
 }
 
 // A single piece of evidence backing a recommendation. `value` is null when the
