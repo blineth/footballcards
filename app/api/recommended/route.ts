@@ -810,6 +810,8 @@ function buildMultiMatchFromScans(scans:FixtureScan[]):MultiMatchBuild{
         seasonHitRate:Number.isFinite(Number(leg.seasonHitRate))?Number(leg.seasonHitRate):null,
         h2hHitRate:Number.isFinite(Number(leg.h2hHitRate))?Number(leg.h2hHitRate):null,
         h2hMatches:Number(leg.h2hMatches??0),sampleMatches:Number(leg.sampleMatches??0),
+        h2hLineupOverlap:Number.isFinite(Number(leg.h2hLineupOverlap))?Number(leg.h2hLineupOverlap):null,
+        h2hSimilarity:Number.isFinite(Number(leg.h2hSimilarity))?Number(leg.h2hSimilarity):null,reason:leg.reason,
       }))
       byTier.set("most-likely",{
         fixtureId:scan.fixture.id,competition:scan.fixture.competition,kickoff:scan.fixture.kickoff,
