@@ -355,17 +355,21 @@ export default function RecommendedPage(){
   </main>
 }
 
-function multiLegEvidence(leg:MultiMatchLeg){
+function multiLegEvidence(leg:MultiMatchLeg|TargetOddsLeg){
   const sample=Math.max(0,Number(leg.sampleMatches??0))
   const recentN=Math.min(5,sample||5)
   const h2hN=Math.max(0,Number(leg.h2hMatches??0))
   const recent=Number(leg.recent5HitRate)
   const season=Number(leg.seasonHitRate)
   const h2h=Number(leg.h2hHitRate)
+  const similarity=Number(leg.h2hSimilarity)
+  const overlap=Number(leg.h2hLineupOverlap)
   const bits:string[]=[]
   if(Number.isFinite(recent)&&recentN>0)bits.push("Recent "+Math.max(0,Math.min(recentN,Math.round(recent*recentN)))+"/"+recentN)
   if(Number.isFinite(season)&&sample>0)bits.push("Season "+Math.max(0,Math.min(sample,Math.round(season*sample)))+"/"+sample)
   if(Number.isFinite(h2h)&&h2hN>0)bits.push("H2H "+Math.max(0,Math.min(h2hN,Math.round(h2h*h2hN)))+"/"+h2hN)
+  if(h2hN>0&&Number.isFinite(similarity)&&similarity>=.45)bits.push("H2H similarity "+Math.round(similarity*100)+"%")
+  if(h2hN>0&&Number.isFinite(overlap)&&overlap>=.45)bits.push("lineup overlap "+Math.round(overlap*100)+"%")
   return bits.length?bits.join(" · "):null
 }
 
