@@ -69,7 +69,8 @@ type PropBoardRow={recId:string;fixture:Fixture;leg:SlipLeg;placeable:boolean;ma
 type MultiMatchLeg={
   fixtureId:string;competition:string;kickoff:string;home:string;away:string;
   player:string;team:string;market:string;label:string;probability:number;
-  bookmakerOdds:number;bookmaker:"Bet365";confidence:"A"|"B"|"C"|"D"
+  bookmakerOdds:number;bookmaker:"Bet365";confidence:"A"|"B"|"C"|"D";
+  recent5HitRate:number|null;seasonHitRate:number|null;h2hHitRate:number|null;h2hMatches:number;sampleMatches:number
 }
 type MultiMatchRiskTier=string
 type MultiMatchGameBuilder={
@@ -309,6 +310,20 @@ export default function RecommendedPage(){
   </main>
 }
 
+function multiLegEvidence(leg:MultiMatchLeg){
+  const sample=Math.max(0,Number(leg.sampleMatches??0))
+  const recentN=Math.min(5,sample||5)
+  const h2hN=Math.max(0,Number(leg.h2hMatches??0))
+  const recent=Number(leg.recent5HitRate)
+  const season=Number(leg.seasonHitRate)
+  const h2h=Number(leg.h2hHitRate)
+  const bits:string[]=[]
+  if(Number.isFinite(recent)&&recentN>0)bits.push("Recent "+Math.max(0,Math.min(recentN,Math.round(recent*recentN)))+"/"+recentN)
+  if(Number.isFinite(season)&&sample>0)bits.push("Season "+Math.max(0,Math.min(sample,Math.round(season*sample)))+"/"+sample)
+  if(Number.isFinite(h2h)&&h2hN>0)bits.push("H2H "+Math.max(0,Math.min(h2hN,Math.round(h2h*h2hN)))+"/"+h2hN)
+  return bits.length?bits.join(" · "):null
+}
+
 function PreMatchMultiLadder({multi,tiers,activeId,setActiveId}:{multi:MultiMatchBuild|undefined;tiers:MultiMatchTier[];activeId:string;setActiveId:(id:string)=>void}){
   const active=tiers.find(t=>t.id===activeId)??tiers[0]??null
   const openId=active?.id??null
@@ -337,7 +352,7 @@ function PreMatchMultiLadder({multi,tiers,activeId,setActiveId}:{multi:MultiMatc
               <div className="flex items-start justify-between gap-3"><div><p className="text-[0.44rem] font-black uppercase text-violet-200/70">Match {matchIndex+1} · {tier.title}</p><p className="mt-1 text-sm font-black">{builder.home} <span className="text-white/25">v</span> {builder.away}</p><p className="mt-1 text-[0.46rem] text-white/30">{builder.competition} · {builder.legs.length} selections</p><div className="mt-2"><LineupButton fixture={{id:builder.fixtureId,competition:builder.competition,kickoff:builder.kickoff,home:{name:builder.home,crest:builder.homeCrest},away:{name:builder.away,crest:builder.awayCrest}}} confirmed={Boolean(builder.lineupsConfirmed)}/></div></div><div className="text-right"><p className="font-mono text-base font-black text-emerald-200">{fractionalOdds(builder.referenceOdds)}</p><p className="text-[0.42rem] text-white/30">{percent(builder.conservativeAllHitProbability)} est.</p></div></div>
               <div className="mt-3 space-y-1.5">{builder.legs.map((leg,i)=><div key={leg.player+"|"+leg.market+"|"+i} className={"grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-xl px-2.5 py-2 "+(leg.market==="card"?"border border-amber-300/15 bg-amber-300/[0.06]":"bg-white/[0.045]")}>
                 <span className="text-[0.46rem] font-black text-white/25">{i+1}</span>
-                <div className="min-w-0"><div className="flex flex-wrap items-center gap-1.5"><p className="truncate text-[0.62rem] font-black">{leg.player} · {leg.label}</p><TeamBadge team={leg.team} home={builder.home} away={builder.away} homeCrest={builder.homeCrest} awayCrest={builder.awayCrest}/></div><p className="mt-0.5 text-[0.42rem] text-white/25">Grade {leg.confidence} · verified Bet365</p></div>
+                <div className="min-w-0"><div className="flex flex-wrap items-center gap-1.5"><p className="truncate text-[0.62rem] font-black">{leg.player} · {leg.label}</p><TeamBadge team={leg.team} home={builder.home} away={builder.away} homeCrest={builder.homeCrest} awayCrest={builder.awayCrest}/></div>{multiLegEvidence(leg)?<p className="mt-1 text-[0.43rem] font-bold text-cyan-100/55">{multiLegEvidence(leg)}</p>:null}<p className="mt-0.5 text-[0.42rem] text-white/25">Grade {leg.confidence} · verified Bet365</p></div>
                 <div className="text-right"><p className="font-mono text-[0.62rem] font-black text-emerald-200">{fractionalOdds(leg.bookmakerOdds)}</p><p className="text-[0.4rem] text-white/25">{percent(leg.probability)}</p></div>
               </div>)}</div>
             </div>)}</div>:<div className="rounded-2xl border border-dashed border-white/10 bg-black/15 p-5 text-center"><p className="text-sm font-black">No route reaches this odds floor yet</p><p className="mt-1 text-[0.5rem] text-white/30">The model will not force weaker selections just to manufacture the price.</p></div>}
