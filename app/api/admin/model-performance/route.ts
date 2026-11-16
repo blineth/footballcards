@@ -13,7 +13,11 @@ export async function GET(request:Request){
     try{backfill=await backfillLegacyPredictionLedger()}catch(error){
       backfill={runs:0,legs:0,warning:error instanceof Error?error.message:"Legacy backfill skipped"}
     }
-    const grading=grade?await gradePredictionLedger(2000):{graded:0,runsUpdated:0}
+    let grading:any={graded:0,runsUpdated:0}
+    if(grade){
+      try{grading=await gradePredictionLedger(2000)}
+      catch(error){grading={graded:0,runsUpdated:0,warning:error instanceof Error?error.message:"Grading skipped"}}
+    }
     const performance=await predictionPerformanceSummary(days)
     return NextResponse.json({ok:true,backfill,grading,performance,updatedAt:new Date().toISOString()},{
       headers:{"Cache-Control":"no-store"}
