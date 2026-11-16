@@ -17,7 +17,7 @@ type ScoreMarket={
   bookmakerOdds:number|null;bookmakerName:string|null;edge:number|null;expectedValue:number|null;
   recent5HitRate:number;recent10HitRate?:number;seasonHitRate:number;seasonPer90?:number|null;
   h2hHitRate:number|null;h2hMatches?:number;h2hLineupOverlap?:number|null;h2hSimilarity?:number|null;
-  sampleMatches?:number;recommendationScore?:number;reasons:string[]
+  sampleMatches?:number;seasonMatches?:number;recommendationScore?:number;reasons:string[]
 }
 type YellowConditional={matches:number;yellows:number;rate:number|null}
 type YellowConditionals={
@@ -37,7 +37,7 @@ type Selection={
   liveFoulsCommitted?:number;liveFoulsDrawn?:number;liveShots?:number;liveShotsOnTarget?:number;
   disciplineHeat?:number;recentFouls10?:number;recentFouls15?:number;aggressionSignals?:string[];lastAggressionMinute?:number|null;
   recent5HitRate?:number|null;recent10HitRate?:number|null;seasonHitRate?:number|null;seasonPer90?:number|null;
-  h2hHitRate?:number|null;h2hMatches?:number;h2hLineupOverlap?:number|null;h2hSimilarity?:number|null;sampleMatches?:number;
+  h2hHitRate?:number|null;h2hMatches?:number;h2hLineupOverlap?:number|null;h2hSimilarity?:number|null;sampleMatches?:number;seasonMatches?:number;
   dataFreshness?:string|null;referenceBookmakerOdds?:number|null;referenceImpliedProbability?:number|null;referenceOddsLive?:boolean
 }
 type LivePlayerStat={
@@ -561,7 +561,7 @@ function selectionsFrom(data:Scorecard|null){
   for(const p of data?.players??[]){
     for(const m of Object.values(p.markets??{})){
       if(!m)continue
-      const row:Selection={id:"",player:p.name,team:p.team,market:m.key,label:m.label,probability:m.probability,fairOdds:m.fairOdds,bookmakerOdds:m.bookmakerOdds,bookmakerName:m.bookmakerName,edge:m.edge,confidence:m.confidence,reason:m.reasons?.[0]??"Player history and current matchup model",yellowConditionals:p.yellowConditionals,position:p.position,recommendationScore:m.recommendationScore,recent5HitRate:m.recent5HitRate,recent10HitRate:m.recent10HitRate??null,seasonHitRate:m.seasonHitRate,seasonPer90:m.seasonPer90??null,h2hHitRate:m.h2hHitRate,h2hMatches:Number(m.h2hMatches??0),h2hLineupOverlap:m.h2hLineupOverlap??null,h2hSimilarity:m.h2hSimilarity??null,sampleMatches:Number(m.sampleMatches??0),dataFreshness:data?.oddsFreshness??null}
+      const row:Selection={id:"",player:p.name,team:p.team,market:m.key,label:m.label,probability:m.probability,fairOdds:m.fairOdds,bookmakerOdds:m.bookmakerOdds,bookmakerName:m.bookmakerName,edge:m.edge,confidence:m.confidence,reason:m.reasons?.[0]??"Player history and current matchup model",yellowConditionals:p.yellowConditionals,position:p.position,recommendationScore:m.recommendationScore,recent5HitRate:m.recent5HitRate,recent10HitRate:m.recent10HitRate??null,seasonHitRate:m.seasonHitRate,seasonPer90:m.seasonPer90??null,h2hHitRate:m.h2hHitRate,h2hMatches:Number(m.h2hMatches??0),h2hLineupOverlap:m.h2hLineupOverlap??null,h2hSimilarity:m.h2hSimilarity??null,sampleMatches:Number(m.sampleMatches??0),seasonMatches:Number(m.seasonMatches??0),dataFreshness:data?.oddsFreshness??null}
       row.id=keyOf(row)
       if(seen.has(row.id))continue
       seen.add(row.id);out.push(row)
@@ -1556,6 +1556,7 @@ function CardRiskPanel({rows,fixture,live,liveBet365}:{rows:Selection[];fixture:
 function marketEvidence(row:Selection){
   if(row.market.startsWith("board:"))return null
   const sample=Math.max(0,Number(row.sampleMatches??0))
+  const seasonN=Math.max(0,Number(row.seasonMatches??0))
   const recent5N=Math.min(5,sample)
   const recent10N=Math.min(10,sample)
   const h2hN=Math.max(0,Number(row.h2hMatches??0))
@@ -1563,13 +1564,13 @@ function marketEvidence(row:Selection){
   const bits:string[]=[]
   if(Number.isFinite(recent5)&&recent5N>0)bits.push("L5 "+Math.max(0,Math.min(recent5N,Math.round(recent5*recent5N)))+"/"+recent5N)
   if(Number.isFinite(recent10)&&recent10N>0)bits.push("L10 "+Math.max(0,Math.min(recent10N,Math.round(recent10*recent10N)))+"/"+recent10N)
-  if(Number.isFinite(season)&&sample>0)bits.push("Season "+Math.max(0,Math.min(sample,Math.round(season*sample)))+"/"+sample)
+  if(Number.isFinite(season)&&seasonN>0)bits.push("Season "+Math.max(0,Math.min(seasonN,Math.round(season*seasonN)))+"/"+seasonN)
   if(Number.isFinite(h2h)&&h2hN>0)bits.push("H2H "+Math.max(0,Math.min(h2hN,Math.round(h2h*h2hN)))+"/"+h2hN)
   return bits.length?bits.join(" · "):null
 }
 function WhySelection({row}:{row:Selection}){
   const price=displayedBet365Odd(row)
-  const sample=Math.max(0,Number(row.sampleMatches??0)),h2hN=Math.max(0,Number(row.h2hMatches??0))
+  const sample=Math.max(0,Number(row.sampleMatches??0)),seasonN=Math.max(0,Number(row.seasonMatches??0)),h2hN=Math.max(0,Number(row.h2hMatches??0))
   const stat=(label:string,value:string)=><div className="rounded-lg bg-white/[0.045] px-2 py-1.5"><p className="text-[0.38rem] font-black uppercase text-white/25">{label}</p><p className="mt-0.5 font-mono text-[0.5rem] font-black text-white/65">{value}</p></div>
   return <details className="mt-2 rounded-xl border border-white/7 bg-black/15">
     <summary className="cursor-pointer list-none px-2.5 py-2 text-[0.46rem] font-black text-cyan-100/70">Why this selection?</summary>
@@ -1577,7 +1578,7 @@ function WhySelection({row}:{row:Selection}){
       <div className="grid grid-cols-3 gap-1.5">
         {stat("Last 5",row.recent5HitRate!=null?percent(row.recent5HitRate):"No sample")}
         {stat("Last 10",row.recent10HitRate!=null?percent(row.recent10HitRate):"No sample")}
-        {stat("Season",sample?percent(row.seasonHitRate):"No sample")}
+        {stat("Season",seasonN?percent(row.seasonHitRate)+" · "+seasonN+" games":"No sample")}
         {stat("Season /90",row.seasonPer90!=null?Number(row.seasonPer90).toFixed(2):"—")}
         {stat("H2H",h2hN&&row.h2hHitRate!=null?percent(row.h2hHitRate)+" · "+h2hN+" games":"No sample")}
         {stat("H2H similarity",row.h2hSimilarity!=null?percent(row.h2hSimilarity):"—")}
