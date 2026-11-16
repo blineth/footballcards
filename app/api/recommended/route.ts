@@ -15,6 +15,16 @@ import { getOfficialLineup } from "@/lib/official-lineup"
 export const dynamic="force-dynamic"
 export const revalidate=120
 
+async function withDeadline<T>(promise:Promise<T>,ms:number,label:string):Promise<T>{
+  let timer:ReturnType<typeof setTimeout>|undefined
+  try{
+    return await Promise.race([
+      promise,
+      new Promise<T>((_,reject)=>{timer=setTimeout(()=>reject(new Error(label+" timed out after "+ms+"ms")),ms)}),
+    ])
+  }finally{if(timer)clearTimeout(timer)}
+}
+
 type Competition="Premier League"|"Championship"|"League One"|"League Two"|"International"
 type Fixture={
   id:string;competition:Competition;tournament?:string;kickoff:string;status?:string;
@@ -144,7 +154,7 @@ async function livePlayerStatsForFixture(f:Fixture){
     const q=new URLSearchParams({
       date:fixtureDate(f),home:f.home.name,away:f.away.name,competition:f.competition,
     })
-    const response=await livePlayerStatsGET(new Request("http://local/api/live-player-stats?"+q.toString()))
+    const response=await withDeadline(livePlayerStatsGET(new Request("http://local/api/live-player-stats?"+q.toString())),6500,"live player stats")
     if(!response.ok)return {source:null,status:null,elapsed:null,score:null,referee:null as RefereeLiveContext|null,players:new Map<string,LivePlayerStat>()}
     const data=await response.json()
     const rows:Array<any>=Array.isArray(data?.players)?data.players:[]
@@ -508,7 +518,7 @@ async function scorecardFor(f:Fixture,refresh:boolean){
   try{
     const q=new URLSearchParams({date:fixtureDate(f),home:f.home.name,away:f.away.name,competition:f.competition})
     if(refresh)q.set("refresh",String(Date.now()))
-    const res=await scorecardGET(new Request("http://local/api/fixture-scorecard?"+q.toString()))
+    const res=await withDeadline(scorecardGET(new Request("http://local/api/fixture-scorecard?"+q.toString())),8000,"fixture scorecard")
     return res.ok?await res.json() as Scorecard:null
   }catch{return null}
 }
@@ -1116,7 +1126,7 @@ async function liveBet365ForFixture(f:Fixture){
     const q=new URLSearchParams({
       date:fixtureDate(f),home:f.home.name,away:f.away.name,competition:f.competition,live:"1",
     })
-    const res=await betBuilderOddsGET(new Request("http://local/api/bet-builder-odds?"+q.toString()))
+    const res=await withDeadline(betBuilderOddsGET(new Request("http://local/api/bet-builder-odds?"+q.toString())),5500,"live Bet365")
     return res.ok?await res.json():null
   }catch{return null}
 }
@@ -1200,9 +1210,9 @@ function calibrateSnapshot(market:"foul1"|"card",raw:number){
 }
 async function fallbackScorecard(f:Fixture):Promise<Scorecard|null>{
   try{
-    return await buildSnapshotScorecard({
+    return await withDeadline(buildSnapshotScorecard({
       date:fixtureDate(f),home:f.home.name,away:f.away.name,competition:f.competition,
-    }) as Scorecard
+    }) as Promise<Scorecard>,6500,"snapshot scorecard")
   }catch{return null}
 }
 
@@ -1393,8 +1403,17 @@ export async function GET(request:Request){
       liveMatches=await Promise.all(liveFixtures.map(async f=>{
         const model=byId.get(String(f.id))??byTeams.get(normName(f.home.name)+"|"+normName(f.away.name))
         const elapsed=Math.max(0,Math.min(96,Number(model?.elapsed??f.elapsed??0)))
-        const [liveStatData,primaryScorecard]=await Promise.all([livePlayerStatsForFixture(f),scorecardFor(f,refresh)])
-        let scorecard=primaryScorecard
+        const liveStatData=await livePlayerStatsForFixture(f)
+        const activeNames=[...liveStatData.players.values()].filter(liveStatActive).map(p=>p.player)
+        let scorecard:Scorecard|null=null
+        if(activeNames.length>=8){
+          try{
+            scorecard=await withDeadline(buildSnapshotScorecard({
+              date:fixtureDate(f),home:f.home.name,away:f.away.name,competition:f.competition,
+              confirmedStarterNames:activeNames,
+            }) as Promise<Scorecard>,6500,"live snapshot scorecard")
+          }catch{}
+        }
         if(!scorecard?.ok)scorecard=await fallbackScorecard(f)
         const livePlayerProps=buildLivePlayerProps(scorecard,elapsed,liveStatData.players,liveStatData.referee)
         if(model)return {...model,homeCrest:f.home.crest??model.homeCrest??null,awayCrest:f.away.crest??model.awayCrest??null,livePlayerProps,livePlayerStatsSource:liveStatData.source}
@@ -1411,8 +1430,17 @@ export async function GET(request:Request){
       }))
     }catch{
       liveMatches=await Promise.all(liveFixtures.map(async f=>{
-        const [liveStatData,primaryScorecard]=await Promise.all([livePlayerStatsForFixture(f),scorecardFor(f,refresh)])
-        let scorecard=primaryScorecard
+        const liveStatData=await livePlayerStatsForFixture(f)
+        const activeNames=[...liveStatData.players.values()].filter(liveStatActive).map(p=>p.player)
+        let scorecard:Scorecard|null=null
+        if(activeNames.length>=8){
+          try{
+            scorecard=await withDeadline(buildSnapshotScorecard({
+              date:fixtureDate(f),home:f.home.name,away:f.away.name,competition:f.competition,
+              confirmedStarterNames:activeNames,
+            }) as Promise<Scorecard>,6500,"live snapshot scorecard")
+          }catch{}
+        }
         if(!scorecard?.ok)scorecard=await fallbackScorecard(f)
         const elapsed=Math.max(0,Math.min(96,Number(f.elapsed??0)))
         return {
