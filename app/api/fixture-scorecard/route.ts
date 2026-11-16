@@ -83,10 +83,13 @@ type ScoreMarket = {
   expectedValue: number | null
   sampleMatches: number
   recent5HitRate: number
+  recent10HitRate: number
   seasonHitRate: number
+  seasonPer90: number | null
   h2hHitRate: number | null
   h2hMatches: number
   h2hLineupOverlap: number | null
+  h2hSimilarity: number | null
   sameMatchupMeetings: number
   recommendationScore?: number
   reasons: string[]
@@ -111,6 +114,7 @@ type ScorePlayer = {
     shots:number
     shotsOnTarget:number
     averageLineupOverlap:number|null
+    averageSimilarity:number|null
     sameMatchupMeetings:number
     sameMatchupCards:number
     sameMatchupFouls:number
@@ -171,8 +175,12 @@ type SlipLeg = {
   priceSource?: "exact" | "estimated" | null
   bookmakerProbability?: number | null
   recent5HitRate?: number | null
+  recent10HitRate?: number | null
   seasonHitRate?: number | null
+  seasonPer90?: number | null
   h2hHitRate?: number | null
+  h2hLineupOverlap?: number | null
+  h2hSimilarity?: number | null
   h2hMatches?: number
   sampleMatches?: number
   expectedMinutes?: number | null
@@ -285,6 +293,28 @@ function playerNameMatch(a:string|null|undefined,b:string|null|undefined){
   const x=norm(a),y=norm(b)
   return Boolean(x&&y&&(x===y||x.includes(y)||y.includes(x)))
 }
+function seasonKey(date:string){
+  const d=new Date(date+"T12:00:00Z")
+  if(!Number.isFinite(d.getTime()))return ""
+  const y=d.getUTCFullYear(),m=d.getUTCMonth()
+  return m>=7?`${y}/${String(y+1).slice(-2)}`:`${y-1}/${String(y).slice(-2)}`
+}
+function roleSimilarity(a:string|null|undefined,b:string|null|undefined){
+  const ra=attackingRole(a),rb=attackingRole(b)
+  if(ra==="other"||rb==="other")return .55
+  if(ra===rb)return 1
+  const adjacent=new Set(["def|dm","dm|def","dm|mid","mid|dm","mid|attmid","attmid|mid","attmid|att","att|attmid"])
+  return adjacent.has(ra+"|"+rb)?.72:.35
+}
+function competitiveSimilarity(currentCompetition:string,rowCompetition:string|null|undefined){
+  const a=norm(currentCompetition),b=norm(rowCompetition)
+  if(!a||!b)return .65
+  if(a===b||a.includes(b)||b.includes(a))return 1
+  const friendly=(v:string)=>v.includes("friendly")
+  if(friendly(a)!==friendly(b))return .45
+  const international=(v:string)=>v.includes("international")||v.includes("nations")||v.includes("world")||v.includes("euro")
+  return international(a)&&international(b)?.72:.58
+}
 function weightedH2HContext(input:{
   candidate:any
   opponent:string
@@ -293,11 +323,15 @@ function weightedH2HContext(input:{
   currentCandidates:any[]
   matchupCandidate:any|null
   targetDate:string
+  competition?:string
 }){
   const currentOpponents=input.currentCandidates.filter(c=>teamMatch(c.team,input.opponent))
-  let weightedOverlap=0,totalWeight=0
+  let weightedOverlap=0,weightedSimilarity=0,totalWeight=0
   let sameMatchupMeetings=0,sameMatchupCards=0,sameMatchupFouls=0
-  const weightedRows:Array<{row:MatchRow;weight:number;overlap:number;sameMatchup:boolean}>=[]
+  const weightedRows:Array<{row:MatchRow;weight:number;overlap:number;sameMatchup:boolean;similarity:number}>=[]
+  const targetMs=new Date(input.targetDate+"T12:00:00Z").getTime()
+  const targetSeason=seasonKey(input.targetDate)
+  const targetYear=input.targetDate.slice(0,4)
   for(const row of input.h2hRows){
     const d=rowDate(row)
     const pastCurrentOpponents=input.allHistory.filter(r=>
@@ -315,13 +349,22 @@ function weightedH2HContext(input:{
       if(row.yellowCard===true)sameMatchupCards++
       sameMatchupFouls+=Number(row.foulsCommitted??0)
     }
-    const targetMs=new Date(input.targetDate+"T12:00:00Z").getTime()
     const rowMs=new Date(d+"T12:00:00Z").getTime()
     const days=Number.isFinite(targetMs)&&Number.isFinite(rowMs)?Math.max(0,(targetMs-rowMs)/86400000):9999
-    const recency=days<=180?.30:days<=365?.18:days<=730?.08:0
-    const weight=1+overlap*1.15+(sameMatchup?.65:0)+recency
-    weightedRows.push({row,weight,overlap,sameMatchup})
+    const recency=days<=120?1:days<=240?.85:days<=365?.68:days<=730?.38:.16
+    const sameSeason=seasonKey(d)===targetSeason?1:0
+    const sameYear=d.slice(0,4)===targetYear?1:0
+    const position=roleSimilarity(input.candidate?.position,row.position)
+    const competitive=competitiveSimilarity(String(input.competition??""),row.competition)
+    // Similarity is deliberately bounded. A single recent meeting with nearly
+    // identical players matters, but never becomes a certainty by itself.
+    const similarity=Math.max(.12,Math.min(1,
+      recency*.27+overlap*.31+(sameMatchup?.15:0)+position*.11+competitive*.08+sameSeason*.06+sameYear*.02
+    ))
+    const weight=.55+similarity*2.15
+    weightedRows.push({row,weight,overlap,sameMatchup,similarity})
     weightedOverlap+=overlap*weight
+    weightedSimilarity+=similarity*weight
     totalWeight+=weight
   }
   const weightedRate=(market:MarketKey)=>{
@@ -335,6 +378,7 @@ function weightedH2HContext(input:{
   return {
     weightedRate,
     averageLineupOverlap:totalWeight>0?weightedOverlap/totalWeight:null,
+    averageSimilarity:totalWeight>0?weightedSimilarity/totalWeight:null,
     sameMatchupMeetings,
     sameMatchupCards,
     sameMatchupFouls,
@@ -950,8 +994,12 @@ function marketLeg(player: ScorePlayer, market: MarketKey): SlipLeg {
     priceSource: m.bookmakerOdds!=null && m.bookmakerName==="Bet365" ? "exact" : null,
     bookmakerProbability:m.bookmakerNoVigProbability??m.impliedProbability,
     recent5HitRate:Number.isFinite(Number(m.recent5HitRate))?Number(m.recent5HitRate):null,
+    recent10HitRate:Number.isFinite(Number(m.recent10HitRate))?Number(m.recent10HitRate):null,
     seasonHitRate:Number.isFinite(Number(m.seasonHitRate))?Number(m.seasonHitRate):null,
+    seasonPer90:Number.isFinite(Number(m.seasonPer90))?Number(m.seasonPer90):null,
     h2hHitRate:Number.isFinite(Number(m.h2hHitRate))?Number(m.h2hHitRate):null,
+    h2hLineupOverlap:Number.isFinite(Number(m.h2hLineupOverlap))?Number(m.h2hLineupOverlap):null,
+    h2hSimilarity:Number.isFinite(Number(m.h2hSimilarity))?Number(m.h2hSimilarity):null,
     h2hMatches:Number(m.h2hMatches??0),
     sampleMatches:Number(m.sampleMatches??player.sampleMatches??0),
     expectedMinutes:Number.isFinite(Number(player.expectedMinutes))?Number(player.expectedMinutes):null,
@@ -1672,8 +1720,8 @@ function compactBuilderScorecard(payload:any){
       out[key]={
         key:m.key,label:m.label,probability:m.probability,fairOdds:m.fairOdds,confidence:m.confidence,
         bookmakerOdds:m.bookmakerOdds,bookmakerName:m.bookmakerName,edge:m.edge,expectedValue:m.expectedValue,
-        recent5HitRate:m.recent5HitRate,seasonHitRate:m.seasonHitRate,h2hHitRate:m.h2hHitRate,
-        h2hMatches:m.h2hMatches,sampleMatches:m.sampleMatches,
+        recent5HitRate:m.recent5HitRate,recent10HitRate:m.recent10HitRate,seasonHitRate:m.seasonHitRate,seasonPer90:m.seasonPer90,
+        h2hHitRate:m.h2hHitRate,h2hMatches:m.h2hMatches,h2hLineupOverlap:m.h2hLineupOverlap,h2hSimilarity:m.h2hSimilarity,sampleMatches:m.sampleMatches,
         recommendationScore:m.recommendationScore,reasons:Array.isArray(m.reasons)?m.reasons.slice(0,2):[],
       }
     }
@@ -1940,7 +1988,9 @@ export async function GET(request: Request) {
           teamMatch(row.opponent,opponent)
         )
       : rows.filter(row => teamMatch(row.opponent, opponent))
-    const recent5Rows = [...rows].sort((a, b) => String(a.matchDate).localeCompare(String(b.matchDate))).slice(-5)
+    const orderedRows = [...rows].sort((a, b) => String(a.matchDate).localeCompare(String(b.matchDate)))
+    const recent5Rows = orderedRows.slice(-5)
+    const recent10Rows = orderedRows.slice(-10)
     const sampleMinutes = rows.reduce((sum, row) => sum + Number(row.minutes ?? 0), 0)
     const intlStarts=internationalRows.filter(row=>row.starter===true).length
     const intlMinutes=internationalRows.reduce((sum,row)=>sum+Number(row.minutes??0),0)
@@ -1965,6 +2015,7 @@ export async function GET(request: Request) {
       currentCandidates:candidates,
       matchupCandidate:matchupCandidate??null,
       targetDate:date,
+      competition,
     })
 
     const rolePrior=cardRolePrior(candidate.position)
@@ -2001,10 +2052,12 @@ export async function GET(request: Request) {
         ? cardEmpiricalProbability(rows,rolePrior)
         : empiricalProbability(rows, market, marketPrior)
       const recent5HitRate = hitRate(recent5Rows, market)
+      const recent10HitRate = hitRate(recent10Rows, market)
       const seasonHitRate = hitRate(rows, market)
       const h2hHitRate = h2hRows.length ? hitRate(h2hRows, market) : null
       const weightedH2HRate=h2hContext.weightedRate(market)
       const overlap=h2hContext.averageLineupOverlap??0
+      const similarity=h2hContext.averageSimilarity??0
       const sampleReliability=h2hRows.length/(h2hRows.length+3)
       const sameMatchupBoost=h2hContext.sameMatchupMeetings>0?0.06:0
       // Repeat H2H patterns matter more than a generic one-off meeting. A 2/2,
@@ -2016,7 +2069,7 @@ export async function GET(request: Request) {
           ? (market==="card"||market.startsWith("foul")?0.07:0.04)
           : 0
       const maxWeight=market==="card"||market.startsWith("foul")?0.48:market.startsWith("shot")||market.startsWith("sot")?0.34:0.28
-      const h2hWeight=Math.min(maxWeight,(0.11+overlap*0.18+sameMatchupBoost+repeatPatternBoost)*sampleReliability)
+      const h2hWeight=Math.min(maxWeight,(0.07+overlap*0.12+similarity*0.24+sameMatchupBoost+repeatPatternBoost)*sampleReliability)
       probability = blend(probability, weightedH2HRate??h2hHitRate, h2hWeight)
 
       const threshold = thresholdForMarket(market)
@@ -2199,10 +2252,13 @@ export async function GET(request: Request) {
         expectedValue: expectedValue == null ? null : Math.round(expectedValue * 1000) / 1000,
         sampleMatches: rows.length,
         recent5HitRate: Math.round(recent5HitRate * 1000) / 1000,
+        recent10HitRate: Math.round(recent10HitRate * 1000) / 1000,
         seasonHitRate: Math.round(seasonHitRate * 1000) / 1000,
+        seasonPer90: per90>0?Math.round(per90*100)/100:null,
         h2hHitRate: h2hHitRate == null ? null : Math.round(h2hHitRate * 1000) / 1000,
         h2hMatches:h2hRows.length,
         h2hLineupOverlap:h2hContext.averageLineupOverlap==null?null:Math.round(h2hContext.averageLineupOverlap*1000)/1000,
+        h2hSimilarity:h2hContext.averageSimilarity==null?null:Math.round(h2hContext.averageSimilarity*1000)/1000,
         sameMatchupMeetings:h2hContext.sameMatchupMeetings,
         reasons: marketReasons({
           market,
