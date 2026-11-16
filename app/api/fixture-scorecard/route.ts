@@ -1305,13 +1305,19 @@ function buildRiskBuilders(players:ScorePlayer[],scope:"all"|"discipline"="all")
   const configs=scope==="discipline"
     ?[
       {id:"discipline-safe-3-1",title:"Fouls & Cards 3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4,minSafety:.42,maxLegs:12},
+      {id:"discipline-safe-5-1",title:"Fouls & Cards 5/1",risk:"Safe" as const,targetFractional:"5/1",targetDecimal:6,minSafety:.39,maxLegs:12},
       {id:"discipline-balanced-10-1",title:"Fouls & Cards 10/1",risk:"Balanced" as const,targetFractional:"10/1",targetDecimal:11,minSafety:.30,maxLegs:12},
-      {id:"discipline-high-20-1",title:"Fouls & Cards 20/1+",risk:"High Risk" as const,targetFractional:"20/1+",targetDecimal:21,minSafety:.20,maxLegs:12},
+      {id:"discipline-balanced-15-1",title:"Fouls & Cards 15/1",risk:"Balanced" as const,targetFractional:"15/1",targetDecimal:16,minSafety:.26,maxLegs:12},
+      {id:"discipline-high-20-1",title:"Fouls & Cards 20/1",risk:"High Risk" as const,targetFractional:"20/1",targetDecimal:21,minSafety:.20,maxLegs:12},
+      {id:"discipline-high-25-1",title:"Fouls & Cards 25/1",risk:"High Risk" as const,targetFractional:"25/1",targetDecimal:26,minSafety:.18,maxLegs:12},
     ]
     :[
       {id:"safe-3-1",title:"Safe 3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4,minSafety:.50,maxLegs:12},
+      {id:"safe-5-1",title:"Safe 5/1",risk:"Safe" as const,targetFractional:"5/1",targetDecimal:6,minSafety:.47,maxLegs:12},
       {id:"balanced-10-1",title:"Balanced 10/1",risk:"Balanced" as const,targetFractional:"10/1",targetDecimal:11,minSafety:.38,maxLegs:12},
-      {id:"high-20-1",title:"High Risk 20/1+",risk:"High Risk" as const,targetFractional:"20/1+",targetDecimal:21,minSafety:.28,maxLegs:12},
+      {id:"balanced-15-1",title:"Balanced 15/1",risk:"Balanced" as const,targetFractional:"15/1",targetDecimal:16,minSafety:.34,maxLegs:12},
+      {id:"high-20-1",title:"Risky 20/1",risk:"High Risk" as const,targetFractional:"20/1",targetDecimal:21,minSafety:.28,maxLegs:12},
+      {id:"high-25-1",title:"Risky 25/1",risk:"High Risk" as const,targetFractional:"25/1",targetDecimal:26,minSafety:.25,maxLegs:12},
     ]
   const baseMarkets:MarketKey[]=["goal1","assist1","shot1","sot1","foul1","fouled1","card"]
   const allPricedMarkets:MarketKey[]=scope==="discipline"
@@ -1407,6 +1413,24 @@ function buildRiskBuilders(players:ScorePlayer[],scope:"all"|"discipline"="all")
     consensus*=evidenceReliability(leg)
     return clamp(consensus,.01,.99)
   }
+  const correlationPenalty=(legs:SlipLeg[])=>{
+    let penalty=1
+    for(let i=0;i<legs.length;i++){
+      for(let j=i+1;j<legs.length;j++){
+        const a=legs[i],b=legs[j]
+        const af=family(a.market),bf=family(b.market)
+        const sameTeam=norm(a.team)===norm(b.team)
+        // These are conservative uncertainty discounts, not claims of an exact
+        // correlation coefficient. Same-team attacking events and related foul
+        // pressure should not be multiplied as fully independent.
+        if(sameTeam&&(af==="shot"||af==="sot")&&(bf==="shot"||bf==="sot"))penalty*=.985
+        else if(sameTeam&&af===bf)penalty*=af==="foul"||af==="fouled"?.993:.988
+        else if(!sameTeam&&((af==="foul"&&bf==="fouled")||(af==="fouled"&&bf==="foul")))penalty*=.992
+        else if((af==="goal"&&bf==="assist")||(af==="assist"&&bf==="goal"))penalty*=.97
+      }
+    }
+    return Math.max(.78,penalty)
+  }
   const conservativeJoint=(legs:SlipLeg[],_raw:number)=>{
     if(!legs.length)return 0
     const counts:Record<string,number>={}
@@ -1416,16 +1440,13 @@ function buildRiskBuilders(players:ScorePlayer[],scope:"all"|"discipline"="all")
       counts[f]=(counts[f]??0)+1
       conservative*=safetyLegProbability(leg)*confidenceReliability(leg)*marketReliability(leg)
     }
-    // Raw probability multiplication already penalises extra legs heavily.
-    // Only a light concentration penalty is applied so five genuinely strong
-    // foul/shot legs can beat one speculative scorer/defender shot.
     let concentrationPenalty=1
     for(const [f,count] of Object.entries(counts)){
       if(count<=1)continue
-      const perExtra=f==="foul"||f==="fouled"?.997:f==="shot"?.995:.985
+      const perExtra=(f==="foul"||f==="fouled")?.997:f==="shot"?.995:.985
       concentrationPenalty*=Math.pow(perExtra,count-1)
     }
-    return Math.max(0,Math.min(.99,conservative*concentrationPenalty))
+    return Math.max(0,Math.min(.99,conservative*concentrationPenalty*correlationPenalty(legs)))
   }
 
   // Choose the action family where each player stands out most versus the other
@@ -1581,7 +1602,7 @@ function buildRiskBuilders(players:ScorePlayer[],scope:"all"|"discipline"="all")
       note:scope==="discipline"
         ?"No verified Bet365 combination of cards, fouls committed or fouls drawn reaches this target at the required safety level yet."
         :config.risk==="Safe"
-          ?"No combination of verified Bet365 legs reaches the 3/1 target at the required consensus-safety level."
+          ?`No combination of verified Bet365 legs reaches the ${config.targetFractional} target at the required consensus-safety level.`
           :"No combination of verified Bet365 player prices reaches this target with the required model strength yet."
     }
     const avg=best.legs.reduce((sum,leg)=>sum+leg.probability,0)/best.legs.length
