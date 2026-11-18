@@ -2036,7 +2036,7 @@ Lukasz Lakomy,Oud-Heverlee Leuven,Belgian Pro League,2026/27,8,3,235,0,0,0,0,2,3
 Noe Dussenne,Oud-Heverlee Leuven,Belgian Pro League,2026/27,9,8,691,0,0,0,0,11,5,8,1,1.4327,0.0,1.042,0.1302,Center Defender,194352
 Robin Mirisola,Oud-Heverlee Leuven,Belgian Pro League,2026/27,7,6,528,2,1,2,0,11,10,22,4,1.875,0.3409,3.75,0.6818,Forward,401002
 Roggerio Nyakossi,Oud-Heverlee Leuven,Belgian Pro League,2026/27,9,9,787,0,0,2,0,9,6,6,0,1.0292,0.2287,0.6861,0.0,Center Left Defender,323045
-Shinji Yamada,Oud-Heverlee Leuven,Belgian Pro League,2026/27,6,2,194,0,0,0,0,3,4,4,1,1.3918,0.0,1.8557,0.4639,Substitute,291782
+Shin Yamada,Oud-Heverlee Leuven,Belgian Pro League,2026/27,6,2,194,0,0,0,0,3,4,4,1,1.3918,0.0,1.8557,0.4639,Substitute,291782
 Siebe Schrijvers,Oud-Heverlee Leuven,Belgian Pro League,2026/27,10,10,873,0,2,3,0,10,17,18,3,1.0309,0.3093,1.8557,0.3093,Center Left Midfielder,180547
 Takuya Ogiwara,Oud-Heverlee Leuven,Belgian Pro League,2026/27,8,3,281,0,0,1,0,6,4,5,2,1.9217,0.3203,1.6014,0.6406,Substitute,271374
 Thibault Vlietinck,Oud-Heverlee Leuven,Belgian Pro League,2026/27,3,0,48,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Substitute,225526
@@ -4388,7 +4388,7 @@ Alexandre Rodríguez,Heracles Almelo,Eerste Divisie,2026/27,14,14,1110,4,1,3,0,2
 Chafik Abbas,Heracles Almelo,Eerste Divisie,2026/27,15,15,1119,2,6,1,0,8,13,52,23,0.6434,0.0804,4.1823,1.8499,Attacking Midfielder Right,268963
 Damon Mirani,Heracles Almelo,Eerste Divisie,2026/27,15,15,1319,2,0,0,0,11,7,17,6,0.7506,0.0,1.16,0.4094,Center Right Defender,193763
 Daniel Van Kaam,Heracles Almelo,Eerste Divisie,2026/27,2,0,18,0,0,0,0,0,1,0,0,0.0,0.0,0.0,0.0,Substitute,281266
-David Tomić,Heracles Almelo,Eerste Divisie,2026/27,12,2,310,0,1,0,0,9,4,11,5,2.6129,0.0,3.1935,1.4516,Substitute,258975
+David Tomic,Heracles Almelo,Eerste Divisie,2026/27,12,2,310,0,1,0,0,9,4,11,5,2.6129,0.0,3.1935,1.4516,Substitute,258975
 David Vicente,Heracles Almelo,Eerste Divisie,2026/27,13,13,1042,1,1,1,1,11,18,4,2,0.9501,0.1727,0.3455,0.1727,Right Back,268603
 Diego Van Oorschot,Heracles Almelo,Eerste Divisie,2026/27,1,0,3,0,0,0,0,1,0,0,0,30.0,0.0,0.0,0.0,Substitute,361014
 Djevencio van der Kust,Heracles Almelo,Eerste Divisie,2026/27,14,13,1215,1,3,1,0,26,13,17,4,1.9259,0.0741,1.2593,0.2963,Right Midfielder,283835
@@ -4568,7 +4568,7 @@ Brahim Ghalidi,NAC Breda,Eerste Divisie,2026/27,8,0,262,0,0,1,0,0,12,5,1,0.0,0.3
 Charles-Andreas Brym,NAC Breda,Eerste Divisie,2026/27,12,12,797,9,0,1,0,14,23,24,14,1.5809,0.1129,2.7102,1.5809,Attacking Midfielder Left,291194
 Cherrion Valerius,NAC Breda,Eerste Divisie,2026/27,4,4,268,0,0,0,0,2,6,4,2,0.6716,0.0,1.3433,0.6716,Right Back,379184
 Elijah Ikpia,NAC Breda,Eerste Divisie,2026/27,1,0,16,0,0,0,0,3,0,2,1,16.875,0.0,11.25,5.625,,3121192
-Fredrik Jensen,NAC Breda,Eerste Divisie,2026/27,13,8,764,0,0,2,0,6,11,7,2,0.7068,0.2356,0.8246,0.2356,Substitute,221227
+Fredrik Oldrup Jensen,NAC Breda,Eerste Divisie,2026/27,13,8,764,0,0,2,0,6,11,7,2,0.7068,0.2356,0.8246,0.2356,Substitute,221227
 Gabriel Misehouy,NAC Breda,Eerste Divisie,2026/27,6,2,227,0,3,0,0,5,7,10,5,1.9824,0.0,3.9648,1.9824,Substitute,335208
 Imran Nazih,NAC Breda,Eerste Divisie,2026/27,9,1,195,1,0,1,0,2,3,3,2,0.9231,0.4615,1.3846,0.9231,Substitute,331056
 Jan Van den Bergh,NAC Breda,Eerste Divisie,2026/27,15,15,1310,0,0,4,0,17,12,17,3,1.1679,0.2748,1.1679,0.2061,Left Back,272350
@@ -4732,7 +4732,7 @@ Mylian Jimenez,ADO Den Haag,Eredivisie,2026/27,4,3,218,0,0,1,0,7,1,3,0,2.8899,0.
 Nigel Thomas,ADO Den Haag,Eredivisie,2026/27,8,6,416,4,1,1,0,8,10,12,5,1.7308,0.2163,2.5962,1.0817,Substitute,284787
 Othniël Raterink,ADO Den Haag,Eredivisie,2026/27,9,4,538,0,0,1,0,7,2,4,0,1.171,0.1673,0.6691,0.0,Substitute,384126
 Pascal Mulder,ADO Den Haag,Eredivisie,2026/27,12,12,990,0,0,3,0,22,7,8,2,2.0,0.2727,0.7273,0.1818,Center Right Defender,330170
-Sekou Sylla,ADO Den Haag,Eredivisie,2026/27,11,7,531,1,0,3,0,9,14,3,1,1.5254,0.5085,0.5085,0.1695,Left Back,281140
+Sékou Sylla,ADO Den Haag,Eredivisie,2026/27,11,7,531,1,0,3,0,9,14,3,1,1.5254,0.5085,0.5085,0.1695,Left Back,281140
 Yannick Eduardo,ADO Den Haag,Eredivisie,2026/27,11,11,826,3,2,2,0,19,11,15,5,2.0702,0.2179,1.6344,0.5448,Center Left Forward,357092
 Ayoub Oufkir,AZ Alkmaar,Eredivisie,2026/27,11,3,342,3,0,4,0,12,9,13,7,3.1579,1.0526,3.4211,1.8421,Substitute,389354
 Bendegúz Kovács,AZ Alkmaar,Eredivisie,2026/27,5,0,53,0,0,0,0,1,0,3,1,1.6981,0.0,5.0943,1.6981,Substitute,408528
@@ -5191,7 +5191,7 @@ Bruma,Aris,Greek Super League,2026/27,4,3,217,1,1,0,0,3,3,3,1,1.2442,0.0,1.2442,
 Christian Kouamé,Aris,Greek Super League,2026/27,9,5,553,2,0,0,0,8,12,15,4,1.302,0.0,2.4412,0.651,Substitute,241415
 Diallo Sanoussi,Aris,Greek Super League,2026/27,1,0,1,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Substitute,396736
 Fabiano,Aris,Greek Super League,2026/27,9,9,810,4,0,2,0,11,1,18,8,1.2222,0.2222,2.0,0.8889,Center Right Defender,131983
-Fredrik Jensen,Aris,Greek Super League,2026/27,10,6,604,0,0,0,0,9,6,1,1,1.3411,0.0,0.149,0.149,Center Left Defender,221227
+Fredrik Oldrup Jensen,Aris,Greek Super League,2026/27,10,6,604,0,0,0,0,9,6,1,1,1.3411,0.0,0.149,0.149,Center Left Defender,221227
 Giannis Gianniotas,Aris,Greek Super League,2026/27,7,5,427,1,0,1,0,5,14,11,3,1.0539,0.2108,2.3185,0.6323,Attacking Midfielder Left,178726
 Jeremy Petris,Aris,Greek Super League,2026/27,8,6,554,1,1,2,0,10,10,3,1,1.6245,0.3249,0.4874,0.1625,Right Back,291712
 Konstantinos Charoupas,Aris,Greek Super League,2026/27,1,0,16,0,0,0,0,1,0,0,0,5.625,0.0,0.0,0.0,Substitute,403412
