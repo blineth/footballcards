@@ -2,7 +2,7 @@
   "source": "ESPN public match-summary player statistics",
   "season": "2026/27",
   "from": "2026-07-01",
-  "to": "2026-11-18",
+  "to": "2026-11-19",
   "competitions": [
     {
       "competition": "Premier League",
@@ -126,7 +126,7 @@
     },
     {
       "competition": "Brazil Serie A",
-      "completed_matches": 164,
+      "completed_matches": 170,
       "failures": []
     },
     {
@@ -165,7 +165,7 @@
       "failures": [
         {
           "stage": "scoreboard",
-          "error": "pol.1 scoreboard months failed: [{'month': '202607', 'error': 'Failed https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202607&limit=500: 400 Client Error: Bad Request for url: https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202607&limit=500'}, {'month': '202610', 'error': 'Failed https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202610&limit=500: 400 Client Error: Bad Request for url: https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202610&limit=500'}, {'month': '202609', 'error': 'Failed https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202609&limit=500: 400 Client Error: Bad Request for url: https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202609&limit=500'}, {'month': '202611', 'error': 'Failed https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202611&limit=500: 400 Client Error: Bad Request for url: https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202611&limit=500'}, {'month': '202608', 'error': 'Failed https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202608&limit=500: 400 Client Error: Bad Request for url: https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202608&limit=500'}]"
+          "error": "pol.1 scoreboard months failed: [{'month': '202610', 'error': 'Failed https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202610&limit=500: 400 Client Error: Bad Request for url: https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202610&limit=500'}, {'month': '202609', 'error': 'Failed https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202609&limit=500: 400 Client Error: Bad Request for url: https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202609&limit=500'}, {'month': '202607', 'error': 'Failed https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202607&limit=500: 400 Client Error: Bad Request for url: https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202607&limit=500'}, {'month': '202611', 'error': 'Failed https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202611&limit=500: 400 Client Error: Bad Request for url: https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202611&limit=500'}, {'month': '202608', 'error': 'Failed https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202608&limit=500: 400 Client Error: Bad Request for url: https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202608&limit=500'}]"
         }
       ]
     },
@@ -176,20 +176,20 @@
     }
   ],
   "totals": {
-    "player_match_rows": 115592,
-    "player_baselines": 14488,
+    "player_match_rows": 115781,
+    "player_baselines": 14493,
     "league_two_players": 579,
-    "goals": 10552,
-    "assists": 7370,
-    "shots": 100946,
-    "shots_on_target": 33572,
-    "yellows": 13820,
-    "fouls_committed": 88429,
-    "fouls_drawn": 84655
+    "goals": 10564,
+    "assists": 7395,
+    "shots": 101102,
+    "shots_on_target": 33622,
+    "yellows": 13855,
+    "fouls_committed": 88589,
+    "fouls_drawn": 84804
   },
   "neon_sync": {
     "h2h": {
-      "rows": 115592,
+      "rows": 115781,
       "competitions": {
         "2. Bundesliga": {
           "rows": 3083,
@@ -212,7 +212,7 @@
           "chunks": 4
         },
         "Brazil Serie A": {
-          "rows": 5199,
+          "rows": 5388,
           "chunks": 7
         },
         "Bundesliga": {
@@ -314,7 +314,7 @@
       }
     },
     "player_baselines": {
-      "rows": 14488,
+      "rows": 14493,
       "competitions": {
         "2. Bundesliga": {
           "rows": 420,
@@ -337,7 +337,7 @@
           "chunks": 1
         },
         "Brazil Serie A": {
-          "rows": 595,
+          "rows": 600,
           "chunks": 1
         },
         "Bundesliga": {
