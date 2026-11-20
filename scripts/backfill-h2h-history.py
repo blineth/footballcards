@@ -48,6 +48,7 @@ FIELDS = [
     "player_name","team","opponent","match_date","competition","venue",
     "minutes","goals","assists","fouls_committed","fouls_drawn","shots",
     "shots_on_target","yellow_card","red_card","external_player_id",
+    "external_match_id","referee_name","starter",
 ]
 
 SESSION = requests.Session()
@@ -191,6 +192,10 @@ def parse_event(slug: str, competition: str, event: dict[str, Any]) -> list[dict
     played = event_date(event)
     minutes = participation_minutes(summary)
     rows: list[dict[str, Any]] = []
+    officials = (summary.get("gameInfo") or {}).get("officials") or (summary.get("header") or {}).get("competitions", [{}])[0].get("officials") or []
+    main_official = next((o for o in officials if "referee" in str(o.get("position", {}).get("displayName", "")).lower()), None) if isinstance(officials, list) else None
+    main_official = main_official or (officials[0] if isinstance(officials, list) and officials else {})
+    referee_name = str(main_official.get("fullName") or main_official.get("displayName") or main_official.get("name") or "").strip()
     for section in summary.get("rosters") or []:
         side = str(section.get("homeAway") or "")
         team = str((section.get("team") or {}).get("displayName") or (home if side == "home" else away))
@@ -213,6 +218,9 @@ def parse_event(slug: str, competition: str, event: dict[str, Any]) -> list[dict
             if mins is None:
                 mins = 90 if row.get("starter") is True else 1
             rows.append({
+                "external_match_id": eid,
+                "referee_name": referee_name,
+                "starter": row.get("starter") is True,
                 "player_name": name,
                 "team": team,
                 "opponent": opponent,
@@ -220,14 +228,14 @@ def parse_event(slug: str, competition: str, event: dict[str, Any]) -> list[dict
                 "competition": competition,
                 "venue": venue,
                 "minutes": int(mins),
-                "goals": int(stats.get("totalGoals", 0)),
-                "assists": int(stats.get("goalAssists", 0)),
-                "fouls_committed": int(stats.get("foulsCommitted", 0)),
-                "fouls_drawn": int(stats.get("foulsSuffered", 0)),
-                "shots": int(stats.get("totalShots", 0)),
-                "shots_on_target": int(stats.get("shotsOnTarget", 0)),
-                "yellow_card": 1 if stats.get("yellowCards", 0) > 0 else 0,
-                "red_card": 1 if stats.get("redCards", 0) > 0 else 0,
+                "goals": int(stats["totalGoals"]) if "totalGoals" in stats else "",
+                "assists": int(stats["goalAssists"]) if "goalAssists" in stats else "",
+                "fouls_committed": int(stats["foulsCommitted"]) if "foulsCommitted" in stats else "",
+                "fouls_drawn": int(stats["foulsSuffered"]) if "foulsSuffered" in stats else "",
+                "shots": int(stats["totalShots"]) if "totalShots" in stats else "",
+                "shots_on_target": int(stats["shotsOnTarget"]) if "shotsOnTarget" in stats else "",
+                "yellow_card": (1 if stats["yellowCards"] > 0 else 0) if "yellowCards" in stats else "",
+                "red_card": (1 if stats["redCards"] > 0 else 0) if "redCards" in stats else "",
                 "external_player_id": pid,
             })
     return rows
@@ -310,12 +318,13 @@ def main() -> int:
         "domesticScope": "2024/25 + 2025/26 + 2026/27 to date, Premier League/Championship/League One/League Two only",
         "internationalScope": "Excluded from this domestic-only backfill",
         "rows": len(rows),
-        "yellowCards": sum(int(r["yellow_card"]) for r in rows),
-        "goals": sum(int(r["goals"]) for r in rows),
-        "fouls": sum(int(r["fouls_committed"]) for r in rows),
-        "shots": sum(int(r["shots"]) for r in rows),
-        "shotsOnTarget": sum(int(r["shots_on_target"]) for r in rows),
+        "yellowCards": sum(int(r["yellow_card"] or 0) for r in rows),
+        "goals": sum(int(r["goals"] or 0) for r in rows),
+        "fouls": sum(int(r["fouls_committed"] or 0) for r in rows),
+        "shots": sum(int(r["shots"] or 0) for r in rows),
+        "shotsOnTarget": sum(int(r["shots_on_target"] or 0) for r in rows),
         "competitions": reports,
+        "missingPlayerStats": {field: sum(1 for r in rows if r.get(field, "") == "") for field in ("fouls_committed", "fouls_drawn", "shots", "shots_on_target", "yellow_card", "red_card")},
     }
     report["neonSync"] = sync(rows)
     (OUT / "quality-report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
