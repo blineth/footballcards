@@ -27,8 +27,13 @@ function refereeNameMatch(a: string | null | undefined, b: string | null | undef
 export async function hasAnyHistoricalData(): Promise<boolean> {
   if (!isDatabaseConfigured) return false
   await ensureResearchSchema()
-  const [row] = await db.select({ n: sql<number>`count(*)::int` }).from(playerBaselines)
-  return (row?.n ?? 0) > 0
+  // Historical match records are usable even when season baseline imports are incomplete.
+  // Check both sources without scanning entire tables.
+  const [baseline, h2h] = await Promise.all([
+    db.select({ n: sql<number>`count(*)::int` }).from(playerBaselines),
+    db.select({ n: sql<number>`count(*)::int` }).from(playerH2H),
+  ])
+  return (baseline[0]?.n ?? 0) > 0 || (h2h[0]?.n ?? 0) > 0
 }
 
 export async function getPlayerBaseline(playerName: string, team?: string) {
