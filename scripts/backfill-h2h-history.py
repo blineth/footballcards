@@ -21,7 +21,7 @@ OUT.mkdir(parents=True, exist_ok=True)
 CACHE.mkdir(parents=True, exist_ok=True)
 
 TODAY = date.today()
-DOMESTIC_START = date(2025, 7, 1)
+DOMESTIC_START = date(2024, 7, 1)
 INTERNATIONAL_START = date(2021, 6, 1)
 
 DOMESTIC = [
@@ -29,8 +29,6 @@ DOMESTIC = [
     ("eng.2", "Championship"),
     ("eng.3", "League One"),
     ("eng.4", "League Two"),
-    ("eng.fa", "FA Cup"),
-    ("eng.league_cup", "League Cup"),
 ]
 INTERNATIONAL = [
     ("uefa.euro", "UEFA European Championship"),
@@ -291,13 +289,6 @@ def main() -> int:
         all_rows.extend(rows)
         reports.append(report)
 
-    # Preload the full senior international tournament cycle for every nation.
-    # Competition labels are retained so the model can distinguish major tournaments,
-    # qualifiers, Nations League and friendlies while still treating them as national-team evidence.
-    for slug, label in INTERNATIONAL:
-        rows, report = collect_competition(slug, label, INTERNATIONAL_START, england_only=False)
-        all_rows.extend(rows)
-        reports.append(report)
 
     # Exact duplicate rows can occur when ESPN mirrors one cup match in more than one feed.
     unique: dict[tuple[str, str, str, str, str], dict[str, Any]] = {}
@@ -316,8 +307,8 @@ def main() -> int:
     (OUT / "player_h2h_2025_26_2026_27_plus_england.csv").write_text(csv_text, encoding="utf-8")
     report = {
         "generatedAt": __import__("datetime").datetime.utcnow().isoformat() + "Z",
-        "domesticScope": "2025/26 + 2026/27 to date, Premier League/Championship/League One/League Two + FA Cup + League Cup",
-        "internationalScope": "All senior national teams from Euro 2020 (played June 2021) onward: Euro 2020, World Cup 2022, Euro 2024, World Cup 2026, Nations League, qualifiers and relevant friendlies",
+        "domesticScope": "2024/25 + 2025/26 + 2026/27 to date, Premier League/Championship/League One/League Two only",
+        "internationalScope": "Excluded from this domestic-only backfill",
         "rows": len(rows),
         "yellowCards": sum(int(r["yellow_card"]) for r in rows),
         "goals": sum(int(r["goals"]) for r in rows),
