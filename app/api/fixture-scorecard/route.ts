@@ -1831,7 +1831,7 @@ function compactBuilderScorecard(payload:any){
     referee:payload.referee??null,
     players:(Array.isArray(payload.players)?payload.players:[]).map((p:any)=>({
       name:p.name,dbName:p.dbName,team:p.team,position:p.position,expectedMinutes:p.expectedMinutes,
-      yellowConditionals:p.yellowConditionals,markets:compactMarkets(p.markets),
+      yellowConditionals:p.yellowConditionals,recentGameLog:Array.isArray(p.recentGameLog)?p.recentGameLog.slice(0,5):[],h2hGameLog:Array.isArray(p.h2hGameLog)?p.h2hGameLog.slice(0,5):[],markets:compactMarkets(p.markets),
     })),
   }
 }
