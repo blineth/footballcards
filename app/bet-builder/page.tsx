@@ -893,26 +893,13 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
 }
 function scorecardCacheKey(f:Fixture){return "match-edge:scorecard:"+[f.date,f.competition,f.home,f.away].join("|").toLowerCase()}
 function readScorecardCache(f:Fixture):Scorecard|null{
-  try{
-    const key=scorecardCacheKey(f)
-    const raw=window.localStorage.getItem(key)
-    if(!raw)return null
-    const parsed=JSON.parse(raw)
-    const data=parsed?.data as Scorecard|undefined
-    if(data?.snapshotFallback){
-      const kickoff=new Date(f.kickoff).getTime()
-      const now=Date.now()
-      const inPlay=Number.isFinite(kickoff)&&now>=kickoff-15*60*1000&&now<=kickoff+4*60*60*1000
-      if(!inPlay){
-        window.localStorage.removeItem(key)
-        return null
-      }
-    }
-    return data?.ok?data:null
-  }catch{return null}
+  // Lineup predictions must never persist across reloads. Official team sheets
+  // must supersede them without a stale browser snapshot taking priority.
+  try{window.localStorage.removeItem(scorecardCacheKey(f))}catch{}
+  return null
 }
-function writeScorecardCache(f:Fixture,data:Scorecard){
-  try{if(data?.ok)window.localStorage.setItem(scorecardCacheKey(f),JSON.stringify({savedAt:new Date().toISOString(),data}))}catch{}
+function writeScorecardCache(_f:Fixture,_data:Scorecard){
+  // Deliberately no persistent scorecard caching: refresh always rechecks XI.
 }
 function liveStateKey(f:Fixture){return "match-edge:live-state:v2:"+[f.date,f.competition,f.home,f.away].join("|").toLowerCase()}
 function liveOddsStateKey(f:Fixture){return "match-edge:live-odds:v2:"+[f.date,f.competition,f.home,f.away].join("|").toLowerCase()}
@@ -982,12 +969,12 @@ export default function BetBuilderPage(){
     const cached=readScorecardCache(f)
 
     if(cached){
-      setData(current=>current?.ok&&!current.snapshotFallback?current:cached)
+      setData(cached)
       setLoading(false)
       if(!force)return
     }else{
       setLoading(true)
-      setData(current=>current?.ok&&!current.snapshotFallback?current:null)
+      setData(null)
     }
 
     // Once kickoff has passed, the live path takes over. Pre-match recommendations
@@ -1021,7 +1008,7 @@ export default function BetBuilderPage(){
   },[])
   useEffect(()=>{if(fixture)void load(fixture,false)},[fixture,load])
   useEffect(()=>{
-    if(!fixture||data?.lineupsConfirmed===true||data?.lineupMode==="confirmed")return
+    if(!fixture)return
     const kickoff=new Date(fixture.kickoff).getTime()
     if(!Number.isFinite(kickoff))return
 
@@ -1445,7 +1432,7 @@ export default function BetBuilderPage(){
           <button onClick={()=>void toggleH2H()} className={"rounded-xl border px-3 py-2.5 text-[0.55rem] font-black "+(h2hOpen?"border-emerald-300/30 bg-emerald-300 text-emerald-950":"border-white/10 bg-white/6 text-white/55")}>H2H</button>
 
         </div>
-        <div className="mt-3 pl-12 pr-2">
+        <div className="mt-2 pl-12 pr-2">
           <button onClick={()=>{
             if(inPlay){
               void loadLive(fixture)
@@ -1454,7 +1441,7 @@ export default function BetBuilderPage(){
             }else{
               void load(fixture,true)
             }
-          }} aria-label="Refresh match statistics and odds" title="Refresh match statistics and odds" className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-400 px-4 py-3 text-sm font-black text-emerald-950 active:scale-[0.99] touch-manipulation"><RefreshCw className={"size-5 "+(loading?"animate-spin":"")}/> Refresh match stats & odds</button>
+          }} aria-label="Refresh match statistics and odds" title="Refresh match statistics and odds" className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-emerald-400 px-3 py-1.5 text-[0.65rem] font-bold text-emerald-950 active:scale-[0.99] touch-manipulation"><RefreshCw className={"size-3.5 "+(loading?"animate-spin":"")}/> Refresh</button>
         </div>
       </div>
     </header>
@@ -1488,7 +1475,7 @@ export default function BetBuilderPage(){
 
 
 
-        {!inPlay&&data?.lineupsConfirmed===true&&<section className="rounded-3xl border border-white/10 bg-white/[0.025] p-4">
+        {!inPlay&&(data?.lineupsConfirmed===true||data?.lineupMode==="confirmed"||data?.lineupMode==="predicted")&&<section className="rounded-3xl border border-white/10 bg-white/[0.025] p-4">
           <div className="flex items-start justify-between gap-3"><div><div className="flex items-center gap-2 text-emerald-300"><Sparkles className="size-4"/><p className="text-[0.54rem] font-black uppercase tracking-[0.13em]">{inPlay&&!liveBet365?"Optional live odds-target slips":"Confirmed XI · pre-match recommended slips"}</p></div><h2 className="mt-1 text-lg font-black">{builderMode==="discipline"?"Most likely to be carded":builderMode==="player"?"Player markets":"All markets"}</h2><p className="mt-1 text-[0.6rem] leading-relaxed text-white/40">{builderMode==="discipline"?"One live ranking based mainly on who is committing fouls and who is being fouled right now, combined with each player's normal card risk and Bet365 card price when available.":builderMode==="player"?"Only player props are considered: goals, assists, shots, shots on target, cards, fouls committed and fouls drawn. Each row shows the Bet365 price captured for that exact player line when available.":inPlay?"Evidence-ranked pre-match combinations using recent form, season performance and available head-to-head records. Target returns are illustrative; only verified bookmaker prices are labelled Bet365.":""}</p></div><span className={"rounded-full px-2 py-1 text-[0.46rem] font-black "+(data.lineupMode==="confirmed"?"bg-emerald-400/10 text-emerald-300":"bg-amber-300/10 text-amber-200")}>{data.lineupMode==="confirmed"?"XI CONFIRMED":"PREDICTED XI"}</span></div>
           <div className="mt-4 grid grid-cols-3 gap-2">
             <button onClick={()=>setBuilderMode("all")} className={"rounded-xl border px-2 py-2.5 text-[0.5rem] font-black "+(builderMode==="all"?"border-emerald-300/30 bg-emerald-300 text-emerald-950":"border-white/8 bg-white/[0.04] text-white/45")}>ALL MARKETS</button>
@@ -1655,7 +1642,7 @@ function CardRiskPanel({rows,fixture,live,liveBet365}:{rows:Selection[];fixture:
 function RecentGameStrip({row}:{row:Selection}){
   const metric=(g:GameLog)=>row.market==="card"?(g.yellow?"🟨":"–"):row.market.startsWith("fouled")?String(g.foulsWon):row.market.startsWith("foul")?String(g.fouls):row.market.startsWith("sot")?String(g.shotsOnTarget):row.market.startsWith("shot")?String(g.shots):row.market.startsWith("goal")?"–":"–"
   const strips=[{title:"Last 5",games:row.recentGameLog??[]},{title:"H2H",games:row.h2hGameLog??[]}]
-  return <span className="mt-2 block space-y-2">{strips.map(strip=><span key={strip.title} className="block"><span className="mb-1 block text-[0.65rem] font-bold text-white/65">{strip.title}{strip.title==="H2H"&&strip.games.length?" · "+strip.games.filter(g=>g.yellow).length+" yellow(s) in "+strip.games.length+" meetings":""}</span>{strip.games.length?<span className="flex gap-1.5">{strip.games.map((g,i)=><span key={g.date+"-"+i} title={g.date+" vs "+g.opponent} className={"flex min-w-0 flex-1 flex-col items-center rounded-lg border px-1 py-1.5 "+(row.market==="card"&&g.yellow?"border-amber-300/40 bg-amber-300/15 text-amber-200":"border-white/10 bg-white/[0.04] text-white/80")}><span className="text-sm font-black">{metric(g)}</span><span className="mt-0.5 text-[0.55rem] text-white/40">{g.date.slice(5)}</span></span>)}</span>:<span className="block text-[0.6rem] text-white/35">No match-by-match data</span>}</span>)}</span>
+  return <span className="mt-2 block space-y-2">{strips.map(strip=><span key={strip.title} className="block"><span className="mb-1 block text-[0.65rem] font-bold text-white/65">{strip.title}{strip.title==="H2H"&&strip.games.length?" · "+strip.games.filter(g=>g.yellow).length+" yellow(s) in "+strip.games.length+" meetings":""}</span>{strip.games.length?<span className="flex gap-1.5">{strip.games.map((g,i)=><span key={g.date+"-"+i} title={g.date+" vs "+g.opponent} className={"flex min-w-0 flex-1 flex-col items-center rounded-lg border px-1 py-1.5 "+(row.market==="card"&&g.yellow?"border-amber-300/40 bg-amber-300/15 text-amber-200":"border-white/10 bg-white/[0.04] text-white/80")}><span className="text-sm font-black">{metric(g)}</span><span className="mt-0.5 text-[0.55rem] text-white/40">{g.date.slice(5)}</span></span>)}</span>:<span className="block text-[0.6rem] text-white/35">No recorded appearances against this opponent / no available match data</span>}</span>)}</span>
 }
 
 function marketEvidence(row:Selection){
