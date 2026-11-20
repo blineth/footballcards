@@ -84,7 +84,7 @@ export async function GET(request:Request){
           verified+=saved.length
         }
         checked++
-      }catch(e){errors.push(clean(event.id)+": "+String(e).slice(0,100))}
+      }catch(e){errors.push(clean(event.id)+": "+String(e).slice(-850))}
     }
     return NextResponse.json({ok:true,date,events:events.length,checked,inserted,verified,eligible,skipped,errors,source:"ESPN verified completed-match player boxscores"},{headers:{"Cache-Control":"no-store"}})
   }catch(e){return NextResponse.json({ok:false,error:String(e).slice(0,200)},{status:502})}
