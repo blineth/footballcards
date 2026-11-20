@@ -14,7 +14,7 @@ export async function GET(request:Request){
   const names=url.searchParams.getAll("player").filter(Boolean).slice(0,40)
   const home=url.searchParams.get("home")??""
   const away=url.searchParams.get("away")??""
-  if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)||!names.length||!home||!away)
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!names.length||!home||!away)
     return NextResponse.json({ok:false,error:"Date, teams and player names required"},{status:400})
   if(!isDatabaseConfigured)return NextResponse.json({ok:false,error:"Player history database unavailable"},{status:503})
   try{
