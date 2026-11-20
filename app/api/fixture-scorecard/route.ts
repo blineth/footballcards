@@ -151,6 +151,8 @@ type ScorePlayer = {
     after2PlusFouls: { matches: number; yellows: number; rate: number | null }
     after3PlusFouls: { matches: number; yellows: number; rate: number | null }
   }
+  recentGameLog?: Array<{date:string;opponent:string;fouls:number;foulsWon:number;shots:number;shotsOnTarget:number;yellow:boolean}>
+  h2hGameLog?: Array<{date:string;opponent:string;fouls:number;foulsWon:number;shots:number;shotsOnTarget:number;yellow:boolean}>
   markets: Record<MarketKey, ScoreMarket>
   offeredFoulLines: OfferedFoulLine[]
   likelyFoulLines: OfferedFoulLine[]
@@ -2560,6 +2562,8 @@ export async function GET(request: Request) {
         after2PlusFouls: cond2,
         after3PlusFouls: cond3,
       },
+      recentGameLog:[...recent5Rows].reverse().map(row=>({date:rowDate(row),opponent:String(row.opponent??""),fouls:Number(row.foulsCommitted??0),foulsWon:Number(row.foulsDrawn??0),shots:Number(row.shots??0),shotsOnTarget:Number(row.shotsOnTarget??0),yellow:row.yellowCard===true})),
+      h2hGameLog:[...h2hRows].sort((a,b)=>String(b.matchDate).localeCompare(String(a.matchDate))).slice(0,5).map(row=>({date:rowDate(row),opponent:String(row.opponent??""),fouls:Number(row.foulsCommitted??0),foulsWon:Number(row.foulsDrawn??0),shots:Number(row.shots??0),shotsOnTarget:Number(row.shotsOnTarget??0),yellow:row.yellowCard===true})),
       markets,
       offeredCardLines,
       offeredFoulLines,
