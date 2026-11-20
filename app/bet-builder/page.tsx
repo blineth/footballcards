@@ -101,7 +101,7 @@ const categories:{id:Category;label:string;markets:MarketKey[]}[]=[
   {id:"assists",label:"Assists",markets:["assist1"]},
   {id:"shots",label:"Shots",markets:["shot1","shot2"]},
   {id:"sot",label:"SOT",markets:["sot1","sot2"]},
-  {id:"fouls",label:"Fouls",markets:["foul1","foul2","foul3","foul4","foul5"]},
+  {id:"fouls",label:"Fouls",markets:["foul1","foul2"]},
   {id:"fouled",label:"Fouled",markets:["fouled1"]},
   {id:"cards",label:"Cards",markets:["card"]},
 ]
@@ -1303,7 +1303,7 @@ export default function BetBuilderPage(){
   const [openMarket,setOpenMarket]=useState<Category|null>("fouls")
   const livePlayerCounts=useMemo(()=>new Map((live?.players??[]).map(player=>[normPlayer(player.player),player])),[live])
   const recommendedPicks=useMemo(()=>{
-    const strongest=allRows.filter(row=>row.probability>=.4&&row.confidence!=="D"&&!row.market.startsWith("board:"))
+    const strongest=allRows.filter(row=>!/^foul[3-9]\d*$/.test(row.market)&&row.probability>=.4&&row.confidence!=="D"&&!row.market.startsWith("board:"))
       .filter(row=>{
         const last5=Number(row.recent5HitRate??0),last10=Number(row.recent10HitRate??0)
         return last5>=.4||last10>=.5||(Number(row.h2hMatches??0)>=2&&Number(row.h2hHitRate??0)>=.5)
