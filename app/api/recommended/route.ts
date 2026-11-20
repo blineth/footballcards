@@ -511,15 +511,17 @@ function blockedReason(scorecard:Scorecard,slip:BetSlip|FoulTargetSlip,kind:"sta
 async function fixturesFor(date:string,refresh:boolean){
   const q=new URLSearchParams({date})
   if(refresh)q.set("refresh",String(Date.now()))
-  const res=await fixturesGET(new Request("http://local/api/fixtures?"+q.toString()))
-  return res.ok?await res.json():null
+  try {
+    const res=await withDeadline(fixturesGET(new Request("http://local/api/fixtures?"+q.toString())),7000,"fixtures")
+    return res.ok?await withDeadline(res.json(),2000,"fixture response"):null
+  } catch { return null }
 }
 async function scorecardFor(f:Fixture,refresh:boolean){
   try{
     const q=new URLSearchParams({date:fixtureDate(f),home:f.home.name,away:f.away.name,competition:f.competition})
     if(refresh)q.set("refresh",String(Date.now()))
     const res=await withDeadline(scorecardGET(new Request("http://local/api/fixture-scorecard?"+q.toString())),8000,"fixture scorecard")
-    return res.ok?await res.json() as Scorecard:null
+    return res.ok?await withDeadline(res.json() as Promise<Scorecard>,2000,"scorecard response"):null
   }catch{return null}
 }
 
@@ -1185,13 +1187,13 @@ async function maybeGradeRecommendations(){
   const now=Date.now()
   if(now-lastGradeAt<TRACKING_CACHE_MS)return
   lastGradeAt=now
-  try{await Promise.all([gradeHistoricalRecommendations(250),gradePredictionLedger(750)])}catch{}
+  try{await withDeadline(Promise.all([gradeHistoricalRecommendations(250),gradePredictionLedger(750)]),2500,"background grading")}catch{}
 }
 async function cachedTrackingSummary(){
   const now=Date.now()
   if(trackingCacheAt&&now-trackingCacheAt<TRACKING_CACHE_MS)return trackingCache
   try{
-    trackingCache=await recommendationTrackingSummary(30)
+    trackingCache=await withDeadline(recommendationTrackingSummary(30),2000,"tracking summary")
     trackingCacheAt=now
   }catch{}
   return trackingCache
