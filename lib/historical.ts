@@ -92,3 +92,13 @@ export async function getPlayerRefereeHistory(refereeName: string, playerName: s
     .orderBy(desc(playerRefereeHistory.season))
   return rows.find((row) => refereeNameMatch(row.refereeName, refereeName)) ?? null
 }
+
+/** Recent observed appearances across opponents, newest first. Missing metrics remain null. */
+export async function getPlayerRecentMatches(playerName: string, team: string, limit = 10) {
+  if (!isDatabaseConfigured) return []
+  await ensureResearchSchema()
+  return db.select().from(playerH2H)
+    .where(and(eq(playerH2H.playerName, playerName), eq(playerH2H.team, team), sql`${playerH2H.matchDate} < CURRENT_DATE`))
+    .orderBy(desc(playerH2H.matchDate))
+    .limit(Math.max(1, Math.min(20, limit)))
+}
