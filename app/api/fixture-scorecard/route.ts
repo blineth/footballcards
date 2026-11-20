@@ -1671,10 +1671,8 @@ function buildRiskBuilders(players:ScorePlayer[],scope:"all"|"discipline"="all")
 }
 
 async function buildVerifiedBet365SnapshotFallback(input:{request:Request;date:string;home:string;away:string;competition:string}){
-  const [fallback,matchStakes]:[any,MatchStakesContext]=await Promise.all([
-    buildSnapshotScorecard({date:input.date,home:input.home,away:input.away,competition:input.competition as any}),
-    getMatchStakes({date:input.date,home:input.home,away:input.away,competition:input.competition}),
-  ])
+  const fallback:any=await buildSnapshotScorecard({date:input.date,home:input.home,away:input.away,competition:input.competition as any})
+  const matchStakes:MatchStakesContext|null=await getMatchStakes({date:input.date,home:input.home,away:input.away,competition:input.competition}).catch(()=>null)
   let odds:any={selections:[],priceAvailable:false}
   try{
     const oddsResponse=await oddsGET(input.request)
@@ -1689,7 +1687,7 @@ async function buildVerifiedBet365SnapshotFallback(input:{request:Request;date:s
   const usable=freshness==="STALE"?[]:selections.filter(s=>s.bookmaker==="Bet365")
   let fallbackPlayers:Array<any>=Array.isArray(fallback?.players)?fallback.players:[]
   const allFallbackNames=fallbackPlayers.map(p=>String(p?.name??"")).filter(Boolean)
-  fallbackPlayers=fallbackPlayers.filter(player=>
+  if(usable.length>0)fallbackPlayers=fallbackPlayers.filter(player=>
     usable.some(selection=>
       ["goal","assist","card","foul","fouled","shot","sot"].includes(String(selection.kind??""))&&
       selection.odd!=null&&Number(selection.odd)>1&&
@@ -1703,8 +1701,8 @@ async function buildVerifiedBet365SnapshotFallback(input:{request:Request;date:s
     const name=String(player?.name??"")
     if(team&&name){fallbackPlayersByTeam[team]=fallbackPlayersByTeam[team]??[];fallbackPlayersByTeam[team].push(name)}
   }
-  const setPieceContext=await getSetPieceContext({date:input.date,competition:input.competition,home:input.home,away:input.away,playersByTeam:fallbackPlayersByTeam})
-  fallbackPlayers=applySetPiecesToFallbackPlayers(fallbackPlayers,setPieceContext)
+  const setPieceContext=await getSetPieceContext({date:input.date,competition:input.competition,home:input.home,away:input.away,playersByTeam:fallbackPlayersByTeam}).catch(()=>null)
+  if(setPieceContext)fallbackPlayers=applySetPiecesToFallbackPlayers(fallbackPlayers,setPieceContext)
   for(const player of fallbackPlayers){
     for(const [marketKey,marketRow] of Object.entries(player?.markets??{}) as Array<[MarketKey,any]>){
       const odd=findOdds(usable,String(player?.name??""),marketKey,names)
@@ -1723,7 +1721,7 @@ async function buildVerifiedBet365SnapshotFallback(input:{request:Request;date:s
       marketRow.expectedValue=Math.round((probability*price-1)*1000)/1000
     }
   }
-  fallbackPlayers=applyStakesToFallbackPlayers(fallbackPlayers,matchStakes)
+  if(matchStakes)fallbackPlayers=applyStakesToFallbackPlayers(fallbackPlayers,matchStakes)
   const bookmakerAvailability:BookmakerAvailability=odds?.bookmakerAvailability??{}
   const eligibleBooks=Object.entries(bookmakerAvailability)
     .filter(([book,a])=>book==="Bet365"&&a.card==="available"&&a.foul==="available")
@@ -1750,7 +1748,8 @@ async function buildVerifiedBet365SnapshotFallback(input:{request:Request;date:s
     playerCount:fallbackPlayers.length,
     riskBuilders:buildRiskBuilders(fallbackPlayers as ScorePlayer[]),
     foulCardBuilders:buildRiskBuilders(fallbackPlayers as ScorePlayer[],"discipline"),
-    fallbackReason:"Live research database is temporarily unavailable; snapshot probabilities are combined with verified Bet365 prices.",
+    snapshotFallback:true,
+    fallbackReason:usable.length?"Provisional historical snapshot with available Bet365 prices; not a verified full model.":"Provisional historical snapshot only; verified Bet365 player prices are currently unavailable.",
   }
 }
 
