@@ -83,6 +83,7 @@ function mapRows(dataset: Dataset, rows: Record<string, unknown>[]) {
         playerName: str(r.player_name ?? r.player) ?? "",
         team: str(r.team), opponent: str(r.opponent) ?? "", matchDate: str(r.match_date) ?? "",
         competition: str(r.competition), venue: str(r.venue), minutes: int(r.minutes),
+        starter: bool(r.starter), externalMatchId: str(r.external_match_id), refereeName: str(r.referee_name),
         goals: int(r.goals), assists: int(r.assists),
         foulsCommitted: int(r.fouls_committed), foulsDrawn: int(r.fouls_drawn),
         shots: int(r.shots), shotsOnTarget: int(r.shots_on_target),
