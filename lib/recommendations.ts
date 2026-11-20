@@ -55,19 +55,19 @@ async function buildCandidate(
   const h2hBookings = h2hBookingSamples.length > 0 ? h2hBookingSamples.filter((m) => m.yellowCard).length : null
   // Compute rates only from recorded observations, never substitute zero for NULL.
   const recentEvidence = (matches: typeof recent, suffix: string): EvidenceItem[] => {
-    const observedFouls = matches.filter((m) => m.foulsCommitted != null)
-    const observedCards = matches.filter((m) => m.yellowCard != null)
+    const observedFouls = matches.filter((m) => m.foulsCommitted != null && Number.isFinite(Number(m.foulsCommitted)))
+    const observedCards = matches.filter((m) => typeof m.yellowCard === "boolean")
     const foulAverage = observedFouls.length
       ? observedFouls.reduce((sum, m) => sum + Number(m.foulsCommitted), 0) / observedFouls.length
       : null
     const cardCount = observedCards.filter((m) => m.yellowCard === true).length
     return [
       { key: `recent${suffix}Fouls`, label: `Last ${suffix} fouls/game`, value: foulAverage,
-        display: foulAverage == null ? "No recorded fouls" : `${foulAverage.toFixed(2)} fouls/game (${observedFouls.length} recorded)`,
+        display: foulAverage == null ? "No recorded fouls" : `${foulAverage.toFixed(2)} fouls/game (${observedFouls.length} of ${matches.length} recent matches recorded)`,
         hasData: foulAverage != null },
       { key: `recent${suffix}Cards`, label: `Last ${suffix} bookings`,
         value: observedCards.length ? cardCount : null,
-        display: observedCards.length ? `${cardCount}/${observedCards.length} recorded matches` : "No recorded bookings",
+        display: observedCards.length ? `${cardCount} bookings in ${observedCards.length} of ${matches.length} recent matches with card data` : "No recorded bookings",
         hasData: observedCards.length > 0 },
     ]
   }
@@ -227,12 +227,12 @@ export async function buildRecommendations(
     ),
   )
 
-  const cardCandidates = [...candidates]
+  const cardCandidates = candidates.filter((candidate) => candidate.hasHistoricalData)
     .sort((a, b) => b.researchConfidence - a.researchConfidence)
     .slice(0, 5)
 
-  const foulCandidates = [...candidates]
-    .sort((a, b) => (b.foulsPer90 ?? -1) - (a.foulsPer90 ?? -1))
+  const foulCandidates = candidates.filter((candidate) => candidate.foulsPer90 != null || candidate.evidence.some((item) => item.key === "recent5Fouls" && item.hasData))
+    .sort((a, b) => (b.foulsPer90 ?? Number(b.evidence.find((item) => item.key === "recent5Fouls")?.value ?? -1)) - (a.foulsPer90 ?? Number(a.evidence.find((item) => item.key === "recent5Fouls")?.value ?? -1)))
     .slice(0, 5)
 
   return { cardCandidates, foulCandidates, confirmed }
