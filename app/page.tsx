@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import { CalendarDays, ChevronRight, RefreshCw, Sparkles, Users, X } from "lucide-react"
+import { CalendarDays, ChevronRight, RefreshCw, Sparkles } from "lucide-react"
 
 type Competition = "Premier League" | "Championship" | "League One" | "League Two" | "International"
 type LiveFixture = {
@@ -119,38 +119,6 @@ function shouldCheckLineup(f:Fixture){
   const mins=(new Date(f.kickoff).getTime()-Date.now())/60000
   return mins<=150&&mins>=-180
 }
-function shortPlayerName(name:string){
-  const parts=name.trim().split(/\s+/)
-  if(parts.length<=1)return name
-  return (parts[0]?.[0]??"")+". "+parts.at(-1)
-}
-function pitchSlots(team:TeamLineup){
-  const starters=[...team.starters].sort((a,b)=>{
-    const ag=(a.position??"").toUpperCase().includes("GK")?0:1
-    const bg=(b.position??"").toUpperCase().includes("GK")?0:1
-    if(ag!==bg)return ag-bg
-    return Number(a.formationPlace??99)-Number(b.formationPlace??99)
-  })
-  const gk=starters.find(p=>(p.position??"").toUpperCase().includes("GK")||p.formationPlace===1)??starters[0]
-  const outfield=starters.filter(p=>p!==gk)
-  let lines=(team.formation??"").split("-").map(Number).filter(n=>Number.isFinite(n)&&n>0)
-  if(lines.reduce((a,b)=>a+b,0)!==outfield.length){
-    lines=outfield.length===10?[4,3,3]:outfield.length===9?[4,4,1]:[Math.min(4,outfield.length),Math.max(0,outfield.length-4)].filter(Boolean)
-  }
-  const slots:Array<{player:LineupPlayer;left:number;top:number}>=[]
-  if(gk)slots.push({player:gk,left:50,top:89})
-  let cursor=0
-  lines.forEach((count,lineIndex)=>{
-    const top=lines.length===1?48:74-(lineIndex*(52/Math.max(1,lines.length-1)))
-    for(let i=0;i<count;i++){
-      const player=outfield[cursor++]
-      if(!player)continue
-      slots.push({player,left:((i+1)*100)/(count+1),top})
-    }
-  })
-  for(const player of outfield.slice(cursor))slots.push({player,left:50,top:18})
-  return slots
-}
 const marketLabels:Record<string,string>={
   goal:"Player to Score",assist:"Assists",card:"Player Cards",foul:"Player Fouls",fouled:"Player Fouled",shot:"Player Shots",sot:"Player SOT",
 }
@@ -207,7 +175,6 @@ export default function MatchesPage(){
   const[autoAdvanced,setAutoAdvanced]=useState(false)
   const[bet365Availability,setBet365Availability]=useState<Record<string,Bet365Availability>>({})
   const[lineups,setLineups]=useState<Record<string,LineupState>>({})
-  const[lineupModal,setLineupModal]=useState<{fixture:Fixture;data:MatchLineup}|null>(null)
 
   const grouped=useMemo(()=>competitionOrder.map(competition=>({
     competition,
@@ -393,15 +360,14 @@ export default function MatchesPage(){
       {loading&&!live?<div className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center"><RefreshCw className="mx-auto mb-2 size-5 animate-spin text-emerald-300"/><p className="font-black">Finding the next matchday…</p></div>:null}
       {!loading&&live&&totalRemaining===0?<div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.03] p-8 text-center"><p className="font-black">No upcoming matches found</p><p className="mt-1 text-sm text-white/35">Nothing was found across International, Premier League, Championship, League One or League Two in the next 21 days.</p></div>:null}
 
-      {grouped.map(group=><CompetitionSection key={group.competition} competition={group.competition} fixtures={group.fixtures} availability={bet365Availability} lineups={lineups} onOpen={f=>router.push(matchUrl(f))} onOpenLineup={(fixture,data)=>setLineupModal({fixture,data})}/>)}
+      {grouped.map(group=><CompetitionSection key={group.competition} competition={group.competition} fixtures={group.fixtures} availability={bet365Availability} lineups={lineups} onOpen={f=>router.push(matchUrl(f))}/>)}
 
       <p className="px-2 text-center text-[0.5rem] leading-relaxed text-white/25">Finished fixtures are hidden from the active match list. When the day's football is over, Matches automatically rolls forward to the next available date.</p>
     </div>
-    {lineupModal?<LineupModal fixture={lineupModal.fixture} data={lineupModal.data} onClose={()=>setLineupModal(null)}/>:null}
   </main>
 }
 
-function CompetitionSection({competition,fixtures,availability,lineups,onOpen,onOpenLineup}:{competition:Competition;fixtures:Fixture[];availability:Record<string,Bet365Availability>;lineups:Record<string,LineupState>;onOpen:(f:Fixture)=>void;onOpenLineup:(f:Fixture,data:MatchLineup)=>void}){
+function CompetitionSection({competition,fixtures,availability,lineups,onOpen}:{competition:Competition;fixtures:Fixture[];availability:Record<string,Bet365Availability>;lineups:Record<string,LineupState>;onOpen:(f:Fixture)=>void}){
   return <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03]">
     <div className="flex items-center justify-between border-b border-white/8 px-4 py-3"><div><p className="text-sm font-black">{competition}</p><p className="mt-0.5 text-[0.46rem] text-white/25">{fixtures.length} match{fixtures.length===1?"":"es"}</p></div><span className="rounded-full bg-white/6 px-2 py-1 text-[0.42rem] font-black text-white/30">BET365 MARKET CHECK</span></div>
     {fixtures.map((f,i)=>{
@@ -411,7 +377,7 @@ function CompetitionSection({competition,fixtures,availability,lineups,onOpen,on
       const bet365=availabilitySummary(availability[f.id])
       const bet365Class=bet365.tone==="available"?"bg-emerald-300/10 text-emerald-200":bet365.tone==="limited"?"bg-amber-300/10 text-amber-200":bet365.tone==="none"?"bg-rose-300/10 text-rose-200":"bg-white/6 text-white/35"
       return <div key={f.id} className={"relative "+(i?"border-t border-white/[0.055]":"")}>
-        <button onClick={()=>onOpen(f)} className="grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 px-3 py-4 pr-24 text-left transition hover:bg-white/[0.035]">
+        <button onClick={()=>onOpen(f)} className="grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 px-3 py-4 text-left transition hover:bg-white/[0.035]">
           <div className="w-12 text-center">
             {liveNow?<><p className="text-[0.55rem] font-black text-rose-300">LIVE</p><p className="mt-0.5 font-mono text-xs font-black">{f.elapsed??""}'</p></>:<><p className="font-mono text-sm font-black">{f.time}</p><p className="mt-0.5 text-[0.44rem] text-white/25">{f.day}</p></>}
           </div>
@@ -423,7 +389,6 @@ function CompetitionSection({competition,fixtures,availability,lineups,onOpen,on
           </div>
           <ChevronRight className="size-4 text-white/25"/>
         </button>
-        {confirmed&&lineup?.data?.confirmed?<button onClick={()=>onOpenLineup(f,lineup.data!)} className="absolute right-9 top-1/2 flex -translate-y-1/2 items-center gap-1 rounded-xl border border-emerald-300/20 bg-emerald-400/10 px-2.5 py-2 text-[0.48rem] font-black uppercase text-emerald-200 transition hover:bg-emerald-400/15"><Users className="size-3"/>Lineup</button>:null}
       </div>
     })}
   </section>
@@ -433,58 +398,3 @@ function TeamRow({name,crest,score}:{name:string;crest?:string;score?:number|nul
   return <div className="flex items-center gap-2 py-0.5"><div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-white p-1">{crest?<img src={crest} alt="" className="max-h-full max-w-full object-contain"/>:<span className="text-[0.42rem] font-black text-[#07120e]">{name.slice(0,2).toUpperCase()}</span>}</div><p className="min-w-0 flex-1 truncate text-sm font-black">{name}</p>{score!=null?<span className="font-mono text-sm font-black">{score}</span>:null}</div>
 }
 
-
-function LineupModal({fixture,data,onClose}:{fixture:Fixture;data:MatchLineup;onClose:()=>void}){
-  const[side,setSide]=useState<"home"|"away">("home")
-  const team=side==="home"?data.homeLineup:data.awayLineup
-  const slots=pitchSlots(team)
-  return <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
-    <div className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-t-[2rem] border border-white/10 bg-[#07120e] shadow-2xl" onClick={e=>e.stopPropagation()}>
-      <div className="sticky top-0 z-20 flex items-center justify-between border-b border-white/10 bg-[#07120e]/95 px-4 py-4 backdrop-blur-xl">
-        <div>
-          <div className="flex items-center gap-2"><span className="rounded-full bg-emerald-400/12 px-2 py-1 text-[0.46rem] font-black uppercase text-emerald-300">Confirmed XI</span><span className="text-[0.46rem] text-white/30">{data.source}</span></div>
-          <p className="mt-1 text-lg font-black">{fixture.home} v {fixture.away}</p>
-          {data.venue?<p className="mt-0.5 text-[0.55rem] text-white/35">{data.venue}</p>:null}
-        </div>
-        <button onClick={onClose} className="rounded-xl bg-white/7 p-2 text-white/60"><X className="size-4"/></button>
-      </div>
-
-      <div className="p-4">
-        <div className="grid grid-cols-2 gap-2 rounded-2xl bg-white/[0.04] p-1">
-          {(["home","away"] as const).map(value=>{
-            const row=value==="home"?data.homeLineup:data.awayLineup
-            return <button key={value} onClick={()=>setSide(value)} className={"flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-black transition "+(side===value?"bg-emerald-400 text-emerald-950":"text-white/45")}>
-              {row.crest?<img src={row.crest} alt="" className="size-5 object-contain"/>:null}
-              <span className="truncate">{row.team}</span>
-              <span className="font-mono text-[0.55rem] opacity-70">{row.formation??"XI"}</span>
-            </button>
-          })}
-        </div>
-
-        <div className="mt-4 flex items-center justify-between px-1">
-          <div><p className="text-sm font-black">{team.team}</p><p className="text-[0.52rem] text-white/35">Official starting XI · {team.starterCount}/11 starters</p></div>
-          <div className="rounded-xl bg-white/6 px-3 py-2 text-right"><p className="text-[0.42rem] font-black uppercase text-white/25">Formation</p><p className="font-mono text-sm font-black text-emerald-200">{team.formation??"Not supplied"}</p></div>
-        </div>
-
-        <div className="relative mt-3 h-[520px] overflow-hidden rounded-[1.75rem] border border-emerald-200/20 bg-emerald-800">
-          <div className="absolute inset-x-[7%] top-[5%] h-[90%] border border-white/25"/>
-          <div className="absolute left-1/2 top-[5%] h-[90%] -translate-x-1/2 border-l border-white/20"/>
-          <div className="absolute left-1/2 top-1/2 size-24 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/20"/>
-          <div className="absolute inset-x-[24%] bottom-[5%] h-[15%] border border-white/20"/>
-          <div className="absolute left-1/2 bottom-[5%] h-4 w-[28%] -translate-x-1/2 border border-white/20 border-b-0"/>
-          {slots.map(({player,left,top})=><div key={player.id||player.name} className="absolute w-[28%] -translate-x-1/2 -translate-y-1/2 text-center" style={{left:left+"%",top:top+"%"}}>
-            <div className="mx-auto flex size-8 items-center justify-center rounded-full border border-white/25 bg-[#07120e] text-[0.62rem] font-black shadow-lg">{player.number??"•"}</div>
-            <div className="mt-1 rounded-lg bg-[#07120e]/85 px-1.5 py-1 text-[0.48rem] font-black leading-tight shadow-lg">{shortPlayerName(player.name)}{player.captain?" (C)":""}</div>
-          </div>)}
-        </div>
-
-        <div className="mt-4 rounded-2xl border border-white/8 bg-white/[0.035] p-3">
-          <div className="mb-2 flex items-center justify-between"><p className="text-xs font-black">Substitutes</p><span className="text-[0.46rem] text-white/30">{team.substitutes.length} listed</span></div>
-          {team.substitutes.length?<div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">{team.substitutes.map(player=><div key={player.id||player.name} className="flex items-center gap-2 rounded-xl bg-white/[0.035] px-2.5 py-2"><span className="w-6 text-center font-mono text-[0.55rem] font-black text-white/35">{player.number??"—"}</span><div className="min-w-0"><p className="truncate text-[0.62rem] font-black">{player.name}</p><p className="text-[0.44rem] text-white/30">{player.position??"Substitute"}</p></div></div>)}</div>:<p className="text-[0.55rem] text-white/30">The starting XI is confirmed; the bench has not been published in the feed yet.</p>}
-        </div>
-
-        <p className="mt-3 text-center text-[0.48rem] leading-relaxed text-white/25">The Lineup button appears only when both teams have 11 official starters in the match feed. Formation and pitch positions come from the published team sheet where available.</p>
-      </div>
-    </div>
-  </div>
-}
