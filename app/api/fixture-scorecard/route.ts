@@ -1869,6 +1869,19 @@ export async function GET(request: Request) {
   }
   let candidates: any[] = Array.isArray(radar?.candidates) ? radar.candidates : []
 
+  // An upstream radar response may be HTTP 200 but contain no usable players.
+  // Preserve the working current-season snapshot in that case rather than
+  // displaying a successful yet empty match model and Bet Builder.
+  if (candidates.length === 0) {
+    try {
+      const snapshot = await buildVerifiedBet365SnapshotFallback({request,date,home,away,competition})
+      if (Array.isArray(snapshot?.players) && snapshot.players.length > 0) {
+        return scorecardJson({...snapshot,fallbackReason:"Live research returned no players; displaying available historical player data and verified bookmaker prices."},builderView)
+      }
+    } catch {}
+  }
+
+
   // International confirmed XIs can be much better covered by the dedicated
   // national-team snapshot than by club-baseline matching. If the live research
   // path only matches a small portion of the 22 starters, use the confirmed-XI
