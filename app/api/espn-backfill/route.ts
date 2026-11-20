@@ -28,7 +28,7 @@ export async function GET(request:Request){
     await ensureResearchSchema()
     const scoreboard=await getJson(BASE+"/scoreboard?dates="+date.replace(/-/g,""))
     const events=(scoreboard.events??[]).filter((e:any)=>e.status?.type?.name==="STATUS_FULL_TIME").slice(0,12)
-    let inserted=0,checked=0,skipped=0
+    let inserted=0,checked=0,skipped=0,eligible=0
     const errors:string[]=[]
     // Bounded concurrency: provider requests and Neon writes are deliberately rate limited.
     for(const event of events){
@@ -62,6 +62,7 @@ export async function GET(request:Request){
               goals:metric(stats,"totalGoals"),assists:metric(stats,"goalAssists")})
           }
         }
+        eligible+=rows.length
         if(rows.length){
           const saved=await db.insert(playerH2H).values(rows).onConflictDoNothing().returning({id:playerH2H.id})
           inserted+=saved.length
@@ -69,6 +70,6 @@ export async function GET(request:Request){
         checked++
       }catch(e){errors.push(clean(event.id)+": "+String(e).slice(0,100))}
     }
-    return NextResponse.json({ok:true,date,events:events.length,checked,inserted,skipped,errors,source:"ESPN verified completed-match player boxscores"},{headers:{"Cache-Control":"no-store"}})
+    return NextResponse.json({ok:true,date,events:events.length,checked,inserted,eligible,skipped,errors,source:"ESPN verified completed-match player boxscores"},{headers:{"Cache-Control":"no-store"}})
   }catch(e){return NextResponse.json({ok:false,error:String(e).slice(0,200)},{status:502})}
 }
