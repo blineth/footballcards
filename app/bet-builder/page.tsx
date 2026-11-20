@@ -947,7 +947,6 @@ export default function BetBuilderPage(){
   const[live,setLive]=useState<LiveData|null>(null)
   const[liveOdds,setLiveOdds]=useState<LiveOddsData|null>(null)
   const[loading,setLoading]=useState(true)
-  const[baselineRetry,setBaselineRetry]=useState(0)
   const[category,setCategory]=useState<Category>("fouls")
   const[selected,setSelected]=useState<Record<string,Selection>>({})
   const[trayOpen,setTrayOpen]=useState(false)
@@ -993,19 +992,17 @@ export default function BetBuilderPage(){
     try{
       const r=await fetch(scorecardUrl(f,force),{cache:force?"no-store":"default",signal:controller.signal})
       const next=await r.json().catch(()=>({ok:false,error:"Unable to load evidenced match model."})) as Scorecard
-      if(next?.ok&&!next.snapshotFallback){
+      if(next?.ok){
+        // Show the available snapshot immediately, but preserve its fallback label.
+        // Snapshot estimates must never be presented as verified recommendations.
         setData(next)
-        writeScorecardCache(f,next)
+        if(!next.snapshotFallback)writeScorecardCache(f,next)
       }else if(!cached){
-        // Never publish a snapshot fallback as a prediction. Keep the evidenced
-        // model loading and automatically retry instead.
-        setData(null)
-        setBaselineRetry(v=>v+1)
+        setData({ok:false,error:next?.error||"The match model is temporarily unavailable. Refresh to try again."})
       }
     }catch{
       if(!cached){
-        setData(null)
-        setBaselineRetry(v=>v+1)
+        setData({ok:false,error:"The match model timed out. Refresh to try again."})
       }
     }finally{
       window.clearTimeout(timeout)
@@ -1013,12 +1010,6 @@ export default function BetBuilderPage(){
     }
   },[])
   useEffect(()=>{if(fixture)void load(fixture,false)},[fixture,load])
-  useEffect(()=>{
-    if(!fixture||(data?.ok&&!data.snapshotFallback)||baselineRetry<=0)return
-    setLoading(true)
-    const t=window.setTimeout(()=>void load(fixture,true),2500)
-    return()=>window.clearTimeout(t)
-  },[fixture,data?.ok,data?.snapshotFallback,baselineRetry,load])
   useEffect(()=>{
     if(!fixture||data?.lineupsConfirmed===true||data?.lineupMode==="confirmed")return
     const kickoff=new Date(fixture.kickoff).getTime()
