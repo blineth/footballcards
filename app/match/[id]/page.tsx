@@ -1,6 +1,6 @@
 "use client"
 
-import { use, useState } from "react"
+import { use, useEffect, useMemo, useState } from "react"
 import useSWR from "swr"
 import { AppHeader } from "@/components/app-header"
 import { CandidateCard } from "@/components/candidate-card"
@@ -116,6 +116,7 @@ export default function MatchPage({
 
       <div className="space-y-5 p-4">
         <RefereePanel referee={match.referee} />
+        <Bet365SlipBuilder match={match} />
 
         <LineupsPanel
           data={lineups}
@@ -223,4 +224,79 @@ function RadarHeader({
       ) : null}
     </div>
   )
+}
+
+type PricedSelection = { market:string; kind:string; label:string; odd:number|null; bookmaker?:string|null }
+type SlipLeg = PricedSelection & { fixtureId:string; fixtureLabel:string; source:string; addedAt:number }
+const SLIP_KEY="footballcards-bet365-slip-v1"
+
+function Bet365SlipBuilder({match}:{match:Fixture}){
+  const [board,setBoard]=useState<PricedSelection[]>([])
+  const [source,setSource]=useState("")
+  const [notice,setNotice]=useState("")
+  const [loading,setLoading]=useState(true)
+  const [slip,setSlip]=useState<SlipLeg[]>([])
+  const [stake,setStake]=useState("10")
+  const [search,setSearch]=useState("")
+  const [ready,setReady]=useState(false)
+  useEffect(()=>{
+    try{
+      const saved=JSON.parse(localStorage.getItem(SLIP_KEY)||"[]")
+      if(Array.isArray(saved))setSlip(saved.filter((v:SlipLeg)=>v&&typeof v.fixtureId==="string"&&Number.isFinite(v.odd)&&Number(v.odd)>1))
+    }catch{}
+    setReady(true)
+  },[])
+  useEffect(()=>{if(ready)localStorage.setItem(SLIP_KEY,JSON.stringify(slip))},[slip,ready])
+  useEffect(()=>{
+    const controller=new AbortController()
+    const date=match.kickoff.slice(0,10)
+    const query=new URLSearchParams({date,home:match.home.name,away:match.away.name,competition:match.competition})
+    setLoading(true)
+    fetch("/api/bet-builder-odds?"+query,{signal:controller.signal,cache:"no-store"})
+      .then(async r=>{if(!r.ok)throw Error("Odds feed unavailable");return r.json()})
+      .then(data=>{
+        const valid=(Array.isArray(data.selections)?data.selections:[]).filter((v:PricedSelection)=>Number.isFinite(Number(v.odd))&&Number(v.odd)>1&&(!v.bookmaker||v.bookmaker.toLowerCase()==="bet365"))
+        setBoard(valid)
+        setSource(String(data.source||""))
+        setNotice(String(data.note||""))
+      })
+      .catch(e=>{if(!controller.signal.aborted){setBoard([]);setNotice(String(e.message||"Unable to load prices"))}})
+      .finally(()=>{if(!controller.signal.aborted)setLoading(false)})
+    return ()=>controller.abort()
+  },[match.id,match.kickoff,match.home.name,match.away.name,match.competition])
+  const visible=useMemo(()=>board.filter(v=>(v.market+" "+v.label).toLowerCase().includes(search.toLowerCase())).slice(0,80),[board,search])
+  const fixtures=new Set(slip.map(v=>v.fixtureId))
+  const sameMatchMultiple=slip.length>1&&fixtures.size<slip.length
+  const total=slip.reduce((n,v)=>n*Number(v.odd),1)
+  const multiMatchOnly=slip.length>0&&!sameMatchMultiple
+  const toggle=(v:PricedSelection)=>{
+    const key=match.id+"|"+v.market+"|"+v.label
+    setSlip(current=>current.some(x=>x.fixtureId+"|"+x.market+"|"+x.label===key)
+      ?current.filter(x=>x.fixtureId+"|"+x.market+"|"+x.label!==key)
+      :[...current,{...v,fixtureId:match.id,fixtureLabel:match.home.name+" v "+match.away.name,source,addedAt:Date.now()}])
+  }
+  return <section className="space-y-3 rounded-2xl border border-border bg-card p-4">
+    <div><h2 className="text-lg font-bold">Bet365 market builder</h2><p className="text-xs text-muted-foreground">Real selections from the existing odds feed. Add legs across fixtures; prices are snapshots, not guaranteed.</p></div>
+    <p className="text-sm">{loading?"Loading Bet365 markets…":board.length+" priced selections"+(source?" · "+source:"")}</p>
+    {notice&&<p className="text-xs text-muted-foreground">{notice}</p>}
+    <input className="w-full rounded-xl border border-border bg-background p-3 text-sm" placeholder="Search player or market" value={search} onChange={e=>setSearch(e.target.value)}/>
+    <div className="max-h-72 space-y-2 overflow-y-auto">
+      {visible.map((v,i)=>{
+        const selected=slip.some(x=>x.fixtureId===match.id&&x.market===v.market&&x.label===v.label)
+        return <button key={v.market+"|"+v.label+"|"+i} type="button" onClick={()=>toggle(v)} className={"flex w-full items-center justify-between gap-3 rounded-xl border p-3 text-left text-sm "+(selected?"border-primary bg-secondary":"border-border")}>
+          <span><span className="block font-semibold">{v.label}</span><span className="block text-xs text-muted-foreground">{v.market}</span></span>
+          <span className="shrink-0 font-bold">{Number(v.odd).toFixed(2)} {selected?"✓":"+"}</span>
+        </button>
+      })}
+      {!loading&&!visible.length&&<p className="text-sm text-muted-foreground">No matching priced markets returned for this fixture.</p>}
+    </div>
+    <div className="space-y-2 border-t border-border pt-3">
+      <div className="flex items-center justify-between"><h3 className="font-bold">Your slip · {slip.length} legs</h3><button type="button" className="text-xs underline" onClick={()=>setSlip([])}>Clear</button></div>
+      {slip.map((leg,i)=><div key={leg.fixtureId+"|"+leg.market+"|"+leg.label+"|"+i} className="flex items-start justify-between gap-2 text-xs"><span>{leg.fixtureLabel} · {leg.label} ({leg.market})</span><button type="button" className="shrink-0 underline" onClick={()=>setSlip(cur=>cur.filter((_,j)=>j!==i))}>{Number(leg.odd).toFixed(2)} ×</button></div>)}
+      <label className="flex items-center justify-between gap-2 text-sm">Stake (£)<input type="number" min="0" step="0.5" value={stake} onChange={e=>setStake(e.target.value)} className="w-24 rounded-lg border border-border bg-background p-2 text-right"/></label>
+      <p className="text-sm">Individual odds product: <strong>{slip.length?total.toFixed(2):"—"}</strong></p>
+      {sameMatchMultiple?<p className="text-xs text-amber-600">Same-match selections detected. The odds product is NOT a verified Bet365 Bet Builder price; combined payout and probability are withheld until correlated pricing is available.</p>:multiMatchOnly?<p className="text-sm">Indicative multi-match return: <strong>£{(Math.max(0,Number(stake)||0)*total).toFixed(2)}</strong></p>:null}
+      <p className="text-xs text-muted-foreground">Research confidence is not a win probability. Verified statistical probabilities will appear only when calibrated estimates are available. Recheck bookmaker prices before placing any bet.</p>
+    </div>
+  </section>
 }
