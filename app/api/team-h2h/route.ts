@@ -37,7 +37,19 @@ function same(a:string|null|undefined,b:string|null|undefined){
 }
 function dateOnly(v:any){return String(v??"").slice(0,10)}
 function n(v:any){const x=Number(v);return Number.isFinite(x)?x:0}
-function startFor(competition:string){return DOMESTIC.has(competition)?DOMESTIC_START:INTERNATIONAL_START}
+function isBarnsleyWednesday(home:string,away:string){return (same(home,"Barnsley")&&same(away,"Sheffield Wednesday"))||(same(home,"Sheffield Wednesday")&&same(away,"Barnsley"))}
+function startFor(competition:string,home="",away=""){return DOMESTIC.has(competition)?(isBarnsleyWednesday(home,away)?"2019-01-01":DOMESTIC_START):INTERNATIONAL_START}
+// Independently verified historical scores; no unverified player-level statistics are attached.
+const BARNSLEY_WEDNESDAY_SCORES:[string,string,string,number,number,string][]=[
+ ["2023-05-29","Barnsley","Sheffield Wednesday",0,1,"League One"],
+ ["2023-03-21","Barnsley","Sheffield Wednesday",4,2,"League One"],
+ ["2022-09-03","Sheffield Wednesday","Barnsley",0,2,"League One"],
+ ["2021-03-20","Barnsley","Sheffield Wednesday",1,2,"Championship"],
+ ["2020-12-12","Sheffield Wednesday","Barnsley",1,2,"Championship"],
+ ["2020-02-08","Barnsley","Sheffield Wednesday",1,1,"Championship"],
+ ["2019-08-10","Sheffield Wednesday","Barnsley",2,0,"Championship"],
+]
+function verifiedBarnsleyWednesday(before:string):Meeting[]{return BARNSLEY_WEDNESDAY_SCORES.filter(([date])=>date<before).map(([date,home,away,homeGoals,awayGoals,competition])=>({date,home,away,homeGoals,awayGoals,competition,scorers:[],bookings:[],players:[],totals:{home:emptyTotals(),away:emptyTotals()}}))}
 function targetDate(date:string){return date||new Date().toISOString().slice(0,10)}
 
 type Meeting={
@@ -229,7 +241,7 @@ async function enrichApiMeeting(meeting:Meeting){
   }
 }
 async function apiFootballH2H(date:string,home:string,away:string,competition:string){
-  const start=startFor(competition),before=targetDate(date)
+  const start=startFor(competition,home,away),before=targetDate(date)
   const key=[start,before,norm(home),norm(away)].join("|")
   const cached=apiCache.get(key)
   if(cached&&cached.expires>Date.now())return cached.value
@@ -304,7 +316,7 @@ async function enrichEspnMeeting(meeting:Meeting,slug:string){
 const espnCache=new Map<string,{expires:number,value:Meeting[]}>()
 async function espnH2H(date:string,home:string,away:string,competition:string){
   const specs=DOMESTIC.has(competition)?DOMESTIC_ESPN:INTERNATIONAL_ESPN
-  const start=startFor(competition),before=targetDate(date)
+  const start=startFor(competition,home,away),before=targetDate(date)
   const key=["espn",start,before,norm(home),norm(away)].join("|")
   const cached=espnCache.get(key)
   if(cached&&cached.expires>Date.now())return cached.value
@@ -356,7 +368,7 @@ export async function GET(request:Request){
   const u=new URL(request.url)
   const date=u.searchParams.get("date")??"",home=u.searchParams.get("home")??"",away=u.searchParams.get("away")??"",competition=u.searchParams.get("competition")??""
   if(!date||!home||!away||!competition)return NextResponse.json({ok:false,error:"Missing fixture parameters"},{status:400})
-  const start=startFor(competition),before=targetDate(date)
+  const start=startFor(competition,home,away),before=targetDate(date)
   let local:Meeting[]=[]
   let sourceParts:string[]=[]
 
@@ -399,9 +411,11 @@ export async function GET(request:Request){
   ])
   if(api.length)sourceParts.push("API-Football")
   if(espnRows.length)sourceParts.push("ESPN")
-  const meetings=mergeMeetings(local,api,espnRows)
+  const verifiedScores=isBarnsleyWednesday(home,away)?verifiedBarnsleyWednesday(before):[]
+  if(verifiedScores.length)sourceParts.push("verified historical results (scores only)")
+  const meetings=mergeMeetings(local,api,espnRows,verifiedScores)
   const scope=DOMESTIC.has(competition)
-    ?"2025/26 + 2026/27 seasons, including league and domestic cup meetings"
+    ?(isBarnsleyWednesday(home,away)?"Previous meetings since 2019; scores verified, player statistics shown only when sourced":"2025/26 + 2026/27 seasons, including league and domestic cup meetings")
     :"Recent international cycle: Euro 2024, 2024/25 and 2026/27 Nations League, 2026 World Cup qualifying, 2026 World Cup and relevant friendlies"
 
   return NextResponse.json({
