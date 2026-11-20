@@ -264,7 +264,7 @@ function Bet365SlipBuilder({match}:{match:Fixture}){
       .finally(()=>{if(!controller.signal.aborted)setLoading(false)})
     return ()=>controller.abort()
   },[match.id,match.kickoff,match.home.name,match.away.name,match.competition])
-  const visible=useMemo(()=>board.filter(v=>(v.market+" "+v.label).toLowerCase().includes(search.toLowerCase())).slice(0,80),[board,search])
+  const visible=useMemo(()=>board.filter(v=>(v.market+" "+v.label).toLowerCase().includes(search.toLowerCase())).sort((a,b)=>(1/Number(b.odd))-(1/Number(a.odd))).slice(0,80),[board,search])
   const fixtures=new Set(slip.map(v=>v.fixtureId))
   const sameMatchMultiple=slip.length>1&&fixtures.size<slip.length
   const total=slip.reduce((n,v)=>n*Number(v.odd),1)
@@ -276,7 +276,7 @@ function Bet365SlipBuilder({match}:{match:Fixture}){
       :[...current,{...v,fixtureId:match.id,fixtureLabel:match.home.name+" v "+match.away.name,source,addedAt:Date.now()}])
   }
   return <section className="space-y-3 rounded-2xl border border-border bg-card p-4">
-    <div><h2 className="text-lg font-bold">Bet365 market builder</h2><p className="text-xs text-muted-foreground">Real selections from the existing odds feed. Add legs across fixtures; prices are snapshots, not guaranteed.</p></div>
+    <div><h2 className="text-lg font-bold">Bet365 market builder</h2><p className="text-xs text-muted-foreground">Real selections from the existing odds feed, ordered by bookmaker-implied likelihood (shortest odds first). This is not our statistical prediction; bookmaker margin is included. Prices are snapshots, not guaranteed.</p></div>
     <p className="text-sm">{loading?"Loading Bet365 markets…":board.length+" priced selections"+(source?" · "+source:"")}</p>
     {notice&&<p className="text-xs text-muted-foreground">{notice}</p>}
     <input className="w-full rounded-xl border border-border bg-background p-3 text-sm" placeholder="Search player or market" value={search} onChange={e=>setSearch(e.target.value)}/>
