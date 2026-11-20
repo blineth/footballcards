@@ -9,6 +9,7 @@ import type {
 import {
   getPlayerBaseline,
   getPlayerH2H,
+  getPlayerRecentMatches,
   getPlayerRefereeHistory,
   getRefereeByName,
 } from "@/lib/historical"
@@ -35,7 +36,7 @@ async function buildCandidate(
   confirmed: boolean,
 ): Promise<BuiltCandidate> {
   const baseline = await getPlayerBaseline(player.name, team)
-  const h2h = await getPlayerH2H(player.name, opponent)
+  const [h2h, recent] = await Promise.all([getPlayerH2H(player.name, opponent), getPlayerRecentMatches(player.name, team, 10)])
   const referee = refereeName ? await getRefereeByName(refereeName) : null
   const refPlayer = refereeName ? await getPlayerRefereeHistory(refereeName, player.name) : null
 
@@ -52,6 +53,30 @@ async function buildCandidate(
   const h2hFoulsPerGame = h2hFoulSamples.length > 0 ? h2hFoulsTotal / h2hFoulSamples.length : null
   const h2hBookingSamples = h2h.filter((m) => m.yellowCard != null)
   const h2hBookings = h2hBookingSamples.length > 0 ? h2hBookingSamples.filter((m) => m.yellowCard).length : null
+  // Compute rates only from recorded observations, never substitute zero for NULL.
+  const recentEvidence = (matches: typeof recent, suffix: string): EvidenceItem[] => {
+    const observedFouls = matches.filter((m) => m.foulsCommitted != null)
+    const observedCards = matches.filter((m) => m.yellowCard != null)
+    const foulAverage = observedFouls.length
+      ? observedFouls.reduce((sum, m) => sum + Number(m.foulsCommitted), 0) / observedFouls.length
+      : null
+    const cardCount = observedCards.filter((m) => m.yellowCard === true).length
+    return [
+      { key: `recent${suffix}Fouls`, label: `Last ${suffix} fouls/game`, value: foulAverage,
+        display: foulAverage == null ? "No recorded fouls" : `${foulAverage.toFixed(2)} fouls/game (${observedFouls.length} recorded)`,
+        hasData: foulAverage != null },
+      { key: `recent${suffix}Cards`, label: `Last ${suffix} bookings`,
+        value: observedCards.length ? cardCount : null,
+        display: observedCards.length ? `${cardCount}/${observedCards.length} recorded matches` : "No recorded bookings",
+        hasData: observedCards.length > 0 },
+    ]
+  }
+  const last5 = recentEvidence(recent.slice(0, 5), "5")
+  const last10 = recentEvidence(recent, "10")
+  const recent5Fouls = last5[0].value
+  const recent10Fouls = last10[0].value
+  const recent5Cards = last5[1].value
+  const recent10Cards = last10[1].value
   const refYellows = referee ? toNum(referee.yellowsPerGame) : null
   const refBookedPlayer = refPlayer ? (refPlayer.yellowCards ?? 0) > 0 : null
 
@@ -72,6 +97,12 @@ async function buildCandidate(
   add(cardsPer90, 0.35, 18)
   add(foulsPer90, 2.6, 18)
   add(h2hFoulsPerGame, 3.0, 8)
+  add(recent5Fouls, 3.0, 12)
+  add(recent10Fouls, 3.0, 8)
+  if (recent5Cards != null && recent.slice(0, 5).filter(m => m.yellowCard != null).length >= 3)
+    add(recent5Cards / recent.slice(0, 5).filter(m => m.yellowCard != null).length, 0.5, 12)
+  if (recent10Cards != null && recent.filter(m => m.yellowCard != null).length >= 5)
+    add(recent10Cards / recent.filter(m => m.yellowCard != null).length, 0.5, 8)
   if (h2hBookings != null && h2hGames > 0) {
     const reliability = Math.min(1, h2hBookingSamples.length / 4)
     const bookingRate = h2hBookings / h2hBookingSamples.length
@@ -89,7 +120,7 @@ async function buildCandidate(
   const researchConfidence = weightUsed > 0 ? Math.max(0, Math.min(100, Math.round((score / weightUsed) * 100))) : 0
   const hasHistoricalData = weightUsed > 0
 
-  const cardEvidence: EvidenceItem[] = [
+  const cardEvidence: EvidenceItem[] = [...last5, ...last10,
     {
       key: "yellowsLastSeason",
       label: "Yellows last season",
@@ -138,9 +169,10 @@ async function buildCandidate(
 
   // Explanation from real signals only.
   const reasons: string[] = []
+  if (recent5Fouls !== null && recent5Fouls >= 2) reasons.push(`${recent5Fouls.toFixed(1)} fouls/game across recent recorded matches`)
   if (seasonCardRate !== null && seasonCardRate >= 0.22) reasons.push(`${Math.round(seasonCardRate*100)}% season booking rate`)
-  if (h2hBookingSamples.length >= 2 && Number(h2hBookings ?? 0) > 0) reasons.push(`booked in ${h2hBookings}/${h2hGames} against ${opponent}`)
-  if (h2hBookingSamples.length >= 2 && h2hBookings === 0) reasons.push(`no bookings in ${h2hGames} H2Hs against ${opponent}`)
+  if (h2hBookingSamples.length >= 2 && Number(h2hBookings ?? 0) > 0) reasons.push(`booked in ${h2hBookings}/${h2hBookingSamples.length} recorded matches against ${opponent}`)
+  if (h2hBookingSamples.length >= 2 && h2hBookings === 0) reasons.push(`no bookings in ${h2hBookingSamples.length} recorded H2Hs against ${opponent}`)
   if (foulsPer90 !== null && foulsPer90 >= 2) reasons.push(`a high ${foulsPer90.toFixed(2)} fouls per 90`)
   if (h2hFoulsPerGame !== null && h2hFoulsPerGame >= 1.5)
     reasons.push(`${h2hFoulsPerGame.toFixed(1)} fouls per game against ${opponent}`)
