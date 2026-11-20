@@ -1142,6 +1142,12 @@ export default function BetBuilderPage(){
   const preMatchRows=useMemo(()=>selectionsFrom(data),[data])
   const liveAdjustedRows=useMemo(()=>applyLive(preMatchRows,live,data),[preMatchRows,live,data])
   const allRows=useMemo(()=>overlayVerifiedLiveBet365(liveAdjustedRows,liveOdds),[liveAdjustedRows,liveOdds])
+  const formH2HRows=useMemo(()=>{
+    const base=data?.slips?.find(slip=>slip.id==="form-h2h-builder")?.legs??[]
+    if(!live||!(live.status==="live"||live.status==="halftime"))return base.map(leg=>({...leg,id:keyOf(leg)}))
+    const available=new Map(allRows.map(row=>[keyOf(row),row]))
+    return base.map(leg=>available.get(keyOf(leg))).filter((leg):leg is Selection=>Boolean(leg))
+  },[data,live,allRows])
   const visible=useMemo(()=>{
     const allowed=new Set(categories.find(x=>x.id===category)?.markets??[])
     const rows=allRows.filter(x=>allowed.has(x.market as MarketKey))
@@ -1382,11 +1388,11 @@ export default function BetBuilderPage(){
           <div className="mt-3 space-y-2">{bestAvailableBets.map((row,index)=><div key={row.id} className="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-2xl bg-black/20 px-3 py-2.5"><span className="flex size-7 items-center justify-center rounded-full bg-cyan-300/10 text-[0.5rem] font-black text-cyan-100">{index+1}</span><div className="min-w-0"><p className="truncate text-xs font-black">{row.label}</p><p className="mt-0.5 truncate text-[0.44rem] text-white/30">{row.market.startsWith("board:")?"Bet365 market consensus":"Match Edge player model"} · verified Bet365</p></div><div className="text-right"><p className="font-mono text-sm font-black text-emerald-200">{Number(row.bookmakerOdds).toFixed(2)}</p><p className="text-[0.42rem] font-black text-white/30">{percent(row.probability)} chance</p></div></div>)}</div>
         </section>:null}
 
-        {data.slips?.find(slip=>slip.id==="form-h2h-builder")?<section className="rounded-3xl border border-cyan-300/20 bg-cyan-300/[0.055] p-4">
+        {formH2HRows.length?<section className="rounded-3xl border border-cyan-300/20 bg-cyan-300/[0.055] p-4">
           <p className="text-[0.52rem] font-black uppercase tracking-widest text-cyan-200">Your prediction method</p>
           <h2 className="mt-1 text-lg font-black">Recent form + head-to-head bet slip</h2>
-          <p className="mt-1 text-[0.6rem] leading-relaxed text-white/45">Built from repeated player actions in their last five and ten matches, direct meetings and season form. Cards need booking evidence; a previous card is never a guarantee. Only selections with verified Bet365 prices can be added to your bet.</p>
-          <div className="mt-3 space-y-2">{data.slips.find(slip=>slip.id==="form-h2h-builder")?.legs.map((leg,index)=>{const priced=verifiedBet365Odd(leg)!=null&&bet365MarketStatus(leg.market)!=="unavailable";const evidence=marketEvidence(leg);return <div key={keyOf(leg)} className="flex items-center gap-2 rounded-xl bg-black/20 p-2.5"><span className="w-5 shrink-0 text-center text-[0.5rem] font-black text-cyan-200">{index+1}</span><div className="min-w-0 flex-1"><p className="text-[0.62rem] font-black">{leg.player} · {leg.label}</p><p className="mt-0.5 text-[0.48rem] text-white/40">{percent(leg.probability)} model chance{evidence?" · "+evidence:""}</p></div><button disabled={!priced} onClick={()=>toggle({...leg,id:keyOf(leg)})} className={"shrink-0 rounded-lg px-2.5 py-2 text-[0.5rem] font-black "+(priced?"bg-cyan-300 text-cyan-950":"bg-white/5 text-white/30")}>{priced?(selected[keyOf(leg)]?"Remove":"Add to slip"):"No price"}</button></div>})}</div>
+          <p className="mt-1 text-[0.6rem] leading-relaxed text-white/45">Built from repeated player actions in their last five and ten matches, direct meetings and season form. During live play, already-achieved lines and substituted-off players are removed, remaining chances adapt to recorded actions, and only verified available Bet365 lines can be added.</p>
+          <div className="mt-3 space-y-2">{formH2HRows.map((leg,index)=>{const priced=verifiedBet365Odd(leg)!=null&&bet365MarketStatus(leg.market)!=="unavailable";const evidence=marketEvidence(leg);return <div key={keyOf(leg)} className="flex items-center gap-2 rounded-xl bg-black/20 p-2.5"><span className="w-5 shrink-0 text-center text-[0.5rem] font-black text-cyan-200">{index+1}</span><div className="min-w-0 flex-1"><p className="text-[0.62rem] font-black">{leg.player} · {leg.label}</p><p className="mt-0.5 text-[0.48rem] text-white/40">{percent(leg.probability)} {live&&(live.status==="live"||live.status==="halftime")?"remaining-match":"model"} chance{leg.liveAdjusted&&leg.currentCount!=null?" · "+leg.currentCount+" recorded":""}{evidence?" · "+evidence:""}</p></div><button disabled={!priced} onClick={()=>toggle({...leg,id:keyOf(leg)})} className={"shrink-0 rounded-lg px-2.5 py-2 text-[0.5rem] font-black "+(priced?"bg-cyan-300 text-cyan-950":"bg-white/5 text-white/30")}>{priced?(selected[keyOf(leg)]?"Remove":"Add to slip"):"No price"}</button></div>})}</div>
           <p className="mt-3 text-[0.5rem] leading-relaxed text-white/35">Individual probabilities are estimates, not an independently validated combined win probability. Bet365 may adjust same-game prices for correlation.</p>
         </section>:null}
 
