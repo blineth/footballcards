@@ -1087,19 +1087,11 @@ export default function BetBuilderPage(){
     if(!(currentLive.status==="live"||currentLive.status==="halftime")||!currentLive.players?.length)return
     const active=currentLive.players.filter(livePlayerIsActive)
     try{
-      const [baselineResult,historyResult]=await Promise.allSettled([
-        fetch(liveBaselineUrl(f,currentLive),{cache:"no-store"}),
-        fetch(scorecardUrl(f,true),{cache:"no-store"}),
-      ])
-      const baselineResponse=baselineResult.status==="fulfilled"?baselineResult.value:null
-      if(!baselineResponse?.ok)return
+      // Render the fast live baseline immediately; never block the match UI on history.
+      const baselineResponse=await fetch(liveBaselineUrl(f,currentLive),{cache:"no-store"})
+      if(!baselineResponse.ok)return
       const next=await baselineResponse.json() as Scorecard
-      const historyResponse=historyResult.status==="fulfilled"?historyResult.value:null
-      const evidenced:Scorecard|null=historyResponse?.ok?await historyResponse.json().catch(()=>null) as Scorecard|null:null
-      const evidenceByName=new Map((evidenced?.ok?evidenced.players??[]:[]).flatMap(p=>[
-        [normPlayer(p.name),p] as const,
-        ...(p.dbName?[[normPlayer(p.dbName),p] as const]:[]),
-      ]))
+      const evidenceByName=new Map<string,ScorePlayer>()
       if(next?.ok&&next.players?.length){
         setData(current=>{
           const mergedPlayers=next.players?.map(p=>{
@@ -1115,8 +1107,32 @@ export default function BetBuilderPage(){
           return merged
         })
         setLoading(false)
+        // Enrich with verified last-five records in the background, without delaying live stats.
+        void (async()=>{
+          try{
+            const controller=new AbortController()
+            const timer=window.setTimeout(()=>controller.abort(),12000)
+            let response:Response
+            try{response=await fetch(scorecardUrl(f,true),{cache:"no-store",signal:controller.signal})}
+            finally{window.clearTimeout(timer)}
+            if(!response.ok)return
+            const historical=await response.json() as Scorecard
+            if(!historical.ok||!historical.players?.length)return
+            const byName=new Map<string,ScorePlayer>()
+            for(const p of historical.players){byName.set(normPlayer(p.name),p);if(p.dbName)byName.set(normPlayer(p.dbName),p)}
+            setData(current=>{
+              if(!current?.ok||!current.players?.length)return current
+              const merged={...current,players:current.players.map(p=>{
+                const h=byName.get(normPlayer(p.name))??(p.dbName?byName.get(normPlayer(p.dbName)):undefined)
+                return {...p,recentGameLog:p.recentGameLog?.length?p.recentGameLog:h?.recentGameLog??[],h2hGameLog:p.h2hGameLog?.length?p.h2hGameLog:h?.h2hGameLog??[]}
+              })}
+              writeScorecardCache(f,merged)
+              return merged
+            })
+          }catch{}
+        })()
       }
-    }catch{}
+    }catch{setLoading(false)}
   },[])
   useEffect(()=>{
     if(!fixture||!live||!liveActiveRosterSignature)return
