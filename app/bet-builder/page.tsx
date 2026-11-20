@@ -768,7 +768,15 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
     const live=Number(row.liveRankScore??row.probability)
     const p=Number(row.probability)
     const baseBonus=baseMarket(row.market)?.035:0
-    return p*.72+live*.20+stability(row)*.08+baseBonus
+    // Reward repeat H2H bookings only when backed by dated match records.
+    // A tiny sample is evidence of a pattern, not a guaranteed future card.
+    const h2hCards=row.market==="card"?(row.h2hGameLog??[]).filter(g=>g.yellow).length:0
+    const h2hGames=row.market==="card"?(row.h2hGameLog??[]).length:0
+    const recentCards=row.market==="card"?(row.recentGameLog??[]).filter(g=>g.yellow).length:0
+    const cardPatternBonus=h2hGames>=2&&h2hCards>=2
+      ?Math.min(.16,(h2hCards/h2hGames)*.09+Math.min(4,h2hGames)*.012+(recentCards>=2?.02:0))
+      :0
+    return p*.72+live*.20+stability(row)*.08+baseBonus+cardPatternBonus
   }
   type PriceMode="live"|"reference"|"model"
   const oddFor=(row:Selection,mode:PriceMode)=>{
@@ -780,6 +788,7 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
     const odd=oddFor(row,mode)
     if(!(odd>1)||row.confidence==="D")return false
     if(row.market==="card"&&row.probability<.16)return false
+    if(row.market==="card"&&(row.h2hGameLog??[]).length>=2&&(row.h2hGameLog??[]).every(g=>g.yellow)&&Number(row.recent5HitRate??0)>=.2)return true
     if((row.market.startsWith("goal")||row.market.startsWith("assist"))&&row.probability<.14)return false
     return true
   }
