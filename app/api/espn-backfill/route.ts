@@ -2,7 +2,7 @@ import {NextResponse} from "next/server"
 import {db,isDatabaseConfigured} from "@/lib/db"
 import {playerH2H} from "@/lib/db/schema"
 import {ensureResearchSchema} from "@/lib/db/ensure-research-schema"
-import {sql} from "drizzle-orm"
+import {and,eq} from "drizzle-orm"
 
 export const dynamic="force-dynamic"
 export const maxDuration=60
@@ -65,23 +65,28 @@ export async function GET(request:Request){
         }
         eligible+=rows.length
         if(rows.length){
-          const saved=await db.insert(playerH2H).values(rows).onConflictDoUpdate({
-            target:[playerH2H.playerName,playerH2H.team,playerH2H.opponent,playerH2H.matchDate,playerH2H.competition],
-            set:{
-              externalMatchId:sql`excluded.external_match_id`,
-              externalPlayerId:sql`excluded.external_player_id`,
-              starter:sql`excluded.starter`,
-              foulsCommitted:sql`excluded.fouls_committed`,
-              foulsDrawn:sql`excluded.fouls_drawn`,
-              shots:sql`excluded.shots`,
-              shotsOnTarget:sql`excluded.shots_on_target`,
-              yellowCard:sql`excluded.yellow_card`,
-              redCard:sql`excluded.red_card`,
-              goals:sql`excluded.goals`,
-              assists:sql`excluded.assists`
-            }
-          }).returning({id:playerH2H.id})
-          verified+=saved.length
+          const existing=await db.select({id:playerH2H.id,playerName:playerH2H.playerName,team:playerH2H.team,opponent:playerH2H.opponent})
+            .from(playerH2H).where(and(eq(playerH2H.matchDate,matchDate),eq(playerH2H.competition,"Premier League")))
+          const key=(r:any)=>[r.playerName,r.team,r.opponent].join("|").toLowerCase()
+          const existingByKey=new Map(existing.map(r=>[key(r),r.id]))
+          const toInsert:any[]=[]
+          for(const row of rows){
+            const id=existingByKey.get(key(row))
+            if(id){
+              await db.update(playerH2H).set({
+                externalMatchId:row.externalMatchId,externalPlayerId:row.externalPlayerId,
+                starter:row.starter,foulsCommitted:row.foulsCommitted,foulsDrawn:row.foulsDrawn,
+                shots:row.shots,shotsOnTarget:row.shotsOnTarget,yellowCard:row.yellowCard,
+                redCard:row.redCard,goals:row.goals,assists:row.assists
+              }).where(eq(playerH2H.id,id))
+              verified++
+            }else{toInsert.push(row)}
+          }
+          if(toInsert.length){
+            const saved=await db.insert(playerH2H).values(toInsert).returning({id:playerH2H.id})
+            inserted+=saved.length
+            verified+=saved.length
+          }
         }
         checked++
       }catch(e){errors.push(clean(event.id)+": "+String((e as any)?.cause?.message??(e as any)?.message??e).slice(-850))}
