@@ -1302,6 +1302,25 @@ export default function BetBuilderPage(){
   },[allRows,data?.lineupMode])
   const [openMarket,setOpenMarket]=useState<Category|null>("fouls")
   const livePlayerCounts=useMemo(()=>new Map((live?.players??[]).map(player=>[normPlayer(player.player),player])),[live])
+  const recommendedPicks=useMemo(()=>{
+    const strongest=allRows.filter(row=>row.probability>=.4&&row.confidence!=="D"&&!row.market.startsWith("board:"))
+      .filter(row=>{
+        const last5=Number(row.recent5HitRate??0),last10=Number(row.recent10HitRate??0)
+        return last5>=.4||last10>=.5||(Number(row.h2hMatches??0)>=2&&Number(row.h2hHitRate??0)>=.5)
+      }).sort((a,b)=>b.probability-a.probability)
+    const picks:Selection[]=[],used=new Set<string>(),families=new Map<string,number>()
+    for(const row of strongest){
+      if(picks.length>=5)break
+      const family=categoryForMarket(row.market)
+      if(used.has(normPlayer(row.player)))continue
+      if((families.get(family)??0)>=2)continue
+      picks.push(row);used.add(normPlayer(row.player));families.set(family,(families.get(family)??0)+1)
+    }
+    return picks
+  },[allRows])
+  const recommendedReferenceOdds=recommendedPicks.length>0&&recommendedPicks.every(p=>verifiedBet365Odd(p)!=null)
+    ?recommendedPicks.reduce((value,p)=>value*Number(verifiedBet365Odd(p)),1):null
+  const recommendedModelChance=recommendedPicks.length?recommendedPicks.reduce((value,p)=>value*p.probability,1):null
   const selectedRows=Object.values(selected)
   const referenceProduct=selectedRows.length&&selectedRows.every(s=>verifiedBet365Odd(s)!=null)
     ? selectedRows.reduce((p,s)=>p*Number(verifiedBet365Odd(s)),1)
@@ -1409,6 +1428,12 @@ export default function BetBuilderPage(){
 
         }
 
+        {recommendedPicks.length>0?<section className="rounded-3xl border border-emerald-300/25 bg-gradient-to-br from-emerald-300/[0.09] to-black/20 p-4">
+          <p className="text-xs font-black uppercase tracking-widest text-emerald-300">Recommended · your form + H2H method</p><h2 className="mt-1 text-lg font-black">Most probable player actions</h2><p className="mt-1 text-xs text-white/50">Up to five evidence-backed selections, with different players and a mix of markets where supported. Review them and add only the ones you want.</p>
+          <div className="mt-3 space-y-2">{recommendedPicks.map(p=>{const price=displayedBet365Odd(p);return <button key={p.id} onClick={()=>{toggle(p);setTrayOpen(true)}} className={"flex w-full items-center gap-3 rounded-xl border p-3 text-left "+(selected[p.id]?"border-emerald-300/50 bg-emerald-300/10":"border-white/10 bg-black/20")}><span className="text-emerald-300">{selected[p.id]?"✓":"+"}</span><span className="min-w-0 flex-1"><span className="block text-sm font-bold">{p.player} · {p.label}</span><span className="mt-1 block text-[0.65rem] text-white/45">{marketEvidence(p)||"Recent form / head-to-head model"} · {price?"Bet365 "+price.odd.toFixed(2)+(price.state==="reference"?" reference":""):"No verified price"}</span></span><span className="font-mono text-sm font-black text-emerald-200">{percent(p.probability)}</span></button>})}</div>
+          <div className="mt-3 rounded-xl bg-black/25 p-3"><p className="text-sm font-bold">{recommendedReferenceOdds!=null&&(!inPlay||liveBet365)?recommendedReferenceOdds.toFixed(2)+" decimal · "+(recommendedReferenceOdds-1).toFixed(2)+"/1 equivalent":"Combined Bet365 price unavailable"}</p><p className="mt-1 text-xs text-white/45">{recommendedReferenceOdds!=null&&(!inPlay||liveBet365)?"Indicative product of singles only; not a confirmed Bet365 Bet Builder quote.":"Awaiting verified prices for every leg; the app will not invent odds."} {recommendedModelChance!=null?"Naive independent-leg chance "+percent(recommendedModelChance)+", not a calibrated combined probability.":""}</p></div>
+          <button onClick={()=>{setSelected(cur=>{const next={...cur};for(const pick of recommendedPicks)next[pick.id]=pick;return next});setTrayOpen(true)}} className="mt-3 w-full rounded-xl bg-emerald-300 px-4 py-3 text-sm font-black text-emerald-950">Add recommended selections to my slip</button>
+        </section>:null}
         <section className="space-y-3">
           <div className="px-1"><p className="text-lg font-black">Build your bet</p><p className="mt-1 text-xs text-white/50">Open a market, compare player probabilities and recent/H2H evidence, then tap any selection to add or remove it from your slip. No preset odds targets.</p>{inPlay&&live?<p className="mt-2 text-[0.7rem] text-emerald-200/80">Live player totals · {live.source??"match feed"} · updated {live.updatedAt?new Date(live.updatedAt).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}):"time unknown"} · refreshes approximately every 30 seconds</p>:null}
             <p className="mt-2 text-xs font-bold text-emerald-300">{selectedRows.length} selection{selectedRows.length===1?"":"s"} in your slip</p></div>
