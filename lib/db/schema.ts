@@ -54,6 +54,8 @@ export const playerH2H = pgTable(
     venue: text("venue"),
     position: text("position"),
     starter: boolean("starter"),
+    externalMatchId: text("external_match_id"),
+    refereeName: text("referee_name"),
     minutes: integer("minutes"),
     foulsCommitted: integer("fouls_committed"),
     foulsDrawn: integer("fouls_drawn"),
