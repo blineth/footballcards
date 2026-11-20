@@ -1848,8 +1848,25 @@ export async function GET(request: Request) {
       },{status:503})
     }
   }
-  if (!radarResponse.ok) return radarResponse
-  const radar = await radarResponse.json()
+  if (!radarResponse.ok) {
+    try {
+      const fallback = await buildVerifiedBet365SnapshotFallback({request,date,home,away,competition})
+      return scorecardJson(fallback,builderView)
+    } catch {
+      return NextResponse.json({ok:false,error:"Match research is unavailable and no verified snapshot could be loaded.",fallbackAvailable:false},{status:503})
+    }
+  }
+  let radar: any
+  try {
+    radar = await radarResponse.json()
+  } catch {
+    try {
+      const fallback = await buildVerifiedBet365SnapshotFallback({request,date,home,away,competition})
+      return scorecardJson(fallback,builderView)
+    } catch {
+      return NextResponse.json({ok:false,error:"Match research returned invalid data and no verified snapshot could be loaded.",fallbackAvailable:false},{status:503})
+    }
+  }
   let candidates: any[] = Array.isArray(radar?.candidates) ? radar.candidates : []
 
   // International confirmed XIs can be much better covered by the dedicated
