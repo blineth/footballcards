@@ -1087,12 +1087,30 @@ export default function BetBuilderPage(){
     if(!(currentLive.status==="live"||currentLive.status==="halftime")||!currentLive.players?.length)return
     const active=currentLive.players.filter(livePlayerIsActive)
     try{
-      const r=await fetch(liveBaselineUrl(f,currentLive),{cache:"default"})
-      if(!r.ok)return
-      const next=await r.json() as Scorecard
+      const [baselineResult,historyResult]=await Promise.allSettled([
+        fetch(liveBaselineUrl(f,currentLive),{cache:"no-store"}),
+        fetch(scorecardUrl(f,true),{cache:"no-store"}),
+      ])
+      const baselineResponse=baselineResult.status==="fulfilled"?baselineResult.value:null
+      if(!baselineResponse?.ok)return
+      const next=await baselineResponse.json() as Scorecard
+      const historyResponse=historyResult.status==="fulfilled"?historyResult.value:null
+      const evidenced:Scorecard|null=historyResponse?.ok?await historyResponse.json().catch(()=>null) as Scorecard|null:null
+      const evidenceByName=new Map((evidenced?.ok?evidenced.players??[]:[]).flatMap(p=>[
+        [normPlayer(p.name),p] as const,
+        ...(p.dbName?[[normPlayer(p.dbName),p] as const]:[]),
+      ]))
       if(next?.ok&&next.players?.length){
         setData(current=>{
-          const merged={...next,referee:next.referee??current?.referee??null}
+          const mergedPlayers=next.players?.map(p=>{
+            const historical=evidenceByName.get(normPlayer(p.name))??(p.dbName?evidenceByName.get(normPlayer(p.dbName)):undefined)
+            const prior=current?.players?.find(x=>normPlayer(x.name)===normPlayer(p.name)||Boolean(p.dbName&&normPlayer(x.dbName??"")===normPlayer(p.dbName)))
+            return {...p,
+              recentGameLog:p.recentGameLog?.length?p.recentGameLog:historical?.recentGameLog?.length?historical.recentGameLog:prior?.recentGameLog??[],
+              h2hGameLog:p.h2hGameLog?.length?p.h2hGameLog:historical?.h2hGameLog?.length?historical.h2hGameLog:prior?.h2hGameLog??[],
+            }
+          })
+          const merged={...next,players:mergedPlayers,referee:next.referee??current?.referee??null}
           writeScorecardCache(f,merged)
           return merged
         })
