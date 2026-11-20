@@ -26,6 +26,25 @@ const team = (
 
 export const predictedFixtures: PredictedFixture[] = [
   {
+    date:"2026-11-21",home:"Manchester City",away:"Fulham",teams:{
+      "Manchester City":team("4-2-3-1",[["Gianluigi Donnarumma","GK"],["Nico O'Reilly","LB"],["Ruben Dias","CB"],["Josko Gvardiol","CB"],["Abdukodir Khusanov","RB"],["Elliot Anderson","CM"],["Enzo Fernandez","CM"],["Jeremy Doku","LW"],["Rayan Cherki","AM"],["Iliman Ndiaye","RW"],["Erling Haaland","ST"]],"RotoWire predicted XI · 20 Nov 2026"),
+      Fulham:team("4-2-3-1",[["Bernd Leno","GK"],["Antonee Robinson","LB"],["Calvin Bassey","CB"],["David Affengruber","CB"],["Timothy Castagne","RB"],["Shea Charles","CM"],["Sander Berge","CM"],["Alex Iwobi","LW"],["Josh King","AM"],["Oscar Bobb","RW"],["Gonzalo Garcia","ST"]],"RotoWire predicted XI · 20 Nov 2026"),
+    }
+  },
+  {
+    date:"2026-11-21",home:"Tottenham Hotspur",away:"Ipswich Town",teams:{
+      "Tottenham Hotspur":team("4-3-3",[["Antonin Kinsky","GK"],["Andrew Robertson","LB"],["Micky van de Ven","CB"],["Jan Paul van Hecke","CB"],["Pedro Porro","RB"],["Sandro Tonali","CM"],["Archie Gray","CM"],["Mateus Fernandes","CM"],["Omar Marmoush","LW"],["Mohammed Kudus","RW"],["Dominic Solanke","ST"]],"RotoWire predicted XI · 20 Nov 2026"),
+      "Ipswich Town":team("3-4-2-1",[["Christian Walton","GK"],["Issa Diop","CB"],["Dara O'Shea","CB"],["Jacob Greaves","CB"],["Leif Davis","LWB"],["Exequiel Palacios","CM"],["Sasa Lukic","CM"],["Abdoul Ouattara","RWB"],["Julio Enciso","AM"],["Daizen Maeda","AM"],["Zian Flemming","ST"]],"RotoWire predicted XI · 20 Nov 2026"),
+    }
+  },
+  {
+    date:"2026-11-21",home:"Coventry City",away:"Crystal Palace",teams:{
+      "Coventry City":team("4-2-3-1",[["Carl Rushworth","GK"],["Jay Dasilva","LB"],["Ethan Pinnock","CB"],["Bobby Thomas","CB"],["Milan van Ewijk","RB"],["Victor Torp","CM"],["Matt Grimes","CM"],["Yann Gboho","LW"],["Jack Rudoni","AM"],["Tatsuhiro Sakamoto","RW"],["Taiwo Awoniyi","ST"]],"RotoWire predicted XI · 20 Nov 2026"),
+      "Crystal Palace":team("3-4-2-1",[["Dean Henderson","GK"],["Axel Disasi","CB"],["Chris Richards","CB"],["Jaydee Canvot","CB"],["Tyrick Mitchell","LWB"],["Will Hughes","CM"],["Adam Wharton","CM"],["Anan Khalaili","RWB"],["Yeremy Pino","AM"],["Daichi Kamada","AM"],["Jorgen Strand Larsen","ST"]],"RotoWire predicted XI · 20 Nov 2026"),
+    }
+  },
+
+  {
     date: "2026-09-12", home: "Aston Villa", away: "Nottingham Forest", teams: {
       "Aston Villa": team("4-2-3-1", [["Zion Suzuki","GK"],["Matty Cash","RB"],["Pau Torres","RCB"],["Victor Lindelof","LCB"],["Ian Maatsen","LB"],["Boubacar Kamara","RDM"],["Tyrone Mings","LDM"],["Emiliano Buendia","RW"],["John McGinn","CAM"],["Ross Barkley","LW"],["Nicolas Jackson","ST"]], "Starting11 predicted XI · 11 Sep 2026"),
       "Nottingham Forest": team("3-4-2-1", [["Matz Sels","GK"],["Jair Cunha","RCB"],["Nikola Milenkovic","CB"],["Murillo","LCB"],["Ola Aina","RWB"],["Xaver Schlager","RCM"],["James McAtee","LCM"],["Neco Williams","LWB"],["Morgan Gibbs-White","RAM"],["Dan Ndoye","LAM"],["Igor Jesus","ST"]], "Recent confirmed XI / most-used fallback · 5 Sep 2026", "recent-xi-fallback"),
