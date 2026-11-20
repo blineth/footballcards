@@ -46,9 +46,12 @@ async function buildCandidate(
   const seasonCardRate = yellows != null && appearances != null && appearances > 0 ? yellows / appearances : null
 
   const h2hGames = h2h.length
-  const h2hFoulsTotal = h2h.reduce((acc, m) => acc + (m.foulsCommitted ?? 0), 0)
-  const h2hFoulsPerGame = h2hGames > 0 ? h2hFoulsTotal / h2hGames : null
-  const h2hBookings = h2hGames > 0 ? h2h.filter((m) => m.yellowCard).length : null
+  // Only observed foul counts enter the average: missing is not a zero-foul match.
+  const h2hFoulSamples = h2h.filter((m) => m.foulsCommitted != null && Number.isFinite(Number(m.foulsCommitted)))
+  const h2hFoulsTotal = h2hFoulSamples.reduce((acc, m) => acc + Number(m.foulsCommitted), 0)
+  const h2hFoulsPerGame = h2hFoulSamples.length > 0 ? h2hFoulsTotal / h2hFoulSamples.length : null
+  const h2hBookingSamples = h2h.filter((m) => m.yellowCard != null)
+  const h2hBookings = h2hBookingSamples.length > 0 ? h2hBookingSamples.filter((m) => m.yellowCard).length : null
   const refYellows = referee ? toNum(referee.yellowsPerGame) : null
   const refBookedPlayer = refPlayer ? (refPlayer.yellowCards ?? 0) > 0 : null
 
@@ -70,11 +73,11 @@ async function buildCandidate(
   add(foulsPer90, 2.6, 18)
   add(h2hFoulsPerGame, 3.0, 8)
   if (h2hBookings != null && h2hGames > 0) {
-    const reliability = Math.min(1, h2hGames / 4)
-    const bookingRate = h2hBookings / h2hGames
+    const reliability = Math.min(1, h2hBookingSamples.length / 4)
+    const bookingRate = h2hBookings / h2hBookingSamples.length
     score += Math.min(1, bookingRate / 0.5) * 22 * reliability
     weightUsed += 22 * reliability
-    if (h2hGames >= 2 && h2hBookings === 0) score -= 7 * reliability
+    if (h2hBookingSamples.length >= 2 && h2hBookings === 0) score -= 7 * reliability
   }
   if (refBookedPlayer === true) {
     score += 4
@@ -118,7 +121,7 @@ async function buildCandidate(
       display:
         h2hBookings === null
           ? "No H2H data"
-          : `Booked in ${h2hBookings} of last ${h2hGames} H2Hs`,
+          : `Booked in ${h2hBookings} of ${h2hBookingSamples.length} recorded H2Hs`,
       hasData: h2hBookings !== null,
     },
     {
@@ -136,8 +139,8 @@ async function buildCandidate(
   // Explanation from real signals only.
   const reasons: string[] = []
   if (seasonCardRate !== null && seasonCardRate >= 0.22) reasons.push(`${Math.round(seasonCardRate*100)}% season booking rate`)
-  if (h2hGames >= 2 && Number(h2hBookings ?? 0) > 0) reasons.push(`booked in ${h2hBookings}/${h2hGames} against ${opponent}`)
-  if (h2hGames >= 2 && Number(h2hBookings ?? 0) === 0) reasons.push(`no bookings in ${h2hGames} H2Hs against ${opponent}`)
+  if (h2hBookingSamples.length >= 2 && Number(h2hBookings ?? 0) > 0) reasons.push(`booked in ${h2hBookings}/${h2hGames} against ${opponent}`)
+  if (h2hBookingSamples.length >= 2 && h2hBookings === 0) reasons.push(`no bookings in ${h2hGames} H2Hs against ${opponent}`)
   if (foulsPer90 !== null && foulsPer90 >= 2) reasons.push(`a high ${foulsPer90.toFixed(2)} fouls per 90`)
   if (h2hFoulsPerGame !== null && h2hFoulsPerGame >= 1.5)
     reasons.push(`${h2hFoulsPerGame.toFixed(1)} fouls per game against ${opponent}`)
