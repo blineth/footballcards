@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-20T18:41:53.064287Z",
+  "generatedAt": "2026-11-20T18:45:44.992805Z",
   "domesticScope": "2024/25 + 2025/26 + 2026/27 to date, Premier League/Championship/League One/League Two only",
   "internationalScope": "Excluded from this domestic-only backfill",
   "rows": 143052,
@@ -34,6 +34,14 @@
       "failures": []
     }
   ],
+  "missingPlayerStats": {
+    "fouls_committed": 272,
+    "fouls_drawn": 272,
+    "shots": 272,
+    "shots_on_target": 272,
+    "yellow_card": 272,
+    "red_card": 272
+  },
   "neonSync": {
     "rows": 143052,
     "competitions": {
