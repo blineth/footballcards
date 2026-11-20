@@ -1183,6 +1183,35 @@ export default function BetBuilderPage(){
     }finally{setH2hLoading(false)}
   },[fixture,h2hOpen,h2hData])
 
+  // Match-by-match evidence is fetched independently of the heavy model and live odds.
+  // A failed or slow history request never blocks match display.
+  const historyRosterKey=(data?.players??[]).map(p=>p.dbName??p.name).sort().join("|")
+  useEffect(()=>{
+    if(!fixture||!data?.ok||!historyRosterKey)return
+    const controller=new AbortController()
+    const q=new URLSearchParams({date:fixture.date,home:fixture.home,away:fixture.away})
+    for(const name of historyRosterKey.split("|"))q.append("player",name)
+    void (async()=>{
+      try{
+        const response=await fetch("/api/player-match-history?"+q,{cache:"no-store",signal:controller.signal})
+        if(!response.ok)return
+        const payload=await response.json() as {ok:boolean;players?:Array<{name:string;recentGameLog:GameLog[];h2hGameLog:GameLog[]}>}
+        if(!payload.ok||!payload.players?.length)return
+        const byName=new Map(payload.players.map(p=>[normPlayer(p.name),p]))
+        setData(current=>{
+          if(!current?.ok||!current.players)return current
+          const updated={...current,players:current.players.map(p=>{
+            const h=byName.get(normPlayer(p.dbName??p.name))??byName.get(normPlayer(p.name))
+            return h?{...p,recentGameLog:h.recentGameLog.length?h.recentGameLog:p.recentGameLog??[],
+              h2hGameLog:h.h2hGameLog.length?h.h2hGameLog:p.h2hGameLog??[]}:p
+          })}
+          writeScorecardCache(fixture,updated)
+          return updated
+        })
+      }catch{}
+    })()
+    return()=>controller.abort()
+  },[fixture,historyRosterKey])
   const preMatchRows=useMemo(()=>selectionsFrom(data),[data])
   const liveAdjustedRows=useMemo(()=>applyLive(preMatchRows,live,data),[preMatchRows,live,data])
   const allRows=useMemo(()=>overlayVerifiedLiveBet365(liveAdjustedRows,liveOdds),[liveAdjustedRows,liveOdds])
