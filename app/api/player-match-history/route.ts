@@ -11,7 +11,7 @@ const dateString=(v:unknown)=>String(v??"").slice(0,10)
 export async function GET(request:Request){
   const url=new URL(request.url)
   const date=url.searchParams.get("date")??""
-  const names=url.searchParams.getAll("player").filter(Boolean).slice(0,40)
+  const names=url.searchParams.getAll("player").filter(Boolean).slice(0,60)
   const home=url.searchParams.get("home")??""
   const away=url.searchParams.get("away")??""
   if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!names.length||!home||!away)
@@ -31,10 +31,12 @@ export async function GET(request:Request){
         shots:Number(r.shots??0),shotsOnTarget:Number(r.shotsOnTarget??0),
         yellow:r.yellowCard===true,
       })
-      const opponent=norm(eligible[0]?.team??"")===norm(home)?away:home
-      const h2h=ordered.filter(r=>norm(r.opponent)===norm(opponent))
+      const h2h=ordered.filter(r=>
+        (norm(r.team??"")===norm(home)&&norm(r.opponent)===norm(away))||
+        (norm(r.team??"")===norm(away)&&norm(r.opponent)===norm(home))
+      )
       return {name,recentGameLog:ordered.slice(0,5).map(toLog).reverse(),
-        h2hGameLog:h2h.slice(0,5).map(toLog),sampleMatches:eligible.length,
+        h2hGameLog:h2h.slice(0,5).map(toLog),h2hMeetings:h2h.length,h2hNoRecordedAppearances:h2h.length===0,sampleMatches:eligible.length,
         seasonMatches:eligible.filter(r=>dateString(r.matchDate)>=date.slice(0,4)+"-08-01").length}
     })
     return NextResponse.json({ok:true,players:result,source:"Stored dated player match records",completeFive:result.filter(p=>p.recentGameLog.length===5).length},{headers:{"Cache-Control":"no-store"}})
