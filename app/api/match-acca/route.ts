@@ -698,12 +698,22 @@ export async function GET(request:Request){
         .filter((x:any)=>x.bookmakerOdds!=null&&Number(x.bookmakerOdds)>1&&Boolean(p.bet365OddsVerifiedAt))
         .sort((a:any,b:any)=>b.score-a.score||b.probability-a.probability)[0]??null
     }).filter(Boolean).sort((a:any,b:any)=>b.score-a.score||b.probability-a.probability)
+    // Separate result-only combinations. Select the best evidence-supported winner
+    // only when a current Bet365 price is available; never imply guaranteed value.
+    const pricedWinners=wins.filter((l:any)=>{
+      const odd=exactPrice(l.prediction,l.market,"Bet365")
+      return odd!=null&&odd>1&&Boolean(l.prediction?.bet365OddsVerifiedAt)&&l.probability>=.48
+    }).map((l:any)=>({...l,bookmakerOdds:exactPrice(l.prediction,l.market,"Bet365"),
+      impliedProbability:1/Number(exactPrice(l.prediction,l.market,"Bet365"))}))
+      .sort((a:any,b:any)=>(b.probability-b.impliedProbability)-(a.probability-a.impliedProbability)||b.probability-a.probability)
     const activePredictions=predictions.filter(p=>!p.finished)
     const finishedPredictions=predictions.filter(p=>p.finished)
     const payload={ok:true,date,generatedAt:new Date().toISOString(),fixtureCount:predictions.length,activeFixtureCount:activePredictions.length,finishedFixtureCount:finishedPredictions.length,predictions:activePredictions,finishedPredictions,slips:[
       buildSlip("fold-5","5-Fold Acca","Five strongest selections from five different matches.",mixed,"fold5",5),
       buildSlip("fold-7","7-Fold Acca","Seven strongest selections from seven different matches.",mixed,"fold7",7),
-      buildSlip("fold-10","10-Fold Acca","Ten strongest selections from ten different matches.",mixed,"fold10",10)
+      buildSlip("fold-10","10-Fold Acca","Ten strongest selections from ten different matches.",mixed,"fold10",10),
+      buildSlip("wins-3","3-Fold Match Winners","Three higher-confidence winner selections with verified prices; ranked by model probability versus implied odds.",pricedWinners,"fold5",3),
+      buildSlip("wins-5","5-Fold Match Winners","Five evidence-ranked match winners with verified prices, where enough qualifying fixtures exist.",pricedWinners,"fold5",5)
     ],cached:false,staleFallback:false,methodology:{resultModel:"Premier League through League Two use league position, PPG, recent five-match form, streaks, home/away PPG and win rate, goal difference and recent H2H with sample shrinkage, followed by walk-forward calibration. Internationals use available local history first, then API-Football where available, and finally ESPN recent competition form using the actual country team IDs. Neutral identical priors are not used to build suggested Accas when recent team form can be recovered.",bttsModel:"Home/away BTTS, scoring and conceding rates, overall BTTS and H2H BTTS. Once both teams have already scored in-play, BTTS is treated as settled and removed from betting recommendations.",pricing:"Each fold uses one selection per fixture. Acca recommendations never use double-chance markets; eligible legs are direct home/away wins, selective draws when the match is genuinely even, and BTTS Yes only. BTTS No is deliberately excluded from automatic Acca recommendations. Displayed Acca odds are Bet365-only. Match Edge pulls the current Bet365 ML and Both Teams To Score board from Odds-API.io. A fixture is eligible only when the exact selected market has a current verified Bet365 price; if the model's first choice is unpriced it tries the next-best priced market, otherwise the fixture is excluded. Combined Acca odds are the product of those current verified Bet365 decimal prices. Model fair combined odds remain separate and are never presented as the Bet365 Acca price.",inPlay:"Live matches are recalculated from the current score, match minute, remaining-time goal rates and the calibrated pre-match strength. Pre-match bookmaker prices are never reused as if they were live prices.",fallback:"Team history uses the live database when available and automatically falls back to the checked-in daily current-season snapshot if database quota or connectivity fails.",caution:"Model estimates, not guarantees. Team news, red cards, injuries and other in-play events can materially change outcomes."}}
     responseCache.set(date,{at:Date.now(),payload})
     return NextResponse.json(payload,{headers:{"Cache-Control":activePredictions.some(p=>p.inPlay)?"public, s-maxage=20, stale-while-revalidate=120":"public, s-maxage=300, stale-while-revalidate=1800"}})
