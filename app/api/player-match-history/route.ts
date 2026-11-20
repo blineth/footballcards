@@ -1,5 +1,5 @@
 import {NextResponse} from "next/server"
-import {inArray,lt,and} from "drizzle-orm"
+import {inArray,lt,and,sql} from "drizzle-orm"
 import {db,isDatabaseConfigured} from "@/lib/db"
 import {playerH2H} from "@/lib/db/schema"
 
@@ -19,7 +19,7 @@ export async function GET(request:Request){
   if(!isDatabaseConfigured)return NextResponse.json({ok:false,error:"Player history database unavailable"},{status:503})
   try{
     // Read-only, dated source records; no fabricated zero-stat matches.
-    const rows=await db.select().from(playerH2H).where(and(lt(playerH2H.matchDate,date),inArray(playerH2H.playerName,names)))
+    const rows=await db.select().from(playerH2H).where(and(lt(playerH2H.matchDate,date),inArray(sql<string>`regexp_replace(translate(lower(${playerH2H.playerName}), 'áàâãäåéèêëíìîïóòôõöúùûüçñø', 'aaaaaaeeeeiiiiooooouuuucno'), '[^a-z0-9]', '', 'g')`,names.map(norm))))
     const result=names.map(name=>{
       const matched=rows.filter(r=>norm(r.playerName)===norm(name))
       const teamRows=matched.filter(r=>norm(r.team)===norm(home)||norm(r.team)===norm(away))
