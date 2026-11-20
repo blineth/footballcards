@@ -190,8 +190,44 @@ function SlipCard({slip,hero=false,onTrack}:{slip:Slip;hero?:boolean;onTrack?:()
   return <article className={"overflow-hidden rounded-3xl border "+(hero?"border-amber-300/25 bg-gradient-to-br from-amber-400/15 to-black/30":"border-white/10 bg-white/[0.04]")}>
     <button onClick={()=>setOpen(v=>!v)} className="w-full p-4 text-left"><div className="flex items-start justify-between gap-3"><div>{hero?<div className="flex items-center gap-1.5 text-amber-300"><Sparkles className="size-3.5"/><span className="text-[0.5rem] font-black uppercase tracking-[0.14em]">Starting point</span></div>:null}<h2 className="mt-1 text-lg font-black">{slip.title}</h2><p className="mt-1 text-[0.62rem] text-white/45">{slip.subtitle}</p><p className="mt-2 text-[0.56rem] font-black text-white/35">{slip.legs.length} legs{slip.bookmaker?" · "+slip.bookmaker:""}</p></div><div className="text-right"><p className="font-mono text-xl font-black">{slip.confirmedBet365Odds&&slip.exactCombinedOdds!=null?slip.exactCombinedOdds.toFixed(2):"—"}</p><p className={"text-[0.43rem] font-black uppercase "+(slip.confirmedBet365Odds?"text-emerald-300":"text-white/25")}>{slip.confirmedBet365Odds?"Bet365 acca odds":"no verified odds"}</p></div></div>
       <div className="mt-3 grid grid-cols-3 gap-1.5"><Small label={slip.containsLive?"Live all hit":"Adj. all hit"} value={percent(slip.adjustedAllHitProbability)}/><Small label="Raw product" value={percent(slip.modelAllHitProbability)}/><Small label={slip.containsLive?"Live legs":"Hist. structure"} value={slip.containsLive?String(slip.legs.filter(l=>l.inPlay).length):percent(slip.historicalStructureHitRate)}/></div><div className="mt-3 flex items-center justify-between"><span className={"rounded-full px-2.5 py-1 text-[0.5rem] font-black "+(slip.confirmedBet365Odds?"bg-emerald-400/15 text-emerald-300":"bg-white/7 text-white/40")}>{slip.confirmedBet365Odds?"CONFIRMED BET365 ACCA ODDS":"BET365 PRICE UNAVAILABLE"}</span><ChevronDown className={"size-4 text-white/30 transition "+(open?"rotate-180":"")}/></div></button>
-    {open?<div className="border-t border-white/8 bg-black/20 p-4"><div className="space-y-2">{slip.legs.map((l,i)=><div key={l.fixtureId+"|"+l.market+"|"+i} className="rounded-2xl bg-white/[0.055] p-3"><div className="flex items-start justify-between gap-3"><div><p className="text-[0.5rem] font-black uppercase text-white/30">{l.competition} · {l.inPlay&&l.score?<span className="text-rose-300">LIVE {l.elapsed??"?"}' · {l.home} {l.score.home}-{l.score.away} {l.away}</span>:<>{time(l.kickoff)} · {l.home} v {l.away}</>}</p><p className="mt-1 text-sm font-black">{l.label}</p><p className="mt-0.5 text-[0.54rem] text-white/35">Grade {l.grade}{l.bookmaker?" · "+l.bookmaker:""}</p></div><div className="text-right"><p className="font-mono text-base font-black">{percent(l.probability)}</p><p className={"text-[0.43rem] font-black "+(l.bookmakerOdds!=null&&l.bookmaker==="Bet365"?"text-emerald-300/75":"text-white/25")}>{l.bookmakerOdds!=null&&l.bookmaker==="Bet365"?l.bookmakerOdds.toFixed(3)+" Bet365":"No verified Bet365 price"}</p></div></div><p className="mt-2 text-[0.58rem] leading-relaxed text-white/40">{l.reasons.slice(0,2).join(" · ")}</p></div>)}</div><p className="mt-3 text-[0.52rem] text-white/30">{slip.confirmedBet365Odds?"Combined price is the product of verified Bet365 prices across separate matches. Prices can move before placement.":"Model probability is still shown, but no combined odds are presented without complete Bet365 pricing."}</p>{onTrack?<button onClick={onTrack} className="mt-3 w-full rounded-xl bg-emerald-400 px-3 py-2.5 text-[0.58rem] font-black text-emerald-950">Track this Acca</button>:null}</div>:null}
+    {open?<div className="border-t border-white/8 bg-black/20 p-4"><div className="space-y-2">{slip.legs.map((l,i)=><AccaLegDetail key={l.fixtureId+"|"+l.market+"|"+i} leg={l}/>)}/div><p className="mt-3 text-[0.52rem] text-white/30">{slip.confirmedBet365Odds?"Combined price is the product of verified Bet365 prices across separate matches. Prices can move before placement.":"Model probability is still shown, but no combined odds are presented without complete Bet365 pricing."}</p>{onTrack?<button onClick={onTrack} className="mt-3 w-full rounded-xl bg-emerald-400 px-3 py-2.5 text-[0.58rem] font-black text-emerald-950">Track this Acca</button>:null}</div>:null}
   </article>
+}
+
+function AccaLegDetail({leg:l}:{leg:Leg}){
+  const[open,setOpen]=useState(false)
+  const[history,setHistory]=useState<H2HData|null>(null)
+  const[loading,setLoading]=useState(false)
+  const toggle=async()=>{
+    if(open){setOpen(false);return}
+    setOpen(true)
+    if(history)return
+    setLoading(true)
+    try{
+      const q=new URLSearchParams({date:kickoffDate(l.kickoff),home:l.home,away:l.away,competition:l.competition})
+      const response=await fetch("/api/team-h2h?"+q,{cache:"no-store"})
+      setHistory(response.ok?await response.json():{ok:false,meetings:[],count:0,error:"H2H source unavailable"})
+    }catch{setHistory({ok:false,meetings:[],count:0,error:"H2H source unavailable"})}
+    finally{setLoading(false)}
+  }
+  const implied=l.bookmakerOdds!=null&&l.bookmakerOdds>1?1/l.bookmakerOdds:null
+  const edge=implied!=null?(l.probability-implied)*100:null
+  const h2h=history?.meetings??[]
+  const bttsHit=h2h.filter(m=>m.homeGoals>0&&m.awayGoals>0).length
+  const homeWins=h2h.filter(m=>m.home===l.home?m.homeGoals>m.awayGoals:m.awayGoals>m.homeGoals).length
+  const awayWins=h2h.filter(m=>m.home===l.away?m.homeGoals>m.awayGoals:m.awayGoals>m.homeGoals).length
+  return <div className="rounded-2xl bg-white/[0.055] p-3">
+    <button onClick={()=>void toggle()} className="w-full text-left" aria-expanded={open} aria-label={"View evidence for "+l.label}>
+      <div className="flex items-start justify-between gap-3"><div><p className="text-[0.5rem] font-black uppercase text-white/30">{l.competition} · {time(l.kickoff)} · {l.home} v {l.away}</p><p className="mt-1 text-sm font-black">{l.label}</p><p className="mt-0.5 text-[0.54rem] text-white/35">Grade {l.grade} · tap for match evidence</p></div><div className="text-right"><p className="font-mono text-base font-black">{percent(l.probability)}</p><p className="text-[0.43rem] text-emerald-300/75">{l.bookmakerOdds!=null&&l.bookmaker==="Bet365"?l.bookmakerOdds.toFixed(3)+" Bet365":"No verified price"}</p><ChevronDown className={"ml-auto mt-1 size-3.5 text-white/40 transition "+(open?"rotate-180":"")}/></div></div>
+    </button>
+    <p className="mt-2 text-[0.58rem] leading-relaxed text-white/40">{l.reasons.slice(0,2).join(" · ")}</p>
+    {open?<div className="mt-3 space-y-3 border-t border-white/10 pt-3">
+      <div className="grid grid-cols-2 gap-2"><Small label="Model chance" value={percent(l.probability)}/><Small label="Bookmaker implied" value={percent(implied)}/></div>
+      <p className="text-[0.58rem] text-white/50">{edge==null?"No verified odds edge available.":"Model minus bookmaker implied chance: "+(edge>=0?"+":"")+edge.toFixed(1)+" percentage points. This is an estimate, not a guaranteed advantage."}</p>
+      <div><p className="text-xs font-bold text-amber-200">Why this selection?</p><p className="mt-1 text-[0.6rem] leading-relaxed text-white/55">{l.reasons.length?l.reasons.join(" · "):"No detailed model explanation supplied."}</p></div>
+      {loading?<p className="text-xs text-white/40">Loading previous meetings…</p>:h2h.length?<div className="rounded-xl bg-black/20 p-3"><p className="text-xs font-bold">Head-to-head · {h2h.length} recorded matches</p><p className="mt-1 text-[0.6rem] text-white/55">BTTS: {bttsHit}/{h2h.length} · {l.home} wins: {homeWins}/{h2h.length} · {l.away} wins: {awayWins}/{h2h.length}</p><div className="mt-2 space-y-1">{h2h.map(m=><p key={m.date+"|"+m.home} className="text-[0.57rem] text-white/45">{m.date} · {m.home} {m.homeGoals}–{m.awayGoals} {m.away}</p>)}</div></div>:<p className="text-[0.6rem] text-white/40">{history?.error??"No verified previous meetings recorded; this does not imply zero goals or zero wins."}</p>}
+    </div>:null}
+  </div>
 }
 
 function TrackAccaModal({slip,onClose,onSaved}:{slip:Slip;onClose:()=>void;onSaved:()=>void}){
