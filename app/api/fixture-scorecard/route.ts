@@ -1300,7 +1300,37 @@ function buildSlips(players: ScorePlayer[]) {
     mixedPlayers.add(norm(leg.player))
   }
 
+  // Evidence-led bet construction: recent player behaviour, direct H2H
+  // and repeatable low-threshold actions first; bookings require their own
+  // discipline evidence. A player may contribute different market families,
+  // but never multiple thresholds from the same family.
+  const evidencePool=players.flatMap(player=>(["foul1","fouled1","shot1","card"] as MarketKey[]).map(key=>({player,market:player.markets[key],leg:marketLeg(player,key)})))
+    .filter(x=>x.leg.confidence!=="D"&&x.leg.probability>=.12)
+    .filter(x=>{
+      const m=x.market
+      if(x.leg.market==="card")return (m.h2hMatches>=2&&Number(m.h2hHitRate??0)>=.5)||(m.recent5HitRate>=.4&&m.seasonHitRate>=.15)||(m.seasonHitRate>=.3&&m.sampleMatches>=8)
+      return m.recent5HitRate>=.4||m.recent10HitRate>=.5||(m.h2hMatches>=2&&Number(m.h2hHitRate??0)>=.5)
+    })
+    .map(x=>{
+      const m=x.market
+      const h2hWeight=m.h2hMatches>=2?Math.min(.16,m.h2hMatches*.035)*Number(m.h2hHitRate??0):0
+      const recentWeight=.12*m.recent5HitRate+.06*m.recent10HitRate
+      const consistency=.05*m.seasonHitRate
+      return {...x,rank:x.leg.probability*.55+recentWeight+h2hWeight+consistency+(x.leg.confidence==="A"?.03:0)}
+    })
+    .sort((a,b)=>b.rank-a.rank)
+  const evidenceLegs:SlipLeg[]=[]
+  const evidenceUsed=new Set<string>()
+  for(const candidate of evidencePool){
+    if(evidenceLegs.length>=10)break
+    const key=norm(candidate.leg.player)+":"+candidate.leg.market.replace(/[0-9]+$/,"")
+    if(evidenceUsed.has(key))continue
+    evidenceLegs.push(candidate.leg)
+    evidenceUsed.add(key)
+  }
+
   return [
+    makeSlip("form-h2h-builder", "Recent form + H2H builder", "Higher", evidenceLegs, "Player-by-player selections ranked using last-five and last-ten evidence, direct head-to-head history and season consistency. Prior bookings raise confidence but never guarantee another card. Combined legs, especially within one match, are correlated; multiplying singles does not establish a reliable all-hit probability."),
     makeSlip("main-safe", "Main safer mix", "Lower", safe, "Probability-first low-variance mix. Separate 1+ foul legs are favoured when their evidence-adjusted chance is comparable to shots/SOT; player duplicates and scorer/card shortcuts are excluded from this safer route."),
     makeSlip("two-cards", "2-card builder", "Medium", twoCard, "Two highest-rated yellow-card candidates from the confirmed starters."),
     makeSlip("three-cards", "3-card builder", "Higher", threeCard, "Three highest-rated yellow-card candidates. Higher return, materially higher variance."),
