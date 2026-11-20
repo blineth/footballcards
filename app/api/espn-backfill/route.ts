@@ -2,6 +2,7 @@ import {NextResponse} from "next/server"
 import {db,isDatabaseConfigured} from "@/lib/db"
 import {playerH2H} from "@/lib/db/schema"
 import {ensureResearchSchema} from "@/lib/db/ensure-research-schema"
+import {sql} from "drizzle-orm"
 
 export const dynamic="force-dynamic"
 export const maxDuration=60
@@ -28,7 +29,7 @@ export async function GET(request:Request){
     await ensureResearchSchema()
     const scoreboard=await getJson(BASE+"/scoreboard?dates="+date.replace(/-/g,""))
     const events=(scoreboard.events??[]).filter((e:any)=>e.status?.type?.name==="STATUS_FULL_TIME").slice(0,12)
-    let inserted=0,checked=0,skipped=0,eligible=0
+    let inserted=0,checked=0,skipped=0,eligible=0,verified=0
     const errors:string[]=[]
     // Bounded concurrency: provider requests and Neon writes are deliberately rate limited.
     for(const event of events){
@@ -64,12 +65,27 @@ export async function GET(request:Request){
         }
         eligible+=rows.length
         if(rows.length){
-          const saved=await db.insert(playerH2H).values(rows).onConflictDoNothing().returning({id:playerH2H.id})
-          inserted+=saved.length
+          const saved=await db.insert(playerH2H).values(rows).onConflictDoUpdate({
+            target:[playerH2H.playerName,playerH2H.team,playerH2H.opponent,playerH2H.matchDate,playerH2H.competition],
+            set:{
+              externalMatchId:sql`excluded.external_match_id`,
+              externalPlayerId:sql`excluded.external_player_id`,
+              starter:sql`excluded.starter`,
+              foulsCommitted:sql`excluded.fouls_committed`,
+              foulsDrawn:sql`excluded.fouls_drawn`,
+              shots:sql`excluded.shots`,
+              shotsOnTarget:sql`excluded.shots_on_target`,
+              yellowCard:sql`excluded.yellow_card`,
+              redCard:sql`excluded.red_card`,
+              goals:sql`excluded.goals`,
+              assists:sql`excluded.assists`
+            }
+          }).returning({id:playerH2H.id})
+          verified+=saved.length
         }
         checked++
       }catch(e){errors.push(clean(event.id)+": "+String(e).slice(0,100))}
     }
-    return NextResponse.json({ok:true,date,events:events.length,checked,inserted,eligible,skipped,errors,source:"ESPN verified completed-match player boxscores"},{headers:{"Cache-Control":"no-store"}})
+    return NextResponse.json({ok:true,date,events:events.length,checked,inserted,verified,eligible,skipped,errors,source:"ESPN verified completed-match player boxscores"},{headers:{"Cache-Control":"no-store"}})
   }catch(e){return NextResponse.json({ok:false,error:String(e).slice(0,200)},{status:502})}
 }
