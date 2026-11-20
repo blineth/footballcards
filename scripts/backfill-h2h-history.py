@@ -325,6 +325,9 @@ def main() -> int:
         "shotsOnTarget": sum(int(r["shots_on_target"] or 0) for r in rows),
         "competitions": reports,
         "missingPlayerStats": {field: sum(1 for r in rows if r.get(field, "") == "") for field in ("fouls_committed", "fouls_drawn", "shots", "shots_on_target", "yellow_card", "red_card")},
+        "missingByCompetition": {label: {field: sum(1 for r in rows if r["competition"] == label and r.get(field, "") == "") for field in ("fouls_committed", "fouls_drawn", "shots", "shots_on_target", "goals", "assists", "yellow_card", "red_card")} for _, label in DOMESTIC},
+        "missingReferees": sum(1 for r in rows if not r.get("referee_name")),
+        "missingStarters": sum(1 for r in rows if r.get("starter") is None),
     }
     report["neonSync"] = sync(rows)
     (OUT / "quality-report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
