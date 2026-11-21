@@ -5,7 +5,7 @@ import { ArrowLeft, BadgeCheck, Layers3, RefreshCw, Sparkles } from "lucide-reac
 import { useRouter } from "next/navigation"
 
 type Competition = "Premier League" | "Championship" | "League One" | "League Two" | "International"
-type Fixture = {id:string;date:string;kickoff:string;competition:Competition;home:string;away:string}
+type Fixture = {id:string;date:string;kickoff:string;competition:Competition;home:string;away:string;status?:string}
 type Offer = {
   player:string;team:string;label:string;probability:number;fairOdds:number|null;
   bookmakerOdds:number;bookmaker:string;edge:number;confidence:"A"|"B"|"C"|"D";
@@ -178,6 +178,30 @@ export default function MultiMatchPage(){
   const[results,setResults]=useState<Result[]>([])
   const[loading,setLoading]=useState(true)
   const[mode,setMode]=useState<"all"|"discipline">("all")
+  const leagues:Competition[]=["Premier League","Championship","League One","League Two","International"]
+  const[league,setLeague]=useState<Competition>("Premier League")
+  const[matchDate,setMatchDate]=useState(()=>new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/London",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date()))
+  const[available,setAvailable]=useState<Fixture[]>([])
+  const[fixtureLoading,setFixtureLoading]=useState(false)
+  const[fixtureError,setFixtureError]=useState("")
+  const fetchAvailable=useCallback(async()=>{
+    setFixtureLoading(true);setFixtureError("")
+    try{
+      const r=await fetch("/api/fixtures?"+new URLSearchParams({date:matchDate,nextIfEmpty:"0",refresh:String(Date.now())}),{cache:"no-store"})
+      if(!r.ok)throw new Error("Unable to retrieve fixtures")
+      const payload=await r.json() as {leagues?:Record<Competition,Array<{id:string;kickoff:string;status?:string;home:{name:string};away:{name:string}}>>}
+      const all=leagues.flatMap(competition=>(payload.leagues?.[competition]??[]).map(game=>({
+        id:game.id,date:matchDate,kickoff:game.kickoff,competition,home:game.home.name,away:game.away.name,status:game.status??"scheduled"
+      })))
+      setAvailable(all)
+    }catch{setFixtureError("Fixtures could not be loaded. Please try Refresh fixtures.")}
+    finally{setFixtureLoading(false)}
+  },[matchDate])
+  useEffect(()=>{void fetchAvailable()},[fetchAvailable])
+  useEffect(()=>{const timer=window.setInterval(()=>void fetchAvailable(),60000);return()=>window.clearInterval(timer)},[fetchAvailable])
+  const toggleFixture=(game:Fixture)=>setFixtures(current=>current.some(x=>x.id===game.id)?current.filter(x=>x.id!==game.id):[...current,game])
+  const leagueFixtures=available.filter(game=>game.competition===league)
+
 
   useEffect(()=>{setFixtures(parseGames())},[])
   const load=useCallback(async(games:Fixture[])=>{
@@ -218,8 +242,17 @@ export default function MultiMatchPage(){
   const combinedChance=selectedPicks.length===selected.length&&selected.length>0?selectedPicks.reduce((p,row)=>p*(row.pick?.probability??1),1):null
   const priced=selectedPicks.length===selected.length&&selectedPicks.every(row=>Number(row.pick?.bookmakerOdds)>1)
   const referenceOdds=priced?selectedPicks.reduce((p,row)=>p*Number(row.pick?.bookmakerOdds),1):null
-  if(!fixtures.length&&!loading)return <main className="min-h-screen bg-[#07120e] p-8 text-white"><h1 className="text-xl font-black">Choose matches first</h1><p className="mt-3 text-white/60">Select several fixtures on the Matches screen to generate your evidence-ranked multi-match slip.</p><button onClick={()=>router.push("/")} className="mt-5 rounded-xl bg-sky-300 px-4 py-3 font-bold text-sky-950">Choose matches</button></main>
+
   return <main className="min-h-screen bg-[#07120e] pb-24 text-white"><header className="sticky top-0 z-30 border-b border-white/10 bg-[#07120e] p-4"><div className="mx-auto flex max-w-3xl items-center gap-3"><button onClick={()=>router.push("/")} className="rounded-xl bg-white/10 p-3"><ArrowLeft className="size-4"/></button><div className="flex-1"><p className="text-xs font-black uppercase tracking-widest text-sky-300">Multi Match</p><h1 className="text-xl font-black">Most likely across {fixtures.length} games</h1></div><button onClick={()=>void load(fixtures)} className="rounded-xl bg-sky-300 p-3 text-sky-950"><RefreshCw className={"size-4 "+(loading?"animate-spin":"")}/></button></div></header>
+    <div className="mx-auto max-w-3xl space-y-3 px-4 pt-4">
+      <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-black">Choose leagues and matches</h2><span className="text-xs text-sky-300">{fixtures.length} selected</span></div>
+        <div className="flex gap-2 overflow-x-auto pb-2">{leagues.map(item=><button key={item} type="button" onClick={()=>setLeague(item)} className={"shrink-0 rounded-xl border px-3 py-2.5 text-xs font-bold "+(league===item?"border-sky-300 bg-sky-300 text-sky-950":"border-white/15 bg-white/5 text-white/70")}>{item}</button>)}</div>
+        <div className="mt-2 flex items-center gap-2"><input type="date" aria-label="Match date" value={matchDate} onChange={e=>setMatchDate(e.target.value)} className="min-w-0 flex-1 rounded-lg border border-white/15 bg-[#07120e] px-3 py-2 text-sm text-white"/><button type="button" onClick={()=>void fetchAvailable()} className="rounded-lg bg-white/10 px-3 py-2 text-xs font-bold">Refresh fixtures</button></div>
+        {fixtureError?<p className="mt-2 text-xs text-amber-200">{fixtureError}</p>:null}
+        <div className="mt-3 max-h-72 space-y-2 overflow-y-auto">{fixtureLoading?<p className="py-3 text-xs text-white/50">Loading fixtures…</p>:leagueFixtures.length?leagueFixtures.map(game=>{const checked=fixtures.some(x=>x.id===game.id);const status=String(game.status??"").toLowerCase();const isLive=status.includes("live")||status.includes("progress")||status.includes("half");return <button key={game.id} type="button" onClick={()=>toggleFixture(game)} className={"flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-3 text-left "+(checked?"border-sky-300/60 bg-sky-300/10":"border-white/10 bg-black/20")}><span><span className="block text-sm font-bold">{game.home} v {game.away}</span><span className="mt-1 block text-xs text-white/50">{time(game.kickoff)} · {isLive?"LIVE":status||"Scheduled"}</span></span><span className={"shrink-0 rounded-lg px-3 py-2 text-xs font-bold "+(checked?"bg-sky-300 text-sky-950":"bg-white/10 text-white")}>{checked?"Selected":"Add"}</span></button>}):<p className="py-3 text-xs text-white/50">No {league} fixtures found on this date. Try another date.</p>}</div>
+      </section>
+    </div>
     <div className="mx-auto max-w-3xl space-y-4 p-4"><div className="grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-1.5"><button type="button" onClick={()=>setMode("all")} className={"rounded-xl px-3 py-3 text-xs font-black "+(mode==="all"?"bg-sky-300 text-sky-950":"text-white/60")}>All Player Markets</button><button type="button" onClick={()=>setMode("discipline")} className={"rounded-xl px-3 py-3 text-xs font-black "+(mode==="discipline"?"bg-amber-300 text-amber-950":"text-white/60")}>Yellow Cards + Fouls</button></div><section className="rounded-3xl border border-sky-300/20 bg-sky-300/5 p-4"><h2 className="font-black">{mode==="discipline"?"Yellow cards + fouls committed across matches":"Your recent-form + H2H prediction slip"}</h2><p className="mt-2 text-sm text-white/60">{mode==="discipline"?"Only yellow cards and fouls committed. Highest estimated probability per match is selected first; choose another player or foul threshold below.":"One high-probability player action is preselected for each match, using the same form and head-to-head model as Match Builder. Tap a different selection to replace it. No artificial odds target."}</p><div className="mt-3 grid grid-cols-2 gap-2"><div className="rounded-xl bg-black/20 p-3"><p className="text-xl font-black">{selectedPicks.length}/{fixtures.length}</p><p className="text-xs text-white/40">Games with selections</p></div><div className="rounded-xl bg-black/20 p-3"><p className="text-xl font-black">{combinedChance==null?"—":percent(combinedChance)}</p><p className="text-xs text-white/40">Independent-leg estimate</p></div></div>{referenceOdds!=null?<p className="mt-3 text-xs text-white/50">Bet365 singles reference product: {referenceOdds.toFixed(2)} decimal. Final accumulator odds must be checked with Bet365.</p>:<p className="mt-3 text-xs text-amber-200/70">Some selections have no verified Bet365 price. They remain visible as predictions, not priced bets.</p>}</section>
     {visibleOptions.map(row=>{const active=selected.find(x=>x.fixture.id===row.fixture.id)?.pick;return <section key={row.fixture.id} className="rounded-3xl border border-white/10 bg-white/[0.04] p-4"><div className="flex items-start justify-between gap-3"><div><h3 className="font-black">{row.fixture.home} v {row.fixture.away}</h3><p className="mt-1 text-xs text-white/40">{row.fixture.competition} · {time(row.fixture.kickoff)}</p></div><span className="rounded-full bg-sky-300/10 px-2 py-1 text-xs text-sky-200">{row.picks.length} options</span></div>{active?<p className="mt-3 rounded-xl bg-sky-300/10 p-3 text-sm font-bold text-sky-100">Selected: {active.player} · {active.label} · {percent(active.probability)}</p>:<p className="mt-3 text-sm text-amber-200">No eligible player markets available for this fixture.</p>}<div className="mt-3 space-y-2">{row.picks.slice(0,mode==="discipline"?20:12).map(p=><button key={p.player+"|"+p.market} onClick={()=>setOverrides(v=>({...v,[mode+"|"+row.fixture.id]:p.player+"|"+p.market}))} className={"flex w-full items-center justify-between gap-3 rounded-xl border p-3 text-left "+(active?.player===p.player&&active?.market===p.market?"border-sky-300/40 bg-sky-300/10":"border-white/10 bg-black/20")}><span className="min-w-0"><span className="block text-sm font-bold">{p.player} · {p.label}</span><span className="mt-1 block text-xs text-white/40">Last 5: {p.recent5HitRate==null?"unavailable":percent(p.recent5HitRate)} · H2H: {p.h2hMatches?percent(p.h2hHitRate):"no sample"}{p.bookmakerOdds?" · Bet365 "+Number(p.bookmakerOdds).toFixed(2):" · no verified price"}</span></span><span className="shrink-0 font-mono text-sm font-black text-sky-200">{percent(p.probability)}</span></button>)}</div></section>})}
     <p className="text-xs leading-relaxed text-white/40">Probabilities are estimates, not guarantees. Multiplying single-leg chances assumes independence and may overstate confidence where events are correlated. Live prices and settlement rules are determined by the bookmaker.</p></div></main>
