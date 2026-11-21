@@ -984,25 +984,31 @@ export default function BetBuilderPage(){
       return
     }
 
-    const controller=new AbortController()
-    const timeout=window.setTimeout(()=>controller.abort(),force?30_000:22_000)
+    // Retry a transient backend failure once. Each attempt has its own deadline,
+    // and every exit path clears the loading state for mobile browsers.
+    let failure="The match model is temporarily unavailable. Refresh to try again."
     try{
-      const r=await fetch(scorecardUrl(f,force),{cache:force?"no-store":"default",signal:controller.signal})
-      const next=await r.json().catch(()=>({ok:false,error:"Unable to load evidenced match model."})) as Scorecard
-      if(next?.ok){
-        // Show the available snapshot immediately, but preserve its fallback label.
-        // Snapshot estimates must never be presented as verified recommendations.
-        setData(next)
-        if(!next.snapshotFallback)writeScorecardCache(f,next)
-      }else if(!cached){
-        setData({ok:false,error:next?.error||"The match model is temporarily unavailable. Refresh to try again."})
+      for(let attempt=0;attempt<2;attempt++){
+        const controller=new AbortController()
+        const timeout=window.setTimeout(()=>controller.abort(),attempt===0?18_000:12_000)
+        try{
+          const r=await fetch(scorecardUrl(f,force||attempt>0),{cache:"no-store",signal:controller.signal})
+          const next=await r.json().catch(()=>({ok:false,error:"The match model returned an invalid response."})) as Scorecard
+          if(r.ok&&next?.ok){
+            setData(next)
+            if(!next.snapshotFallback)writeScorecardCache(f,next)
+            return
+          }
+          failure=next?.error||"The match model is temporarily unavailable. Refresh to try again."
+          if(r.status>=400&&r.status<500&&r.status!==408&&r.status!==429)break
+        }catch{
+          failure="The match model did not respond in time. Please retry."
+        }finally{
+          window.clearTimeout(timeout)
+        }
       }
-    }catch{
-      if(!cached){
-        setData({ok:false,error:"The match model timed out. Refresh to try again."})
-      }
+      if(!cached)setData({ok:false,error:failure})
     }finally{
-      window.clearTimeout(timeout)
       setLoading(false)
     }
   },[])
