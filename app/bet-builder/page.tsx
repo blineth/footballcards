@@ -1426,9 +1426,13 @@ function LiveMatchStatsPanel({live,home,away,onRefresh}:{live:LiveData|null;home
       .sort((a,b)=>Number(b[sort]??0)-Number(a[sort]??0)||Number(b.foulsCommitted??0)-Number(a.foulsCommitted??0)||a.player.localeCompare(b.player))
   },[live,sort,team,home,away])
   const shown=expanded?active:active.slice(0,8)
+  const booked=useMemo(()=>live?.players?.filter(p=>Number(p.yellowCards??0)>0||Number(p.redCards??0)>0)
+    .sort((a,b)=>Number(b.yellowCards??0)-Number(a.yellowCards??0))??[],[live])
+  const yellowTotal=live?.players?.reduce((sum,p)=>sum+Number(p.yellowCards??0),0)??0
+  const redTotal=live?.players?.reduce((sum,p)=>sum+Number(p.redCards??0),0)??0
   const options:Array<{key:LiveStatSort;label:string}>=[
     {key:"foulsCommitted",label:"Fouls"},{key:"foulsDrawn",label:"Fouled"},
-    {key:"yellowCards",label:"Cards"},{key:"shots",label:"Shots"},
+    {key:"yellowCards",label:"Yellow cards"},{key:"shots",label:"Shots"},
     {key:"shotsOnTarget",label:"SOT"},{key:"tackles",label:"Tackles"},
     {key:"disciplineHeat",label:"Heat"},
   ]
@@ -1443,17 +1447,22 @@ function LiveMatchStatsPanel({live,home,away,onRefresh}:{live:LiveData|null;home
       <button onClick={onRefresh} aria-label="Refresh live player statistics" className="rounded-xl border border-white/10 bg-white/5 p-2.5 text-emerald-200"><RefreshCw className="size-4"/></button>
     </div>
     {live?.players?.length?<>
+      <div className="mt-3 flex items-center gap-2 rounded-xl border border-amber-300/20 bg-amber-300/[0.055] p-2.5">
+        <span className="grid size-8 shrink-0 place-items-center rounded-md bg-amber-300 text-sm font-black text-amber-950">{yellowTotal}</span>
+        <div className="min-w-0 flex-1"><p className="text-xs font-black text-amber-100">Yellow cards issued</p><p className="text-[0.5rem] text-white/45">{booked.length?booked.length+" player"+(booked.length===1?"":"s")+" booked / sent off":"No players booked in this feed yet"} · {redTotal} red</p></div>
+      </div>
+      {booked.length?<div className="mt-2"><p className="mb-1.5 text-[0.5rem] font-black uppercase tracking-wide text-amber-200/70">Already booked · live match</p><div className="flex flex-wrap gap-1.5">{booked.map(p=><span key={p.team+"|"+p.player} className="rounded-lg border border-amber-300/15 bg-amber-300/[0.075] px-2.5 py-2 text-[0.58rem] font-bold text-amber-100"><span className="mr-1 rounded-sm bg-amber-300 px-1 py-0.5 font-black text-amber-950">{p.yellowCards} YC</span>{p.player} <span className="text-amber-100/40">· {p.foulsCommitted} fouls{p.redCards>0?" · RED":""}</span></span>)}</div></div>:null}
       <div className="mt-3 flex flex-wrap gap-1.5">{(["all","home","away"] as const).map(v=><button key={v} onClick={()=>{setTeam(v);setExpanded(false)}} className={"max-w-full truncate rounded-lg px-2.5 py-2 text-[0.57rem] font-bold "+(team===v?"bg-emerald-300 text-emerald-950":"bg-white/[0.07] text-white/65")}>{v==="all"?"Both teams":v==="home"?home:away}</button>)}</div>
       <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none]">{options.map(x=><button key={x.key} onClick={()=>setSort(x.key)} className={"shrink-0 rounded-lg border px-2.5 py-1.5 text-[0.52rem] font-black "+(sort===x.key?"border-cyan-300/30 bg-cyan-300/15 text-cyan-100":"border-white/10 bg-white/[0.03] text-white/45")}>{x.label}</button>)}</div>
       <div className="mt-2 overflow-x-auto rounded-xl border border-white/10">
         <table className="w-full min-w-[560px] text-left">
-          <thead className="bg-white/[0.055] text-[0.49rem] font-black uppercase text-white/40"><tr><th className="px-2.5 py-2">Player</th><th className="px-1.5 py-2 text-center">Min</th><th className="px-1.5 py-2 text-center">Fouls</th><th className="px-1.5 py-2 text-center">Won</th><th className="px-1.5 py-2 text-center">YC</th><th className="px-1.5 py-2 text-center">Shots</th><th className="px-1.5 py-2 text-center">SOT</th><th className="px-1.5 py-2 text-center">Tkl</th><th className="px-1.5 py-2 text-center">Heat</th></tr></thead>
+          <thead className="bg-white/[0.055] text-[0.49rem] font-black uppercase text-white/40"><tr><th className="px-2.5 py-2">Player</th><th className="px-1.5 py-2 text-center">Min</th><th className="px-1.5 py-2 text-center">Fouls</th><th className="px-1.5 py-2 text-center">Won</th><th className="px-1.5 py-2 text-center text-amber-200">Yellow</th><th className="px-1.5 py-2 text-center">Shots</th><th className="px-1.5 py-2 text-center">SOT</th><th className="px-1.5 py-2 text-center">Tkl</th><th className="px-1.5 py-2 text-center">Heat</th></tr></thead>
           <tbody>{shown.map(p=><tr key={p.team+"|"+p.player} className="border-t border-white/[0.06] text-[0.62rem]">
             <td className="max-w-[170px] px-2.5 py-2"><p className="truncate font-black">{p.player}</p><p className="truncate text-[0.44rem] text-white/35">{p.team}{p.subbedOff?" · OFF":p.subbedOn?" · SUB":""}</p></td>
             <td className="px-1.5 text-center font-mono text-white/50">{p.minutes??"—"}</td>
             <td className={"px-1.5 text-center font-mono font-black "+(sort==="foulsCommitted"?"text-cyan-200":"text-white")}>{p.foulsCommitted}</td>
             <td className="px-1.5 text-center font-mono">{p.foulsDrawn}</td>
-            <td className="px-1.5 text-center font-mono text-amber-200">{p.yellowCards}{p.redCards>0?" / "+p.redCards+"R":""}</td>
+            <td className="px-1.5 text-center font-mono"><span className={"inline-flex min-w-6 justify-center rounded px-1 py-1 font-black "+(p.yellowCards>0?"bg-amber-300 text-amber-950":"text-white/40")}>{p.yellowCards}</span>{p.redCards>0?<span className="ml-1 rounded bg-red-500 px-1 py-1 font-black text-white">{p.redCards}R</span>:null}</td>
             <td className="px-1.5 text-center font-mono">{p.shots}</td>
             <td className="px-1.5 text-center font-mono">{p.shotsOnTarget}</td>
             <td className="px-1.5 text-center font-mono">{p.tackles}</td>
