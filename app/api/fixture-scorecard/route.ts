@@ -4,6 +4,7 @@ import { db, isDatabaseConfigured } from "@/lib/db"
 import { playerH2H } from "@/lib/db/schema"
 import { ensureResearchSchema } from "@/lib/db/ensure-research-schema"
 import { GET as radarGET } from "../fixture-radar/route"
+import { GET as historyGET } from "../player-match-history/route"
 import { GET as oddsGET } from "../bet-builder-odds/route"
 import calibrationSnapshot from "@/data/model/calibration.json"
 import { buildSnapshotScorecard } from "@/lib/snapshot-scorecard"
@@ -1849,7 +1850,25 @@ export async function GET(request: Request) {
   if(builderView){
     try{
       const quick=await buildSnapshotScorecard({date,home,away,competition:competition as any})
-      return scorecardJson({...quick,snapshotFallback:true,fallbackReason:"Fast historical player model; full research and bookmaker prices are not yet verified."},true)
+      // Attach actual dated match rows BEFORE responding. Client-side enrichment alone
+      // left every Last 5 / H2H section empty while the UI displayed estimates.
+      if(Array.isArray(quick.players)&&quick.players.length){
+        try{
+          const query=new URLSearchParams({date,home,away})
+          for(const player of quick.players)query.append("player",String(player.dbName??player.name))
+          const historyResponse=await historyGET(new Request("http://local/api/player-match-history?"+query))
+          if(historyResponse.ok){
+            const history=await historyResponse.json()
+            const normalize=(name:string)=>String(name??"").normalize("NFD").replace(/[\\u0300-\\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]/g,"")
+            const byName=new Map<string,any>((history.players??[]).map((p:any)=>[normalize(p.name),p]))
+            quick.players=quick.players.map((player:any)=>{
+              const match=byName.get(normalize(player.dbName??player.name))??byName.get(normalize(player.name))
+              return match?{...player,recentGameLog:match.recentGameLog??[],h2hGameLog:match.h2hGameLog??[],h2hMeetings:match.h2hMeetings??0}:player
+            })
+          }
+        }catch(error){console.warn("Snapshot player history enrichment failed",error)}
+      }
+      return scorecardJson({...quick,snapshotFallback:true,fallbackReason:"Fast historical player model with stored match history; full research and bookmaker prices are not yet verified."},true)
     }catch(error){
       return NextResponse.json({ok:false,error:"The fast player model is unavailable. Please retry."},{status:503,headers:{"Cache-Control":"no-store"}})
     }
