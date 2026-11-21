@@ -980,12 +980,12 @@ export default function BetBuilderPage(){
     // Once kickoff has passed, the live path takes over. Pre-match recommendations
     // must always come from the full evidenced scorecard, never the fast snapshot.
     if(inPlayWindow){
-      setLoading(!cached)
+      if(!cached){setData({ok:false,error:"The match is in progress. Live player research is loading separately; refresh to retry the model."});setLoading(false)}
       return
     }
 
     const controller=new AbortController()
-    const timeout=window.setTimeout(()=>controller.abort(),force?45_000:40_000)
+    const timeout=window.setTimeout(()=>controller.abort(),force?30_000:22_000)
     try{
       const r=await fetch(scorecardUrl(f,force),{cache:force?"no-store":"default",signal:controller.signal})
       const next=await r.json().catch(()=>({ok:false,error:"Unable to load evidenced match model."})) as Scorecard
