@@ -1014,7 +1014,7 @@ export default function BetBuilderPage(){
   },[])
   useEffect(()=>{if(fixture)void load(fixture,false)},[fixture,load])
   useEffect(()=>{
-    if(!fixture)return
+    if(!fixture||data?.lineupsConfirmed===true)return
     const kickoff=new Date(fixture.kickoff).getTime()
     if(!Number.isFinite(kickoff))return
 
