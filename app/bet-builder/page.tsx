@@ -1446,11 +1446,11 @@ export default function BetBuilderPage(){
           <button onClick={()=>void toggleH2H()} className={"rounded-xl border px-3 py-2.5 text-[0.55rem] font-black "+(h2hOpen?"border-emerald-300/30 bg-emerald-300 text-emerald-950":"border-white/10 bg-white/6 text-white/55")}>H2H</button>
 
         </div>
-        {!inPlay?<div className="mt-2 pl-12 pr-2"><button type="button" onClick={()=>void load(fixture,true)} aria-label="Refresh match statistics and odds" className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg bg-emerald-400 px-4 py-2 text-xs font-bold text-emerald-950 touch-manipulation"><RefreshCw className={"size-4 "+(loading?"animate-spin":"")}/> Refresh</button></div>:null}
+        <div className="mt-2 pl-12 pr-2"><button type="button" onClick={()=>{if(inPlay){void loadLive(fixture);if(live)void loadLiveBaseline(fixture,live);void loadLiveOdds(fixture)}else{void load(fixture,true)}}} aria-label={inPlay?"Refresh live match statistics and odds":"Refresh match statistics and odds"} className="relative z-[80] inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-emerald-400 px-5 py-3 text-sm font-bold text-emerald-950 shadow-md touch-manipulation active:scale-95"><RefreshCw className={"size-4 "+(loading?"animate-spin":"")}/>{inPlay?"Refresh live":"Refresh"}</button></div>
       </div>
     </header>
 
-    {inPlay?<button type="button" onClick={()=>{void loadLive(fixture);if(live)void loadLiveBaseline(fixture,live);void loadLiveOdds(fixture)}} aria-label="Refresh live match statistics and odds" className="fixed bottom-24 right-4 z-[70] inline-flex min-h-12 items-center gap-2 rounded-full border border-emerald-200/30 bg-emerald-400 px-5 py-3 text-sm font-black text-emerald-950 shadow-2xl shadow-black/60 touch-manipulation active:scale-95"><RefreshCw className="size-4"/> Refresh live</button>:null}
+
 
     <div className="mx-auto max-w-3xl space-y-5 px-4 py-4">
       {h2hOpen?<H2HPanel data={h2hData} loading={h2hLoading} home={fixture.home} away={fixture.away}/>:null}
