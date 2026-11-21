@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { ArrowLeft, BadgeCheck, Layers3, RefreshCw, Sparkles } from "lucide-react"
 import { useRouter } from "next/navigation"
 
@@ -184,6 +184,7 @@ export default function MultiMatchPage(){
   const[available,setAvailable]=useState<Fixture[]>([])
   const[fixtureLoading,setFixtureLoading]=useState(false)
   const[fixtureError,setFixtureError]=useState("")
+  const initialSelectionApplied=useRef(false)
   const fetchAvailable=useCallback(async()=>{
     setFixtureLoading(true);setFixtureError("")
     const controller=new AbortController()
@@ -196,6 +197,11 @@ export default function MultiMatchPage(){
         id:game.id,date:matchDate,kickoff:game.kickoff,competition,home:game.home.name,away:game.away.name,status:game.status??"scheduled"
       })))
       setAvailable(all)
+      if(!initialSelectionApplied.current){
+        initialSelectionApplied.current=true
+        const premThreePm=all.filter(game=>game.competition==="Premier League"&&new Date(game.kickoff).toLocaleTimeString("en-GB",{timeZone:"Europe/London",hour:"2-digit",minute:"2-digit",hour12:false})==="15:00")
+        if(!new URLSearchParams(window.location.search).has("games")&&premThreePm.length)setFixtures(current=>current.length?current:premThreePm)
+      }
     }catch{setFixtureError("Could not refresh fixtures. Try again; existing matches remain visible.")}
     finally{window.clearTimeout(timeout);setFixtureLoading(false)}
   },[matchDate])
