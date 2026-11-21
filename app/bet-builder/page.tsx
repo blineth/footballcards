@@ -1018,11 +1018,15 @@ export default function BetBuilderPage(){
     const kickoff=new Date(fixture.kickoff).getTime()
     if(!Number.isFinite(kickoff))return
 
-    const windowStart=kickoff-120*60*1000
+    // Providers normally publish official XIs around one hour before kickoff.
+    // Poll through the 60, 58, 56, 55-minute marks and continue until confirmed.
+    const windowStart=kickoff-70*60*1000
     const windowEnd=kickoff+10*60*1000
     let cancelled=false
     let timer:number|undefined
     let interval:number|undefined
+    let checking=false
+    let refreshing=false
 
     const stop=()=>{
       if(timer!=null)window.clearTimeout(timer)
@@ -1031,32 +1035,36 @@ export default function BetBuilderPage(){
       interval=undefined
     }
     const check=async()=>{
-      if(cancelled)return
+      if(cancelled||checking||refreshing)return
       const now=Date.now()
       if(now<windowStart||now>windowEnd){if(now>windowEnd)stop();return}
+      checking=true
       try{
-        const r=await fetch(lineupStatusUrl(fixture),{cache:"no-store"})
+        const r=await fetch(lineupStatusUrl(fixture)+"&refresh="+Date.now(),{cache:"no-store"})
         if(!r.ok)return
         const status=await r.json()
         if(status?.confirmed===true){
-          stop()
+          refreshing=true
           await load(fixture,true)
+          // Only stop after the confirmed XI actually reaches the displayed scorecard.
+          // Otherwise keep checking so a transient scorecard failure can recover.
+          if(!cancelled)refreshing=false
         }
-      }catch{}
+      }catch{
+        // Retry on the next poll; never treat a network failure as an unconfirmed XI.
+      }finally{checking=false}
     }
     const begin=()=>{
       if(cancelled)return
       void check()
-      interval=window.setInterval(()=>void check(),30000)
+      interval=window.setInterval(()=>void check(),15000)
     }
-
     const now=Date.now()
     if(now<windowStart){
       timer=window.setTimeout(begin,Math.max(0,windowStart-now))
     }else if(now<=windowEnd){
       begin()
     }
-
     return()=>{cancelled=true;stop()}
   },[fixture,data?.lineupsConfirmed,data?.lineupMode,load])
 
