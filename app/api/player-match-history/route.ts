@@ -30,6 +30,7 @@ export async function GET(request:Request){
         fouls:r.foulsCommitted===null?null:Number(r.foulsCommitted),foulsWon:r.foulsDrawn===null?null:Number(r.foulsDrawn),
         shots:r.shots===null?null:Number(r.shots),shotsOnTarget:r.shotsOnTarget===null?null:Number(r.shotsOnTarget),
         yellow:r.yellowCard===null?null:r.yellowCard===true,
+        goals:r.goals===null?null:Number(r.goals),assists:r.assists===null?null:Number(r.assists),
       })
       const h2h=ordered.filter(r=>
         (norm(r.team??"")===norm(home)&&norm(r.opponent)===norm(away))||
