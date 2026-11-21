@@ -180,7 +180,7 @@ export default function MultiMatchPage(){
   const[mode,setMode]=useState<"all"|"discipline">("all")
   const leagues:Competition[]=["Premier League","Championship","League One","League Two","International"]
   const[league,setLeague]=useState<Competition>("Premier League")
-  const[matchDate,setMatchDate]=useState(()=>new Date().toLocaleDateString("en-CA",{timeZone:"Europe/London"}))
+  const[matchDate,setMatchDate]=useState(()=>(()=>{const parts=new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/London",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date());const part=(type:string)=>parts.find(p=>p.type===type)?.value??"";return part("year")+"-"+part("month")+"-"+part("day")})())
   const[available,setAvailable]=useState<Fixture[]>([])
   const[fixtureLoading,setFixtureLoading]=useState(false)
   const[fixtureError,setFixtureError]=useState("")
@@ -203,7 +203,7 @@ export default function MultiMatchPage(){
   const leagueFixtures=available.filter(game=>game.competition===league)
 
 
-  useEffect(()=>{setFixtures(parseGames())},[])
+  useEffect(()=>{const games=parseGames();setFixtures(games);if(!games.length)setLoading(false)},[])
   const load=useCallback(async(games:Fixture[])=>{
     if(!games.length){setLoading(false);return}
     setLoading(true)
