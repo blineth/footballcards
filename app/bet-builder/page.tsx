@@ -1421,7 +1421,7 @@ function LiveMatchStatsPanel({live,home,away,onRefresh}:{live:LiveData|null;home
   const[expanded,setExpanded]=useState(false)
   const active=useMemo(()=>{
     if(!live?.players)return []
-    return live.players.filter(p=>livePlayerIsActive(p))
+    return live.players.filter(p=>livePlayerIsActive(p)||p.subbedOff)
       .filter(p=>team==="all"||(team==="home"?sameTeamName(p.team,home):sameTeamName(p.team,away)))
       .sort((a,b)=>Number(b[sort]??0)-Number(a[sort]??0)||Number(b.foulsCommitted??0)-Number(a.foulsCommitted??0)||a.player.localeCompare(b.player))
   },[live,sort,team,home,away])
