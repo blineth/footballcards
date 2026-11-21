@@ -177,19 +177,27 @@ export default function MultiMatchPage(){
   const[fixtures,setFixtures]=useState<Fixture[]>([])
   const[results,setResults]=useState<Result[]>([])
   const[loading,setLoading]=useState(true)
+  const[lastSuccessfulPull,setLastSuccessfulPull]=useState<Date|null>(null)
+  const[latestPullCount,setLatestPullCount]=useState(0)
+  const[refreshFailed,setRefreshFailed]=useState(false)
 
   useEffect(()=>{setFixtures(parseGames())},[])
   const load=useCallback(async(games:Fixture[])=>{
     if(!games.length){setLoading(false);return}
     setLoading(true)
     try{
-      setResults(await Promise.all(games.map(async fixture=>{
+      const fetched=await Promise.all(games.map(async fixture=>{
         try{
           const r=await fetch(scorecardUrl(fixture),{cache:"no-store"})
           return {fixture,scorecard:r.ok?await r.json() as Scorecard:null}
         }catch{return {fixture,scorecard:null}}
-      })))
-    }finally{setLoading(false)}
+      }))
+      const successful=fetched.filter(item=>item.scorecard?.ok).length
+      setResults(fetched)
+      setLatestPullCount(successful)
+      setRefreshFailed(successful<games.length)
+      if(successful>0)setLastSuccessfulPull(new Date())
+    }catch{setRefreshFailed(true)}finally{setLoading(false)}
   },[])
   useEffect(()=>{if(fixtures.length)void load(fixtures)},[fixtures,load])
   useEffect(()=>{if(!fixtures.length)return;const t=window.setInterval(()=>void load(fixtures),60000);return()=>window.clearInterval(t)},[fixtures,load])
@@ -224,6 +232,8 @@ export default function MultiMatchPage(){
 
   return <main className="min-h-screen bg-[#07120e] pb-24 text-white">
     <header className="sticky top-0 z-30 border-b border-white/10 bg-[#07120e]/95 backdrop-blur-xl"><div className="mx-auto max-w-3xl px-4 pb-4 pt-[max(1rem,env(safe-area-inset-top))]"><div className="flex items-center gap-3"><button onClick={()=>router.push("/")} className="rounded-xl bg-white/7 p-2.5 text-white/70"><ArrowLeft className="size-4"/></button><div className="min-w-0 flex-1"><div className="flex items-center gap-2 text-sky-300"><Layers3 className="size-4"/><span className="text-[0.6rem] font-black uppercase tracking-[0.15em]">Multi Match</span></div><h1 className="mt-1 text-xl font-black">{fixtures.length} selected games</h1><p className="mt-0.5 text-[0.58rem] text-white/35">One bookmaker per accumulator · exact offered card/foul lines only.</p></div><button onClick={()=>void load(fixtures)} className="rounded-xl bg-sky-300 p-2.5 text-sky-950"><RefreshCw className={"size-4 "+(loading?"animate-spin":"")}/></button></div></div></header>
+
+    <div className={"border-b px-4 py-2.5 "+(refreshFailed?"border-amber-300/20 bg-amber-300/[0.07]":"border-sky-300/20 bg-sky-300/[0.07]")} role="status" aria-live="polite"><div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-x-4 gap-y-1 text-[0.68rem]"><span className={"flex items-center gap-2 font-black "+(refreshFailed?"text-amber-200":"text-sky-200")}><span className={"inline-block size-2 rounded-full "+(refreshFailed?"bg-amber-300":lastSuccessfulPull?"bg-emerald-400":"bg-white/40")}/>MULTI MATCH DATA LAST PULLED</span><span className="font-mono font-semibold text-white/85">{lastSuccessfulPull?lastSuccessfulPull.toLocaleString("en-GB",{timeZone:"Europe/London",day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit",second:"2-digit"}):loading?"Checking…":"Not yet fetched"} <span className="font-sans text-white/45">UK time</span></span><span className="text-[0.58rem] text-white/55">{loading?"Refreshing…":refreshFailed?`Partial/failed update · ${latestPullCount}/${fixtures.length} feeds verified`:`${latestPullCount}/${fixtures.length} match feeds verified · auto-refresh every 60s`}</span></div></div>
 
     <div className="mx-auto max-w-3xl space-y-4 px-4 py-4">
       <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-4"><div className="flex items-center justify-between"><div><p className="text-sm font-black">Selected matches</p><p className="mt-0.5 text-[0.58rem] text-white/35">A full accumulator needs one bookmaker to cover every selected game.</p></div><span className="rounded-full bg-white/7 px-2 py-1 text-[0.5rem] font-black text-white/45">{confirmedCount}/{fixtures.length} XI confirmed</span></div><div className="mt-3 space-y-2">{fixtures.map(f=>{const s=results.find(r=>r.fixture.id===f.id)?.scorecard;return <div key={f.id} className="flex items-center justify-between gap-3 rounded-2xl bg-black/20 p-3"><div><p className="text-sm font-black">{f.home} v {f.away}</p><p className="mt-0.5 text-[0.54rem] text-white/35">{f.competition} · {time(f.kickoff)}</p></div><span className={"rounded-full px-2 py-1 text-[0.5rem] font-black "+((s?.eligibleBooks?.length??0)?"bg-emerald-400/10 text-emerald-300":"bg-rose-400/10 text-rose-200")}>{s?.eligibleBooks?.length?s.eligibleBooks.join(" / "):"BLOCKED"}</span></div>})}</div></section>
