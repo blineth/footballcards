@@ -246,7 +246,14 @@ export default function MultiMatchPage(){
     return {fixture:result.fixture,picks}
   }),[results])
   const recommended=useMemo(()=>options.filter(row=>row.fixture.competition===league).map(row=>{
-    const picks=row.picks.filter(p=>mode==="all"||p.market==="card"||/^foul[1-5]$/.test(p.market)).slice(0,5)
+    // Discipline slips deliberately reserve 1–2 slots for the most likely
+    // yellow-card recipients and three for fouls committed, per fixture.
+    // Do not substitute low-probability card picks just to fill a quota.
+    const cards=row.picks.filter(p=>p.market==="card"&&p.probability>=.12).sort((a,b)=>b.probability-a.probability)
+    const fouls=row.picks.filter(p=>/^foul[1-5]$/.test(p.market)).sort((a,b)=>b.probability-a.probability)
+    const chosenCards=cards.slice(0,2)
+    const chosenFouls=fouls.filter(p=>!chosenCards.some(c=>c.player===p.player)).slice(0,3)
+    const picks=mode==="discipline"?[...chosenCards,...chosenFouls].sort((a,b)=>b.probability-a.probability):row.picks.slice(0,5)
     const combined=picks.length?picks.reduce((v,p)=>v*p.probability,1):null
     const actualOdds=picks.length&&picks.every(p=>Number(p.bookmakerOdds)>1)?picks.reduce((v,p)=>v*Number(p.bookmakerOdds),1):null
     return {fixture:row.fixture,picks,combined,actualOdds,fairOdds:combined&&combined>0?1/combined:null}
@@ -260,7 +267,7 @@ export default function MultiMatchPage(){
     </div>
     <div className="mx-auto max-w-3xl space-y-2 px-3 pb-4">
       <div className="grid grid-cols-2 gap-1 rounded-xl bg-white/5 p-1"><button onClick={()=>setMode("all")} className={"rounded-lg px-2 py-2 text-xs font-bold "+(mode==="all"?"bg-sky-300 text-sky-950":"text-white/60")}>All markets</button><button onClick={()=>setMode("discipline")} className={"rounded-lg px-2 py-2 text-xs font-bold "+(mode==="discipline"?"bg-amber-300 text-amber-950":"text-white/60")}>Cards + fouls</button></div>
-      <p className="text-xs text-white/50">Five highest-probability picks per match. Projected fair odds are estimates, not bookmaker prices.</p>
+      <p className="text-xs text-white/50">{mode==="discipline"?"Per match: 1–2 highest-probability yellow-card picks plus 3 fouls-committed picks, where supported by available data.":"Five highest-probability picks per match."} Projected fair odds are estimates, not bookmaker prices.</p>
       {loading?<p className="text-xs text-sky-200">Updating projections…</p>:null}
       {recommended.map(row=><section key={row.fixture.id} className="rounded-xl border border-white/10 bg-white/[0.035] p-2.5">
         <div className="flex items-center justify-between gap-2"><div className="min-w-0"><h3 className="truncate text-sm font-black">{row.fixture.home} v {row.fixture.away}</h3><p className="text-[0.65rem] text-white/45">{time(row.fixture.kickoff)} · {row.picks.length} picks</p></div><div className="shrink-0 text-right"><p className="font-mono text-sm font-black text-emerald-300">{row.fairOdds==null?"—":row.fairOdds.toFixed(2)}x</p><p className="text-[0.6rem] text-white/40">projected fair odds</p></div></div>
