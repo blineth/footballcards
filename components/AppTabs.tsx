@@ -8,7 +8,7 @@ export function AppTabs() {
   const pathname = usePathname()
   const tabs = [
     { href: "/", label: "Matches", icon: CalendarDays },
-    { href: "/recommended", label: "Multi", icon: Sparkles },
+    { href: "/multi-match", label: "Multi", icon: Sparkles },
     { href: "/accumulator", label: "Accas", icon: TicketCheck },
     { href: "/performance", label: "Results", icon: BarChart3 },
   ]
