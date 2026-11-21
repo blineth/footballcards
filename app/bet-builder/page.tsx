@@ -1260,17 +1260,9 @@ export default function BetBuilderPage(){
   const disciplineRows=allRows.filter(r=>r.market==="card"||r.market.startsWith("foul")||r.market.startsWith("fouled"))
   const cardRiskRows=useMemo(()=>allRows
     .filter(r=>r.market==="card")
-    .sort((a,b)=>{
-      // Live card risk is driven first by actual foul involvement in this match.
-      // Fouls committed matter most; fouls drawn are a smaller involvement signal.
-      const aScore=Number(a.probability)*.62+Math.min(.15,Number(a.liveFoulsCommitted??0)*.045)+Math.min(.03,Number(a.liveFoulsDrawn??0)*.008)
-        +Math.min(.22,Number(a.disciplineHeat??0)*.22)+Math.min(.12,Number(a.recentFouls10??0)*.06)
-        +(a.referenceImpliedProbability!=null?Math.min(.035,Math.max(-.02,(a.referenceImpliedProbability-a.probability)*.10)):0)
-      const bScore=Number(b.probability)*.62+Math.min(.15,Number(b.liveFoulsCommitted??0)*.045)+Math.min(.03,Number(b.liveFoulsDrawn??0)*.008)
-        +Math.min(.22,Number(b.disciplineHeat??0)*.22)+Math.min(.12,Number(b.recentFouls10??0)*.06)
-        +(b.referenceImpliedProbability!=null?Math.min(.035,Math.max(-.02,(b.referenceImpliedProbability-b.probability)*.10)):0)
-      return bScore-aScore||Number(b.liveFoulsCommitted??0)-Number(a.liveFoulsCommitted??0)||b.probability-a.probability
-    })
+    // Display the actual model probability in descending order. Foul counts
+    // are visible supporting evidence, not a hidden replacement percentage.
+    .sort((a,b)=>b.probability-a.probability||Number(b.liveFoulsCommitted??0)-Number(a.liveFoulsCommitted??0))
     .slice(0,8),[allRows])
   const inPlay=live?.status==="live"||live?.status==="halftime"
   const activeMarketAvailability=inPlay?(liveOdds?.marketAvailability??{}):(data?.marketAvailability??{})
@@ -1624,14 +1616,17 @@ function H2HTeamTotals({label,x}:{label:string;x:{yellow:number;red:number;fouls
 function CardRiskPanel({rows,fixture,live,liveBet365}:{rows:Selection[];fixture:Fixture;live:LiveData|null;liveBet365:boolean}){
   return <div className="mt-4 overflow-hidden rounded-2xl border border-amber-300/14 bg-black/20">
     <div className="border-b border-white/7 px-3 py-3">
-      <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-black text-amber-100">Live card risk</p><p className="mt-1 text-[0.48rem] text-white/30">Ranked from live discipline heat, referee strictness, foul load, recent foul bursts and any dangerous/reckless, confrontation or dissent signals in the commentary, then normal card history and Bet365 price.</p>{live?.referee?.name?<div className="mt-2 flex flex-wrap gap-1.5"><span className={"rounded-full px-2 py-1 text-[0.42rem] font-black "+(live.referee.strictnessLabel==="strict"?"bg-rose-300/12 text-rose-100":live.referee.strictnessLabel==="lenient"?"bg-emerald-300/10 text-emerald-100":"bg-white/6 text-white/45")}>REF {live.referee.name} · {live.referee.strictnessLabel.toUpperCase()}</span>{live.referee.historicalYellowsPerGame!=null?<span className="rounded-full bg-white/6 px-2 py-1 text-[0.42rem] font-black text-white/40">{Number(live.referee.historicalYellowsPerGame).toFixed(1)} YC/G</span>:null}{live.referee.liveYellowsPer90!=null?<span className="rounded-full bg-amber-300/10 px-2 py-1 text-[0.42rem] font-black text-amber-100">LIVE {Number(live.referee.liveYellowsPer90).toFixed(1)} YC/90</span>:null}</div>:null}</div>{live?<span className="rounded-full bg-rose-300/10 px-2 py-1 text-[0.42rem] font-black text-rose-200">{live.elapsed}' LIVE</span>:null}</div>
+      <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-black text-amber-100">Most likely to receive a yellow card</p><p className="mt-1 text-[0.48rem] text-white/30">Highest estimated yellow-card probability first. Compare fouls committed, fouls won, recent bookings, H2H and live discipline signals below.</p>{live?.referee?.name?<div className="mt-2 flex flex-wrap gap-1.5"><span className={"rounded-full px-2 py-1 text-[0.42rem] font-black "+(live.referee.strictnessLabel==="strict"?"bg-rose-300/12 text-rose-100":live.referee.strictnessLabel==="lenient"?"bg-emerald-300/10 text-emerald-100":"bg-white/6 text-white/45")}>REF {live.referee.name} · {live.referee.strictnessLabel.toUpperCase()}</span>{live.referee.historicalYellowsPerGame!=null?<span className="rounded-full bg-white/6 px-2 py-1 text-[0.42rem] font-black text-white/40">{Number(live.referee.historicalYellowsPerGame).toFixed(1)} YC/G</span>:null}{live.referee.liveYellowsPer90!=null?<span className="rounded-full bg-amber-300/10 px-2 py-1 text-[0.42rem] font-black text-amber-100">LIVE {Number(live.referee.liveYellowsPer90).toFixed(1)} YC/90</span>:null}</div>:null}</div>{live?<span className="rounded-full bg-rose-300/10 px-2 py-1 text-[0.42rem] font-black text-rose-200">{live.elapsed}' LIVE</span>:null}</div>
     </div>
     {rows.length?rows.map((row,i)=><div key={row.id} className={"grid grid-cols-[auto_1fr_auto] items-center gap-3 px-3 py-3 "+(i?"border-t border-white/[0.055]":"")}>
       <span className={"flex size-8 items-center justify-center rounded-full font-mono text-xs font-black "+(i===0?"bg-amber-300 text-amber-950":"bg-white/6 text-white/45")}>{i+1}</span>
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-1.5"><p className="truncate text-sm font-black">{row.player}</p><TeamBadge team={row.team} fixture={fixture}/></div>
         <div className="mt-1 flex flex-wrap gap-1.5">
-          <span className="rounded-full bg-rose-300/10 px-2 py-0.5 text-[0.42rem] font-black text-rose-100">FOULS {Number(row.liveFoulsCommitted??0)}</span>
+          <span className="rounded-full bg-amber-300/15 px-2 py-0.5 text-[0.48rem] font-black text-amber-100">LAST 5: {(row.recentGameLog??[]).filter(g=>g.yellow===true).length} YC / {(row.recentGameLog??[]).length} games</span>
+          <span className="rounded-full bg-white/10 px-2 py-0.5 text-[0.48rem] font-black text-white/75">L5 FOULS {(row.recentGameLog??[]).reduce((n,g)=>n+Number(g.fouls??0),0)}</span>
+          <span className="rounded-full bg-white/10 px-2 py-0.5 text-[0.48rem] font-black text-white/75">H2H {(row.h2hGameLog??[]).filter(g=>g.yellow===true).length} YC / {(row.h2hGameLog??[]).length}</span>
+          <span className="rounded-full bg-rose-300/10 px-2 py-0.5 text-[0.48rem] font-black text-rose-100">LIVE FOULS {Number(row.liveFoulsCommitted??0)}</span>
           <span className="rounded-full bg-cyan-300/10 px-2 py-0.5 text-[0.42rem] font-black text-cyan-100">FOULED {Number(row.liveFoulsDrawn??0)}</span>
           {row.disciplineHeat!=null?<span className="rounded-full bg-amber-300/10 px-2 py-0.5 text-[0.42rem] font-black text-amber-100">HEAT {Math.round(Number(row.disciplineHeat)*100)}</span>:null}
           {Number(row.recentFouls10??0)>0?<span className="rounded-full bg-rose-300/10 px-2 py-0.5 text-[0.42rem] font-black text-rose-100">+{Number(row.recentFouls10)} RECENT FOUL{Number(row.recentFouls10)===1?"":"S"}</span>:null}
@@ -1639,7 +1634,7 @@ function CardRiskPanel({rows,fixture,live,liveBet365}:{rows:Selection[];fixture:
           {row.referenceBookmakerOdds?<span className="rounded-full bg-emerald-300/10 px-2 py-0.5 text-[0.42rem] font-black text-emerald-100">{row.referenceOddsLive?"BET365 LIVE ":"LAST BET365 "}{Number(row.referenceBookmakerOdds).toFixed(2)}</span>:null}
         </div>
       </div>
-      <div className="text-right"><p className="font-mono text-lg font-black text-amber-100">{percent(row.probability)}</p><p className="text-[0.4rem] font-black uppercase text-white/25">card chance</p></div>
+      <div className="text-right"><p className="font-mono text-2xl font-black text-amber-100">{percent(row.probability)}</p><p className="text-[0.4rem] font-black uppercase text-white/25">card chance</p></div>
     </div>):<p className="px-4 py-8 text-center text-sm text-white/35">No unbooked card candidates available right now.</p>}
     <div className="border-t border-white/7 px-3 py-2 text-[0.43rem] leading-relaxed text-white/25">Players already booked or substituted off are removed. {liveBet365?"Fresh Bet365 card prices are included in the ranking.":"If Bet365's live board drops, the last captured card price is only a light reference; the live foul counts continue updating."}</div>
   </div>
