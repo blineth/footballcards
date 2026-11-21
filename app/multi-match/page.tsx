@@ -197,14 +197,11 @@ export default function MultiMatchPage(){
         id:game.id,date:matchDate,kickoff:game.kickoff,competition,home:game.home.name,away:game.away.name,status:game.status??"scheduled"
       })))
       setAvailable(all)
-      if(!initialSelectionApplied.current){
-        initialSelectionApplied.current=true
-        const premThreePm=all.filter(game=>game.competition==="Premier League"&&new Date(game.kickoff).toLocaleTimeString("en-GB",{timeZone:"Europe/London",hour:"2-digit",minute:"2-digit",hour12:false})==="15:00")
-        if(!new URLSearchParams(window.location.search).has("games")&&premThreePm.length)setFixtures(current=>current.length?current:premThreePm)
-      }
+      if(!new URLSearchParams(window.location.search).has("games"))setFixtures(all.filter(game=>game.competition===league))
+
     }catch{setFixtureError("Could not refresh fixtures. Try again; existing matches remain visible.")}
     finally{window.clearTimeout(timeout);setFixtureLoading(false)}
-  },[matchDate])
+  },[matchDate,league])
   useEffect(()=>{void fetchAvailable()},[fetchAvailable])
   useEffect(()=>{const timer=window.setInterval(()=>void fetchAvailable(),60000);return()=>window.clearInterval(timer)},[fetchAvailable])
   const toggleFixture=(game:Fixture)=>setFixtures(current=>current.some(x=>x.id===game.id)?current.filter(x=>x.id!==game.id):[...current,game])
@@ -217,7 +214,7 @@ export default function MultiMatchPage(){
 
 
 
-  useEffect(()=>{const games=parseGames();setFixtures(games);if(!games.length)setLoading(false)},[])
+  useEffect(()=>{const games=parseGames();if(games.length)setFixtures(games);else setLoading(false)},[])
   const load=useCallback(async(games:Fixture[])=>{
     if(!games.length){setLoading(false);return}
     setLoading(true)
@@ -248,62 +245,30 @@ export default function MultiMatchPage(){
     const picks=fallback.filter(x=>x.probability>=.08&&x.confidence!=="D"&&Number.isFinite(x.probability)).sort((a,b)=>b.probability-a.probability)
     return {fixture:result.fixture,picks}
   }),[results])
-  // A recommendation is a short, cross-match slip, not a catalogue of every player.
-  // Keep one pick per fixture to avoid within-match correlation, and limit to five legs.
-  const recommended=useMemo(()=>{
-    const discipline=mode==="discipline"
-    const choices=options.map(row=>({
-      fixture:row.fixture,
-      picks:row.picks.filter(p=>discipline?(p.market==="card"||/^foul[1-5]$/.test(p.market)):true)
-    })).filter(row=>row.picks.length)
-    const choose=(row:typeof choices[number],market:"card"|"foul"|"any")=>row.picks.filter(p=>market==="any"|| (market==="card"?p.market==="card":/^foul[1-5]$/.test(p.market)))[0]??null
-    const used=new Set<string>()
-    const legs:Array<{fixture:Fixture;pick:typeof choices[number]["picks"][number]}>=[]
-    if(discipline){
-      // Choose up to two strongest card selections, only where card evidence
-      // supports the probability; fill the other places with foul lines.
-      const cardChoices=choices.map(row=>({fixture:row.fixture,pick:choose(row,"card")})).filter(row=>row.pick&&row.pick.probability>=.20).sort((a,b)=>Number(b.pick?.probability)-Number(a.pick?.probability))
-      for(const row of cardChoices.slice(0,2)){if(row.pick){legs.push({fixture:row.fixture,pick:row.pick});used.add(row.fixture.id)}}
-      const fouls=choices.filter(row=>!used.has(row.fixture.id)).map(row=>({fixture:row.fixture,pick:choose(row,"foul")})).filter(row=>row.pick).sort((a,b)=>Number(b.pick?.probability)-Number(a.pick?.probability))
-      for(const row of fouls){if(legs.length>=5)break;if(row.pick){legs.push({fixture:row.fixture,pick:row.pick});used.add(row.fixture.id)}}
-    }else{
-      for(const row of [...choices].sort((a,b)=>(b.picks[0]?.probability??0)-(a.picks[0]?.probability??0)).slice(0,5)){const pick=choose(row,"any");if(pick)legs.push({fixture:row.fixture,pick})}
-    }
-    return legs.sort((a,b)=>b.pick.probability-a.pick.probability)
-  },[options,mode])
-  const combinedChance=recommended.length?recommended.reduce((v,row)=>v*row.pick.probability,1):null
-  const priced=recommended.length>0&&recommended.every(row=>Number(row.pick.bookmakerOdds)>1)
-  const referenceOdds=priced?recommended.reduce((v,row)=>v*Number(row.pick.bookmakerOdds),1):null
+  const recommended=useMemo(()=>options.filter(row=>row.fixture.competition===league).map(row=>{
+    const picks=row.picks.filter(p=>mode==="all"||p.market==="card"||/^foul[1-5]$/.test(p.market)).slice(0,5)
+    const combined=picks.length?picks.reduce((v,p)=>v*p.probability,1):null
+    const actualOdds=picks.length&&picks.every(p=>Number(p.bookmakerOdds)>1)?picks.reduce((v,p)=>v*Number(p.bookmakerOdds),1):null
+    return {fixture:row.fixture,picks,combined,actualOdds,fairOdds:combined&&combined>0?1/combined:null}
+  }),[options,league,mode])
 
-  return <main className="min-h-screen bg-[#07120e] pb-24 text-white"><header className="sticky top-0 z-30 border-b border-white/10 bg-[#07120e] p-4"><div className="mx-auto flex max-w-3xl items-center gap-3"><button onClick={()=>router.push("/")} className="rounded-xl bg-white/10 p-3"><ArrowLeft className="size-4"/></button><div className="flex-1"><p className="text-xs font-black uppercase tracking-widest text-sky-300">Multi Match</p><h1 className="text-xl font-black">Most likely across {fixtures.length} games</h1></div><button onClick={()=>void load(fixtures)} className="rounded-xl bg-sky-300 p-3 text-sky-950"><RefreshCw className={"size-4 "+(loading?"animate-spin":"")}/></button></div></header>
-    <div className="mx-auto max-w-3xl space-y-3 px-4 pt-4">
-      <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-black">Choose leagues and matches</h2><span className="text-xs text-sky-300">{fixtures.length} selected</span></div>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{leagues.map(item=><button key={item} type="button" aria-pressed={league===item} onClick={()=>setLeague(item)} className={"min-h-12 rounded-xl border px-3 py-3 text-left text-xs font-bold touch-manipulation "+(league===item?"border-sky-300 bg-sky-300 text-sky-950":"border-white/15 bg-white/10 text-white/80")}><span className="block">{item==="Premier League"?"Premier League":item}</span><span className={"mt-1 block text-[0.6rem] "+(league===item?"text-sky-950/65":"text-white/45")}>{available.filter(g=>g.competition===item).length} games · {fixtures.filter(g=>g.competition===item).length} selected</span></button>)}</div><p className="mt-3 text-xs font-bold text-sky-200">Showing {league} · {leagueFixtures.length} fixtures · {selectedInLeague} selected</p>
-        <div className="mt-2 flex items-center gap-2"><input type="date" aria-label="Match date" value={matchDate} onChange={e=>setMatchDate(e.target.value)} className="min-w-0 flex-1 rounded-lg border border-white/15 bg-[#07120e] px-3 py-2 text-sm text-white"/><button type="button" onClick={()=>void fetchAvailable()} className="rounded-lg bg-white/10 px-3 py-2 text-xs font-bold">Refresh fixtures</button></div>
-        {fixtureError?<p className="mt-2 text-xs text-amber-200">{fixtureError}</p>:null}
-        <div className="mt-3 flex items-center justify-between gap-2"><span className="text-xs text-white/60">{threePmFixtures.length} matches at 3:00pm</span><button type="button" onClick={selectThreePm} disabled={!threePmFixtures.length} className="rounded-lg bg-sky-300 px-3 py-2 text-xs font-black text-sky-950 disabled:opacity-40">Select all 3pm</button></div><div className="mt-3 max-h-96 space-y-2 overflow-y-auto">{fixtureLoading&&available.length===0?<p className="py-3 text-xs text-white/50">Loading fixtures…</p>:leagueFixtures.length?displayedFixtures.map(game=>{const checked=fixtures.some(x=>x.id===game.id);const status=String(game.status??"").toLowerCase();const isLive=status.includes("live")||status.includes("progress")||status.includes("half");return <button key={game.id} type="button" onClick={()=>toggleFixture(game)} className={"flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-3 text-left "+(checked?"border-sky-300/60 bg-sky-300/10":"border-white/10 bg-black/20")}><span><span className="block text-sm font-bold">{game.home} v {game.away}</span><span className="mt-1 block text-xs text-white/50">{time(game.kickoff)} · {isThreePm(game)?"3PM KICKOFF · ":""}{isLive?"LIVE":status||"Scheduled"}</span></span><span className={"shrink-0 rounded-lg px-3 py-2 text-xs font-bold "+(checked?"bg-sky-300 text-sky-950":"bg-white/10 text-white")}>{checked?"Selected":"Add"}</span></button>}):<p className="py-3 text-xs text-white/50">No {league} fixtures found on this date. Try another date.</p>}</div>
-      </section>
+  return <main className="min-h-screen bg-[#07120e] pb-24 text-white"><header className="sticky top-0 z-30 border-b border-white/10 bg-[#07120e] p-4"><div className="mx-auto flex max-w-3xl items-center gap-3"><button onClick={()=>router.push("/")} className="rounded-xl bg-white/10 p-3"><ArrowLeft className="size-4"/></button><div className="flex-1"><p className="text-xs font-black uppercase tracking-widest text-sky-300">Multi Match</p><h1 className="text-xl font-black">Top 5 picks per match</h1></div><button onClick={()=>void load(fixtures)} className="rounded-xl bg-sky-300 p-3 text-sky-950"><RefreshCw className={"size-4 "+(loading?"animate-spin":"")}/></button></div></header>
+    <div className="mx-auto max-w-3xl px-3 pt-3">
+      <div className="flex gap-1.5 overflow-x-auto pb-2">{leagues.map(item=><button key={item} type="button" onClick={()=>setLeague(item)} className={"shrink-0 rounded-lg px-3 py-2 text-xs font-bold "+(league===item?"bg-sky-300 text-sky-950":"bg-white/10 text-white/75")}>{item} ({available.filter(g=>g.competition===item).length})</button>)}</div>
+      <div className="flex items-center justify-between gap-2"><input type="date" value={matchDate} onChange={e=>setMatchDate(e.target.value)} className="rounded-lg border border-white/15 bg-[#07120e] px-2 py-1.5 text-xs text-white"/><span className="text-xs text-white/50">{leagueFixtures.length} games · all included</span></div>
+      {fixtureError?<p className="mt-2 text-xs text-amber-200">{fixtureError}</p>:null}
     </div>
-    <div className="mx-auto max-w-3xl space-y-4 p-4">
-      <div className="grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-1.5">
-        <button type="button" onClick={()=>setMode("all")} className={"rounded-xl px-3 py-3 text-xs font-black "+(mode==="all"?"bg-sky-300 text-sky-950":"text-white/60")}>Recommended Mixed Slip</button>
-        <button type="button" onClick={()=>setMode("discipline")} className={"rounded-xl px-3 py-3 text-xs font-black "+(mode==="discipline"?"bg-amber-300 text-amber-950":"text-white/60")}>Cards + Fouls Slip</button>
-      </div>
-      <section className="rounded-3xl border border-sky-300/20 bg-sky-300/5 p-4">
-        <p className="text-xs font-black uppercase tracking-widest text-sky-300">Highest probability recommendations</p>
-        <h2 className="mt-1 text-xl font-black">{mode==="discipline"?"Yellow Cards + Fouls Committed":"Recommended Multi-Match Slip"}</h2>
-        <p className="mt-2 text-xs leading-relaxed text-white/55">{mode==="discipline"?"Up to two yellow-card picks, with the remaining selections based on the strongest fouls-committed probabilities across different matches.":"Up to five strongest player-market selections across different matches, including shots, shots on target, goals, assists and fouls."} Select leagues and matches above to change the games included.</p>
-        <div className="mt-3 flex items-center justify-between rounded-xl bg-black/25 p-3"><span className="text-sm font-bold">{recommended.length} recommended legs</span><span className="text-sm font-black text-sky-200">{combinedChance==null?"—":percent(combinedChance)} combined estimate</span></div>
-        {loading?<p className="mt-3 text-xs text-white/50">Updating recommendations…</p>:null}
-        <div className="mt-3 space-y-2">{recommended.map((row,i)=><div key={row.fixture.id} className="rounded-xl border border-white/10 bg-black/20 p-3">
-          <div className="flex items-center justify-between gap-3"><span className="text-[0.65rem] font-bold text-white/45">#{i+1} · {row.fixture.home} v {row.fixture.away}</span><span className="font-mono text-lg font-black text-emerald-300">{percent(row.pick.probability)}</span></div>
-          <p className="mt-1 text-sm font-black">{row.pick.player} · {row.pick.label}</p>
-          <p className="mt-1 text-xs text-white/45">{row.fixture.competition} · L5 {row.pick.recent5HitRate==null?"not available":percent(row.pick.recent5HitRate)} · H2H {row.pick.h2hMatches?percent(row.pick.h2hHitRate):"no sample"}{Number(row.pick.bookmakerOdds)>1?" · reference odds "+Number(row.pick.bookmakerOdds).toFixed(2):""}</p>
-        </div>)}</div>
-        {!recommended.length?<p className="mt-3 rounded-xl bg-black/20 p-4 text-sm text-amber-200">{fixtures.length?"No eligible player selections have loaded for the selected matches yet. Try Refresh.":"Choose fixtures above or tap Select all 3pm to generate your recommended slip."}</p>:null}
-        {referenceOdds!=null?<p className="mt-3 text-xs text-white/45">Combined reference singles odds: {referenceOdds.toFixed(2)}. Check accumulator availability with the bookmaker.</p>:null}
-      </section>
+    <div className="mx-auto max-w-3xl space-y-2 px-3 pb-4">
+      <div className="grid grid-cols-2 gap-1 rounded-xl bg-white/5 p-1"><button onClick={()=>setMode("all")} className={"rounded-lg px-2 py-2 text-xs font-bold "+(mode==="all"?"bg-sky-300 text-sky-950":"text-white/60")}>All markets</button><button onClick={()=>setMode("discipline")} className={"rounded-lg px-2 py-2 text-xs font-bold "+(mode==="discipline"?"bg-amber-300 text-amber-950":"text-white/60")}>Cards + fouls</button></div>
+      <p className="text-xs text-white/50">Five highest-probability picks per match. Projected fair odds are estimates, not bookmaker prices.</p>
+      {loading?<p className="text-xs text-sky-200">Updating projections…</p>:null}
+      {recommended.map(row=><section key={row.fixture.id} className="rounded-xl border border-white/10 bg-white/[0.035] p-2.5">
+        <div className="flex items-center justify-between gap-2"><div className="min-w-0"><h3 className="truncate text-sm font-black">{row.fixture.home} v {row.fixture.away}</h3><p className="text-[0.65rem] text-white/45">{time(row.fixture.kickoff)} · {row.picks.length} picks</p></div><div className="shrink-0 text-right"><p className="font-mono text-sm font-black text-emerald-300">{row.fairOdds==null?"—":row.fairOdds.toFixed(2)}x</p><p className="text-[0.6rem] text-white/40">projected fair odds</p></div></div>
+        <div className="mt-2 divide-y divide-white/5">{row.picks.map((p,i)=><div key={p.player+"|"+p.market} className="flex items-center justify-between gap-2 py-1.5"><div className="min-w-0"><p className="truncate text-xs font-bold">{i+1}. {p.player} · {p.label}</p><p className="text-[0.62rem] text-white/40">Fair {p.probability>0?(1/p.probability).toFixed(2):"—"}x{Number(p.bookmakerOdds)>1?" · Book "+Number(p.bookmakerOdds).toFixed(2)+"x":""}</p></div><span className="shrink-0 font-mono text-xs font-black text-sky-200">{percent(p.probability)}</span></div>)}</div>
+        {row.picks.length>1?<p className="mt-1 border-t border-white/10 pt-1.5 text-[0.65rem] text-white/45">Combined estimate {percent(row.combined)} · {row.actualOdds==null?"No verified combined bookmaker price":"Bookmaker singles product "+row.actualOdds.toFixed(2)+"x"} · correlated legs may change actual probability</p>:null}
+        {!row.picks.length?<p className="py-2 text-xs text-amber-200">Player projections unavailable for this fixture.</p>:null}
+      </section>)}
+      {!recommended.length&&!loading?<p className="rounded-xl bg-white/5 p-4 text-sm text-white/60">No fixtures with player projections available for this league/date.</p>:null}
     <p className="text-xs leading-relaxed text-white/40">Probabilities are estimates, not guarantees. Multiplying single-leg chances assumes independence and may overstate confidence where events are correlated. Live prices and settlement rules are determined by the bookmaker.</p></div></main>
 }
 
