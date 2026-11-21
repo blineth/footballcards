@@ -180,7 +180,7 @@ export default function MultiMatchPage(){
   const[mode,setMode]=useState<"all"|"discipline">("all")
   const leagues:Competition[]=["Premier League","Championship","League One","League Two","International"]
   const[league,setLeague]=useState<Competition>("Premier League")
-  const[matchDate,setMatchDate]=useState(()=>new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/London",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date()))
+  const[matchDate,setMatchDate]=useState(()=>new Date().toLocaleDateString("en-CA",{timeZone:"Europe/London"}))
   const[available,setAvailable]=useState<Fixture[]>([])
   const[fixtureLoading,setFixtureLoading]=useState(false)
   const[fixtureError,setFixtureError]=useState("")
