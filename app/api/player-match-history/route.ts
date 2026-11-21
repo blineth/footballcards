@@ -27,9 +27,9 @@ export async function GET(request:Request){
       const ordered=[...eligible].sort((a,b)=>dateString(b.matchDate).localeCompare(dateString(a.matchDate)))
       const toLog=(r:typeof playerH2H.$inferSelect)=>({
         date:dateString(r.matchDate),opponent:String(r.opponent??""),
-        fouls:Number(r.foulsCommitted??0),foulsWon:Number(r.foulsDrawn??0),
-        shots:Number(r.shots??0),shotsOnTarget:Number(r.shotsOnTarget??0),
-        yellow:r.yellowCard===true,
+        fouls:r.foulsCommitted===null?null:Number(r.foulsCommitted),foulsWon:r.foulsDrawn===null?null:Number(r.foulsDrawn),
+        shots:r.shots===null?null:Number(r.shots),shotsOnTarget:r.shotsOnTarget===null?null:Number(r.shotsOnTarget),
+        yellow:r.yellowCard===null?null:r.yellowCard===true,
       })
       const h2h=ordered.filter(r=>
         (norm(r.team??"")===norm(home)&&norm(r.opponent)===norm(away))||
