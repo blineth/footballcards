@@ -1844,6 +1844,17 @@ export async function GET(request: Request) {
   const competition = url.searchParams.get("competition") ?? "Premier League"
   const builderView = url.searchParams.get("view")==="builder"
   if (!date || !home || !away) return NextResponse.json({ ok: false, error: "Invalid fixture parameters" }, { status: 400 })
+  // Mobile match builder must remain usable even when the full research pipeline
+  // stalls on external services. Serve a bounded historical/lineup snapshot.
+  if(builderView){
+    try{
+      const quick=await buildSnapshotScorecard({date,home,away,competition:competition as any})
+      return scorecardJson({...quick,snapshotFallback:true,fallbackReason:"Fast historical player model; full research and bookmaker prices are not yet verified."},true)
+    }catch(error){
+      return NextResponse.json({ok:false,error:"The fast player model is unavailable. Please retry."},{status:503,headers:{"Cache-Control":"no-store"}})
+    }
+  }
+
   if (!isDatabaseConfigured) {
     try {
       { const fallback=await buildVerifiedBet365SnapshotFallback({request,date,home,away,competition}); return scorecardJson(fallback,builderView) }
