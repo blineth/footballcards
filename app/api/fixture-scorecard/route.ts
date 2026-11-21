@@ -1863,7 +1863,27 @@ export async function GET(request: Request) {
             const byName=new Map<string,any>((history.players??[]).map((p:any)=>[normalize(p.name),p]))
             quick.players=quick.players.map((player:any)=>{
               const match=byName.get(normalize(player.dbName??player.name))??byName.get(normalize(player.name))
-              return match?{...player,recentGameLog:match.recentGameLog??[],h2hGameLog:match.h2hGameLog??[],h2hMeetings:match.h2hMeetings??0}:player
+              if(!match)return player
+              const h2h=(match.h2hGameLog??[]).filter((g:any)=>typeof g.yellow==="boolean")
+              const baseline=Number(player.markets?.card?.probability)
+              // Conservative Bayesian H2H adjustment: four equivalent prior
+              // meetings at the season/recent baseline, capped at 20% weight.
+              // H2H is context, not an independent 100% prediction from 2/2.
+              const bookings=h2h.filter((g:any)=>g.yellow===true).length
+              const h2hPosterior=(bookings+4*baseline)/(h2h.length+4)
+              const h2hWeight=Math.min(.2,h2h.length*.1)
+              const adjusted=Number.isFinite(baseline)&&h2h.length?
+                Math.max(.01,Math.min(.85,baseline*(1-h2hWeight)+h2hPosterior*h2hWeight)):baseline
+              const card=player.markets?.card
+              const markets=card&&Number.isFinite(adjusted)?{
+                ...player.markets,
+                card:{...card,probability:Math.round(adjusted*1000)/1000,
+                  fairOdds:Math.round(100/adjusted)/100,
+                  reason:String(card.reason??"Season and recent card history.")+
+                    " H2H adjustment: "+bookings+"/"+h2h.length+
+                    " previous bookings; conservatively weighted due to small sample."}
+              }:player.markets
+              return {...player,markets,recentGameLog:match.recentGameLog??[],h2hGameLog:match.h2hGameLog??[],h2hMeetings:match.h2hMeetings??0}
             })
           }
         }catch(error){console.warn("Snapshot player history enrichment failed",error)}
