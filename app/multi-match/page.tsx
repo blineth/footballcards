@@ -248,14 +248,32 @@ export default function MultiMatchPage(){
     const picks=fallback.filter(x=>x.probability>=.08&&x.confidence!=="D"&&Number.isFinite(x.probability)).sort((a,b)=>b.probability-a.probability)
     return {fixture:result.fixture,picks}
   }),[results])
-  const [overrides,setOverrides]=useState<Record<string,string>>({})
-  const visibleOptions=options.map(row=>({...row,picks:mode==="discipline"?row.picks.filter(p=>p.market==="card"||/^foul[1-5]$/.test(p.market)):row.picks}))
-  const selected=visibleOptions.map(row=>({fixture:row.fixture,pick:row.picks.find(p=>p.player+"|"+p.market===overrides[mode+"|"+row.fixture.id])??row.picks[0]??null}))
-  const selectedPicks=selected.filter(row=>row.pick)
-  const selectedGames=new Set(selectedPicks.map(row=>row.fixture.id)).size
-  const combinedChance=selectedPicks.length===selected.length&&selected.length>0?selectedPicks.reduce((p,row)=>p*(row.pick?.probability??1),1):null
-  const priced=selectedPicks.length===selected.length&&selectedPicks.every(row=>Number(row.pick?.bookmakerOdds)>1)
-  const referenceOdds=priced?selectedPicks.reduce((p,row)=>p*Number(row.pick?.bookmakerOdds),1):null
+  // A recommendation is a short, cross-match slip, not a catalogue of every player.
+  // Keep one pick per fixture to avoid within-match correlation, and limit to five legs.
+  const recommended=useMemo(()=>{
+    const discipline=mode==="discipline"
+    const choices=options.map(row=>({
+      fixture:row.fixture,
+      picks:row.picks.filter(p=>discipline?(p.market==="card"||/^foul[1-5]$/.test(p.market)):true)
+    })).filter(row=>row.picks.length)
+    const choose=(row:typeof choices[number],market:"card"|"foul"|"any")=>row.picks.filter(p=>market==="any"|| (market==="card"?p.market==="card":/^foul[1-5]$/.test(p.market)))[0]??null
+    const used=new Set<string>()
+    const legs:Array<{fixture:Fixture;pick:typeof choices[number]["picks"][number]}>=[]
+    if(discipline){
+      // Choose up to two strongest card selections, only where card evidence
+      // supports the probability; fill the other places with foul lines.
+      const cardChoices=choices.map(row=>({fixture:row.fixture,pick:choose(row,"card")})).filter(row=>row.pick&&row.pick.probability>=.20).sort((a,b)=>Number(b.pick?.probability)-Number(a.pick?.probability))
+      for(const row of cardChoices.slice(0,2)){if(row.pick){legs.push({fixture:row.fixture,pick:row.pick});used.add(row.fixture.id)}}
+      const fouls=choices.filter(row=>!used.has(row.fixture.id)).map(row=>({fixture:row.fixture,pick:choose(row,"foul")})).filter(row=>row.pick).sort((a,b)=>Number(b.pick?.probability)-Number(a.pick?.probability))
+      for(const row of fouls){if(legs.length>=5)break;if(row.pick){legs.push({fixture:row.fixture,pick:row.pick});used.add(row.fixture.id)}}
+    }else{
+      for(const row of [...choices].sort((a,b)=>(b.picks[0]?.probability??0)-(a.picks[0]?.probability??0)).slice(0,5)){const pick=choose(row,"any");if(pick)legs.push({fixture:row.fixture,pick})}
+    }
+    return legs.sort((a,b)=>b.pick.probability-a.pick.probability)
+  },[options,mode])
+  const combinedChance=recommended.length?recommended.reduce((v,row)=>v*row.pick.probability,1):null
+  const priced=recommended.length>0&&recommended.every(row=>Number(row.pick.bookmakerOdds)>1)
+  const referenceOdds=priced?recommended.reduce((v,row)=>v*Number(row.pick.bookmakerOdds),1):null
 
   return <main className="min-h-screen bg-[#07120e] pb-24 text-white"><header className="sticky top-0 z-30 border-b border-white/10 bg-[#07120e] p-4"><div className="mx-auto flex max-w-3xl items-center gap-3"><button onClick={()=>router.push("/")} className="rounded-xl bg-white/10 p-3"><ArrowLeft className="size-4"/></button><div className="flex-1"><p className="text-xs font-black uppercase tracking-widest text-sky-300">Multi Match</p><h1 className="text-xl font-black">Most likely across {fixtures.length} games</h1></div><button onClick={()=>void load(fixtures)} className="rounded-xl bg-sky-300 p-3 text-sky-950"><RefreshCw className={"size-4 "+(loading?"animate-spin":"")}/></button></div></header>
     <div className="mx-auto max-w-3xl space-y-3 px-4 pt-4">
@@ -267,9 +285,25 @@ export default function MultiMatchPage(){
         <div className="mt-3 flex items-center justify-between gap-2"><span className="text-xs text-white/60">{threePmFixtures.length} matches at 3:00pm</span><button type="button" onClick={selectThreePm} disabled={!threePmFixtures.length} className="rounded-lg bg-sky-300 px-3 py-2 text-xs font-black text-sky-950 disabled:opacity-40">Select all 3pm</button></div><div className="mt-3 max-h-96 space-y-2 overflow-y-auto">{fixtureLoading&&available.length===0?<p className="py-3 text-xs text-white/50">Loading fixtures…</p>:leagueFixtures.length?displayedFixtures.map(game=>{const checked=fixtures.some(x=>x.id===game.id);const status=String(game.status??"").toLowerCase();const isLive=status.includes("live")||status.includes("progress")||status.includes("half");return <button key={game.id} type="button" onClick={()=>toggleFixture(game)} className={"flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-3 text-left "+(checked?"border-sky-300/60 bg-sky-300/10":"border-white/10 bg-black/20")}><span><span className="block text-sm font-bold">{game.home} v {game.away}</span><span className="mt-1 block text-xs text-white/50">{time(game.kickoff)} · {isThreePm(game)?"3PM KICKOFF · ":""}{isLive?"LIVE":status||"Scheduled"}</span></span><span className={"shrink-0 rounded-lg px-3 py-2 text-xs font-bold "+(checked?"bg-sky-300 text-sky-950":"bg-white/10 text-white")}>{checked?"Selected":"Add"}</span></button>}):<p className="py-3 text-xs text-white/50">No {league} fixtures found on this date. Try another date.</p>}</div>
       </section>
     </div>
-    <div className="mx-auto max-w-3xl space-y-4 p-4"><div className="grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-1.5"><button type="button" onClick={()=>setMode("all")} className={"rounded-xl px-3 py-3 text-xs font-black "+(mode==="all"?"bg-sky-300 text-sky-950":"text-white/60")}>All Player Markets</button><button type="button" onClick={()=>setMode("discipline")} className={"rounded-xl px-3 py-3 text-xs font-black "+(mode==="discipline"?"bg-amber-300 text-amber-950":"text-white/60")}>Yellow Cards + Fouls</button></div><section className="rounded-3xl border border-sky-300/20 bg-sky-300/5 p-4"><h2 className="font-black">{mode==="discipline"?"Yellow cards + fouls committed across matches":"Your recent-form + H2H prediction slip"}</h2><p className="mt-2 text-sm text-white/60">{mode==="discipline"?"Only yellow cards and fouls committed. Highest estimated probability per match is selected first; choose another player or foul threshold below.":"One high-probability player action is preselected for each match, using the same form and head-to-head model as Match Builder. Tap a different selection to replace it. No artificial odds target."}</p><div className="mt-3 grid grid-cols-2 gap-2"><div className="rounded-xl bg-black/20 p-3"><p className="text-xl font-black">{selectedPicks.length}/{fixtures.length}</p><p className="text-xs text-white/40">Games with selections</p></div><div className="rounded-xl bg-black/20 p-3"><p className="text-xl font-black">{combinedChance==null?"—":percent(combinedChance)}</p><p className="text-xs text-white/40">Independent-leg estimate</p></div></div>{referenceOdds!=null?<p className="mt-3 text-xs text-white/50">Bet365 singles reference product: {referenceOdds.toFixed(2)} decimal. Final accumulator odds must be checked with Bet365.</p>:<p className="mt-3 text-xs text-amber-200/70">Some selections have no verified Bet365 price. They remain visible as predictions, not priced bets.</p>}</section>
-    <div className="flex items-center justify-between gap-2"><h2 className="text-sm font-black">Selected games and player picks</h2><span className="text-xs text-white/45">{league} filter</span></div>
-    {visibleOptions.filter(row=>row.fixture.competition===league).map(row=>{const active=selected.find(x=>x.fixture.id===row.fixture.id)?.pick;return <section key={row.fixture.id} className="rounded-3xl border border-white/10 bg-white/[0.04] p-4"><div className="flex items-start justify-between gap-3"><div><h3 className="font-black">{row.fixture.home} v {row.fixture.away}</h3><p className="mt-1 text-xs text-white/40">{row.fixture.competition} · {time(row.fixture.kickoff)}</p></div><span className="rounded-full bg-sky-300/10 px-2 py-1 text-xs text-sky-200">{row.picks.length} options</span></div>{active?<p className="mt-3 rounded-xl bg-sky-300/10 p-3 text-sm font-bold text-sky-100">Selected: {active.player} · {active.label} · {percent(active.probability)}</p>:<p className="mt-3 text-sm text-amber-200">No eligible player markets available for this fixture.</p>}<div className="mt-3 space-y-2">{row.picks.slice(0,mode==="discipline"?20:12).map(p=><button key={p.player+"|"+p.market} onClick={()=>setOverrides(v=>({...v,[mode+"|"+row.fixture.id]:p.player+"|"+p.market}))} className={"flex w-full items-center justify-between gap-3 rounded-xl border p-3 text-left "+(active?.player===p.player&&active?.market===p.market?"border-sky-300/40 bg-sky-300/10":"border-white/10 bg-black/20")}><span className="min-w-0"><span className="block text-sm font-bold">{p.player} · {p.label}</span><span className="mt-1 block text-xs text-white/40">Last 5: {p.recent5HitRate==null?"unavailable":percent(p.recent5HitRate)} · H2H: {p.h2hMatches?percent(p.h2hHitRate):"no sample"}{p.bookmakerOdds?" · Bet365 "+Number(p.bookmakerOdds).toFixed(2):" · no verified price"}</span></span><span className="shrink-0 font-mono text-sm font-black text-sky-200">{percent(p.probability)}</span></button>)}</div></section>})}
+    <div className="mx-auto max-w-3xl space-y-4 p-4">
+      <div className="grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-1.5">
+        <button type="button" onClick={()=>setMode("all")} className={"rounded-xl px-3 py-3 text-xs font-black "+(mode==="all"?"bg-sky-300 text-sky-950":"text-white/60")}>Recommended Mixed Slip</button>
+        <button type="button" onClick={()=>setMode("discipline")} className={"rounded-xl px-3 py-3 text-xs font-black "+(mode==="discipline"?"bg-amber-300 text-amber-950":"text-white/60")}>Cards + Fouls Slip</button>
+      </div>
+      <section className="rounded-3xl border border-sky-300/20 bg-sky-300/5 p-4">
+        <p className="text-xs font-black uppercase tracking-widest text-sky-300">Highest probability recommendations</p>
+        <h2 className="mt-1 text-xl font-black">{mode==="discipline"?"Yellow Cards + Fouls Committed":"Recommended Multi-Match Slip"}</h2>
+        <p className="mt-2 text-xs leading-relaxed text-white/55">{mode==="discipline"?"Up to two yellow-card picks, with the remaining selections based on the strongest fouls-committed probabilities across different matches.":"Up to five strongest player-market selections across different matches, including shots, shots on target, goals, assists and fouls."} Select leagues and matches above to change the games included.</p>
+        <div className="mt-3 flex items-center justify-between rounded-xl bg-black/25 p-3"><span className="text-sm font-bold">{recommended.length} recommended legs</span><span className="text-sm font-black text-sky-200">{combinedChance==null?"—":percent(combinedChance)} combined estimate</span></div>
+        {loading?<p className="mt-3 text-xs text-white/50">Updating recommendations…</p>:null}
+        <div className="mt-3 space-y-2">{recommended.map((row,i)=><div key={row.fixture.id} className="rounded-xl border border-white/10 bg-black/20 p-3">
+          <div className="flex items-center justify-between gap-3"><span className="text-[0.65rem] font-bold text-white/45">#{i+1} · {row.fixture.home} v {row.fixture.away}</span><span className="font-mono text-lg font-black text-emerald-300">{percent(row.pick.probability)}</span></div>
+          <p className="mt-1 text-sm font-black">{row.pick.player} · {row.pick.label}</p>
+          <p className="mt-1 text-xs text-white/45">{row.fixture.competition} · L5 {row.pick.recent5HitRate==null?"not available":percent(row.pick.recent5HitRate)} · H2H {row.pick.h2hMatches?percent(row.pick.h2hHitRate):"no sample"}{Number(row.pick.bookmakerOdds)>1?" · reference odds "+Number(row.pick.bookmakerOdds).toFixed(2):""}</p>
+        </div>)}</div>
+        {!recommended.length?<p className="mt-3 rounded-xl bg-black/20 p-4 text-sm text-amber-200">{fixtures.length?"No eligible player selections have loaded for the selected matches yet. Try Refresh.":"Choose fixtures above or tap Select all 3pm to generate your recommended slip."}</p>:null}
+        {referenceOdds!=null?<p className="mt-3 text-xs text-white/45">Combined reference singles odds: {referenceOdds.toFixed(2)}. Check accumulator availability with the bookmaker.</p>:null}
+      </section>
     <p className="text-xs leading-relaxed text-white/40">Probabilities are estimates, not guarantees. Multiplying single-leg chances assumes independence and may overstate confidence where events are correlated. Live prices and settlement rules are determined by the bookmaker.</p></div></main>
 }
 
