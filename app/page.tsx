@@ -32,6 +32,7 @@ type Bet365Availability={
   marketAvailability:Record<string,MarketStatus>
   availableBets?:Array<{kind:string;market:string;label:string;odd:number}>
   note?:string|null
+  checkedAt?:string
 }
 type Fixture = {
   id:string
@@ -172,6 +173,7 @@ export default function MatchesPage(){
   const[live,setLive]=useState<FixturesResponse|null>(null)
   const[loading,setLoading]=useState(false)
   const[lastRefresh,setLastRefresh]=useState<Date|null>(null)
+  const[lastMarketRefresh,setLastMarketRefresh]=useState<Date|null>(null)
   const[autoAdvanced,setAutoAdvanced]=useState(false)
   const[bet365Availability,setBet365Availability]=useState<Record<string,Bet365Availability>>({})
   const[lineups,setLineups]=useState<Record<string,LineupState>>({})
@@ -207,6 +209,7 @@ export default function MatchesPage(){
         if(!response.ok)throw new Error("odds")
         const data=await response.json()
         return [fixture.id,{
+          checkedAt:new Date().toISOString(),
           loading:false,
           priceAvailable:Boolean(data?.priceAvailable),
           liveVerified:data?.liveVerified,
@@ -221,6 +224,8 @@ export default function MatchesPage(){
 
     const merged={...cached,...Object.fromEntries(results)}
     setBet365Availability(cur=>({...cur,...merged}))
+    const mostRecent=Object.values(merged).map(v=>v.checkedAt).filter((v):v is string=>Boolean(v)).sort().at(-1)
+    if(mostRecent)setLastMarketRefresh(new Date(mostRecent))
     writeJsonCache(cacheKey,merged)
   },[resolvedDate,selectedDate])
 
@@ -265,13 +270,18 @@ export default function MatchesPage(){
         setLastRefresh(new Date(cached.savedAt))
         setLoading(false)
         const avail=readJsonCache<Record<string,Bet365Availability>>(availabilityCacheKey(cached.resolvedDate||selectedDate))
-        if(avail)setBet365Availability(avail)
+        if(avail){
+          setBet365Availability(avail)
+          const mostRecent=Object.values(avail).map(v=>v.checkedAt).filter((v):v is string=>Boolean(v)).sort().at(-1)
+          setLastMarketRefresh(mostRecent?new Date(mostRecent):null)
+        }
         return
       }
     }else if(force){
       try{window.localStorage.removeItem(fixturesCacheKey(selectedDate))}catch{}
       try{window.localStorage.removeItem(availabilityCacheKey(resolvedDate||selectedDate))}catch{}
       setBet365Availability({})
+      setLastMarketRefresh(null)
     }
 
     if(!liveTick)setLoading(true)
@@ -345,6 +355,14 @@ export default function MatchesPage(){
         </div>
       </div>
     </header>
+
+    <div className="border-b border-emerald-300/15 bg-emerald-400/[0.08] px-4 py-2.5" role="status" aria-live="polite">
+      <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-x-4 gap-y-1 text-[0.68rem]">
+        <span className="flex items-center gap-2 font-bold text-emerald-200"><span className={"inline-block size-2 rounded-full "+(lastRefresh?"bg-emerald-400":"bg-amber-300")}/>LIVE DATA LAST PULLED</span>
+        <span className="font-mono font-semibold text-white/85">{lastRefresh?lastRefresh.toLocaleString("en-GB",{timeZone:"Europe/London",day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit",second:"2-digit"}):loading?"Checking…":"Not yet fetched"} <span className="font-sans text-white/45">UK time · fixtures</span></span>
+        <span className="text-[0.58rem] text-white/55">Bet365 markets: {lastMarketRefresh?lastMarketRefresh.toLocaleTimeString("en-GB",{timeZone:"Europe/London",hour:"2-digit",minute:"2-digit",second:"2-digit"}):"not yet verified"}</span>
+      </div>
+    </div>
 
     <div className="mx-auto max-w-3xl space-y-4 px-4 py-4">
       <section className="flex items-center gap-2 rounded-3xl border border-white/10 bg-white/[0.045] p-3">
