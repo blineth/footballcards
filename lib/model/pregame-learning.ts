@@ -194,7 +194,21 @@ export async function runPregameLearning(){
  // Descriptive evidence only. No assumptions that a zero-foul booking was dissent.
  const watched=[/\\bpedro neto\\b/i,/\\bdan burn\\b/i,/\\bmac allister\\b|\\bmcallister\\b/i,/\\benzo fernandez\\b|\\benzo fernández\\b/i]
  const observedByPlayer=new Map<string,{player:string;team:string;matches:number;yellows:number;nonFoulBookings:number;zeroFoulAppearances:number;verifiedZeroFoulAppearances:number;confirmedDissentBookings:number;lateBookings:number;knownReasons:number;knownMinutes:number}>()
- for(const row of rows){
+ // Audited players must not vanish simply because the general replay limits
+ // itself to 70,000 recent records.
+ const watch=await pool.query<HistoryRow>(`SELECT player_name,team,opponent,competition,match_date::text,minutes,
+   yellow_card,red_card,fouls_committed,fouls_drawn,shots,shots_on_target,
+   booking_reason,yellow_card_minute,fouls_stat_verified
+   FROM player_h2h WHERE match_date>=current_date-interval '36 months'
+     AND match_date<current_date
+     AND player_name ~* '(Pedro Neto|Dan Burn|Mac Allister|McAllister|Enzo Fern.ndez)'
+   ORDER BY match_date DESC LIMIT 1800`)
+ const watchedRows=watch.rows
+ const seenWatched=new Set<string>()
+ for(const row of watchedRows){
+   const rowKey=[row.match_date,row.player_name,row.team,row.opponent].join("|")
+   if(seenWatched.has(rowKey))continue
+   seenWatched.add(rowKey)
    if(!watched.some(re=>re.test(String(row.player_name))))continue
    const key=String(row.player_name).toLowerCase()+"|"+String(row.team).toLowerCase()
    const old=observedByPlayer.get(key)??{player:row.player_name,team:String(row.team),matches:0,yellows:0,nonFoulBookings:0,zeroFoulAppearances:0,verifiedZeroFoulAppearances:0,confirmedDissentBookings:0,lateBookings:0,knownReasons:0,knownMinutes:0}
