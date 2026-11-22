@@ -1748,7 +1748,10 @@ type HistoryMatch={
 }
 type HistoryResult={ok:boolean;lastFive?:HistoryMatch[];h2h?:HistoryMatch[];
  lastFiveSummary?:{matches:number;graded:number;hits:number;rate:number|null};
- h2hSummary?:{matches:number;graded:number;hits:number;rate:number|null};error?:string}
+ h2hSummary?:{matches:number;graded:number;hits:number;rate:number|null};
+ lastFiveBookings?:{booked:number;withKnownOutcome:number;reds:number};
+ h2hBookings?:{booked:number;withKnownOutcome:number;reds:number};
+ h2hOpponent?:string;error?:string}
 function PlayerHistoryDetails({row,fixture,inPlay}:{row:Selection;fixture:Fixture;inPlay:boolean}){
  const[history,setHistory]=useState<HistoryResult|null>(null)
  const[loading,setLoading]=useState(true)
@@ -1780,16 +1783,34 @@ function PlayerHistoryDetails({row,fixture,inPlay}:{row:Selection;fixture:Fixtur
    if(row.market.startsWith("assist"))return match.assists
    return null
  }
- const panel=(title:string,matches:HistoryMatch[],summary?:HistoryResult["lastFiveSummary"])=>(
-   <div className="mt-3">
-    <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-black">{title}</p>
-     <p className="text-[0.57rem] text-cyan-100/70">{summary?.graded?summary.hits+"/"+summary.graded+" hit ("+percent(summary.rate,0)+")":"No graded results"}</p>
+ const panel=(title:string,matches:HistoryMatch[],summary?:HistoryResult["lastFiveSummary"],isH2H=false)=>(
+   <div className={"mt-4 rounded-2xl border p-3 "+(isH2H?"border-amber-300/25 bg-amber-300/[0.045]":"border-white/8 bg-white/[0.02]")}>
+    <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-black">{title}</p>
+     <p className="text-[0.65rem] font-black text-cyan-100/80">{summary?.graded?summary.hits+"/"+summary.graded+" "+row.label+" ("+percent(summary.rate,0)+")":"No graded results"}</p>
     </div>
-    {matches.length?<div className="mt-2 space-y-1.5">{matches.map((m,i)=><div key={m.date+"|"+m.opponent+"|"+i} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 rounded-lg bg-black/20 px-2.5 py-2">
-     <div className="min-w-0"><p className="truncate text-[0.68rem] font-black">{m.opponent}</p><p className="text-[0.53rem] text-white/40">{m.date} · {m.minutes==null?"minutes unknown":m.minutes+" mins"}</p></div>
-     <div className="text-right"><p className="font-mono text-xs font-black">{metric(m)??"—"}</p><p className="text-[0.46rem] text-white/40">{row.label}</p></div>
-     <span className={"rounded-lg px-2 py-1 text-[0.53rem] font-black "+(m.hit===true?"bg-emerald-400/15 text-emerald-200":m.hit===false?"bg-rose-400/10 text-rose-200":"bg-white/10 text-white/35")}>{m.hit==null?"N/A":m.hit?"HIT":"MISS"}</span>
-    </div>)}</div>:<p className="mt-2 rounded-lg bg-black/15 p-3 text-[0.65rem] text-white/40">No matching historical appearances in the current database.</p>}
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      <span className="rounded-xl border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-xs font-black text-amber-100">
+        🟨 {matches.filter(m=>m.yellow===true).length}/{matches.filter(m=>m.yellow!=null).length} yellow-card games
+      </span>
+      {matches.some(m=>m.red===true)?<span className="rounded-xl bg-rose-400/15 px-2.5 py-2 text-xs font-bold text-rose-200">🟥 {matches.filter(m=>m.red===true).length} red-card games</span>:null}
+      <span className="text-[0.58rem] text-white/40">{matches.length} recorded appearance{matches.length===1?"":"s"}</span>
+    </div>
+    {matches.length?<div className="mt-3 space-y-2">{matches.map((m,i)=><div key={m.date+"|"+m.opponent+"|"+i}
+      className={"rounded-xl border px-3 py-3 "+(m.yellow===true?"border-amber-300/35 bg-amber-300/[0.085]":"border-white/[0.06] bg-black/20")}>
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0"><p className="truncate text-sm font-black">{m.opponent}</p><p className="mt-0.5 text-[0.62rem] text-white/45">{m.date} · {m.minutes==null?"Minutes unknown":m.minutes+" mins"}</p></div>
+        {m.yellow===true?<span className="shrink-0 rounded-xl border border-amber-200/50 bg-amber-300/20 px-3 py-2 text-sm font-black text-amber-100">🟨 BOOKED</span>:
+         m.yellow===false?<span className="shrink-0 rounded-lg bg-white/[0.06] px-2.5 py-1.5 text-[0.7rem] font-bold text-white/50">No yellow</span>:
+         <span className="shrink-0 text-xs text-white/35">Card unknown</span>}
+      </div>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-2">
+       <p className="text-[0.7rem] font-bold text-white/70">{row.market==="card"?"Discipline":row.label}: <span className="font-mono text-white">{metric(m)??"—"}</span></p>
+       <span className={"rounded-lg px-2 py-1 text-[0.62rem] font-black "+(m.hit===true?"bg-emerald-400/15 text-emerald-200":m.hit===false?"bg-rose-400/10 text-rose-200":"bg-white/10 text-white/35")}>{m.hit==null?"NO DATA":m.hit?"✓ HIT":"✕ MISS"}</span>
+      </div>
+      <p className="mt-1.5 text-[0.59rem] text-white/40">Fouls {m.foulsCommitted??"—"} · fouls drawn {m.foulsDrawn??"—"} · shots {m.shots??"—"} · SOT {m.shotsOnTarget??"—"}</p>
+     </div>)}</div>:<p className="mt-3 rounded-lg bg-black/20 p-3 text-[0.68rem] leading-relaxed text-white/55">
+      {isH2H?"No historical appearances against this opponent found in the imported match database, including earlier clubs and seasons. This does not mean the player has never faced them.":"No historical appearances found in the imported database."}
+     </p>}
    </div>
  )
  return <div className="border-t border-white/8 bg-black/20 px-3 py-4">
@@ -1797,9 +1818,22 @@ function PlayerHistoryDetails({row,fixture,inPlay}:{row:Selection;fixture:Fixtur
   <div className="mt-2 grid grid-cols-3 gap-1.5"><MiniStat label="Last 5 model" value={row.recent5HitRate==null?"—":percent(row.recent5HitRate)}/><MiniStat label="Season model" value={row.seasonHitRate==null?"—":percent(row.seasonHitRate)}/><MiniStat label="H2H model" value={row.h2hHitRate==null?"—":percent(row.h2hHitRate)}/></div>
   {inPlay?<p className="mt-2 text-[0.59rem] text-emerald-200/70">Historical records are fixed before kickoff. Live foul/shot counts are shown on the ranking above, not added to last-five or H2H.</p>:null}
   {loading?<p className="mt-3 text-xs text-white/45">Loading actual past match rows…</p>:
-    history?.ok?<>{panel("Last five appearances",history.lastFive??[],history.lastFiveSummary)}{panel("Against today's opponent",history.h2h??[],history.h2hSummary)}</>:
+    history?.ok?<>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+       <div className="rounded-xl border border-amber-300/25 bg-amber-300/10 p-3">
+        <p className="text-[0.58rem] font-black uppercase tracking-wide text-amber-100/70">Last 5 bookings</p>
+        <p className="mt-1 text-xl font-black text-amber-100">🟨 {history.lastFiveBookings?.booked??(history.lastFive??[]).filter(x=>x.yellow===true).length}<span className="text-xs text-amber-100/60"> / {history.lastFiveBookings?.withKnownOutcome??(history.lastFive??[]).length}</span></p>
+       </div>
+       <div className="rounded-xl border border-amber-300/25 bg-amber-300/10 p-3">
+        <p className="text-[0.58rem] font-black uppercase tracking-wide text-amber-100/70">H2H bookings</p>
+        <p className="mt-1 text-xl font-black text-amber-100">🟨 {history.h2hBookings?.booked??(history.h2h??[]).filter(x=>x.yellow===true).length}<span className="text-xs text-amber-100/60"> / {history.h2hBookings?.withKnownOutcome??(history.h2h??[]).length}</span></p>
+       </div>
+      </div>
+      {panel("Last five appearances",history.lastFive??[],history.lastFiveSummary)}
+      {panel("H2H vs "+(history.h2hOpponent??(sameTeamName(row.team,fixture.home)?fixture.away:fixture.home)),history.h2h??[],history.h2hSummary,true)}
+     </>:
     <div className="mt-3"><p className="text-xs text-amber-100">{history?.error??"No history found"}</p><button onClick={()=>setAttempt(a=>a+1)} className="mt-2 rounded-lg bg-white/10 px-3 py-2 text-xs font-bold">Retry history</button></div>}
-  <p className="mt-3 text-[0.56rem] leading-relaxed text-white/35">Individual match rows are distinct from smoothed model percentages. Missing stats are displayed as unavailable, not zero.</p>
+  <p className="mt-3 text-[0.56rem] leading-relaxed text-white/35">Yellow-card badges show recorded bookings regardless of the selected market. H2H includes available earlier seasons and clubs. Individual results differ from model estimates; unavailable stats are never assumed to be zero.</p>
  </div>
 }
 function LikelihoodBoard({rows,allRows,category,fixture,inPlay}:{rows:Selection[];allRows:Selection[];category:Category;fixture:Fixture;inPlay:boolean}){
