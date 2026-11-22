@@ -839,13 +839,13 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
   const productOf=(pool:Selection[],mode:PriceMode,count:number)=>pool.slice(0,count).reduce((v,row)=>v*oddFor(row,mode),1)
   const canReach=(pool:Selection[],mode:PriceMode,target:number)=>pool.length>=2&&productOf(pool,mode,Math.min(pool.length,MAX_RESEARCH_BUILDER_LEGS))>=target
 
+  // Use the actual Bet365 single-market board whenever it exists. Never
+  // substitute fair/model odds as bookmaker prices for an odds-target slip.
   let mode:PriceMode="model"
   const livePool=choosePool("live")
   const refPool=choosePool("reference")
-  if(canReach(livePool,"live",101))mode="live"
-  else if(canReach(refPool,"reference",101))mode="reference"
-  else if(canReach(livePool,"live",21))mode="live"
-  else if(canReach(refPool,"reference",21))mode="reference"
+  if(livePool.length>=2)mode="live"
+  else if(refPool.length>=2)mode="reference"
 
   // Optimise each odds tier independently. Hull exposed a failure mode where the
   // previous ladder inherited a weak selection from every smaller builder.
@@ -898,7 +898,7 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
   }
 
   return configs.map(cfg=>{
-    const found=optimise(cfg.targetDecimal)
+    const found=mode==="model"?null:optimise(cfg.targetDecimal)
     const legs=found?.legs??[]
     const product=found?.price??1
     const raw=found?.joint??1
@@ -928,16 +928,14 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
     const refPriced=mode==="reference"
     return {
       id:cfg.id,title:cfg.title,risk:cfg.risk,targetFractional:cfg.targetFractional,targetDecimal:cfg.targetDecimal,
-      legs,referenceProductOdds:Math.round(product*100)/100,
+      legs,referenceProductOdds:Math.round(indicativeBuilderDecimal(product,legs.length)*100)/100,
       averageLegProbability:legs.reduce((s,x)=>s+x.probability,0)/legs.length,
       minimumLegProbability:Math.min(...legs.map(x=>x.probability)),
       modelAllHitProbability:raw,conservativeAllHitProbability:conservative,safetyScore:conservative,
       exactPriced:false,bookmaker:null,
       verifiedBet365LegPrices:false,referenceBet365LegPrices:false,exactBet365BuilderPrice:false,
       pricingBasis:"none" as const,
-      note:cfg.id==="most-likely"
-        ?"Highest-probability route from the current eligible selections. Its price is whatever the safest route naturally produces."
-        :`Independently optimised combination for ${cfg.targetFractional}, prioritising joint hit probability and avoiding weak inherited legs. Indicative singles product, not a verified Bet365 Bet Builder quote.`
+      note:`Provisional correlated Bet Builder estimate from ${mode==="live"?"current":"previously captured"} Bet365 single-market prices. Not an actual combined bookmaker quote. ${cfg.targetFractional} is a target, not a verified price.`
     }
   })
 }
