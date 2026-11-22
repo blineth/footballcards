@@ -41,12 +41,7 @@ export async function GET(request:Request){
              fouls_committed,fouls_drawn,shots,shots_on_target,yellow_card,red_card,goals,assists,
              external_match_id)
             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
-            ON CONFLICT(player_name,team,opponent,match_date,competition)
-            DO UPDATE SET minutes=EXCLUDED.minutes,fouls_committed=EXCLUDED.fouls_committed,
-            fouls_drawn=EXCLUDED.fouls_drawn,shots=EXCLUDED.shots,
-            shots_on_target=EXCLUDED.shots_on_target,yellow_card=EXCLUDED.yellow_card,
-            red_card=EXCLUDED.red_card,goals=EXCLUDED.goals,assists=EXCLUDED.assists,
-            external_match_id=EXCLUDED.external_match_id`,
+            ON CONFLICT DO NOTHING`,
             [player.player,player.team,opponent,date,f.competition,
              player.minutes??null,player.foulsCommitted??null,player.foulsDrawn??null,
              player.shots??null,player.shotsOnTarget??null,Number(player.yellowCards??0)>0,
