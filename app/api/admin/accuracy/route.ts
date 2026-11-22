@@ -19,6 +19,8 @@ export async function GET(request:Request){
         l.model_probability::float8 probability,l.outcome,l.graded_at,
         l.discipline_heat::float8 heat,l.recent_fouls_10::float8 recent_fouls,
         l.live_fouls::float8 live_fouls,l.live_fouled::float8 live_fouled,
+        l.sample_matches,l.h2h_matches,l.aggression_signals,l.live_feed_source,l.live_feed_updated_at,
+        r.lineup_confirmed,
         r.id run_id,r.captured_at,r.live,
         CASE WHEN COALESCE(l.kickoff,r.kickoff) IS NULL THEN 'unknown kickoff'
           WHEN r.live AND r.captured_at < COALESCE(l.kickoff,r.kickoff) THEN 'live before kickoff'
@@ -81,14 +83,13 @@ export async function GET(request:Request){
         FROM source GROUP BY timing_quality,phase ORDER BY selections DESC`,[days]),
       pool.query(cte+` SELECT phase,market_group,
         count(*) FILTER(WHERE graded_at IS NOT NULL)::int graded,
-        count(*) FILTER(WHERE graded_at IS NOT NULL AND sample_matches IS NULL)::int no_sample
-        FROM (
-          SELECT l.sample_matches,r.live,l.graded_at,l.market,
-          CASE WHEN r.live THEN 'live' ELSE 'pre-match' END phase,
-          ${marketGroup} AS market_group
-          FROM prediction_legs l JOIN prediction_runs r ON r.id=l.run_id
-          WHERE l.fixture_date >= CURRENT_DATE-$1::int AND l.fixture_date < CURRENT_DATE
-        ) q GROUP BY phase,market_group ORDER BY graded DESC`,[days]),
+        count(*) FILTER(WHERE graded_at IS NOT NULL AND coalesce(sample_matches,0)=0)::int no_sample,
+        count(*) FILTER(WHERE graded_at IS NOT NULL AND coalesce(h2h_matches,0)=0)::int no_h2h,
+        count(*) FILTER(WHERE graded_at IS NOT NULL AND NOT lineup_confirmed)::int lineup_unconfirmed,
+        count(*) FILTER(WHERE graded_at IS NOT NULL AND phase='live' AND live_feed_source IS NULL)::int no_feed_provenance,
+        count(*) FILTER(WHERE graded_at IS NOT NULL AND phase='live' AND aggression_signals IS NOT NULL AND cardinality(aggression_signals)>0)::int commentary_signals
+        FROM unique_picks
+        GROUP BY phase,market_group ORDER BY graded DESC`,[days]),,
     ])
     return NextResponse.json({ok:true,days,updatedAt:new Date().toISOString(),
       coverage:coverage.rows[0],phases:phases.rows,markets:markets.rows,confidence:confidence.rows,
