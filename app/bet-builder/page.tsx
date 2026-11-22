@@ -1332,9 +1332,28 @@ export default function BetBuilderPage(){
       slip:{id:"likelihood-"+category,title:(inPlay?"Live ":"")+"Likelihood · "+category,tier:"ranking",oddsTarget:null,combinedOdds:null,modelJointProbability:null,bookmaker:"Bet365"},
       legs:likelihoodLegs,
     })
+    // Persist every market family even when the visitor is viewing another tab.
+    // Otherwise a pre-match visit to "Popular" leaves no card/foul baseline.
+    const auditFamilies=[
+      {id:"cards",markets:["card"]},
+      {id:"fouls",markets:["foul"]},
+      {id:"fouled",markets:["fouled"]},
+      {id:"shots",markets:["shot"]},
+      {id:"sot",markets:["sot"]},
+      {id:"goals",markets:["goal"]},
+      {id:"assists",markets:["assist"]},
+    ]
+    for(const family of auditFamilies){
+      const rows=allRows.filter(row=>family.markets.some(m=>m==="card"?row.market==="card":row.market.startsWith(m)))
+        .sort((a,b)=>b.probability-a.probability)
+      const legs=rows.slice(0,30).map(row=>ledgerLeg(row,fixture,live)).filter(Boolean)
+      if(!legs.length)continue
+      runs.push({...base,surface:inPlay?"market_audit_live":"market_audit_pre",
+        slip:{id:"all-"+family.id,title:(inPlay?"Live ":"Pre-match ")+family.id+" audit",tier:"ranking",oddsTarget:null,combinedOdds:null,modelJointProbability:null,bookmaker:null},legs})
+    }
     if(!runs.length)return
     void fetch("/api/prediction-ledger",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({runs}),keepalive:true}).catch(()=>{})
-  },[fixture,data?.ok,data?.lineupMode,data?.lineupsConfirmed,builders,builderMode,cardRiskRows,visible,category,inPlay,live?.elapsed,live?.referee])
+  },[fixture,data?.ok,data?.lineupMode,data?.lineupsConfirmed,builders,builderMode,cardRiskRows,visible,category,allRows,inPlay,live?.elapsed,live?.referee])
   useEffect(()=>{
     const valid=new Map(allRows.map(r=>[r.id,r]))
     setSelected(cur=>{
