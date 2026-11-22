@@ -17,7 +17,7 @@ function display(summary:Summary|undefined,market:string){
  return summary.events+" "+labelFor(market)+"/"+summary.total
 }
 function keyFor(name:string,team:string,market:string,date:string,home:string,away:string){return [date,home,away,name,team,market].join("|").toLowerCase()}
-export function MarketHistoryBadge({player,team,market,date,home,away,compact=false}:{player:string;team:string;market:string;date:string;home:string;away:string;compact?:boolean}){
+export function MarketHistoryBadge({player,team,market,date,home,away,competition=""}:{player:string;team:string;market:string;date:string;home:string;away:string;competition?:string}){
  const key=keyFor(player,team,market,date,home,away)
  const[summary,setSummary]=useState<Stats|null>(null)
  const[open,setOpen]=useState(false)
@@ -38,12 +38,12 @@ export function MarketHistoryBadge({player,team,market,date,home,away,compact=fa
  },[key,date,home,away,player,team,market])
  const expand=()=>{
   setOpen(v=>!v)
-  if(history||open)return
+  if(history||open||!competition)return
   const opponent=(team.trim().toLowerCase()===home.trim().toLowerCase())?away:home
   const qs=new URLSearchParams({date,competition:"",player,team,opponent,market})
   // Dedicated match history uses a competition; the optional prop from
   // callers is applied via the component's own lookup argument.
-  qs.set("competition",competitionValue)
+  qs.set("competition",competition)
   fetch("/api/player-match-history?"+qs,{cache:"no-store"}).then(r=>r.ok?r.json():null).then(d=>setHistory(d)).catch(()=>setHistory(null))
  }
  return <span className="inline-flex max-w-full flex-col items-start">
@@ -56,6 +56,13 @@ export function MarketHistoryBadge({player,team,market,date,home,away,compact=fa
    <span className="block font-bold">Historical {labelFor(market)} · played appearances including substitutes</span>
    <span className="mt-1 block">L5: {summary?.lastFive.known??0} with stat data · {summary?.lastFive.hits??0}/{summary?.lastFive.total??0} met {market} threshold</span>
    <span className="mt-1 block">H2H: {summary?.h2h.known??0} with stat data · {summary?.h2h.hits??0}/{summary?.h2h.total??0} met {market} threshold</span>
+   {history?.ok?<span className="mt-2 block border-t border-white/10 pt-2">
+     {(history.h2h??[]).length?<span className="block font-bold">Latest H2H matches</span>:<span className="block">No imported H2H match rows.</span>}
+     {(history.h2h??[]).slice(0,12).map(m=><span key={m.date+m.opponent} className="mt-1 flex justify-between gap-2">
+       <span>{m.date} · {m.opponent} · {m.minutes??"?"} min</span>
+       <span className="font-bold">{m.yellow===true?"🟨 ":""}{m.hit===true?"✓":m.hit===false?"✕":"—"}</span>
+      </span>)}
+   </span>:null}
   </span>:null}
  </span>
 }
