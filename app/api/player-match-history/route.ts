@@ -51,8 +51,8 @@ export async function GET(request:Request){
     const result=await pool.query<Row>(`SELECT match_date::text,player_name,team,opponent,competition,minutes,
       fouls_committed,fouls_drawn,shots,shots_on_target,yellow_card,red_card,goals,assists,venue
       FROM player_h2h
-      WHERE lower(player_name)=lower($1) AND lower(team)=lower($2)
-        AND lower(competition)=lower($3) AND match_date<$4::date
+      WHERE lower(player_name)=lower($1) AND match_date<$4::date
+        AND (minutes>0 OR (minutes IS NULL AND starter IS DISTINCT FROM FALSE))
       ORDER BY match_date DESC LIMIT 60`,[player,team,competition,date])
     const unique=new Set<string>()
     const history=result.rows.filter(row=>{
@@ -67,7 +67,7 @@ export async function GET(request:Request){
       fouls_committed,fouls_drawn,shots,shots_on_target,yellow_card,red_card,goals,assists,venue
       FROM player_h2h
       WHERE lower(player_name)=lower($1) AND match_date<$2::date
-      AND (minutes IS NULL OR minutes>0) ORDER BY match_date DESC`,[player,date])
+      AND (minutes>0 OR (minutes IS NULL AND starter IS DISTINCT FROM FALSE)) ORDER BY match_date DESC`,[player,date])
     const h2hSeen=new Set<string>()
     const allH2h=opponentRows.rows.filter(row=>{
       if(!matchTeam(row.opponent,opposition))return false
