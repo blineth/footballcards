@@ -3,8 +3,6 @@ import { pool,isDatabaseConfigured } from "@/lib/db"
 import { ensureResearchSchema } from "@/lib/db/ensure-research-schema"
 import { GET as fixturesGET } from "@/app/api/fixtures/route"
 import { GET as playerStatsGET } from "@/app/api/live-player-stats/route"
-import { gradePredictionLedger } from "@/lib/prediction-ledger"
-import { gradeHistoricalRecommendations } from "@/lib/recommendation-tracking"
 
 export const dynamic="force-dynamic"
 export const revalidate=0
@@ -67,10 +65,43 @@ export async function GET(request:Request){
         return {fixture:name,imported,status:"saved",feed:data.source??null}
       }catch(e){return {fixture:name,imported:0,status:"error",error:e instanceof Error?e.message:"Import failed"}}
     }))
-    const graded=await gradePredictionLedger(3500).catch(e=>({graded:0,runsUpdated:0,error:String(e)}))
-    const legacy=await gradeHistoricalRecommendations(1500).catch(e=>({graded:0,error:String(e)}))
+    // Grade only recorded player markets whose final player row is present.
+    // Never turn missing final data into a loss, and never alter the saved probability.
+    const graded=await pool.query(`UPDATE prediction_legs l SET
+      result_value=CASE
+        WHEN l.market='card' THEN CASE WHEN h.yellow_card OR h.red_card THEN 1 ELSE 0 END
+        WHEN l.market LIKE 'fouled%' THEN COALESCE(h.fouls_drawn,0)
+        WHEN l.market LIKE 'foul%' THEN COALESCE(h.fouls_committed,0)
+        WHEN l.market LIKE 'sot%' THEN COALESCE(h.shots_on_target,0)
+        WHEN l.market LIKE 'shot%' THEN COALESCE(h.shots,0)
+        WHEN l.market LIKE 'goal%' THEN COALESCE(h.goals,0)
+        WHEN l.market LIKE 'assist%' THEN COALESCE(h.assists,0)
+        ELSE 0 END,
+      outcome=CASE
+        WHEN l.market='card' THEN h.yellow_card OR h.red_card
+        WHEN l.market LIKE 'fouled%' THEN COALESCE(h.fouls_drawn,0)>=COALESCE(l.threshold,1)
+        WHEN l.market LIKE 'foul%' THEN COALESCE(h.fouls_committed,0)>=COALESCE(l.threshold,1)
+        WHEN l.market LIKE 'sot%' THEN COALESCE(h.shots_on_target,0)>=COALESCE(l.threshold,1)
+        WHEN l.market LIKE 'shot%' THEN COALESCE(h.shots,0)>=COALESCE(l.threshold,1)
+        WHEN l.market LIKE 'goal%' THEN COALESCE(h.goals,0)>=COALESCE(l.threshold,1)
+        WHEN l.market LIKE 'assist%' THEN COALESCE(h.assists,0)>=COALESCE(l.threshold,1)
+        ELSE NULL END,
+      graded_at=now()
+      FROM player_h2h h
+      WHERE l.fixture_date=$1 AND h.match_date=$1 AND l.graded_at IS NULL
+        AND lower(COALESCE(l.db_player_name,l.player_name))=lower(h.player_name)
+        AND (l.player_team IS NULL OR lower(l.player_team)=lower(h.team))
+        AND (l.opponent_team IS NULL OR lower(l.opponent_team)=lower(h.opponent))
+        AND (l.market='card' OR l.market LIKE 'fouled%' OR l.market LIKE 'foul%' OR l.market LIKE 'sot%' OR l.market LIKE 'shot%' OR l.market LIKE 'goal%' OR l.market LIKE 'assist%')
+    `,[date])
+    await pool.query(`UPDATE prediction_runs r SET
+      fully_graded=true,won=t.won,graded_at=now()
+      FROM (SELECT run_id,count(*) total,count(*) FILTER(WHERE graded_at IS NOT NULL) graded,bool_and(outcome IS TRUE) won
+        FROM prediction_legs WHERE fixture_date=$1 GROUP BY run_id) t
+      WHERE r.id=t.run_id AND t.total=t.graded AND t.total>0 AND r.fully_graded=false`,[date])
+    const legacy={graded:0,note:"Legacy grading remains on existing scheduled process"}
     return NextResponse.json({ok:true,date,offset,limit,totalFinished:finished.length,
       nextOffset:offset+selected.length<finished.length?offset+selected.length:null,
-      results,graded,legacy,updatedAt:new Date().toISOString()},{headers:{"Cache-Control":"no-store"}})
+      results,graded:{graded:graded.rowCount??0},legacy,updatedAt:new Date().toISOString()},{headers:{"Cache-Control":"no-store"}})
   }catch(e){return NextResponse.json({ok:false,error:e instanceof Error?e.message:"Import failed"},{status:500})}
 }
