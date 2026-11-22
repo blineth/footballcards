@@ -1,7 +1,7 @@
 "use client"
 import {useCallback,useEffect,useMemo,useState} from "react"
 import Link from "next/link"
-import {ArrowLeft,RefreshCw,ShieldCheck,AlertTriangle,Clock3,ChartNoAxesCombined,Copy,Check,Target} from "lucide-react"
+import {ArrowLeft,RefreshCw,ShieldCheck,AlertTriangle,Copy,Check,Target} from "lucide-react"
 
 type Market="shot1"|"shot2"|"sot1"|"foul1"|"foul2"|"fouled1"|"card"
 type ModelMarket={probability:number;confidence:string;sampleMatches?:number|null;recent5HitRate?:number|null;seasonHitRate?:number|null;h2hHitRate?:number|null;h2hMatches?:number|null}
@@ -48,13 +48,6 @@ function shortlist(rows:Leg[],markets:Market[],count=5,forceBothTeams=true){
 }
 const pct=(n:number)=>Number.isFinite(n)?(n*100).toFixed(1)+"%":"—"
 const dec=(n:number)=>Number(n).toFixed(n<2?3:2)
-function thresholdHit(p:Leg){
- if(!p.live)return null
- if(p.market==="card")return Number(p.live.yellowCards??0)>0
- const field=p.market.startsWith("shot")?"shots":p.market==="sot1"?"shotsOnTarget":p.market==="fouled1"?"foulsDrawn":"foulsCommitted"
- const threshold=p.market.endsWith("2")?2:1
- return Number(p.live[field]??0)>=threshold
-}
 export default function HullBrightonToday(){
  const[baseline,setBaseline]=useState<Baseline|null>(null)
  const[prices,setPrices]=useState<Prices|null>(null)
