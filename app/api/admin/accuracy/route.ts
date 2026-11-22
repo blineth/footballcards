@@ -20,6 +20,10 @@ export async function GET(request:Request){
         l.discipline_heat::float8 heat,l.recent_fouls_10::float8 recent_fouls,
         l.live_fouls::float8 live_fouls,l.live_fouled::float8 live_fouled,
         r.id run_id,r.captured_at,r.live,
+        CASE WHEN COALESCE(l.kickoff,r.kickoff) IS NULL THEN 'unknown kickoff'
+          WHEN r.live AND r.captured_at < COALESCE(l.kickoff,r.kickoff) THEN 'live before kickoff'
+          WHEN NOT r.live AND r.captured_at >= COALESCE(l.kickoff,r.kickoff) THEN 'pre-match after kickoff'
+          ELSE 'valid' END AS timing_quality,
         CASE WHEN r.live THEN 'live' ELSE 'pre-match' END AS phase,
         ${marketGroup} AS market_group,
         row_number() OVER (PARTITION BY CASE WHEN r.live THEN 'live' ELSE 'pre-match' END,
@@ -30,9 +34,9 @@ export async function GET(request:Request){
       WHERE l.fixture_date >= CURRENT_DATE - $1::int AND l.fixture_date < CURRENT_DATE
         AND l.model_probability IS NOT NULL
     ), unique_picks AS (
-      SELECT * FROM source WHERE rank_first=1
+      SELECT * FROM source WHERE rank_first=1 AND timing_quality='valid'
     )`
-    const [phases,markets,confidence,signals,goals,walkForward,coverage]=await Promise.all([
+    const [phases,markets,confidence,signals,goals,walkForward,coverage,timing,featureCoverage]=await Promise.all([
       pool.query(cte+` SELECT phase,count(*)::int total,
         count(*) FILTER(WHERE graded_at IS NOT NULL)::int graded,
         count(*) FILTER(WHERE outcome IS TRUE)::int hits,
@@ -73,11 +77,24 @@ export async function GET(request:Request){
       pool.query(cte+` SELECT count(*)::int unique_saved,
         count(*) FILTER(WHERE graded_at IS NULL)::int ungraded,
         count(DISTINCT fixture_date)::int match_days FROM unique_picks`,[days]),
+      pool.query(cte+` SELECT timing_quality,phase,count(*) FILTER(WHERE rank_first=1)::int selections
+        FROM source GROUP BY timing_quality,phase ORDER BY selections DESC`,[days]),
+      pool.query(cte+` SELECT phase,market_group,
+        count(*) FILTER(WHERE graded_at IS NOT NULL)::int graded,
+        count(*) FILTER(WHERE graded_at IS NOT NULL AND sample_matches IS NULL)::int no_sample
+        FROM (
+          SELECT l.sample_matches,r.live,l.graded_at,l.market,
+          CASE WHEN r.live THEN 'live' ELSE 'pre-match' END phase,
+          ${marketGroup} AS market_group
+          FROM prediction_legs l JOIN prediction_runs r ON r.id=l.run_id
+          WHERE l.fixture_date >= CURRENT_DATE-$1::int AND l.fixture_date < CURRENT_DATE
+        ) q GROUP BY phase,market_group ORDER BY graded DESC`,[days]),
     ])
     return NextResponse.json({ok:true,days,updatedAt:new Date().toISOString(),
       coverage:coverage.rows[0],phases:phases.rows,markets:markets.rows,confidence:confidence.rows,
       liveCardSignals:signals.rows,goals:goals.rows,walkForward:walkForward.rows,
-      note:"First published prediction per phase, fixture, player, market and threshold. No duplicate refreshes. Incomplete picks excluded from hit-rate denominators."},
+      timingQuality:timing.rows,featureCoverage:featureCoverage.rows,
+      note:"First published prediction per phase, fixture, player, market and threshold. No duplicate refreshes. Only snapshots made at a verifiable eligible time are evaluated; absent results are excluded."},
       {headers:{"Cache-Control":"no-store"}})
   }catch(e){return NextResponse.json({ok:false,error:e instanceof Error?e.message:"Accuracy unavailable"},{status:500})}
 }
