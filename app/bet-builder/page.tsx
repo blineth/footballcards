@@ -1838,8 +1838,30 @@ function PlayerHistoryDetails({row,fixture,inPlay}:{row:Selection;fixture:Fixtur
 }
 function LikelihoodBoard({rows,allRows,category,fixture,inPlay}:{rows:Selection[];allRows:Selection[];category:Category;fixture:Fixture;inPlay:boolean}){
  const[expanded,setExpanded]=useState<string|null>(null)
+ const[summaries,setSummaries]=useState<Record<string,{lastFive:{booked:number;total:number};h2h:{booked:number;total:number};recordedRecent:number;recordedH2h:number}>>({})
  const label=categories.find(x=>x.id===category)?.label??"Likelihood"
  const ranked=[...rows].sort((a,b)=>b.probability-a.probability).slice(0,10)
+ const rosterKey=JSON.stringify(ranked.map(r=>[r.player,r.team]))
+ useEffect(()=>{
+  if(!rosterKey||rosterKey==="[]")return
+  let cancelled=false
+  const ctrl=new AbortController()
+  const timeout=window.setTimeout(()=>ctrl.abort(),9000)
+  const unique=Array.from(new Map((JSON.parse(rosterKey) as [string,string][]).map(([name,team])=>[name.toLowerCase()+"|"+team.toLowerCase(),{name,team}])).values())
+  fetch("/api/player-booking-summaries",{
+    method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({date:fixture.date,home:fixture.home,away:fixture.away,players:unique}),
+    signal:ctrl.signal,cache:"no-store",
+  }).then(async r=>{if(!r.ok)throw Error("Historical summaries unavailable");return r.json()})
+   .then((d:{ok:boolean;profiles?:Array<{name:string;team:string;lastFive:{booked:number;total:number};h2h:{booked:number;total:number};recordedRecent:number;recordedH2h:number}>})=>{
+    if(cancelled||!d.ok)return
+    const next:Record<string,{lastFive:{booked:number;total:number};h2h:{booked:number;total:number};recordedRecent:number;recordedH2h:number}>={}
+    for(const p of d.profiles??[])next[normPlayer(p.name)+"|"+teamNorm(p.team)]={lastFive:p.lastFive,h2h:p.h2h,recordedRecent:p.recordedRecent,recordedH2h:p.recordedH2h}
+    setSummaries(next)
+   }).catch(()=>{if(!cancelled)setSummaries({})})
+   .finally(()=>window.clearTimeout(timeout))
+  return()=>{cancelled=true;ctrl.abort();window.clearTimeout(timeout)}
+ },[rosterKey,fixture.date,fixture.home,fixture.away])
  const evidence=(row:Selection)=>{
    if(!inPlay)return marketEvidence(row)
    if(row.market==="card")return "Fouls "+Number(row.liveFoulsCommitted??0)+" · fouled "+Number(row.liveFoulsDrawn??0)
@@ -1856,6 +1878,8 @@ function LikelihoodBoard({rows,allRows,category,fixture,inPlay}:{rows:Selection[
    const price=displayedBet365Odd(row),traffic=trafficFor(row,allRows)
    const tone=traffic==="high"?"text-emerald-200":traffic==="average"?"text-amber-100":"text-rose-100/80"
    const open=expanded===row.id
+   const counts=summaries[normPlayer(row.player)+"|"+teamNorm(row.team)]
+   const countLabel=(v:{booked:number;total:number}|undefined)=>v&&v.total?String(v.booked)+"/"+v.total:"—"
    return <div key={row.id} className={i?"border-t border-white/[0.055]":""}>
     <button type="button" onClick={()=>setExpanded(v=>v===row.id?null:row.id)} aria-expanded={open}
       className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-3 py-3 text-left hover:bg-white/[0.025]">
@@ -1863,7 +1887,11 @@ function LikelihoodBoard({rows,allRows,category,fixture,inPlay}:{rows:Selection[
      <div className="min-w-0"><div className="flex flex-wrap items-center gap-1.5"><p className="truncate text-sm font-black">{row.player}</p><TeamBadge team={row.team} fixture={fixture}/></div>
       <p className="mt-0.5 truncate text-[0.54rem] font-bold text-white/55">{row.label}</p>
       {evidence(row)?<p className="mt-1 truncate text-[0.46rem] font-bold text-cyan-100/45">{evidence(row)}</p>:null}
-      <span className="mt-1 flex items-center gap-1 text-[0.52rem] font-bold text-emerald-200/65">{open?"Hide match history":"Last 5 · H2H"} <ChevronDown className={"size-3 transition "+(open?"rotate-180":"")}/></span>
+      <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.58rem] font-bold">
+       <span className="text-amber-200/85">🟨 L5 {countLabel(counts?.lastFive)}</span>
+       <span className="text-amber-200/85">H2H {countLabel(counts?.h2h)}</span>
+       <span className="inline-flex items-center gap-0.5 text-emerald-200/70">{open?"Less":"Details"} <ChevronDown className={"size-3 transition "+(open?"rotate-180":"")}/></span>
+      </span>
      </div>
      <div className="min-w-[5.5rem] text-right"><p className={"font-mono text-lg font-black "+tone}>{percent(row.probability)}</p>
       <p className="text-[0.4rem] font-black uppercase text-white/25">{inPlay?"remaining chance":"model chance"}</p>
