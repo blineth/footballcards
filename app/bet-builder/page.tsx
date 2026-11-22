@@ -861,15 +861,25 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
     const legs=[...chosen]
     const reached=cfg.id==="most-likely"?legs.length>=1:product>=cfg.targetDecimal
     if(!reached){
+      // A missing bookmaker quote or an unreachable odds floor must not erase
+      // the actual model picks: these are research predictions, not quoted bets.
+      const researchLegs=legs.length?legs:choosePool("model").slice(0,Math.min(5,MAX_RESEARCH_BUILDER_LEGS))
+      const joint=researchLegs.reduce((p,row)=>p*row.probability,1)
+      const conservative=conservativeJoint(researchLegs,joint)
       return {
         id:cfg.id,title:cfg.title,risk:cfg.risk,targetFractional:cfg.targetFractional,targetDecimal:cfg.targetDecimal,
-        legs:[],referenceProductOdds:null,averageLegProbability:null,minimumLegProbability:null,
-        modelAllHitProbability:null,conservativeAllHitProbability:null,safetyScore:null,
+        legs:researchLegs,referenceProductOdds:null,
+        averageLegProbability:researchLegs.length?researchLegs.reduce((v,row)=>v+row.probability,0)/researchLegs.length:null,
+        minimumLegProbability:researchLegs.length?Math.min(...researchLegs.map(row=>row.probability)):null,
+        modelAllHitProbability:researchLegs.length?joint:null,
+        conservativeAllHitProbability:researchLegs.length?conservative:null,
+        safetyScore:researchLegs.length?conservative:null,
         exactPriced:false,bookmaker:null,verifiedBet365LegPrices:false,referenceBet365LegPrices:false,
         exactBet365BuilderPrice:false,pricingBasis:"none" as const,
-        note:"Unavailable under the six-leg research cap. Bet365 allows up to 12 selections, but these are unverified combinations and cannot be represented as placeable Bet Builders."
+        note:"Research selections shown: the requested odds floor is not verified or reachable with available prices. These picks are model predictions, not a bookmaker-quoted builder."
       }
     }
+
     const conservative=conservativeJoint(legs,raw)
     const livePriced=mode==="live"
     const refPriced=mode==="reference"
