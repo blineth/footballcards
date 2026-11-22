@@ -278,6 +278,12 @@ export function ensureResearchSchema() {
         UNIQUE (run_id, leg_index)
       )
     `)
+    // Preserve the exact evidence available when future predictions are published.
+    await pool.query(`ALTER TABLE prediction_legs ADD COLUMN IF NOT EXISTS aggression_signals text[]`)
+    await pool.query(`ALTER TABLE prediction_legs ADD COLUMN IF NOT EXISTS aggression_event_minute integer`)
+    await pool.query(`ALTER TABLE prediction_legs ADD COLUMN IF NOT EXISTS live_feed_source text`)
+    await pool.query(`ALTER TABLE prediction_legs ADD COLUMN IF NOT EXISTS live_feed_updated_at timestamptz`)
+    await pool.query(`ALTER TABLE prediction_legs ADD COLUMN IF NOT EXISTS live_model_minute integer`)
     await pool.query(`ALTER TABLE prediction_legs ADD COLUMN IF NOT EXISTS fixture_id text`)
     await pool.query(`ALTER TABLE prediction_legs ADD COLUMN IF NOT EXISTS competition text`)
     await pool.query(`ALTER TABLE prediction_legs ADD COLUMN IF NOT EXISTS fixture_date date`)
