@@ -32,7 +32,7 @@ export async function GET(request:Request){
     ), unique_picks AS (
       SELECT * FROM source WHERE rank_first=1
     )`
-    const [phases,markets,confidence,signals,goals,coverage]=await Promise.all([
+    const [phases,markets,confidence,signals,goals,coverage,walkForward]=await Promise.all([
       pool.query(cte+` SELECT phase,count(*)::int total,
         count(*) FILTER(WHERE graded_at IS NOT NULL)::int graded,
         count(*) FILTER(WHERE outcome IS TRUE)::int hits,
@@ -62,13 +62,21 @@ export async function GET(request:Request){
       pool.query(cte+` SELECT phase,count(*) FILTER(WHERE market_group='Goals' AND graded_at IS NOT NULL)::int graded_goals,
         count(*) FILTER(WHERE market_group='Goals' AND outcome IS TRUE)::int scored
         FROM unique_picks GROUP BY phase`,[days]),
+      pool.query(cte+` SELECT phase,market_group,
+        CASE WHEN fixture_date=(SELECT max(fixture_date) FROM unique_picks) THEN 'holdout' ELSE 'training' END AS split,
+        threshold,
+        count(*)::int graded,count(*) FILTER(WHERE outcome IS TRUE)::int hits,
+        round(avg(probability)::numeric*100,1) avg_confidence
+        FROM unique_picks CROSS JOIN (VALUES (.50::float8),(.60::float8),(.70::float8),(.75::float8),(.80::float8)) cutoffs(threshold)
+        WHERE graded_at IS NOT NULL AND probability>=threshold
+        GROUP BY phase,market_group,split,threshold ORDER BY phase,market_group,split,threshold`,[days]),
       pool.query(cte+` SELECT count(*)::int unique_saved,
         count(*) FILTER(WHERE graded_at IS NULL)::int ungraded,
         count(DISTINCT fixture_date)::int match_days FROM unique_picks`,[days]),
     ])
     return NextResponse.json({ok:true,days,updatedAt:new Date().toISOString(),
       coverage:coverage.rows[0],phases:phases.rows,markets:markets.rows,confidence:confidence.rows,
-      liveCardSignals:signals.rows,goals:goals.rows,
+      liveCardSignals:signals.rows,goals:goals.rows,walkForward:walkForward.rows,
       note:"First published prediction per phase, fixture, player, market and threshold. No duplicate refreshes. Incomplete picks excluded from hit-rate denominators."},
       {headers:{"Cache-Control":"no-store"}})
   }catch(e){return NextResponse.json({ok:false,error:e instanceof Error?e.message:"Accuracy unavailable"},{status:500})}
