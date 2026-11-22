@@ -5,7 +5,8 @@ import {ArrowLeft,RefreshCw,Target,Activity,AlertTriangle} from "lucide-react"
 
 type Rate={phase:string;graded:number;hits:number;avg_confidence:string|null;brier?:string;total?:number;market_group?:string;band?:string}
 type Signal={signal:string;graded:number;hits:number;avg_confidence:string|null}
-type Data={ok:boolean;error?:string;days:number;updatedAt:string;
+type Test={phase:string;market_group:string;split:string;threshold:number;graded:number;hits:number;avg_confidence:string|null}
+type Data={ok:boolean;error?:string;days:number;updatedAt:string;walkForward?:Test[];
   phases:Rate[];markets:Rate[];confidence:Rate[];liveCardSignals:Signal[];
   coverage:{unique_saved:number;ungraded:number;match_days:number}}
 function pct(h:number,n:number){return n?((100*h)/n).toFixed(1)+"%":"—"}
@@ -68,6 +69,22 @@ export default function AccuracyPage(){
             <div><p className="text-sm font-bold">{x.band}</p><p className="text-[0.55rem] text-white/40">{x.hits}/{x.graded} · avg prediction {num(x.avg_confidence)}</p></div>
             <p className="font-mono text-lg font-black">{pct(x.hits,x.graded)}</p>
           </div>)}</div>
+        </section>
+        <section className="rounded-2xl border border-white/10 bg-white/[0.035] p-4">
+          <h2 className="font-black">Reverse-engineering test · later matches held out</h2>
+          <p className="mt-1 text-xs leading-relaxed text-white/45">We test stricter original-confidence cutoffs using earlier match dates for training, then check the latest match date independently. This is a retrospective simulation, not a proven future strategy. A high hit rate with very few bets is not reliable.</p>
+          <div className="mt-3 space-y-2">{(["pre-match","live"] as const).map(phase=><div key={phase} className="rounded-xl bg-black/25 p-3">
+            <p className="mb-2 text-sm font-black">{phase==="live"?"Live":"Before match"} · 75%+ original model confidence</p>
+            {(["training","holdout"] as const).map(split=>{
+              const picks=(data.walkForward??[]).filter(x=>x.phase===phase&&x.split===split&&Number(x.threshold)===.75)
+              const n=picks.reduce((a,x)=>a+x.graded,0),hits=picks.reduce((a,x)=>a+x.hits,0)
+              return <div key={split} className="flex items-center justify-between gap-2 border-t border-white/5 py-2">
+                <div><p className="text-xs font-bold">{split==="training"?"Earlier match days":"Latest match date (unseen holdout)"}</p><p className="text-[0.56rem] text-white/40">{hits}/{n} selections</p></div>
+                <p className="font-mono text-lg font-black">{pct(hits,n)}</p>
+              </div>
+            })}
+          </div>)}</div>
+          <p className="mt-3 text-[0.62rem] leading-relaxed text-amber-100/70">A retrospective cutoff cannot by itself improve the underlying probabilities. We should only adopt a rule after sufficient independent forward results and odds-adjusted returns.</p>
         </section>
         <section className="rounded-2xl border border-white/10 bg-white/[0.035] p-4">
           <div className="flex items-center gap-2"><AlertTriangle className="size-4 text-amber-200"/><h2 className="font-black">Live yellow-card signal review</h2></div>
