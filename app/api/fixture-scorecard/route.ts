@@ -1190,7 +1190,7 @@ function buildFoulTargetSlips(players: ScorePlayer[]): FoulTargetSlip[] {
       for(const leg of candidates){
         const next=[...states]
         for(const state of states){
-          if(state.legs.length>=12)continue
+          if(state.legs.length>=6)continue
           if(state.legs.some(existing=>norm(existing.player)===norm(leg.player)))continue
           const count=state.teamCounts[leg.team]??0
           if(count>=6)continue
@@ -1334,30 +1334,30 @@ type RiskBuilder = {
 function buildRiskBuilders(players:ScorePlayer[],scope:"all"|"discipline"="all"):RiskBuilder[]{
   const configs=scope==="discipline"
     ?[
-      {id:"discipline-safe-3-1",title:"Fouls & Cards 3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4,minSafety:.42,maxLegs:12},
-      {id:"discipline-safe-5-1",title:"Fouls & Cards 5/1",risk:"Safe" as const,targetFractional:"5/1",targetDecimal:6,minSafety:.39,maxLegs:12},
-      {id:"discipline-balanced-10-1",title:"Fouls & Cards 10/1",risk:"Balanced" as const,targetFractional:"10/1",targetDecimal:11,minSafety:.30,maxLegs:12},
-      {id:"discipline-balanced-15-1",title:"Fouls & Cards 15/1",risk:"Balanced" as const,targetFractional:"15/1",targetDecimal:16,minSafety:.26,maxLegs:12},
-      {id:"discipline-high-20-1",title:"Fouls & Cards 20/1",risk:"High Risk" as const,targetFractional:"20/1",targetDecimal:21,minSafety:.20,maxLegs:12},
-      {id:"discipline-high-25-1",title:"Fouls & Cards 25/1",risk:"High Risk" as const,targetFractional:"25/1",targetDecimal:26,minSafety:.18,maxLegs:12},
-      {id:"discipline-high-30-1",title:"Fouls & Cards 30/1",risk:"High Risk" as const,targetFractional:"30/1",targetDecimal:31,minSafety:.16,maxLegs:12},
-      {id:"discipline-high-40-1",title:"Fouls & Cards 40/1",risk:"High Risk" as const,targetFractional:"40/1",targetDecimal:41,minSafety:.14,maxLegs:12},
-      {id:"discipline-high-50-1",title:"Fouls & Cards 50/1",risk:"High Risk" as const,targetFractional:"50/1",targetDecimal:51,minSafety:.12,maxLegs:12},
-      {id:"discipline-high-75-1",title:"Fouls & Cards 75/1",risk:"High Risk" as const,targetFractional:"75/1",targetDecimal:76,minSafety:.10,maxLegs:12},
-      {id:"discipline-high-100-1",title:"Fouls & Cards 100/1",risk:"High Risk" as const,targetFractional:"100/1",targetDecimal:101,minSafety:.08,maxLegs:12},
+      {id:"discipline-safe-3-1",title:"Fouls & Cards 3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4,minSafety:.42,maxLegs:6},
+      {id:"discipline-safe-5-1",title:"Fouls & Cards 5/1",risk:"Safe" as const,targetFractional:"5/1",targetDecimal:6,minSafety:.39,maxLegs:6},
+      {id:"discipline-balanced-10-1",title:"Fouls & Cards 10/1",risk:"Balanced" as const,targetFractional:"10/1",targetDecimal:11,minSafety:.30,maxLegs:6},
+      {id:"discipline-balanced-15-1",title:"Fouls & Cards 15/1",risk:"Balanced" as const,targetFractional:"15/1",targetDecimal:16,minSafety:.26,maxLegs:6},
+      {id:"discipline-high-20-1",title:"Fouls & Cards 20/1",risk:"High Risk" as const,targetFractional:"20/1",targetDecimal:21,minSafety:.20,maxLegs:6},
+      {id:"discipline-high-25-1",title:"Fouls & Cards 25/1",risk:"High Risk" as const,targetFractional:"25/1",targetDecimal:26,minSafety:.18,maxLegs:6},
+      {id:"discipline-high-30-1",title:"Fouls & Cards 30/1",risk:"High Risk" as const,targetFractional:"30/1",targetDecimal:31,minSafety:.16,maxLegs:6},
+      {id:"discipline-high-40-1",title:"Fouls & Cards 40/1",risk:"High Risk" as const,targetFractional:"40/1",targetDecimal:41,minSafety:.14,maxLegs:6},
+      {id:"discipline-high-50-1",title:"Fouls & Cards 50/1",risk:"High Risk" as const,targetFractional:"50/1",targetDecimal:51,minSafety:.12,maxLegs:6},
+      {id:"discipline-high-75-1",title:"Fouls & Cards 75/1",risk:"High Risk" as const,targetFractional:"75/1",targetDecimal:76,minSafety:.10,maxLegs:6},
+      {id:"discipline-high-100-1",title:"Fouls & Cards 100/1",risk:"High Risk" as const,targetFractional:"100/1",targetDecimal:101,minSafety:.08,maxLegs:6},
     ]
     :[
-      {id:"safe-3-1",title:"Safe 3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4,minSafety:.50,maxLegs:12},
-      {id:"safe-5-1",title:"Safe 5/1",risk:"Safe" as const,targetFractional:"5/1",targetDecimal:6,minSafety:.47,maxLegs:12},
-      {id:"balanced-10-1",title:"Balanced 10/1",risk:"Balanced" as const,targetFractional:"10/1",targetDecimal:11,minSafety:.38,maxLegs:12},
-      {id:"balanced-15-1",title:"Balanced 15/1",risk:"Balanced" as const,targetFractional:"15/1",targetDecimal:16,minSafety:.34,maxLegs:12},
-      {id:"high-20-1",title:"Risky 20/1",risk:"High Risk" as const,targetFractional:"20/1",targetDecimal:21,minSafety:.28,maxLegs:12},
-      {id:"high-25-1",title:"Risky 25/1",risk:"High Risk" as const,targetFractional:"25/1",targetDecimal:26,minSafety:.25,maxLegs:12},
-      {id:"high-30-1",title:"Risky 30/1",risk:"High Risk" as const,targetFractional:"30/1",targetDecimal:31,minSafety:.22,maxLegs:12},
-      {id:"high-40-1",title:"Risky 40/1",risk:"High Risk" as const,targetFractional:"40/1",targetDecimal:41,minSafety:.20,maxLegs:12},
-      {id:"high-50-1",title:"Risky 50/1",risk:"High Risk" as const,targetFractional:"50/1",targetDecimal:51,minSafety:.18,maxLegs:12},
-      {id:"high-75-1",title:"Risky 75/1",risk:"High Risk" as const,targetFractional:"75/1",targetDecimal:76,minSafety:.16,maxLegs:12},
-      {id:"high-100-1",title:"Risky 100/1",risk:"High Risk" as const,targetFractional:"100/1",targetDecimal:101,minSafety:.14,maxLegs:12},
+      {id:"safe-3-1",title:"Safe 3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4,minSafety:.50,maxLegs:6},
+      {id:"safe-5-1",title:"Safe 5/1",risk:"Safe" as const,targetFractional:"5/1",targetDecimal:6,minSafety:.47,maxLegs:6},
+      {id:"balanced-10-1",title:"Balanced 10/1",risk:"Balanced" as const,targetFractional:"10/1",targetDecimal:11,minSafety:.38,maxLegs:6},
+      {id:"balanced-15-1",title:"Balanced 15/1",risk:"Balanced" as const,targetFractional:"15/1",targetDecimal:16,minSafety:.34,maxLegs:6},
+      {id:"high-20-1",title:"Risky 20/1",risk:"High Risk" as const,targetFractional:"20/1",targetDecimal:21,minSafety:.28,maxLegs:6},
+      {id:"high-25-1",title:"Risky 25/1",risk:"High Risk" as const,targetFractional:"25/1",targetDecimal:26,minSafety:.25,maxLegs:6},
+      {id:"high-30-1",title:"Risky 30/1",risk:"High Risk" as const,targetFractional:"30/1",targetDecimal:31,minSafety:.22,maxLegs:6},
+      {id:"high-40-1",title:"Risky 40/1",risk:"High Risk" as const,targetFractional:"40/1",targetDecimal:41,minSafety:.20,maxLegs:6},
+      {id:"high-50-1",title:"Risky 50/1",risk:"High Risk" as const,targetFractional:"50/1",targetDecimal:51,minSafety:.18,maxLegs:6},
+      {id:"high-75-1",title:"Risky 75/1",risk:"High Risk" as const,targetFractional:"75/1",targetDecimal:76,minSafety:.16,maxLegs:6},
+      {id:"high-100-1",title:"Risky 100/1",risk:"High Risk" as const,targetFractional:"100/1",targetDecimal:101,minSafety:.14,maxLegs:6},
     ]
   const baseMarkets:MarketKey[]=["goal1","assist1","shot1","sot1","foul1","fouled1","card"]
   const allPricedMarkets:MarketKey[]=scope==="discipline"
