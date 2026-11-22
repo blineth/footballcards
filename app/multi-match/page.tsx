@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { ArrowLeft, BadgeCheck, Layers3, RefreshCw, Sparkles } from "lucide-react"
 import { useRouter } from "next/navigation"
+import {MarketHistoryBadge} from "@/components/MarketHistoryBadge"
 
 type Competition = "Premier League" | "Championship" | "League One" | "League Two" | "International"
 type Fixture = {id:string;date:string;kickoff:string;competition:Competition;home:string;away:string}
@@ -20,7 +21,7 @@ type Scorecard = {
   error?:string
 }
 type Result={fixture:Fixture;scorecard:Scorecard|null}
-type MultiLeg=Offer&{match:string;competition:Competition;market:"card"|"foul"}
+type MultiLeg=Offer&{match:string;competition:Competition;market:"card"|"foul";date:string;home:string;away:string}
 type MultiSlip={
   id:string;title:string;subtitle:string;bookmaker:string|null;legs:MultiLeg[];
   combinedOdds:number|null;modelAllHit:number|null;complete:boolean
@@ -82,7 +83,7 @@ function buildForBook(
     if(!s?.ok||!s.lineupsConfirmed||!(s.eligibleBooks??[]).includes(book)){complete=false;continue}
     const offer=pick(s,book)
     if(!offer){complete=false;continue}
-    legs.push({...offer,match:r.fixture.home+" v "+r.fixture.away,competition:r.fixture.competition,market})
+    legs.push({...offer,match:r.fixture.home+" v "+r.fixture.away,competition:r.fixture.competition,market,date:r.fixture.date,home:r.fixture.home,away:r.fixture.away})
   }
   const combinedOdds=legs.length?Math.round(legs.reduce((p,l)=>p*l.bookmakerOdds,1)*100)/100:null
   const modelAllHit=legs.length?legs.reduce((p,l)=>p*l.probability,1):null
@@ -113,7 +114,7 @@ function buildTargetMulti(book:string,results:Result[],targetDecimal:number,targ
         const odds=state.odds*option.offer.bookmakerOdds
         if(odds>targetDecimal*2.5&&state.legs.length>=1)continue
         next.push({
-          legs:[...state.legs,{...option.offer,match:row.fixture.home+" v "+row.fixture.away,competition:row.fixture.competition,market:option.market}],
+          legs:[...state.legs,{...option.offer,match:row.fixture.home+" v "+row.fixture.away,competition:row.fixture.competition,market:option.market,date:row.fixture.date,home:row.fixture.home,away:row.fixture.away}],
           odds,
           quality:state.quality+quality(option.offer),
         })
@@ -161,7 +162,7 @@ function buildMixedForBook(book:string,results:Result[]):MultiSlip{
     options.sort((a,b)=>quality(b.offer)-quality(a.offer))
     const pick=options[0]
     if(!pick){complete=false;continue}
-    legs.push({...pick.offer,match:r.fixture.home+" v "+r.fixture.away,competition:r.fixture.competition,market:pick.market})
+    legs.push({...pick.offer,match:r.fixture.home+" v "+r.fixture.away,competition:r.fixture.competition,market:pick.market,date:r.fixture.date,home:r.fixture.home,away:r.fixture.away})
   }
   const combinedOdds=legs.length?Math.round(legs.reduce((p,l)=>p*l.bookmakerOdds,1)*100)/100:null
   const modelAllHit=legs.length?legs.reduce((p,l)=>p*l.probability,1):null
@@ -252,6 +253,6 @@ function MultiSlipCard({slip,hero=false}:{slip:MultiSlip;hero?:boolean}){
   const[open,setOpen]=useState(hero)
   return <article className={"overflow-hidden rounded-3xl border "+(hero?"border-sky-300/25 bg-gradient-to-br from-sky-500/20 to-black/30":"border-white/10 bg-white/[0.04]")}>
     <button onClick={()=>setOpen(x=>!x)} className="w-full p-4 text-left"><div className="flex items-start justify-between gap-3"><div>{hero?<div className="flex items-center gap-1.5 text-sky-300"><Sparkles className="size-3.5"/><span className="text-[0.52rem] font-black uppercase tracking-[0.14em]">Recommended</span></div>:null}<h2 className="mt-1 text-lg font-black">{slip.title}</h2><p className="mt-1 text-sm font-black text-sky-300">{slip.bookmaker}</p><p className="mt-1 text-[0.62rem] text-white/45">{slip.subtitle}</p><p className="mt-2 text-[0.58rem] text-white/35">{slip.legs.length} games included</p></div><div className="text-right"><p className="font-mono text-xl font-black">{slip.combinedOdds?.toFixed(2)??"—"}</p><p className="text-[0.42rem] uppercase text-white/25">individual prices multiplied</p></div></div><div className="mt-3 rounded-2xl bg-black/20 p-3"><div className="flex items-start gap-2"><BadgeCheck className="mt-0.5 size-4 shrink-0 text-emerald-300"/><p className="text-[0.64rem] leading-relaxed text-white/50">All legs are exact prices from {slip.bookmaker}. Cross-match legs are separate events, so the product is a useful accumulator reference; the bookmaker's displayed final price remains authoritative.</p></div></div></button>
-    {open?<div className="border-t border-white/8 bg-black/20 p-4"><div className="space-y-2">{slip.legs.map((l,i)=><div key={l.match+"|"+l.player+"|"+i} className="rounded-2xl bg-white/[0.055] p-3"><p className="text-[0.52rem] font-black uppercase text-white/30">{l.competition} · {l.match}</p><div className="mt-1 flex items-center justify-between gap-3"><div><div className="flex flex-wrap items-center gap-1.5"><p className="text-sm font-black">{l.player} · {l.label}</p><TeamTag team={l.team}/></div><p className="mt-1 text-[0.58rem] text-white/40">{l.bookmaker} · Grade {l.confidence}</p></div><div className="text-right"><p className="font-mono text-base font-black">{percent(l.probability)}</p><p className="text-[0.46rem] text-white/25">{l.bookmakerOdds.toFixed(2)} odds</p></div></div></div>)}</div>{slip.modelAllHit!=null?<p className="mt-3 text-[0.54rem] text-white/30">Independent cross-match model guide: {percent(slip.modelAllHit)} for every leg landing. This remains an estimate, not a guarantee.</p>:null}</div>:null}
+    {open?<div className="border-t border-white/8 bg-black/20 p-4"><div className="space-y-2">{slip.legs.map((l,i)=><div key={l.match+"|"+l.player+"|"+i} className="rounded-2xl bg-white/[0.055] p-3"><p className="text-[0.52rem] font-black uppercase text-white/30">{l.competition} · {l.match}</p><div className="mt-1 flex items-center justify-between gap-3"><div><div className="flex flex-wrap items-center gap-1.5"><p className="text-sm font-black">{l.player} · {l.label}</p><TeamTag team={l.team}/></div><p className="mt-1 text-[0.58rem] text-white/40">{l.bookmaker} · Grade {l.confidence}</p><MarketHistoryBadge player={l.player} team={l.team} market={l.market==="card"?"card":"foul"+(l.threshold??1)} date={l.date} home={l.home} away={l.away} competition={l.competition}/></div><div className="text-right"><p className="font-mono text-base font-black">{percent(l.probability)}</p><p className="text-[0.46rem] text-white/25">{l.bookmakerOdds.toFixed(2)} odds</p></div></div></div>)}</div>{slip.modelAllHit!=null?<p className="mt-3 text-[0.54rem] text-white/30">Independent cross-match model guide: {percent(slip.modelAllHit)} for every leg landing. This remains an estimate, not a guarantee.</p>:null}</div>:null}
   </article>
 }
