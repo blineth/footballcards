@@ -80,7 +80,20 @@ export async function runPregameLearning(){
  const examples:PriorSample[]=[]
  const seen=new Set<string>()
  const fixtures=new Set<string>()
+ let openDate:string|null=null
+ let pending:Array<{prior:Record<Market,boolean[]>;market:Market;hit:boolean}>=[]
+ const commitDay=()=>{
+   for(const item of pending){
+     item.prior[item.market].push(item.hit)
+     if(item.prior[item.market].length>30)item.prior[item.market].shift()
+   }
+   pending=[]
+ }
  for(const row of rows){
+   if(openDate!==row.match_date){
+     commitDay()
+     openDate=row.match_date
+   }
    const name=String(row.player_name).toLowerCase().trim()
    const league=String(row.competition).toLowerCase().trim()
    // Never mix separate players merely because they share a short surname.
@@ -98,10 +111,10 @@ export async function runPregameLearning(){
      const hit=outcome(row,market)
      if(hit===null)continue
      if(before[market].length>=4)examples.push({date:row.match_date,player:name,team:String(row.team),competition:league,fixture,market,outcome:hit,history:before[market]})
-     past[market].push(hit)
-     if(past[market].length>30)past[market].shift()
+     pending.push({prior:past,market,hit})
    }
  }
+ commitDay()
  const train=examples.filter(x=>x.date<=boundary)
  const holdout=examples.filter(x=>x.date>boundary)
  const results:Score[]=[]
