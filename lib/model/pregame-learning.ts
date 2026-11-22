@@ -97,8 +97,10 @@ export async function runPregameLearning(){
     status text NOT NULL, source_rows integer NOT NULL, unique_fixtures integer NOT NULL,
     first_date date,last_date date, training_end date, results jsonb NOT NULL,
     recommendations jsonb NOT NULL, methodology text NOT NULL,
-    review_examples jsonb NOT NULL DEFAULT '[]'::jsonb)`)
+    review_examples jsonb NOT NULL DEFAULT '[]'::jsonb,
+    player_profiles jsonb NOT NULL DEFAULT '[]'::jsonb)`)
  await pool.query(`ALTER TABLE pregame_learning_runs ADD COLUMN IF NOT EXISTS review_examples jsonb NOT NULL DEFAULT '[]'::jsonb`)
+ await pool.query(`ALTER TABLE pregame_learning_runs ADD COLUMN IF NOT EXISTS player_profiles jsonb NOT NULL DEFAULT '[]'::jsonb`)
  const query=await pool.query<HistoryRow>(`SELECT player_name,team,opponent,competition,
      match_date::text,minutes,yellow_card,red_card,fouls_committed,fouls_drawn,shots,shots_on_target,booking_reason,yellow_card_minute
      FROM player_h2h
@@ -186,15 +188,34 @@ export async function runPregameLearning(){
    recommendations.push({market,candidate:champion.model,baselineHoldout:baseHoldout,candidateHoldout:testedHoldout,training:champion,adopted:false,
      reason:!meetsSize?"Insufficient independent holdout fixtures for production promotion":!exceeds?"No reliable out-of-sample Brier improvement":"Promising shadow candidate; must be validated against the real published model and prices before adoption"})
  }
+ // Descriptive evidence only. No assumptions that a zero-foul booking was dissent.
+ const watched=[/\\bpedro neto\\b/i,/\\bdan burn\\b/i,/\\bmac allister\\b|\\bmcallister\\b/i,/\\benzo fernandez\\b|\\benzo fernández\\b/i]
+ const observedByPlayer=new Map<string,{player:string;team:string;matches:number;yellows:number;nonFoulBookings:number;zeroFoulAppearances:number;confirmedDissentBookings:number;lateBookings:number;knownReasons:number;knownMinutes:number}>()
+ for(const row of rows){
+   if(!watched.some(re=>re.test(String(row.player_name))))continue
+   const key=String(row.player_name).toLowerCase()+"|"+String(row.team).toLowerCase()
+   const old=observedByPlayer.get(key)??{player:row.player_name,team:String(row.team),matches:0,yellows:0,nonFoulBookings:0,zeroFoulAppearances:0,confirmedDissentBookings:0,lateBookings:0,knownReasons:0,knownMinutes:0}
+   const booked=row.yellow_card===true||row.red_card===true
+   old.matches++
+   if(booked)old.yellows++
+   if(row.fouls_committed!=null&&Number(row.fouls_committed)===0){
+     old.zeroFoulAppearances++
+     if(booked)old.nonFoulBookings++
+   }
+   if(row.booking_reason){old.knownReasons++;if(/dissent/i.test(row.booking_reason))old.confirmedDissentBookings++}
+   if(row.yellow_card_minute!=null){old.knownMinutes++;if(row.yellow_card===true&&Number(row.yellow_card_minute)>=80)old.lateBookings++}
+   observedByPlayer.set(key,old)
+ }
+ const playerProfiles=[...observedByPlayer.values()].sort((a,b)=>b.matches-a.matches)
  const status=dates.length<12||examples.length<200?"insufficient-history":"shadow-evaluated"
  const methodology="Yellow-card candidates additionally test earlier bookings with zero recorded fouls, documented dissent booking events, and late-match bookings. Zero recorded fouls is a behavioural proxy, NOT evidence of dissent. Explicit booking causes are only counted when the match feed states them. Candidate performance must beat the unadjusted model on later fixtures. Chronological fixture-date split (first 80% train, last 20% holdout). For each player, league and fixture, rolling binary market rates use strictly earlier player matches only; fewer than four prior appearances are excluded. Candidate recency/prior weights are selected on training dates, then independently scored on held-out dates. Top single player per match and market, not every player, is graded. Baseline is an historical Bayesian proxy, not an exact replay of the website's old scoring engine; historical exact bookmaker odds and commentary are not reconstructed. Shadow research only; no automatic production promotion."
  const saved=await pool.query(`INSERT INTO pregame_learning_runs
-   (status,source_rows,unique_fixtures,first_date,last_date,training_end,results,recommendations,methodology,review_examples)
-   VALUES($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9,$10::jsonb) RETURNING id,created_at`,
-   [status,rows.length,fixtures.size,first,last,boundary,JSON.stringify(results),JSON.stringify(recommendations),methodology,JSON.stringify(examplesAudit)])
+   (status,source_rows,unique_fixtures,first_date,last_date,training_end,results,recommendations,methodology,review_examples,player_profiles)
+   VALUES($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9,$10::jsonb,$11::jsonb) RETURNING id,created_at`,
+   [status,rows.length,fixtures.size,first,last,boundary,JSON.stringify(results),JSON.stringify(recommendations),methodology,JSON.stringify(examplesAudit),JSON.stringify(playerProfiles)])
  return {id:saved.rows[0].id,createdAt:saved.rows[0].created_at,status,sourceRows:rows.length,
    uniqueFixtures:fixtures.size,matchDates:dates.length,trainingEnd:boundary,trainingSamples:train.length,holdoutSamples:holdout.length,
-   results,recommendations,reviewExamples:examplesAudit,methodology}
+   results,recommendations,reviewExamples:examplesAudit,playerProfiles,methodology}
 }
 export async function latestPregameLearning(){
  if(!isDatabaseConfigured)return null
