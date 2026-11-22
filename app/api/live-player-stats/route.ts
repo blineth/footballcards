@@ -11,7 +11,7 @@ type LivePlayerStat={
   tackles:number;interceptions:number;blocks:number;duelsTotal:number;duelsWon:number;defensiveInterventions:number;
   recentFouls10:number;recentFouls15:number;recentFouled10:number;disciplineHeat:number;
   aggressionScore:number;aggressionSignals:string[];lastAggressionMinute:number|null;
-  bookingReason:string|null;yellowCardMinute:number|null
+  bookingReason:string|null;yellowCardMinute:number|null;foulsStatVerified:boolean
 }
 type RefereeLiveContext={
   name:string|null;source:string|null;matches:number|null;historicalYellowsPerGame:number|null;historicalFoulsPerGame:number|null;
@@ -292,6 +292,7 @@ async function espnLive(input:{date:string;home:string;away:string;competition:C
           map.set(norm(player),{
             player,team,minutes:minutesRaw>0?minutesRaw:null,
             foulsCommitted:espnStat(row,"foulsCommitted"),
+            foulsStatVerified:(row?.stats??[]).some((v:any)=>v?.name==="foulsCommitted"&&v?.value!=null),
             foulsDrawn:espnStat(row,"foulsSuffered"),
             shots:espnStat(row,"totalShots"),
             shotsOnTarget:espnStat(row,"shotsOnTarget"),
@@ -442,6 +443,7 @@ function mergeLivePlayers(primary:LivePayload,secondary:LivePayload|null){
       duelsWon:Math.max(Number(player.duelsWon??0),Number(other.duelsWon??0)),
       defensiveInterventions:Math.max(Number(player.defensiveInterventions??0),Number(other.defensiveInterventions??0)),
       foulsCommitted:Math.max(Number(player.foulsCommitted??0),Number(other.foulsCommitted??0)),
+      foulsStatVerified:Boolean(player.foulsStatVerified||other.foulsStatVerified),
       foulsDrawn:Math.max(Number(player.foulsDrawn??0),Number(other.foulsDrawn??0)),
       shots:Math.max(Number(player.shots??0),Number(other.shots??0)),
       shotsOnTarget:Math.max(Number(player.shotsOnTarget??0),Number(other.shotsOnTarget??0)),
@@ -500,6 +502,7 @@ async function apiFootballLive(input:{date:string;home:string;away:string;compet
         players.push({
           player,team,minutes:Number.isFinite(Number(s?.games?.minutes))?Number(s.games.minutes):null,
           foulsCommitted:Number(s?.fouls?.committed??0)||0,
+          foulsStatVerified:s?.fouls?.committed!=null,
           foulsDrawn:Number(s?.fouls?.drawn??0)||0,
           shots:Number(s?.shots?.total??0)||0,
           shotsOnTarget:Number(s?.shots?.on??0)||0,
