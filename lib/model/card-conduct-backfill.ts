@@ -72,6 +72,26 @@ export async function backfillCardConduct(limit=8){
        const response=await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${slug}/summary?event=${event.id}`,{cache:"no-store",signal:AbortSignal.timeout(4500)})
        if(response.ok){
          const data=await response.json()
+         // Backfill only explicitly present foul statistics. Historical feeds
+         // frequently omit a player's foul count, which must not mean zero.
+         for(const roster of data?.rosters??[]){
+           for(const p of roster?.roster??[]){
+             const name=nameOf(p)
+             const stat=(p?.stats??[]).find((v:any)=>v?.name==="foulsCommitted")
+             if(!name||stat?.value==null)continue
+             const fouls=Number(stat.value)
+             if(!Number.isFinite(fouls)||fouls<0)continue
+             await pool.query(`UPDATE player_h2h SET
+                fouls_committed=$5,fouls_stat_verified=true
+                WHERE match_date=$1 AND competition=$2
+                  AND (team=$3 OR opponent=$3 OR team=$4 OR opponent=$4)
+                  AND regexp_replace(translate(lower(player_name),
+                    'áéíóúüñàèêëç','aeiouunaeeec'),'[^a-z0-9]','','g')=$6`,[
+               fixture.fixture_date,fixture.competition,fixture.team_a,fixture.team_b,
+               fouls,norm(name).replace(/[^a-z0-9]/g,""),
+             ])
+           }
+         }
          let found=0
          for(const booking of data?.keyEvents??[]){
            const t=String(booking?.type?.type??booking?.type?.text??"").toLowerCase()
@@ -88,7 +108,7 @@ export async function backfillCardConduct(limit=8){
               yellow_card_minute=COALESCE($6,yellow_card_minute)
              WHERE match_date=$1 AND competition=$2
                AND (team=$3 OR opponent=$3 OR team=$4 OR opponent=$4)
-               AND regexp_replace(lower(player_name),'[^a-z0-9]','','g')=$7
+               AND regexp_replace(translate(lower(player_name),'áéíóúüñàèêëç','aeiouunaeeec'),'[^a-z0-9]','','g')=$7
                AND yellow_card IS TRUE
              RETURNING id`,[
               fixture.fixture_date,fixture.competition,fixture.team_a,fixture.team_b,
