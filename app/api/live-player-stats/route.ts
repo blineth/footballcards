@@ -90,10 +90,6 @@ function applyCommentaryDiscipline(summary:any,map:Map<string,LivePlayerStat>,el
     const key=(minute??-1)+"|"+raw.toLowerCase()
     if(seen.has(key))continue
     seen.add(key)
-    const mentioned=[...map.values()].filter(p=>norm(raw).includes(norm(p.player)))
-    const participants=(ev?.participants??[])
-      .map((p:any)=>norm(String(p?.athlete?.displayName??p?.athlete?.fullName??p?.name??"")))
-      .filter((name:string)=>Boolean(name)&&map.has(name)) as string[]
     // A challenge can name both offender and victim. Don't mark both players
     // as aggressive: credit only a clearly identified actor, or omit the signal.
     // A single participant may still be the victim in ambiguous prose; require
@@ -104,8 +100,15 @@ function applyCommentaryDiscipline(summary:any,map:Map<string,LivePlayerStat>,el
       const candidate=norm(namedActor[1])
       if(map.has(candidate))actor=candidate
     }
-    if(!actor&&participants.length===1&&mentioned.length<=1)actor=participants[0]
-    if(!actor&&mentioned.length===1&&participants.length<=1)actor=norm(mentioned[0].player)
+    // A lone participant may identify the player fouled rather than the offender.
+    // Only use a commentary signal when the text identifies the responsible player.
+    if(!actor){
+      const by=raw.match(/(?:challenge|foul|dissent|confrontation|retaliation)\\s+by\\s+([^,.;]+?)(?:\\s+on\\s+|[.,;]|$)/i)
+      if(by){
+        const candidate=norm(by[1])
+        if(map.has(candidate))actor=candidate
+      }
+    }
     if(!actor)continue
     const age=minute==null?0:Math.max(0,elapsed-minute)
     const recency=minute==null?.75:age<=5?1:age<=10?.88:age<=20?.62:.35
