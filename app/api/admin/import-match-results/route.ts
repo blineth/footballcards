@@ -16,14 +16,16 @@ export async function GET(request:Request){
   const date=params.get("date")??""
   const offset=Math.max(0,Math.min(500,Number(params.get("offset")??0)||0))
   const limit=Math.max(1,Math.min(5,Number(params.get("limit")??4)||4))
-  if(!ymd(date)||date>=new Date().toISOString().slice(0,10))return NextResponse.json({ok:false,error:"Date must be a completed past day"},{status:400})
+  if(!ymd(date)||date>new Date().toISOString().slice(0,10))return NextResponse.json({ok:false,error:"Date cannot be in the future"},{status:400})
   if(!isDatabaseConfigured)return NextResponse.json({ok:false,error:"Database unavailable"},{status:503})
   try{
     await ensureResearchSchema()
     const response=await fixturesGET(new Request("http://internal/api/fixtures?date="+date+"&nextIfEmpty=0"))
     const board=await response.json()
     const fixtures=Object.values(board?.leagues??{}).flat() as any[]
-    const finished=fixtures.filter(f=>f.status==="finished")
+    const homeFilter=String(params.get("home")??"").trim().toLowerCase()
+    const awayFilter=String(params.get("away")??"").trim().toLowerCase()
+    const finished=fixtures.filter(f=>f.status==="finished"&&(!homeFilter||String(f.home.name).toLowerCase().includes(homeFilter))&&(!awayFilter||String(f.away.name).toLowerCase().includes(awayFilter)))
     await pool.query(`CREATE TABLE IF NOT EXISTS match_result_audit (
       fixture_date date NOT NULL,home_team text NOT NULL,away_team text NOT NULL,
       competition text,home_score integer NOT NULL,away_score integer NOT NULL,
