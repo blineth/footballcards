@@ -8,6 +8,43 @@ type Stats={lastFive:Summary;h2h:Summary}
 type Match={date:string;opponent:string;minutes:number|null;yellow:boolean|null;foulsCommitted:number|null;foulsDrawn:number|null;shots:number|null;shotsOnTarget:number|null;hit:boolean|null}
 type History={ok:boolean;lastFive?:Match[];h2h?:Match[];h2hTotalAppearances?:number}
 const cache=new Map<string,Promise<Stats|null>>()
+type Job={key:string;player:string;team:string;market:string;resolve:(stats:Stats|null)=>void}
+const queue=new Map<string,Job[]>()
+const queued=new Set<string>()
+function fetchSummary(key:string,player:string,team:string,market:string,date:string,home:string,away:string):Promise<Stats|null>{
+ const existing=cache.get(key)
+ if(existing)return existing
+ const fixtureKey=[date,home,away].join("|").toLowerCase()
+ const task=new Promise<Stats|null>(resolve=>{
+  const jobs=queue.get(fixtureKey)??[]
+  jobs.push({key,player,team,market,resolve})
+  queue.set(fixtureKey,jobs)
+  if(queued.has(fixtureKey))return
+  queued.add(fixtureKey)
+  setTimeout(()=>{
+   queued.delete(fixtureKey)
+   const batch=queue.get(fixtureKey)??[]
+   queue.delete(fixtureKey)
+   for(let i=0;i<batch.length;i+=24){
+    const chunk=batch.slice(i,i+24)
+    fetch("/api/player-booking-summaries",{
+     method:"POST",headers:{"Content-Type":"application/json"},
+     body:JSON.stringify({date,home,away,players:chunk.map(x=>({name:x.player,team:x.team,market:x.market}))}),
+    }).then(r=>r.ok?r.json():null).then(data=>{
+      const profiles=Array.isArray(data?.profiles)?data.profiles:[]
+      for(const item of chunk){
+       const profile=profiles.find((x:{name:string;team:string;market:string})=>
+        x.name.toLowerCase()===item.player.toLowerCase()&&
+        x.team.toLowerCase()===item.team.toLowerCase()&&x.market===item.market)
+       item.resolve(profile?{lastFive:profile.lastFive,h2h:profile.h2h}:null)
+      }
+    }).catch(()=>{for(const item of chunk)item.resolve(null)})
+   }
+  },30)
+ })
+ cache.set(key,task)
+ return task
+}
 function labelFor(market:string){if(market==="card")return "🟨";if(market.startsWith("fouled"))return "drawn";if(market.startsWith("foul"))return "fouls";if(market.startsWith("sot"))return "SOT";if(market.startsWith("shot"))return "shots";if(market.startsWith("goal"))return "goals";if(market.startsWith("assist"))return "assists";return "events"}
 function display(summary:Summary|undefined,market:string){
  if(!summary||!summary.total)return "—"
@@ -25,14 +62,7 @@ export function MarketHistoryBadge({player,team,market,date,home,away,competitio
  useEffect(()=>{
   let active=true
   setSummary(null);setOpen(false);setHistory(null)
-  let task=cache.get(key)
-  if(!task){
-   task=fetch("/api/player-booking-summaries",{method:"POST",headers:{"Content-Type":"application/json"},
-     body:JSON.stringify({date,home,away,players:[{name:player,team,market}]})})
-     .then(r=>r.ok?r.json():null).then(d=>d?.ok&&d.profiles?.length?{lastFive:d.profiles[0].lastFive,h2h:d.profiles[0].h2h}:null)
-     .catch(()=>null)
-   cache.set(key,task)
-  }
+  const task=fetchSummary(key,player,team,market,date,home,away)
   void task.then(value=>{if(active)setSummary(value)})
   return()=>{active=false}
  },[key,date,home,away,player,team,market])
