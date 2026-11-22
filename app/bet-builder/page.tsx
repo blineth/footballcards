@@ -1244,6 +1244,7 @@ export default function BetBuilderPage(){
     if(!fixture||!data?.ok||(!inPlay&&data.snapshotFallback))return
     // Never record a post-kickoff view as a pre-match forecast when the live feed is missing.
     if(!inPlay&&Date.now()>=new Date(fixture.kickoff).getTime())return
+    if(inPlay&&Date.now()<new Date(fixture.kickoff).getTime())return
     const fixtureInfo={id:fixture.id,competition:fixture.competition,kickoff:fixture.kickoff,date:fixture.date,home:fixture.home,away:fixture.away}
     const ref=live?.referee??null
     const base={
