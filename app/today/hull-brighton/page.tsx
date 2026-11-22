@@ -106,6 +106,9 @@ export default function HullBrightonToday(){
   try{await navigator.clipboard.writeText(content);setCopied(name)}catch{setCopied(null)}
  }
  const cards=legs.filter(p=>p.market==="card").sort((a,b)=>b.p-a.p)
+ const valueWatch=legs.filter(p=>p.edge>0&&p.grade!=="D")
+   .sort((a,b)=>b.edge-a.edge).slice(0,8)
+ const pricedBelowModel=legs.filter(p=>p.edge<=0).length
  return <main className="min-h-screen bg-[#07120e] pb-24 text-white">
   <div className="border-b border-white/10"><div className="mx-auto max-w-5xl px-4 py-5">
    <div className="flex items-center gap-3">
@@ -158,9 +161,21 @@ export default function HullBrightonToday(){
         <p className="mt-1 text-[0.65rem] text-white/50">{MARKET_LABELS[p.market]} · {p.team==="Hull City"?"HUL":"BHA"} · evidence {p.grade}</p></div>
        <div className="shrink-0 text-right"><p className="font-mono text-sm font-black">{pct(p.p)}</p><p className="mt-0.5 text-xs font-bold text-emerald-200">Bet365 {dec(p.price)}</p></div>
       </div>)}</div>
-      <p className="mt-3 text-[0.62rem] text-amber-100/65">{picks.length<5?"Only "+picks.length+" qualifying priced starters.":""} Individual odds are verified; no combined bet-builder price or guaranteed hit rate is available. Correlation between legs is not priced by multiplying singles.</p>
+      <p className="mt-3 text-[0.62rem] text-amber-100/65">{picks.length<5?"Only "+picks.length+" qualifying priced starters.":""} Quoted individual odds are verified, but many legs are priced shorter than their model-implied fair odds. These are probability-first research selections, NOT automatically positive-value bets. No combined bet-builder price or guaranteed hit rate is available. Correlation between legs is not priced by multiplying singles.</p>
      </div>
     })}
+   </section>
+   <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+    <div className="flex flex-wrap items-start justify-between gap-2"><div>
+      <h2 className="font-black">Model vs bookmaker · possible value</h2>
+      <p className="mt-1 text-xs leading-relaxed text-white/50">Only markets where the model's estimated probability exceeds Bet365's raw implied probability. A positive difference is <strong>not</strong> proof of genuine value: the model can be miscalibrated, the bookmaker margin is included and the historical shadow calibration is not live.</p>
+     </div><p className="text-xs text-white/45">{pricedBelowModel} of {legs.length} priced markets are at or below bookmaker-implied chance</p>
+    </div>
+    <div className="mt-3 space-y-2">{valueWatch.map(p=><div key={p.player+p.market} className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 rounded-xl bg-black/25 p-3">
+     <div className="min-w-0"><p className="text-sm font-bold">{p.player}</p><p className="mt-1 text-xs text-white/55">{MARKET_LABELS[p.market]} · evidence {p.grade}</p><p className="mt-1 text-[0.65rem] text-white/45">Model {pct(p.p)} · bookmaker-implied {pct(p.implied)}</p></div>
+     <div className="text-right"><p className="text-sm font-black text-emerald-200">{dec(p.price)}</p><p className="mt-1 text-xs text-white/55">+{(p.edge*100).toFixed(1)} points</p></div>
+    </div>)}
+    {!valueWatch.length?<p className="mt-3 text-xs text-white/50">No verified positive-edge candidate currently clears the basic model-versus-price screen.</p>:null}</div>
    </section>
    <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
     <div className="flex items-center justify-between gap-3"><div><h2 className="font-black">Yellow-card candidates</h2>
