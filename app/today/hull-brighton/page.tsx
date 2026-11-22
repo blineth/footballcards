@@ -1,6 +1,7 @@
 "use client"
 import {useCallback,useEffect,useMemo,useState} from "react"
 import Link from "next/link"
+import {MarketHistoryBadge} from "@/components/MarketHistoryBadge"
 import {ArrowLeft,RefreshCw,ShieldCheck,AlertTriangle,Copy,Check,Target} from "lucide-react"
 
 type Market="shot1"|"shot2"|"sot1"|"foul1"|"foul2"|"fouled1"|"card"
@@ -164,7 +165,7 @@ export default function HullBrightonToday(){
       </div>
       <div className="mt-3 space-y-2">{picks.map((p,i)=><div key={p.player+p.market} className="flex items-center justify-between gap-3 rounded-xl bg-black/25 px-3 py-2.5">
        <div className="min-w-0"><p className="text-sm font-bold">{i+1}. {p.player}</p>
-        <p className="mt-1 text-[0.65rem] text-white/50">{MARKET_LABELS[p.market]} · {p.team==="Hull City"?"HUL":"BHA"} · evidence {p.grade}</p></div>
+        <p className="mt-1 text-[0.65rem] text-white/50">{MARKET_LABELS[p.market]} · {p.team==="Hull City"?"HUL":"BHA"} · evidence {p.grade}</p><MarketHistoryBadge player={p.player} team={p.team} market={p.market} date={DATE} home="Hull City" away="Brighton & Hove Albion" competition="Premier League"/></div>
        <div className="shrink-0 text-right"><p className="font-mono text-sm font-black">{pct(p.p)}</p><p className="mt-0.5 text-xs font-bold text-emerald-200">Bet365 {dec(p.price)}</p></div>
       </div>)}</div>
       <p className="mt-3 text-[0.62rem] text-amber-100/65">{picks.length<5?"Only "+picks.length+" qualifying priced starters.":""} Quoted individual odds are verified, but many legs are priced shorter than their model-implied fair odds. These are probability-first research selections, NOT automatically positive-value bets. No combined bet-builder price or guaranteed hit rate is available. Correlation between legs is not priced by multiplying singles.</p>
@@ -178,7 +179,7 @@ export default function HullBrightonToday(){
      </div><p className="text-xs text-white/45">{pricedBelowModel} of {legs.length} priced markets are at or below bookmaker-implied chance</p>
     </div>
     <div className="mt-3 space-y-2">{valueWatch.map(p=><div key={p.player+p.market} className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 rounded-xl bg-black/25 p-3">
-     <div className="min-w-0"><p className="text-sm font-bold">{p.player}</p><p className="mt-1 text-xs text-white/55">{MARKET_LABELS[p.market]} · evidence {p.grade}</p><p className="mt-1 text-[0.65rem] text-white/45">Model {pct(p.p)} · bookmaker-implied {pct(p.implied)}</p></div>
+     <div className="min-w-0"><p className="text-sm font-bold">{p.player}</p><p className="mt-1 text-xs text-white/55">{MARKET_LABELS[p.market]} · evidence {p.grade}</p><MarketHistoryBadge player={p.player} team={p.team} market={p.market} date={DATE} home="Hull City" away="Brighton & Hove Albion" competition="Premier League"/><p className="mt-1 text-[0.65rem] text-white/45">Model {pct(p.p)} · bookmaker-implied {pct(p.implied)}</p></div>
      <div className="text-right"><p className="text-sm font-black text-emerald-200">{dec(p.price)}</p><p className="mt-1 text-xs text-white/55">+{(p.edge*100).toFixed(1)} points</p></div>
     </div>)}
     {!valueWatch.length?<p className="mt-3 text-xs text-white/50">No verified positive-edge candidate currently clears the basic model-versus-price screen.</p>:null}</div>
@@ -188,7 +189,7 @@ export default function HullBrightonToday(){
      <p className="mt-1 text-xs text-white/45">Card model + exact priced markets; dissent/late-card hypothesis not yet validated.</p></div><AlertTriangle className="size-4 text-amber-200"/></div>
     <div className="mt-3 grid gap-2 sm:grid-cols-2">{cards.slice(0,6).map(p=><div key={p.player} className="rounded-xl bg-black/25 p-3">
      <div className="flex justify-between gap-2"><p className="text-sm font-bold">{p.player}</p><p className="font-mono font-black">{pct(p.p)}</p></div>
-     <p className="mt-1 text-xs text-white/50">{p.team} · Bet365 {dec(p.price)} · evidence {p.grade}</p>
+     <p className="mt-1 text-xs text-white/50">{p.team} · Bet365 {dec(p.price)} · evidence {p.grade}</p><MarketHistoryBadge player={p.player} team={p.team} market={p.market} date={DATE} home="Hull City" away="Brighton & Hove Albion" competition="Premier League"/>
      {p.zeroFouls?.matches?<p className="mt-1 text-[0.62rem] text-white/40">{p.zeroFouls.yellows}/{p.zeroFouls.matches} recorded zero-foul games with cards (reason unverified)</p>:null}
     </div>)}</div>
    </section>
@@ -200,7 +201,7 @@ export default function HullBrightonToday(){
      {(["all",...MARKETS] as Array<Market|"all">).map(k=><button key={k} onClick={()=>setMarketFilter(k)} className={"rounded-lg border px-2.5 py-1.5 text-xs font-bold "+(marketFilter===k?"border-emerald-300/50 bg-emerald-300/15 text-emerald-100":"border-white/10 bg-white/5 text-white/60")}>{k==="all"?"All":MARKET_LABELS[k]}</button>)}
     </div>
     <div className="mt-3 max-h-[650px] space-y-1.5 overflow-y-auto">{sorted.slice(0,90).map(p=><div key={p.player+"|"+p.market} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 rounded-lg bg-black/25 px-3 py-2.5">
-     <div className="min-w-0"><p className="truncate text-xs font-bold">{p.player}</p><p className="text-[0.63rem] text-white/45">{MARKET_LABELS[p.market]} · {p.team==="Hull City"?"HUL":"BHA"} · {p.grade}</p></div>
+     <div className="min-w-0"><p className="truncate text-xs font-bold">{p.player}</p><p className="text-[0.63rem] text-white/45">{MARKET_LABELS[p.market]} · {p.team==="Hull City"?"HUL":"BHA"} · {p.grade}</p><MarketHistoryBadge player={p.player} team={p.team} market={p.market} date={DATE} home="Hull City" away="Brighton & Hove Albion" competition="Premier League"/></div>
      <div className="text-right"><p className="text-xs font-black">{pct(p.p)}</p><p className="text-[0.58rem] text-white/40">Model</p></div>
      <div className="text-right"><p className="text-xs font-black text-emerald-200">{dec(p.price)}</p><p className="text-[0.58rem] text-white/40">Bet365</p></div>
     </div>)}
