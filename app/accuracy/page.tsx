@@ -11,7 +11,7 @@ type Timing={phase:string;timing_quality:string;selections:number}
 type LearningScore={market:string;model:string;phase:string;sample:number;hits:number;hitRate:number;brier:number;avgPredicted:number;distinctDates:number}
 type LearningRecommendation={market:string;candidate:string;baselineHoldout:LearningScore;candidateHoldout:LearningScore;training:LearningScore;adopted:boolean;reason:string}
 type LearningPick={date:string;fixture:string;player:string;team:string;market:string;model:string;probability:number;hit:boolean;priorMatches:number;lastFiveHits:number;nonFoulCards?:number;confirmedDissentBookings?:number;lateBookings?:number;period:string}
-type ConductProfile={player:string;team:string;matches:number;yellows:number;nonFoulBookings:number;zeroFoulAppearances:number;confirmedDissentBookings:number;lateBookings:number;knownReasons:number;knownMinutes:number}
+type ConductProfile={player:string;team:string;matches:number;yellows:number;nonFoulBookings:number;zeroFoulAppearances:number;verifiedZeroFoulAppearances:number;confirmedDissentBookings:number;lateBookings:number;knownReasons:number;knownMinutes:number}
 type LearningResponse={ok:boolean;available:boolean;run?:{id:number;created_at:string;status:string;source_rows:number;unique_fixtures:number;training_end:string;recommendations:LearningRecommendation[];review_examples?:LearningPick[];player_profiles?:ConductProfile[];methodology:string}}
 type Data={ok:boolean;error?:string;days:number;updatedAt:string;walkForward?:Test[];featureCoverage?:Gap[];timingQuality?:Timing[];
   phases:Rate[];markets:Rate[];confidence:Rate[];liveCardSignals:Signal[];
@@ -107,8 +107,8 @@ export default function AccuracyPage(){
               <p className="mt-3 text-xs font-black">Players to investigate</p>
               {(learning.run.player_profiles??[]).length? <div className="mt-2 space-y-2">{(learning.run.player_profiles??[]).map(x=><div key={x.player+x.team} className="rounded-xl bg-black/25 p-3">
                 <p className="text-sm font-black">{x.player} <span className="text-white/45">· {x.team}</span></p>
-                <p className="mt-1 text-[0.58rem] text-white/55">{x.yellows}/{x.matches} booked · {x.nonFoulBookings}/{x.zeroFoulAppearances} zero-foul appearances with bookings</p>
-                <p className="mt-1 text-[0.58rem] text-white/45">{x.confirmedDissentBookings} explicit dissent · {x.lateBookings} late bookings · {x.knownReasons} known reasons, {x.knownMinutes} known booking minutes</p>
+                <p className="mt-1 text-[0.58rem] text-white/55">{x.yellows}/{x.matches} booked · {x.nonFoulBookings}/{x.verifiedZeroFoulAppearances??0} verified zero-foul appearances with bookings</p>
+                <p className="mt-1 text-[0.58rem] text-white/45">{x.confirmedDissentBookings} explicit dissent · {x.lateBookings} late bookings · {x.knownReasons} known reasons, {x.knownMinutes} known booking minutes · {x.zeroFoulAppearances} total recorded zero-foul games (may include unverified data)</p>
               </div>)}</div>:<p className="mt-2 text-xs text-white/45">No matching historical appearances found for the named players in the imported dataset.</p>}
               <p className="mt-2 text-[0.58rem] text-amber-100/70">Missing booking reasons and missing foul statistics are not assumed to mean dissent or no fouls.</p>
             </div>
