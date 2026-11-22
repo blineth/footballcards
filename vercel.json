@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/reconcile-results",
       "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/train-pregame",
+      "schedule": "0 6 * * *"
     }
   ]
 }
