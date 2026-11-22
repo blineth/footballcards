@@ -64,7 +64,7 @@ export async function GET(request:Request){
         FROM unique_picks GROUP BY phase`,[days]),
       pool.query(cte+` SELECT phase,market_group,
         CASE WHEN fixture_date=(SELECT max(fixture_date) FROM unique_picks) THEN 'holdout' ELSE 'training' END AS split,
-        cutoffs.cutoff,
+        cutoffs.cutoff AS threshold,
         count(*)::int graded,count(*) FILTER(WHERE outcome IS TRUE)::int hits,
         round(avg(probability)::numeric*100,1) avg_confidence
         FROM unique_picks CROSS JOIN (VALUES (.50::float8),(.60::float8),(.70::float8),(.75::float8),(.80::float8)) cutoffs(cutoff)
