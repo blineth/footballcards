@@ -13,6 +13,8 @@ export type LedgerLeg={
   recent5HitRate?:number|null;seasonHitRate?:number|null;h2hHitRate?:number|null;h2hMatches?:number|null;sampleMatches?:number|null;
   disciplineHeat?:number|null;recentFouls10?:number|null;liveCurrentCount?:number|null;
   liveFouls?:number|null;liveFouled?:number|null;liveShots?:number|null;liveSot?:number|null;
+  aggressionSignals?:string[]|null;aggressionEventMinute?:number|null;
+  liveFeedSource?:string|null;liveFeedUpdatedAt?:string|null;liveModelMinute?:number|null;
 }
 export type LedgerRun={
   surface:string;
@@ -107,9 +109,10 @@ export async function savePredictionLedger(runs:LedgerRun[]){
           player_name,db_player_name,player_team,opponent_team,market,threshold,label,
           model_probability,fair_odds,bookmaker_odds,confidence,
           recent5_hit_rate,season_hit_rate,h2h_hit_rate,h2h_matches,sample_matches,
-          discipline_heat,recent_fouls_10,live_current_count,live_fouls,live_fouled,live_shots,live_sot
+          discipline_heat,recent_fouls_10,live_current_count,live_fouls,live_fouled,live_shots,live_sot,
+          aggression_signals,aggression_event_minute,live_feed_source,live_feed_updated_at,live_model_minute
         ) VALUES (
-          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31
+          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36
         )`,
         [
           runId,i,legFixture?.id??null,legFixture?.competition??null,legDate,
@@ -119,6 +122,10 @@ export async function savePredictionLedger(runs:LedgerRun[]){
           num(leg.recent5HitRate),num(leg.seasonHitRate),num(leg.h2hHitRate),num(leg.h2hMatches),num(leg.sampleMatches),
           num(leg.disciplineHeat),num(leg.recentFouls10),num(leg.liveCurrentCount),
           num(leg.liveFouls),num(leg.liveFouled),num(leg.liveShots),num(leg.liveSot),
+          Array.isArray(leg.aggressionSignals)?leg.aggressionSignals.slice(0,4).map(String):null,
+          num(leg.aggressionEventMinute),leg.liveFeedSource??null,
+          leg.liveFeedUpdatedAt&&Number.isFinite(Date.parse(leg.liveFeedUpdatedAt))?new Date(leg.liveFeedUpdatedAt):null,
+          num(leg.liveModelMinute),
         ],
       )
       savedLegs++
