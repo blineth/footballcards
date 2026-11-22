@@ -970,49 +970,65 @@ export default function BetBuilderPage(){
     if(cachedOdds)setLiveOdds(cachedOdds)
   },[fixture])
   const load=useCallback(async(f:Fixture,force=false)=>{
-    const kickoff=new Date(f.kickoff).getTime()
-    const now=Date.now()
-    const preMatch=!Number.isFinite(kickoff)||now<kickoff
-    const inPlayWindow=Number.isFinite(kickoff)&&now>=kickoff&&now<=kickoff+4*60*60*1000
     const cached=readScorecardCache(f)
-
-    if(cached){
-      setData(current=>current?.ok&&!current.snapshotFallback?current:cached)
+    if(cached?.ok){
+      setData(cached)
       setLoading(false)
       if(!force)return
-    }else{
-      setLoading(true)
-      setData(current=>current?.ok&&!current.snapshotFallback?current:null)
+    }else setLoading(true)
+    // Full scorecard requests currently exceed the platform function timeout.
+    // Use the bounded independent starter/history and Bet365 odds feeds.
+    const params=new URLSearchParams({date:f.date,home:f.home,away:f.away,competition:f.competition})
+    const quick=async(url:string,ms:number)=>{
+      const c=new AbortController()
+      const timer=window.setTimeout(()=>c.abort(),ms)
+      try{
+        const response=await fetch(url,{cache:"no-store",signal:c.signal})
+        if(!response.ok)throw Error("Source HTTP "+response.status)
+        return await response.json()
+      }finally{window.clearTimeout(timer)}
     }
-
-    // Once kickoff has passed, the live path takes over. Pre-match recommendations
-    // must always come from the full evidenced scorecard, never the fast snapshot.
-    if(inPlayWindow){
-      setLoading(!cached)
-      return
-    }
-
-    const controller=new AbortController()
-    const timeout=window.setTimeout(()=>controller.abort(),force?45_000:40_000)
     try{
-      const r=await fetch(scorecardUrl(f,force),{cache:force?"no-store":"default",signal:controller.signal})
-      const next=await r.json().catch(()=>({ok:false,error:"Unable to load evidenced match model."})) as Scorecard
-      if(next?.ok){
-        // Show the available snapshot immediately, but preserve its fallback label.
-        // Snapshot estimates must never be presented as verified recommendations.
-        setData(next)
-        if(!next.snapshotFallback)writeScorecardCache(f,next)
-      }else if(!cached){
-        setData({ok:false,error:next?.error||"The match model is temporarily unavailable. Refresh to try again."})
+      const snapshot=await quick("/api/live-player-baseline?"+params,12_000) as Scorecard
+      if(!snapshot.ok||!snapshot.players?.length)throw Error("Fast player model unavailable")
+      const odds=await quick("/api/bet-builder-odds?"+params,10_000).catch(()=>null) as (LiveOddsData&{source?:string})|null
+      const prices=Array.isArray(odds?.selections)?odds.selections:[]
+      const players=(snapshot.players??[]).map(player=>({
+        ...player,
+        markets:Object.fromEntries(Object.entries(player.markets??{}).map(([key,m])=>{
+          if(!m)return [key,m]
+          const kind=liveKindForMarket(key)
+          const threshold=thresholdForMarket(key)
+          const label=key==="card"?"to be booked":key==="goal1"?"anytime goalscorer":key==="assist1"?"1+ assist":
+            key.startsWith("fouled")?threshold+"+ foul"+(threshold>1?"s":"")+" drawn":
+            key.startsWith("foul")?threshold+"+ foul"+(threshold>1?"s":"")+" committed":
+            key.startsWith("sot")?threshold+"+ shot"+(threshold>1?"s":"")+" on target":
+            threshold+"+ shot"+(threshold>1?"s":"")
+          const quote=prices.find(item=>{
+            if(item.bookmaker!=="Bet365"||item.kind!==kind||!item.odd||item.odd<=1)return false
+            const parts=String(item.label??"").split("·")
+            return parts.length>=2&&sameLivePlayer(parts[0],player.name)&&
+              parts.slice(1).join("·").trim().toLowerCase()===label
+          })
+          const price=quote?Number(quote.odd):null
+          return [key,{...m,bookmakerOdds:price,bookmakerName:price!=null?"Bet365":null,
+            edge:price!=null?m.probability-1/price:null}]
+        })) as ScorePlayer["markets"],
+      }))
+      const next:Scorecard={...snapshot,players,snapshotFallback:true,
+        fallbackReason:"Fast historical snapshot shown because the full evidence service is slow. Recheck before betting.",
+        bookmaker:odds?.priceAvailable?"Bet365":null,
+        oddsSource:odds?.source??null,oddsCapturedAt:odds?.capturedAt??null,
+        priceAvailable:Boolean(odds?.priceAvailable),oddsFreshness:odds?.priceAvailable?"LIVE":"UNKNOWN",
+        marketAvailability:odds?.marketAvailability??{},
+        bookmakerAvailability:odds?.bookmakerAvailability??{},
+        availableBets:odds?.availableBets??[],
       }
+      setData(next)
+      writeScorecardCache(f,next)
     }catch{
-      if(!cached){
-        setData({ok:false,error:"The match model timed out. Refresh to try again."})
-      }
-    }finally{
-      window.clearTimeout(timeout)
-      setLoading(false)
-    }
+      if(!cached)setData({ok:false,error:"Match model is slow or temporarily unavailable. Try the match centre or refresh."})
+    }finally{setLoading(false)}
   },[])
   useEffect(()=>{if(fixture)void load(fixture,false)},[fixture,load])
   useEffect(()=>{
@@ -1372,7 +1388,8 @@ export default function BetBuilderPage(){
       {loading&&!data&&inPlay?<section className="rounded-3xl border border-emerald-300/12 bg-emerald-400/[0.045] p-4"><div className="flex items-center gap-3"><RefreshCw className="size-4 animate-spin text-emerald-300"/><div><p className="text-sm font-black">Loading live player model…</p><p className="mt-1 text-[0.54rem] text-white/35">Current score and live events are already connected. Player rankings will appear as soon as the cached or fresh scorecard is available.</p></div></div></section>:null}
       {data&&!data.ok?<section className="rounded-3xl border border-rose-300/15 bg-rose-400/5 p-5"><p className="font-black">Match model unavailable</p><p className="mt-1 text-sm text-white/40">{data.error}</p></section>:null}
 
-      {data?.ok&&data.lineupMode==="predicted"?<section className="rounded-3xl border border-amber-300/15 bg-amber-300/[0.05] p-4"><div className="flex items-start gap-3"><Clock3 className="mt-0.5 size-5 shrink-0 text-amber-300"/><div><p className="font-black text-amber-100">Predicted XI active</p><p className="mt-1 text-[0.6rem] leading-relaxed text-white/40">{data.lineupSource??"Probable starters based on recent selection history and minutes."} The page checks the official team sheet every 30 seconds from two hours before kickoff until confirmation. Once both starting XIs are verified, anyone benched is removed and every probability and slip is rebuilt from the confirmed starters.</p></div></div></section>:data?.ok&&data.lineupMode==="squad"?<section className="rounded-3xl border border-amber-300/15 bg-amber-300/[0.05] p-6 text-center"><Clock3 className="mx-auto size-6 text-amber-300"/><p className="mt-3 font-black">No reliable XI yet</p><p className="mx-auto mt-1 max-w-lg text-xs leading-relaxed text-white/40">The match is still available, but player recommendations need a probable or confirmed starting XI.</p></section>:null}
+      {data?.ok&&data.snapshotFallback?<section className="rounded-2xl border border-amber-300/20 bg-amber-300/[0.06] p-4"><p className="text-sm font-black text-amber-100">Fast match view — limited research model</p><p className="mt-1 text-xs leading-relaxed text-white/55">{data.fallbackReason} Player estimates use the current snapshot, not the full referee/H2H model. Exact Bet365 singles prices are included where available, but no combined odds are implied.</p></section>:null}
+       {data?.ok&&data.lineupMode==="predicted"?<section className="rounded-3xl border border-amber-300/15 bg-amber-300/[0.05] p-4"><div className="flex items-start gap-3"><Clock3 className="mt-0.5 size-5 shrink-0 text-amber-300"/><div><p className="font-black text-amber-100">Predicted XI active</p><p className="mt-1 text-[0.6rem] leading-relaxed text-white/40">{data.lineupSource??"Probable starters based on recent selection history and minutes."} The page checks the official team sheet every 30 seconds from two hours before kickoff until confirmation. Once both starting XIs are verified, anyone benched is removed and every probability and slip is rebuilt from the confirmed starters.</p></div></div></section>:data?.ok&&data.lineupMode==="squad"?<section className="rounded-3xl border border-amber-300/15 bg-amber-300/[0.05] p-6 text-center"><Clock3 className="mx-auto size-6 text-amber-300"/><p className="mt-3 font-black">No reliable XI yet</p><p className="mx-auto mt-1 max-w-lg text-xs leading-relaxed text-white/40">The match is still available, but player recommendations need a probable or confirmed starting XI.</p></section>:null}
 
       {inPlay&&live?<section className="rounded-3xl border border-rose-300/15 bg-rose-400/[0.055] p-4"><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-black text-rose-200">Live recommendations adapting</p><p className="mt-1 text-[0.58rem] leading-relaxed text-white/40">Settled thresholds are removed automatically. If a player commits their first foul, 1+ disappears and the next available foul line moves up the ranking.</p></div><span className="shrink-0 rounded-full bg-rose-300 px-2 py-1 text-[0.45rem] font-black text-rose-950">{live.elapsed}'</span></div><p className="mt-2 text-[0.46rem] text-white/25">{live.source??"Live feed"} · refreshes every 30 seconds</p></section>:null}
 
@@ -1382,7 +1399,7 @@ export default function BetBuilderPage(){
         {unavailableBet365Markets.length?<div className="mt-2"><p className="text-[0.42rem] font-black uppercase text-rose-300/80">Not available in verified Bet365 feed</p><div className="mt-1 flex flex-wrap gap-1.5">{unavailableBet365Markets.map(kind=><span key={kind} className="rounded-full bg-rose-300/10 px-2 py-1 text-[0.42rem] font-black text-rose-200">{marketLabel(kind)}</span>)}</div></div>:null}
       </section>:null}
 
-      {data?.ok&&(inPlay||!data.snapshotFallback)&&(data.lineupMode==="confirmed"||data.lineupMode==="predicted"||data.lineupsConfirmed)?<>
+      {data?.ok&&(data.lineupMode==="confirmed"||data.lineupMode==="predicted"||data.lineupsConfirmed)?<>
         <section className={"rounded-2xl border px-3 py-2.5 "+(liveBet365?"border-emerald-300/25 bg-emerald-400/[0.07]":verifiedBet365?"border-cyan-300/20 bg-cyan-300/[0.05]":"border-white/8 bg-white/[0.025]")}>
           <div className="flex items-center justify-between gap-3"><div><p className={"text-[0.52rem] font-black uppercase tracking-wide "+(liveBet365?"text-emerald-300":verifiedBet365?"text-cyan-200":"text-white/35")}>{liveBet365?"CONFIRMED LIVE BET365 ODDS":inPlay?"WAITING FOR LIVE BET365 PRICES":verifiedBet365?"VERIFIED BET365 ODDS":"NO VERIFIED BET365 PRICES"}</p><p className="mt-0.5 text-[0.5rem] text-white/30">{liveBet365?"Prices are from the current Odds-API.io Bet365 live feed and are rechecked every 15 seconds.":inPlay?(liveOdds?.note??"Live model probabilities remain visible, but 3/1, 10/1 and 20/1 target cards require fresh verified Bet365 live prices."):verifiedBet365?"Bet365 prices are verified but not inside the live freshness window.":"Model probabilities remain available, but target odds are not shown without Bet365 pricing."}</p></div>{data.oddsFreshness?<span className="rounded-full bg-white/6 px-2 py-1 font-mono text-[0.42rem] font-black text-white/35">{data.oddsFreshness}</span>:null}</div>
         </section>
