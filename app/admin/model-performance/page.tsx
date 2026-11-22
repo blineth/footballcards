@@ -67,7 +67,7 @@ export default function AdminModelPerformance(){
           </div>
           <button onClick={()=>void load(true)} className="rounded-xl bg-violet-300 p-2.5 text-violet-950"><RefreshCw className={"size-4 "+(loading?"animate-spin":"")}/></button>
         </div>
-        <div className="mt-4 flex gap-2">{[7,30,90,365].map(d=><button key={d} onClick={()=>setDays(d)} className={"rounded-full border px-3 py-2 text-[0.55rem] font-black "+(days===d?"border-violet-300/30 bg-violet-300 text-violet-950":"border-white/10 bg-white/[0.04] text-white/45")}>{d===365?"1 YEAR":d+" DAYS"}</button>)}</div>
+        <div className="mt-4 flex flex-wrap items-center gap-2"><Link href="/admin/recommendation-audit" className="rounded-full border border-emerald-300/25 bg-emerald-300/10 px-3 py-2 text-[0.55rem] font-black text-emerald-200">SUGGESTED VS ACTUAL</Link>{[7,30,90,365].map(d=><button key={d} onClick={()=>setDays(d)} className={"rounded-full border px-3 py-2 text-[0.55rem] font-black "+(days===d?"border-violet-300/30 bg-violet-300 text-violet-950":"border-white/10 bg-white/[0.04] text-white/45")}>{d===365?"1 YEAR":d+" DAYS"}</button>)}</div>
       </div>
     </header>
 
