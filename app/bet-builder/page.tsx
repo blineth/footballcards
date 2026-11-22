@@ -879,7 +879,6 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
           }else next.push(candidate)
         }
       }
-      if(best&&depth>=2)break
       beam=next.sort((a,b)=>{
         const aGap=Math.max(0,Math.log(required/a.price))
         const bGap=Math.max(0,Math.log(required/b.price))
