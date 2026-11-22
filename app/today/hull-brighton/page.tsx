@@ -61,7 +61,13 @@ export default function HullBrightonToday(){
   setLoading(true)
   const endpoints=["/api/live-player-baseline?"+PATH_PARAMS,"/api/bet-builder-odds?"+PATH_PARAMS,"/api/live-player-stats?"+PATH_PARAMS]
   const outcomes=await Promise.allSettled(endpoints.map(async path=>{
-   const res=await fetch(path,{cache:"no-store"});if(!res.ok)throw Error(path+" HTTP "+res.status);return res.json()
+   const controller=new AbortController()
+   const timer=window.setTimeout(()=>controller.abort(),path.includes("bet-builder-odds")?12_000:9_000)
+   try{
+     const res=await fetch(path,{cache:"no-store",signal:controller.signal})
+     if(!res.ok)throw Error(path+" HTTP "+res.status)
+     return await res.json()
+   }finally{window.clearTimeout(timer)}
   }))
   if(outcomes[0].status==="fulfilled")setBaseline(outcomes[0].value as Baseline)
   if(outcomes[1].status==="fulfilled")setPrices(outcomes[1].value as Prices)
