@@ -10,7 +10,8 @@ type Gap={phase:string;market_group:string;graded:number;no_sample:number;no_h2h
 type Timing={phase:string;timing_quality:string;selections:number}
 type LearningScore={market:string;model:string;phase:string;sample:number;hits:number;hitRate:number;brier:number;avgPredicted:number;distinctDates:number}
 type LearningRecommendation={market:string;candidate:string;baselineHoldout:LearningScore;candidateHoldout:LearningScore;training:LearningScore;adopted:boolean;reason:string}
-type LearningResponse={ok:boolean;available:boolean;run?:{id:number;created_at:string;status:string;source_rows:number;unique_fixtures:number;training_end:string;recommendations:LearningRecommendation[];methodology:string}}
+type LearningPick={date:string;fixture:string;player:string;team:string;market:string;model:string;probability:number;hit:boolean;priorMatches:number;lastFiveHits:number;period:string}
+type LearningResponse={ok:boolean;available:boolean;run?:{id:number;created_at:string;status:string;source_rows:number;unique_fixtures:number;training_end:string;recommendations:LearningRecommendation[];review_examples?:LearningPick[];methodology:string}}
 type Data={ok:boolean;error?:string;days:number;updatedAt:string;walkForward?:Test[];featureCoverage?:Gap[];timingQuality?:Timing[];
   phases:Rate[];markets:Rate[];confidence:Rate[];liveCardSignals:Signal[];
   coverage:{unique_saved:number;ungraded:number;match_days:number}}
@@ -95,6 +96,14 @@ export default function AccuracyPage(){
               <p className="mt-1 text-[0.55rem] text-white/45">Candidate: {x.candidate} · holdout Brier baseline {x.baselineHoldout?.brier??"—"} vs challenger {x.candidateHoldout?.brier??"—"}</p>
               <p className="mt-1 text-[0.55rem] text-white/55">Latest holdout: {x.candidateHoldout?.hits??0}/{x.candidateHoldout?.sample??0} ({pct(x.candidateHoldout?.hits??0,x.candidateHoldout?.sample??0)}) · {x.reason}</p>
             </div>)}</div>
+            <div className="mt-4 border-t border-white/10 pt-3">
+              <p className="text-sm font-black">Historical replay misses · latest holdout fixtures</p>
+              <p className="mt-1 text-[0.58rem] text-white/40">What the challenger would have selected using prior player appearances, not the actual original app bet.</p>
+              <div className="mt-2 space-y-2">{(learning.run.review_examples??[]).filter(x=>!x.hit).slice(0,14).map((x,i)=><div key={x.fixture+x.market+i} className="rounded-xl bg-black/20 p-3">
+                <div className="flex justify-between gap-2"><p className="text-xs font-black">{x.player} · {x.market}</p><span className="text-xs font-black text-rose-200">MISSED</span></div>
+                <p className="mt-1 text-[0.58rem] text-white/50">{x.date} · {x.team} · predicted {(x.probability*100).toFixed(1)}% · prior matches {x.priorMatches}, last five wins {x.lastFiveHits}</p>
+              </div>)}</div>
+            </div>
           </>:<p className="mt-3 rounded-xl bg-black/25 p-3 text-xs text-white/45">Historical training is scheduled daily at 06:00 UTC. No completed learning run has been recorded yet, so no new candidate has been validated or promoted.</p>}
           <p className="mt-3 text-[0.6rem] text-amber-100/70">Research stays separate from live recommendations until enough independent future evidence and bookmaker prices support an improvement.</p>
         </section>
