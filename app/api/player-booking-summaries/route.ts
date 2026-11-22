@@ -25,13 +25,13 @@ export async function POST(request:Request){
  if(!isDatabaseConfigured)return NextResponse.json({ok:true,profiles:[],source:"unavailable"},{headers:{"Cache-Control":"no-store"}})
  try{
    const unique=[...new Set(players.map(p=>p.name.toLowerCase()))]
-   const query=await pool.query<Row>(`WITH ranked AS (
-      SELECT player_name,team,opponent,match_date::text,yellow_card,
-       ROW_NUMBER() OVER (PARTITION BY lower(player_name) ORDER BY match_date DESC) as rn
-      FROM player_h2h WHERE lower(player_name)=ANY($1::text[]) AND match_date<$2::date
-   )
-   SELECT player_name,team,opponent,match_date,yellow_card FROM ranked WHERE rn<=220
-   ORDER BY match_date DESC`,[unique,date])
+   // All known appearances before kickoff, including substitute appearances.
+   // Crucially, no 12-match H2H or last-220-match cutoff.
+   const query=await pool.query<Row&{minutes:number|null;starter:boolean|null}>(`
+    SELECT player_name,team,opponent,match_date::text,yellow_card,minutes,starter
+    FROM player_h2h WHERE lower(player_name)=ANY($1::text[]) AND match_date<$2::date
+    AND (minutes IS NULL OR minutes>0)
+    ORDER BY match_date DESC`,[unique,date])
    const profiles=players.map(p=>{
      const matches=query.rows.filter(r=>norm(r.player_name)===norm(p.name))
      const seen=new Set<string>()
@@ -42,7 +42,7 @@ export async function POST(request:Request){
      })
      const recent=deduped.filter(r=>sameTeam(r.team??"",p.team)).slice(0,5)
      const opponent=sameTeam(p.team,home)?away:home
-     const h2h=deduped.filter(r=>sameTeam(r.opponent,opponent)).slice(0,12)
+     const h2h=deduped.filter(r=>sameTeam(r.opponent,opponent))
      return {name:p.name,team:p.team,lastFive:countBooked(recent),h2h:countBooked(h2h),
        recordedRecent:recent.length,recordedH2h:h2h.length}
    })
