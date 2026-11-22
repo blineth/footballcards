@@ -69,6 +69,7 @@ export default function TodayPage(){
    <section className="rounded-2xl border border-amber-300/20 bg-amber-300/[0.055] p-4 text-xs leading-relaxed text-white/65">
      <div className="flex gap-2"><AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-200"/><p><strong className="text-white">Research selections, not verified bookmaker bet slips.</strong> These reflect the existing pre-match baseline. Do not treat them as placeable odds or final selections until both the official XI and exact market prices are confirmed. The historical shadow model is not automatically applied.</p></div>
    </section>
+   <Link href="/today/hull-brighton" className="block rounded-2xl border border-emerald-300/30 bg-emerald-300/10 p-4 text-sm font-black text-emerald-100">Hull City vs Brighton — confirmed starters, live Bet365 single-market odds, model rankings and five-leg research builders →</Link>
    <section className="grid gap-3 sm:grid-cols-2">{GAMES.map((g,i)=><div key={g.home} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
       <p className="text-xs font-bold text-emerald-200">{g.kickoff} · Premier League</p><h2 className="mt-1 text-lg font-black">{g.home} v {g.away}</h2>
       <p className="mt-2 text-xs text-white/55">Lineups: {data[i]?.lineupsConfirmed?"Confirmed":data[i]?.lineupMode==="predicted"?"Predicted only":"Not verified"} · bookmaker prices: {data[i]?.priceAvailable?"Source reports prices":"Unverified"}</p>
