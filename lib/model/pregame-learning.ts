@@ -2,7 +2,7 @@ import {pool,isDatabaseConfigured} from "@/lib/db"
 import {ensureResearchSchema} from "@/lib/db/ensure-research-schema"
 
 type Market="card"|"foul1"|"foul2"|"fouled1"|"shot1"|"shot2"|"sot1"
-type HistoryRow={player_name:string;team:string|null;opponent:string|null;competition:string|null;match_date:string;minutes:number|null;yellow_card:boolean|null;red_card:boolean|null;fouls_committed:number|null;fouls_drawn:number|null;shots:number|null;shots_on_target:number|null;booking_reason:string|null;yellow_card_minute:number|null}
+type HistoryRow={player_name:string;team:string|null;opponent:string|null;competition:string|null;match_date:string;minutes:number|null;yellow_card:boolean|null;red_card:boolean|null;fouls_committed:number|null;fouls_drawn:number|null;shots:number|null;shots_on_target:number|null;booking_reason:string|null;yellow_card_minute:number|null;fouls_stat_verified:boolean|null}
 type PriorSample={date:string;player:string;team:string;competition:string;fixture:string;market:Market;outcome:boolean;history:boolean[];nonFoulCards:boolean[];confirmedDissent:boolean[];lateCards:boolean[]}
 type Score={market:Market;model:string;phase:"train"|"holdout";sample:number;hits:number;hitRate:number;brier:number;avgPredicted:number;distinctDates:number;fixtureCount:number}
 type Policy={id:string;recentWeight:number;priorStrength:number;minHistory:number;behaviourWeight?:number;dissentWeight?:number;lateWeight?:number}
@@ -102,7 +102,7 @@ export async function runPregameLearning(){
  await pool.query(`ALTER TABLE pregame_learning_runs ADD COLUMN IF NOT EXISTS review_examples jsonb NOT NULL DEFAULT '[]'::jsonb`)
  await pool.query(`ALTER TABLE pregame_learning_runs ADD COLUMN IF NOT EXISTS player_profiles jsonb NOT NULL DEFAULT '[]'::jsonb`)
  const query=await pool.query<HistoryRow>(`SELECT player_name,team,opponent,competition,
-     match_date::text,minutes,yellow_card,red_card,fouls_committed,fouls_drawn,shots,shots_on_target,booking_reason,yellow_card_minute
+     match_date::text,minutes,yellow_card,red_card,fouls_committed,fouls_drawn,shots,shots_on_target,booking_reason,yellow_card_minute,fouls_stat_verified
      FROM (
        SELECT * FROM player_h2h
        WHERE match_date >= current_date-interval '36 months'
@@ -162,7 +162,7 @@ export async function runPregameLearning(){
      pending.push({prior:past,market,hit})
    }
    const booked=row.yellow_card===true
-   if(row.fouls_committed!=null)pendingBehaviour.push({list:conduct.nonFoulCards,hit:booked&&Number(row.fouls_committed)===0})
+   if(row.fouls_stat_verified===true&&row.fouls_committed!=null)pendingBehaviour.push({list:conduct.nonFoulCards,hit:booked&&Number(row.fouls_committed)===0})
    // An explicit reason, not zero fouls, is required to call it dissent.
    pendingBehaviour.push({list:conduct.confirmedDissent,hit:booked&&/dissent/i.test(row.booking_reason??"")})
    pendingBehaviour.push({list:conduct.lateCards,hit:row.yellow_card===true&&row.yellow_card_minute!=null&&Number(row.yellow_card_minute)>=80})
@@ -193,17 +193,17 @@ export async function runPregameLearning(){
  }
  // Descriptive evidence only. No assumptions that a zero-foul booking was dissent.
  const watched=[/\\bpedro neto\\b/i,/\\bdan burn\\b/i,/\\bmac allister\\b|\\bmcallister\\b/i,/\\benzo fernandez\\b|\\benzo fernández\\b/i]
- const observedByPlayer=new Map<string,{player:string;team:string;matches:number;yellows:number;nonFoulBookings:number;zeroFoulAppearances:number;confirmedDissentBookings:number;lateBookings:number;knownReasons:number;knownMinutes:number}>()
+ const observedByPlayer=new Map<string,{player:string;team:string;matches:number;yellows:number;nonFoulBookings:number;zeroFoulAppearances:number;verifiedZeroFoulAppearances:number;confirmedDissentBookings:number;lateBookings:number;knownReasons:number;knownMinutes:number}>()
  for(const row of rows){
    if(!watched.some(re=>re.test(String(row.player_name))))continue
    const key=String(row.player_name).toLowerCase()+"|"+String(row.team).toLowerCase()
-   const old=observedByPlayer.get(key)??{player:row.player_name,team:String(row.team),matches:0,yellows:0,nonFoulBookings:0,zeroFoulAppearances:0,confirmedDissentBookings:0,lateBookings:0,knownReasons:0,knownMinutes:0}
+   const old=observedByPlayer.get(key)??{player:row.player_name,team:String(row.team),matches:0,yellows:0,nonFoulBookings:0,zeroFoulAppearances:0,verifiedZeroFoulAppearances:0,confirmedDissentBookings:0,lateBookings:0,knownReasons:0,knownMinutes:0}
    const booked=row.yellow_card===true
    old.matches++
    if(booked)old.yellows++
    if(row.fouls_committed!=null&&Number(row.fouls_committed)===0){
      old.zeroFoulAppearances++
-     if(booked)old.nonFoulBookings++
+     if(row.fouls_stat_verified===true){old.verifiedZeroFoulAppearances++;if(booked)old.nonFoulBookings++}
    }
    if(row.booking_reason){old.knownReasons++;if(/dissent/i.test(row.booking_reason))old.confirmedDissentBookings++}
    if(row.yellow_card_minute!=null){old.knownMinutes++;if(row.yellow_card===true&&Number(row.yellow_card_minute)>=80)old.lateBookings++}
@@ -211,7 +211,7 @@ export async function runPregameLearning(){
  }
  const playerProfiles=[...observedByPlayer.values()].sort((a,b)=>b.matches-a.matches)
  const status=dates.length<12||examples.length<200?"insufficient-history":"shadow-evaluated"
- const methodology="Yellow-card candidates additionally test earlier bookings with zero recorded fouls, documented dissent booking events, and late-match bookings. Zero recorded fouls is a behavioural proxy, NOT evidence of dissent. Explicit booking causes are only counted when the match feed states them. Candidate performance must beat the unadjusted model on later fixtures. Chronological fixture-date split (first 80% train, last 20% holdout). For each player, league and fixture, rolling binary market rates use strictly earlier player matches only; fewer than four prior appearances are excluded. Candidate recency/prior weights are selected on training dates, then independently scored on held-out dates. Top single player per match and market, not every player, is graded. Baseline is an historical Bayesian proxy, not an exact replay of the website's old scoring engine; historical exact bookmaker odds and commentary are not reconstructed. Shadow research only; no automatic production promotion."
+ const methodology="Yellow-card candidates additionally test earlier bookings with provider-verified zero fouls, documented dissent booking events, and late-match bookings. Previously imported zero-foul rows without verified provider stat coverage are excluded from behavioural adjustments. Zero recorded fouls is a behavioural proxy, NOT evidence of dissent. Explicit booking causes are only counted when the match feed states them. Candidate performance must beat the unadjusted model on later fixtures. Chronological fixture-date split (first 80% train, last 20% holdout). For each player, league and fixture, rolling binary market rates use strictly earlier player matches only; fewer than four prior appearances are excluded. Candidate recency/prior weights are selected on training dates, then independently scored on held-out dates. Top single player per match and market, not every player, is graded. Baseline is an historical Bayesian proxy, not an exact replay of the website's old scoring engine; historical exact bookmaker odds and commentary are not reconstructed. Shadow research only; no automatic production promotion."
  const saved=await pool.query(`INSERT INTO pregame_learning_runs
    (status,source_rows,unique_fixtures,first_date,last_date,training_end,results,recommendations,methodology,review_examples,player_profiles)
    VALUES($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9,$10::jsonb,$11::jsonb) RETURNING id,created_at`,
