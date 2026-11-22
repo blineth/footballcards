@@ -32,7 +32,7 @@ export async function GET(request:Request){
     ), unique_picks AS (
       SELECT * FROM source WHERE rank_first=1
     )`
-    const [phases,markets,confidence,signals,goals,coverage,walkForward]=await Promise.all([
+    const [phases,markets,confidence,signals,goals,walkForward,coverage]=await Promise.all([
       pool.query(cte+` SELECT phase,count(*)::int total,
         count(*) FILTER(WHERE graded_at IS NOT NULL)::int graded,
         count(*) FILTER(WHERE outcome IS TRUE)::int hits,
