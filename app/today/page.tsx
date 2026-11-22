@@ -1,6 +1,7 @@
 "use client"
 import {useCallback,useEffect,useMemo,useState} from "react"
 import Link from "next/link"
+import {MarketHistoryBadge} from "@/components/MarketHistoryBadge"
 import {ArrowLeft,RefreshCw,AlertTriangle,Target,Activity} from "lucide-react"
 
 type Market="shot1"|"shot2"|"foul1"|"foul2"|"fouled1"|"sot1"|"card"
@@ -81,7 +82,7 @@ export default function TodayPage(){
       <p className="mt-1 text-xs text-white/40">{data[i]?.players?.length??0} players modelled</p>
       {!data[i]?.ok&&data[i]?<p className="mt-1 text-xs text-rose-200">Data request timed out. Retry using refresh, or open the Hull–Brighton match centre above.</p>:null}
       <div className="mt-3 space-y-2">{picks.filter(p=>p.game===i&&p.market!=="card").sort((a,b)=>b.p-a.p).slice(0,4).map((p,j)=><div key={j} className="flex items-center justify-between gap-2 rounded-lg bg-black/25 p-2">
-       <div><p className="text-xs font-bold">{p.player}</p><p className="text-[0.56rem] text-white/40">{LABELS[p.market]} · evidence grade {p.confidence}</p></div><p className="font-mono text-sm font-black">{pct(p.p)}</p>
+       <div><p className="text-xs font-bold">{p.player}</p><p className="text-[0.56rem] text-white/40">{LABELS[p.market]} · evidence grade {p.confidence}</p><MarketHistoryBadge player={p.player} team={p.team} market={p.market} date={GAMES[p.game].date} home={GAMES[p.game].home} away={GAMES[p.game].away} competition="Premier League"/></div><p className="font-mono text-sm font-black">{pct(p.p)}</p>
       </div>)}</div>
    </div>)}</section>
    <div className="flex items-center gap-2"><Target className="size-4 text-emerald-300"/><h2 className="text-xl font-black">Provisional five-leg combinations</h2></div>
@@ -89,14 +90,14 @@ export default function TodayPage(){
    {plans.map(plan=>{const legs=draft(picks,plan.markets,plan.size,true);return <section key={plan.name} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
     <h3 className="font-black">{plan.name}</h3><p className="mt-1 text-xs text-white/45">{plan.note}</p>
     <div className="mt-3 space-y-2">{legs.map((p,i)=><div key={i} className="flex items-center justify-between gap-3 rounded-xl bg-black/25 p-3">
-      <div><p className="text-sm font-bold">{p.player}</p><p className="mt-1 text-[0.58rem] text-white/45">{p.team} · {LABELS[p.market]} · grade {p.confidence}</p></div><span className="font-mono text-base font-black">{pct(p.p)}</span>
+      <div><p className="text-sm font-bold">{p.player}</p><p className="mt-1 text-[0.58rem] text-white/45">{p.team} · {LABELS[p.market]} · grade {p.confidence}</p><MarketHistoryBadge player={p.player} team={p.team} market={p.market} date={GAMES[p.game].date} home={GAMES[p.game].home} away={GAMES[p.game].away} competition="Premier League"/></div><span className="font-mono text-base font-black">{pct(p.p)}</span>
     </div>)}</div>
     <p className="mt-2 text-[0.6rem] text-amber-100/65">{legs.length===5?"Five provisional candidates; not a priced or approved slip.":"Only "+legs.length+" eligible candidates from the current baseline."}</p>
    </section>})}
    <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
     <div className="flex items-center gap-2"><Activity className="size-4 text-amber-200"/><h2 className="font-black">Yellow-card watchlist — not a slip</h2></div>
     <p className="mt-1 text-xs text-white/45">Low-probability card markets remain separate until the dissent and late-card hypotheses pass independent validation.</p>
-    <div className="mt-3 space-y-2">{cardPicks.map((p,i)=><div key={i} className="flex items-center justify-between rounded-lg bg-black/25 p-3"><p className="text-xs"><strong>{p.player}</strong><span className="ml-2 text-white/40">{p.team}</span></p><p className="font-mono text-sm font-black">{pct(p.p)}</p></div>)}</div>
+    <div className="mt-3 space-y-2">{cardPicks.map((p,i)=><div key={i} className="flex items-center justify-between rounded-lg bg-black/25 p-3"><p className="text-xs"><strong>{p.player}</strong><span className="ml-2 text-white/40">{p.team}</span></p><MarketHistoryBadge player={p.player} team={p.team} market={p.market} date={GAMES[p.game].date} home={GAMES[p.game].home} away={GAMES[p.game].away} competition="Premier League"/><p className="font-mono text-sm font-black">{pct(p.p)}</p></div>)}</div>
    </section>
    <Link href="/accuracy" className="block rounded-xl bg-white/10 px-4 py-3 text-center text-sm font-bold">Review historical learning and validation</Link>
   </div>
