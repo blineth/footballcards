@@ -6,7 +6,9 @@ import {ArrowLeft,RefreshCw,Target,Activity,AlertTriangle} from "lucide-react"
 type Rate={phase:string;graded:number;hits:number;avg_confidence:string|null;brier?:string;total?:number;market_group?:string;band?:string}
 type Signal={signal:string;graded:number;hits:number;avg_confidence:string|null}
 type Test={phase:string;market_group:string;split:string;threshold:number;graded:number;hits:number;avg_confidence:string|null}
-type Data={ok:boolean;error?:string;days:number;updatedAt:string;walkForward?:Test[];
+type Gap={phase:string;market_group:string;graded:number;no_sample:number;no_h2h:number;lineup_unconfirmed:number;no_feed_provenance:number;commentary_signals:number}
+type Timing={phase:string;timing_quality:string;selections:number}
+type Data={ok:boolean;error?:string;days:number;updatedAt:string;walkForward?:Test[];featureCoverage?:Gap[];timingQuality?:Timing[];
   phases:Rate[];markets:Rate[];confidence:Rate[];liveCardSignals:Signal[];
   coverage:{unique_saved:number;ungraded:number;match_days:number}}
 function pct(h:number,n:number){return n?((100*h)/n).toFixed(1)+"%":"—"}
@@ -85,6 +87,20 @@ export default function AccuracyPage(){
             })}
           </div>)}</div>
           <p className="mt-3 text-[0.62rem] leading-relaxed text-amber-100/70">A retrospective cutoff cannot by itself improve the underlying probabilities. We should only adopt a rule after sufficient independent forward results and odds-adjusted returns.</p>
+        </section>
+        <section className="rounded-2xl border border-white/10 bg-white/[0.035] p-4">
+          <div className="flex items-center gap-2"><AlertTriangle className="size-4 text-amber-200"/><h2 className="font-black">Evidence gaps across the historical record</h2></div>
+          <p className="mt-1 text-xs leading-relaxed text-white/45">Missing inputs may explain weaknesses, but do not prove an alternative model would have predicted correctly. Counts below use de-duplicated, graded selections.</p>
+          <div className="mt-3 space-y-2">{(data.featureCoverage??[]).filter(x=>x.phase===tab&&x.graded>=5).map(x=><div key={x.phase+x.market_group} className="rounded-xl bg-black/25 p-3">
+            <p className="text-sm font-black">{x.market_group} <span className="text-[0.56rem] font-normal text-white/40">· {x.graded} evaluated</span></p>
+            <p className="mt-1 text-[0.58rem] text-amber-100/75">{x.no_sample} missing match sample · {x.no_h2h} missing H2H matches · {x.lineup_unconfirmed} without confirmed lineup</p>
+            {x.phase==="live"?<p className="mt-1 text-[0.58rem] text-white/40">{x.no_feed_provenance} without archived live-feed provenance · {x.commentary_signals} with recorded commentary signals</p>:null}
+          </div>)}</div>
+          <div className="mt-3 border-t border-white/10 pt-3">
+            <p className="text-xs font-black">Prediction timing checks</p>
+            {(data.timingQuality??[]).filter(x=>x.timing_quality!=="valid").map(x=><p key={x.phase+x.timing_quality} className="mt-1 text-xs text-amber-100/75">{x.selections} {x.phase} entries excluded: {x.timing_quality}</p>)}
+            <p className="mt-1 text-[0.58rem] text-white/45">Selections that appear to have used unavailable match timing are excluded from the headline hit rate.</p>
+          </div>
         </section>
         <section className="rounded-2xl border border-white/10 bg-white/[0.035] p-4">
           <div className="flex items-center gap-2"><AlertTriangle className="size-4 text-amber-200"/><h2 className="font-black">Live yellow-card signal review</h2></div>
