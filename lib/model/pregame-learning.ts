@@ -2,10 +2,10 @@ import {pool,isDatabaseConfigured} from "@/lib/db"
 import {ensureResearchSchema} from "@/lib/db/ensure-research-schema"
 
 type Market="card"|"foul1"|"foul2"|"fouled1"|"shot1"|"shot2"|"sot1"
-type HistoryRow={player_name:string;team:string|null;opponent:string|null;competition:string|null;match_date:string;minutes:number|null;yellow_card:boolean|null;red_card:boolean|null;fouls_committed:number|null;fouls_drawn:number|null;shots:number|null;shots_on_target:number|null}
-type PriorSample={date:string;player:string;team:string;competition:string;fixture:string;market:Market;outcome:boolean;history:boolean[]}
+type HistoryRow={player_name:string;team:string|null;opponent:string|null;competition:string|null;match_date:string;minutes:number|null;yellow_card:boolean|null;red_card:boolean|null;fouls_committed:number|null;fouls_drawn:number|null;shots:number|null;shots_on_target:number|null;booking_reason:string|null;yellow_card_minute:number|null}
+type PriorSample={date:string;player:string;team:string;competition:string;fixture:string;market:Market;outcome:boolean;history:boolean[];nonFoulCards:boolean[];confirmedDissent:boolean[];lateCards:boolean[]}
 type Score={market:Market;model:string;phase:"train"|"holdout";sample:number;hits:number;hitRate:number;brier:number;avgPredicted:number;distinctDates:number;fixtureCount:number}
-type Policy={id:string;recentWeight:number;priorStrength:number;minHistory:number}
+type Policy={id:string;recentWeight:number;priorStrength:number;minHistory:number;behaviourWeight?:number;dissentWeight?:number;lateWeight?:number}
 const MARKET_TYPES:Market[]=["card","foul1","foul2","fouled1","shot1","shot2","sot1"]
 const POLICIES:Policy[]=[
  {id:"baseline",recentWeight:0,priorStrength:8,minHistory:4},
@@ -14,6 +14,10 @@ const POLICIES:Policy[]=[
  {id:"recent-65",recentWeight:.65,priorStrength:8,minHistory:4},
  {id:"recent-25-strong-prior",recentWeight:.25,priorStrength:16,minHistory:4},
  {id:"recent-50-strong-prior",recentWeight:.50,priorStrength:16,minHistory:4},
+ // Explicitly test card pathways not explained by recorded fouls.
+ {id:"card-no-foul",recentWeight:.25,priorStrength:8,minHistory:4,behaviourWeight:.65},
+ {id:"card-no-foul-strong",recentWeight:.25,priorStrength:8,minHistory:4,behaviourWeight:1.2},
+ {id:"card-dissent-late",recentWeight:.25,priorStrength:8,minHistory:4,behaviourWeight:.65,dissentWeight:.8,lateWeight:.35},
 ]
 const marketPrior:Record<Market,number>={card:.18,foul1:.65,foul2:.32,fouled1:.56,shot1:.60,shot2:.30,sot1:.30}
 function outcome(row:HistoryRow,m:Market):boolean|null{
@@ -22,13 +26,26 @@ function outcome(row:HistoryRow,m:Market):boolean|null{
  const key=m==="foul1"||m==="foul2"?row.fouls_committed:m==="fouled1"?row.fouls_drawn:m==="sot1"?row.shots_on_target:row.shots
  const x=n(key);return x==null?null:x>=(m.endsWith("2")?2:1)
 }
-function predict(history:boolean[],market:Market,policy:Policy){
+function predict(history:boolean[],market:Market,policy:Policy,evidence?:Pick<PriorSample,"nonFoulCards"|"confirmedDissent"|"lateCards">){
  const n=history.length
  const hits=history.reduce((a,x)=>a+Number(x),0)
  const rate=(hits+marketPrior[market]*policy.priorStrength)/(n+policy.priorStrength)
  const recent=history.slice(-5)
  const recentRate=(recent.reduce((a,x)=>a+Number(x),0)+marketPrior[market]*4)/(recent.length+4)
- return Math.max(.02,Math.min(.98,(1-policy.recentWeight)*rate+policy.recentWeight*recentRate))
+ let p=(1-policy.recentWeight)*rate+policy.recentWeight*recentRate
+ if(market==="card"&&n>=8&&evidence){
+   const smoothed=(arr:boolean[],prior:number)=>(arr.filter(Boolean).length+prior*12)/(arr.length+12)
+   // A yellow with zero recorded fouls is NOT automatically a dissent card.
+   // These independent, shrinkage-stabilised features remain research candidates.
+   const nonFoulRate=smoothed(evidence.nonFoulCards,.04)
+   const dissentRate=smoothed(evidence.confirmedDissent,.01)
+   const lateRate=smoothed(evidence.lateCards,.04)
+   const reliable=Math.min(1,(n-4)/20)
+   p+=reliable*((policy.behaviourWeight??0)*(nonFoulRate-.04)
+       +(policy.dissentWeight??0)*(dissentRate-.01)
+       +(policy.lateWeight??0)*(lateRate-.04))
+ }
+ return Math.max(.02,Math.min(.98,p))
 }
 function emptyScore(m:Market,policy:string,phase:"train"|"holdout"):Score{
  return {market:m,model:policy,phase,sample:0,hits:0,hitRate:0,brier:0,avgPredicted:0,distinctDates:0,fixtureCount:0}
@@ -45,16 +62,19 @@ function summarize(rows:Array<{date:string;fixture:string;p:number;hit:boolean}>
  value.fixtureCount=new Set(rows.map(x=>x.fixture)).size
  return value
 }
-type LearningPick={date:string;fixture:string;player:string;team:string;competition:string;market:Market;model:string;probability:number;hit:boolean;priorMatches:number;lastFiveHits:number;period:"train"|"holdout"}
+type LearningPick={date:string;fixture:string;player:string;team:string;competition:string;market:Market;model:string;probability:number;hit:boolean;priorMatches:number;lastFiveHits:number;nonFoulCards:number;confirmedDissentBookings:number;lateBookings:number;period:"train"|"holdout"}
 function getTopPicks(samples:PriorSample[],policy:Policy,period:"train"|"holdout",market:Market){
  const best=new Map<string,LearningPick>()
  for(const row of samples){
   if(row.market!==market||row.history.length<policy.minHistory)continue
-  const p=predict(row.history,market,policy)
+  const p=predict(row.history,market,policy,row)
   const old=best.get(row.fixture)
   if(!old||p>old.probability)best.set(row.fixture,{date:row.date,fixture:row.fixture,player:row.player,team:row.team,
      competition:row.competition,market,model:policy.id,probability:Number(p.toFixed(4)),
-     hit:row.outcome,priorMatches:row.history.length,lastFiveHits:row.history.slice(-5).filter(Boolean).length,period})
+     hit:row.outcome,priorMatches:row.history.length,lastFiveHits:row.history.slice(-5).filter(Boolean).length,
+     nonFoulCards:row.nonFoulCards.filter(Boolean).length,
+     confirmedDissentBookings:row.confirmedDissent.filter(Boolean).length,
+     lateBookings:row.lateCards.filter(Boolean).length,period})
  }
  return [...best.values()]
 }
@@ -91,12 +111,14 @@ export async function runPregameLearning(){
  const first=rows[0]?.match_date??null,last=rows[rows.length-1]?.match_date??null
  const dates=[...new Set(rows.map(r=>r.match_date))].sort()
  const boundary=dates[Math.max(0,Math.floor(dates.length*.8)-1)]??""
- const history=new Map<string,Record<Market,boolean[]>>()
+ const history=new Map<string,Record<Market,boolean[]>>()\n const behaviour=new Map<string,{nonFoulCards:boolean[];confirmedDissent:boolean[];lateCards:boolean[]}>()
  const examples:PriorSample[]=[]
  const seen=new Set<string>()
  const fixtures=new Set<string>()
  let openDate:string|null=null
  let pending:Array<{prior:Record<Market,boolean[]>;market:Market;hit:boolean}>=[]
+ let pendingBehaviour:Array<{list:boolean[];hit:boolean}>=[]
+ const pushCapped=(list:boolean[],hit:boolean)=>{list.push(hit);if(list.length>30)list.shift()}
  const commitDay=()=>{
    for(const item of pending){
      item.prior[item.market].push(item.hit)
@@ -112,20 +134,23 @@ export async function runPregameLearning(){
    const name=String(row.player_name).toLowerCase().trim()
    const league=String(row.competition).toLowerCase().trim()
    // Never mix separate players merely because they share a short surname.
-   const playerKey=league+"|"+name
+   const playerKey=league+"|"+String(row.team).toLowerCase().trim()+"|"+name
    const fixture=row.match_date+"|"+league+"|"+[String(row.team).toLowerCase().trim(),String(row.opponent).toLowerCase().trim()].sort().join("|")
    const rowKey=fixture+"|"+playerKey
    if(seen.has(rowKey))continue
    seen.add(rowKey);fixtures.add(fixture)
    let past=history.get(playerKey)
    if(!past){past=Object.fromEntries(MARKET_TYPES.map(m=>[m,[]])) as Record<Market,boolean[]>;history.set(playerKey,past)}
+   let conduct=behaviour.get(playerKey)
+   if(!conduct){conduct={nonFoulCards:[],confirmedDissent:[],lateCards:[]};behaviour.set(playerKey,conduct)}
+   const observedConduct={nonFoulCards:[...conduct.nonFoulCards],confirmedDissent:[...conduct.confirmedDissent],lateCards:[...conduct.lateCards]}
    const before=Object.fromEntries(MARKET_TYPES.map(m=>[m,[...past![m]]])) as Record<Market,boolean[]>
    // Avoid including zero-minute squad members and non-appearance records.
    if(row.minutes!=null&&Number(row.minutes)<25)continue
    for(const market of MARKET_TYPES){
      const hit=outcome(row,market)
      if(hit===null)continue
-     if(before[market].length>=4)examples.push({date:row.match_date,player:name,team:String(row.team),competition:league,fixture,market,outcome:hit,history:before[market]})
+     if(before[market].length>=4)examples.push({date:row.match_date,player:name,team:String(row.team),competition:league,fixture,market,outcome:hit,history:before[market],...observedConduct})
      pending.push({prior:past,market,hit})
    }
  }
@@ -136,7 +161,8 @@ export async function runPregameLearning(){
  const examplesAudit:LearningPick[]=[]
  const recommendations:Array<{market:Market;candidate:string;baselineHoldout:Score;candidateHoldout:Score;training:Score;adopted:boolean;reason:string}>=[]
  for(const market of MARKET_TYPES){
-   const trainRows=POLICIES.map(policy=>selectTop(train,policy,"train",market))
+   const candidates=market==="card"?POLICIES:POLICIES.filter(x=>!(x.behaviourWeight||x.dissentWeight||x.lateWeight))
+   const trainRows=candidates.map(policy=>selectTop(train,policy,"train",market))
    const baseline=trainRows[0]
    // Rank on earlier fixtures only. Later outcomes do not select the policy.
    const champion=trainRows.filter(x=>x.sample>=60).sort((a,b)=>a.brier-b.brier)[0]??baseline
@@ -153,7 +179,7 @@ export async function runPregameLearning(){
      reason:!meetsSize?"Insufficient independent holdout fixtures for production promotion":!exceeds?"No reliable out-of-sample Brier improvement":"Promising shadow candidate; must be validated against the real published model and prices before adoption"})
  }
  const status=dates.length<12||examples.length<200?"insufficient-history":"shadow-evaluated"
- const methodology="Chronological fixture-date split (first 80% train, last 20% holdout). For each player, league and fixture, rolling binary market rates use strictly earlier player matches only; fewer than four prior appearances are excluded. Candidate recency/prior weights are selected on training dates, then independently scored on held-out dates. Top single player per match and market, not every player, is graded. Baseline is an historical Bayesian proxy, not an exact replay of the website's old scoring engine; historical exact bookmaker odds and commentary are not reconstructed. Shadow research only; no automatic production promotion."
+ const methodology="Yellow-card candidates additionally test earlier bookings with zero recorded fouls, documented dissent booking events, and late-match bookings. Zero recorded fouls is a behavioural proxy, NOT evidence of dissent. Explicit booking causes are only counted when the match feed states them. Candidate performance must beat the unadjusted model on later fixtures. Chronological fixture-date split (first 80% train, last 20% holdout). For each player, league and fixture, rolling binary market rates use strictly earlier player matches only; fewer than four prior appearances are excluded. Candidate recency/prior weights are selected on training dates, then independently scored on held-out dates. Top single player per match and market, not every player, is graded. Baseline is an historical Bayesian proxy, not an exact replay of the website's old scoring engine; historical exact bookmaker odds and commentary are not reconstructed. Shadow research only; no automatic production promotion."
  const saved=await pool.query(`INSERT INTO pregame_learning_runs
    (status,source_rows,unique_fixtures,first_date,last_date,training_end,results,recommendations,methodology,review_examples)
    VALUES($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9,$10::jsonb) RETURNING id,created_at`,
