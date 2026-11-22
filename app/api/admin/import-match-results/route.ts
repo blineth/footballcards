@@ -58,20 +58,21 @@ export async function GET(request:Request){
           await pool.query(`INSERT INTO player_h2h
             (player_name,team,opponent,match_date,competition,minutes,
              fouls_committed,fouls_drawn,shots,shots_on_target,yellow_card,red_card,goals,assists,
-             external_match_id,booking_reason,yellow_card_minute)
-            VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+             external_match_id,booking_reason,yellow_card_minute,fouls_stat_verified)
+            VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
             ON CONFLICT DO NOTHING`,
             [player.player,player.team,opponent,date,f.competition,
              player.minutes??null,player.foulsCommitted??null,player.foulsDrawn??null,
              player.shots??null,player.shotsOnTarget??null,Number(player.yellowCards??0)>0,
              Number(player.redCards??0)>0,player.goals??null,player.assists??null,
-             String(f.id??""),player.bookingReason??null,player.yellowCardMinute??null])
+             String(f.id??""),player.bookingReason??null,player.yellowCardMinute??null,player.foulsStatVerified===true])
           if(player.bookingReason||player.yellowCardMinute!=null){
             await pool.query(`UPDATE player_h2h SET
               booking_reason=COALESCE($6,booking_reason),
-              yellow_card_minute=COALESCE($7,yellow_card_minute)
+              yellow_card_minute=COALESCE($7,yellow_card_minute),
+              fouls_stat_verified=CASE WHEN $8 THEN TRUE ELSE fouls_stat_verified END
               WHERE player_name=$1 AND team=$2 AND opponent=$3 AND match_date=$4 AND competition=$5`,
-              [player.player,player.team,opponent,date,f.competition,player.bookingReason??null,player.yellowCardMinute??null])
+              [player.player,player.team,opponent,date,f.competition,player.bookingReason??null,player.yellowCardMinute??null,player.foulsStatVerified===true])
           }
           imported++
         }
