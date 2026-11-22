@@ -78,7 +78,7 @@ export async function GET(request:Request){
     const h2h=allH2h.slice(0,12)
     const bookingSummary=(rows:Row[])=>({
       booked:rows.filter(row=>row.yellow_card===true).length,
-      withKnownOutcome:rows.filter(row=>row.yellow_card!=null).length,
+      withKnownOutcome:rows.length,
       reds:rows.filter(row=>row.red_card===true).length,
     })
     const cast=(row:Row)=>({
