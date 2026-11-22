@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { pool, isDatabaseConfigured } from "@/lib/db"
 import { ensureResearchSchema } from "@/lib/db/ensure-research-schema"
 import { gradePredictionLedger } from "@/lib/prediction-ledger"
+import { GET as importMatchResults } from "@/app/api/admin/import-match-results/route"
 
 export const dynamic="force-dynamic"
 export const revalidate=0
@@ -12,7 +13,27 @@ export async function GET(){
   if(!isDatabaseConfigured)return NextResponse.json({ok:false,error:"Database unavailable"},{status:503})
   try{
     await ensureResearchSchema()
-    await gradePredictionLedger(1500)
+    let importStatus:unknown=null
+    const secret=process.env.CRON_SECRET
+    if(secret){
+      await pool.query(`CREATE TABLE IF NOT EXISTS prediction_audit_refresh (
+        audit_key text PRIMARY KEY, last_attempt timestamptz NOT NULL DEFAULT now()
+      )`)
+      const claimed=await pool.query(`INSERT INTO prediction_audit_refresh(audit_key,last_attempt)
+        VALUES('hull-2026-11-22',now())
+        ON CONFLICT(audit_key) DO UPDATE SET last_attempt=now()
+        WHERE prediction_audit_refresh.last_attempt<now()-interval '15 minutes'
+        RETURNING audit_key`)
+      if(claimed.rowCount){
+        const params=new URLSearchParams({date:"2026-11-22",home:"Hull",away:"Brighton",limit:"4"})
+        const response=await importMatchResults(new Request("http://internal/api/admin/import-match-results?"+params,{
+          headers:{authorization:"Bearer "+secret}
+        }))
+        const payload=await response.json()
+        importStatus={ok:response.ok&&payload.ok,results:payload.results??[],graded:payload.graded??null,error:payload.error??null}
+      }
+    }
+    const gradeStatus=await gradePredictionLedger(1500)
     const runs=await pool.query(`
       SELECT r.id,r.surface,r.fixture_date,r.home_team,r.away_team,
         r.slip_id,r.slip_title,r.tier,r.odds_target,r.combined_odds,
@@ -38,6 +59,6 @@ export async function GET(){
       arr.push({...leg,run_id:undefined});byRun.set(key,arr)
     }
     const output=runs.rows.map(r=>({...r,id:undefined,legs:byRun.get(String(r.id))??[]}))
-    return NextResponse.json({ok:true,fixture:"Hull",runs:output,runCount:output.length,legCount:legs.rows.length,gradedLegs:legs.rows.filter(l=>l.graded_at!=null).length},{headers:{"Cache-Control":"no-store"}})
+    return NextResponse.json({ok:true,fixture:"Hull",runs:output,runCount:output.length,legCount:legs.rows.length,gradedLegs:legs.rows.filter(l=>l.graded_at!=null).length,gradeStatus,importStatus},{headers:{"Cache-Control":"no-store"}})
   }catch(e){return NextResponse.json({ok:false,error:e instanceof Error?e.message:"Audit unavailable"},{status:500})}
 }
