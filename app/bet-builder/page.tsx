@@ -1302,7 +1302,7 @@ export default function BetBuilderPage(){
       referee:ref?{name:ref.name??null,strictnessScore:ref.strictnessScore??null}:null,
     }
     const runs:any[]=[]
-    if(builderMode!=="discipline"){
+    {
       for(const build of builders){
         const legs=(build.legs??[]).map(row=>ledgerLeg(row,fixture,live)).filter(Boolean)
         if(!legs.length)continue
@@ -1318,7 +1318,8 @@ export default function BetBuilderPage(){
           legs,
         })
       }
-    }else if(cardRiskRows.length){
+    }
+    if(cardRiskRows.length){
       const legs=cardRiskRows.slice(0,8).map(row=>ledgerLeg(row,fixture,live)).filter(Boolean)
       if(legs.length)runs.push({
         ...base,surface:"match_card_risk",
