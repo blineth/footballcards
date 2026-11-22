@@ -164,6 +164,44 @@ function rawEventId(input?:string|null){
   return id.includes(":")?id.split(":").at(-1)??id:id
 }
 
+
+/** User-supplied match-screen starting XIs (22 Nov 2026).
+ * Used only when the official provider has not returned both complete teams.
+ * This is a pre-match snapshot, not a live substitution feed.
+ */
+function suppliedMatchSnapshot(input:{date:string;home:string;away:string;competition:OfficialCompetition}):OfficialLineupResult|null{
+  if(input.date!=="2026-11-22"||input.competition!=="Premier League"||
+    !teamMatch(input.home,"Liverpool")||!teamMatch(input.away,"Manchester United"))return null
+  const make=(team:string,rows:Array<[string,string,string]>,captain:string):OfficialTeamLineup=>({
+    team,crest:null,formation:"4-2-3-1",formationSource:"position-inferred",
+    starters:rows.map(([number,name,position],i)=>({
+      id:"supplied-"+norm(team)+"-"+number,name,shortName:name,number,position,
+      formationPlace:i+1,starter:true,captain:name===captain,subbedIn:false,subbedOut:false
+    })),
+    substitutes:[],starterCount:11,benchAvailable:false
+  })
+  const homeLineup=make(input.home,[
+    ["1","Alisson","GK"],["33","Ronald Araújo","RB"],["5","Jérémy Jacquet","CB"],
+    ["4","Virgil van Dijk","CB"],["6","Milos Kerkez","LB"],
+    ["8","Dominik Szoboszlai","CM"],["10","Alexis Mac Allister","CM"],
+    ["73","Rio Ngumoha","LW"],["7","Florian Wirtz","CAM"],
+    ["29","Bradley Barcola","RW"],["9","Alexander Isak","ST"]
+  ],"Virgil van Dijk")
+  const awayLineup=make(input.away,[
+    ["1","Senne Lammens","GK"],["15","Leny Yoro","RB"],["4","Matthijs de Ligt","CB"],
+    ["6","Lisandro Martínez","CB"],["2","Diogo Dalot","LB"],
+    ["37","Kobbie Mainoo","CM"],["18","Youri Tielemans","CM"],
+    ["13","Patrick Dorgu","LW"],["8","Bruno Fernandes","CAM"],
+    ["19","Bryan Mbeumo","RW"],["10","Matheus Cunha","ST"]
+  ],"Bruno Fernandes")
+  return {ok:true,eventId:null,source:"User-supplied lineup screenshot (22 Nov 2026)",
+    checkedAt:new Date().toISOString(),confirmedAt:"2026-11-22T15:27:00.000Z",
+    date:input.date,competition:input.competition,home:input.home,away:input.away,
+    confirmed:true,lineupAvailable:true,cachedConfirmed:false,providerAvailable:false,
+    status:"Pre-match snapshot",venue:"Anfield",homeLineup,awayLineup,
+    reason:"Both starting XIs supplied in a lineup screenshot; live changes must be checked against the provider."}
+}
+
 export async function getOfficialLineup(input:{
   date:string;home:string;away:string;competition:OfficialCompetition;eventId?:string|null;force?:boolean
 }):Promise<OfficialLineupResult>{
@@ -212,12 +250,16 @@ export async function getOfficialLineup(input:{
       if(confirmed)await writeCached(key,result)
       else memory.set(key,{expires:Date.now()+20_000,value:result})
       if(!confirmed){
+        const supplied=suppliedMatchSnapshot(input)
+        if(supplied)return supplied
         const cached=await readCached(key)
         if(cached)return cached
       }
       return result
     }catch{}
   }
+  const supplied=suppliedMatchSnapshot(input)
+  if(supplied)return supplied
   const cached=await readCached(key)
   if(cached)return cached
   const now=new Date().toISOString()
