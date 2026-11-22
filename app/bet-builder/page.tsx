@@ -1740,41 +1740,104 @@ function TrackBetModal({draft,fixture,onClose,onSaved}:{draft:TrackDraft;fixture
 
 function MiniStat({label,value}:{label:string;value:string}){return <div className="rounded-xl bg-black/20 px-2 py-1.5"><p className="font-mono text-xs font-black">{value}</p><p className="text-[0.4rem] uppercase text-white/25">{label}</p></div>}
 
-function LikelihoodBoard({rows,allRows,category,fixture,inPlay}:{rows:Selection[];allRows:Selection[];category:Category;fixture:Fixture;inPlay:boolean}){
-  const label=categories.find(x=>x.id===category)?.label??"Likelihood"
-  const ranked=[...rows].sort((a,b)=>b.probability-a.probability).slice(0,10)
-  const evidence=(row:Selection)=>{
-    if(!inPlay)return marketEvidence(row)
-    if(row.market==="card")return `Fouls ${Number(row.liveFoulsCommitted??0)} · fouled ${Number(row.liveFoulsDrawn??0)}`
-    if(row.market.startsWith("fouled"))return `Fouled ${Number(row.liveFoulsDrawn??0)} already`
-    if(row.market.startsWith("foul"))return `Fouls ${Number(row.liveFoulsCommitted??0)} already`
-    if(row.market.startsWith("sot"))return `Shots ${Number(row.liveShots??0)} · SOT ${Number(row.liveShotsOnTarget??0)}`
-    if(row.market.startsWith("shot"))return `Shots ${Number(row.liveShots??0)} · SOT ${Number(row.liveShotsOnTarget??0)}`
-    return row.currentCount!=null?`Live count ${row.currentCount}`:marketEvidence(row)
-  }
-  return <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]">
-    <div className="border-b border-white/8 px-3 py-3">
-      <div className="flex items-center justify-between gap-3"><div><p className="text-sm font-black">{label} likelihood</p><p className="mt-1 text-[0.5rem] text-white/30">{inPlay?"Remaining-match probability · most likely first":"Model probability · most likely first"}</p></div><span className="rounded-full bg-white/6 px-2 py-1 text-[0.42rem] font-black text-white/35">{ranked.length} PLAYERS</span></div>
+type HistoryMatch={
+ date:string;opponent:string;minutes:number|null;foulsCommitted:number|null;foulsDrawn:number|null;
+ shots:number|null;shotsOnTarget:number|null;yellow:boolean|null;red:boolean|null;
+ goals:number|null;assists:number|null;hit:boolean|null
+}
+type HistoryResult={ok:boolean;lastFive?:HistoryMatch[];h2h?:HistoryMatch[];
+ lastFiveSummary?:{matches:number;graded:number;hits:number;rate:number|null};
+ h2hSummary?:{matches:number;graded:number;hits:number;rate:number|null};error?:string}
+function PlayerHistoryDetails({row,fixture,inPlay}:{row:Selection;fixture:Fixture;inPlay:boolean}){
+ const[history,setHistory]=useState<HistoryResult|null>(null)
+ const[loading,setLoading]=useState(true)
+ const[attempt,setAttempt]=useState(0)
+ useEffect(()=>{
+   let active=true
+   const controller=new AbortController()
+   const timer=window.setTimeout(()=>controller.abort(),9000)
+   setLoading(true);setHistory(null)
+   const params=new URLSearchParams({
+     date:fixture.date,competition:fixture.competition,player:row.player,team:row.team,
+     opponent:sameTeamName(row.team,fixture.home)?fixture.away:fixture.home,
+     market:row.market,
+   })
+   fetch("/api/player-match-history?"+params,{signal:controller.signal})
+     .then(async response=>{if(!response.ok)throw Error("Unavailable");return await response.json() as HistoryResult})
+     .then(data=>{if(active)setHistory(data)})
+     .catch(()=>{if(active)setHistory({ok:false,error:"History could not be loaded. Retry."})})
+     .finally(()=>{window.clearTimeout(timer);if(active)setLoading(false)})
+   return()=>{active=false;window.clearTimeout(timer);controller.abort()}
+ },[fixture.date,fixture.competition,fixture.home,fixture.away,row.player,row.team,row.market,attempt])
+ const metric=(match:HistoryMatch)=>{
+   if(row.market==="card")return match.yellow==null?"—":match.yellow?"Yellow":"No yellow"
+   if(row.market.startsWith("fouled"))return match.foulsDrawn
+   if(row.market.startsWith("foul"))return match.foulsCommitted
+   if(row.market.startsWith("sot"))return match.shotsOnTarget
+   if(row.market.startsWith("shot"))return match.shots
+   if(row.market.startsWith("goal"))return match.goals
+   if(row.market.startsWith("assist"))return match.assists
+   return null
+ }
+ const panel=(title:string,matches:HistoryMatch[],summary?:HistoryResult["lastFiveSummary"])=>(
+   <div className="mt-3">
+    <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-black">{title}</p>
+     <p className="text-[0.57rem] text-cyan-100/70">{summary?.graded?summary.hits+"/"+summary.graded+" hit ("+percent(summary.rate,0)+")":"No graded results"}</p>
     </div>
-    {ranked.length?ranked.map((row,i)=>{
-      const price=displayedBet365Odd(row)
-      const traffic=trafficFor(row,allRows)
-      const tone=traffic==="high"?"text-emerald-200":traffic==="average"?"text-amber-100":"text-rose-100/80"
-      return <div key={row.id} className={"grid grid-cols-[auto_1fr_auto] items-center gap-3 px-3 py-3 "+(i?"border-t border-white/[0.055]":"")}>
-        <span className={"flex size-8 items-center justify-center rounded-full font-mono text-xs font-black "+(i===0?"bg-emerald-300 text-emerald-950":"bg-white/6 text-white/45")}>{i+1}</span>
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-1.5"><p className="truncate text-sm font-black">{row.player}</p><TeamBadge team={row.team} fixture={fixture}/></div>
-          <p className="mt-0.5 truncate text-[0.54rem] font-bold text-white/55">{row.label}</p>
-          {evidence(row)?<p className="mt-1 truncate text-[0.46rem] font-bold text-cyan-100/45">{evidence(row)}</p>:null}
-        </div>
-        <div className="min-w-[5.8rem] text-right">
-          <p className={"font-mono text-lg font-black "+tone}>{percent(row.probability)}</p>
-          <p className="text-[0.4rem] font-black uppercase text-white/25">{inPlay?"remaining chance":"model chance"}</p>
-          {price?<p className={"mt-1 font-mono text-[0.48rem] font-black "+(price.state==="live"?"text-emerald-200":"text-amber-200/80")}>B365 {price.odd.toFixed(2)}{price.state==="reference"?" ref":""}</p>:null}
-        </div>
-      </div>
-    }):<p className="px-4 py-8 text-center text-sm text-white/35">No remaining player events in this market right now.</p>}
-  </div>
+    {matches.length?<div className="mt-2 space-y-1.5">{matches.map((m,i)=><div key={m.date+"|"+m.opponent+"|"+i} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 rounded-lg bg-black/20 px-2.5 py-2">
+     <div className="min-w-0"><p className="truncate text-[0.68rem] font-black">{m.opponent}</p><p className="text-[0.53rem] text-white/40">{m.date} · {m.minutes==null?"minutes unknown":m.minutes+" mins"}</p></div>
+     <div className="text-right"><p className="font-mono text-xs font-black">{metric(m)??"—"}</p><p className="text-[0.46rem] text-white/40">{row.label}</p></div>
+     <span className={"rounded-lg px-2 py-1 text-[0.53rem] font-black "+(m.hit===true?"bg-emerald-400/15 text-emerald-200":m.hit===false?"bg-rose-400/10 text-rose-200":"bg-white/10 text-white/35")}>{m.hit==null?"N/A":m.hit?"HIT":"MISS"}</span>
+    </div>)}</div>:<p className="mt-2 rounded-lg bg-black/15 p-3 text-[0.65rem] text-white/40">No matching historical appearances in the current database.</p>}
+   </div>
+ )
+ return <div className="border-t border-white/8 bg-black/20 px-3 py-4">
+  <div className="flex items-center justify-between"><p className="text-xs font-black text-white/80">Player history · {row.label}</p><span className="text-[0.55rem] text-white/35">Before match only</span></div>
+  <div className="mt-2 grid grid-cols-3 gap-1.5"><MiniStat label="Last 5 model" value={row.recent5HitRate==null?"—":percent(row.recent5HitRate)}/><MiniStat label="Season model" value={row.seasonHitRate==null?"—":percent(row.seasonHitRate)}/><MiniStat label="H2H model" value={row.h2hHitRate==null?"—":percent(row.h2hHitRate)}/></div>
+  {inPlay?<p className="mt-2 text-[0.59rem] text-emerald-200/70">Historical records are fixed before kickoff. Live foul/shot counts are shown on the ranking above, not added to last-five or H2H.</p>:null}
+  {loading?<p className="mt-3 text-xs text-white/45">Loading actual past match rows…</p>:
+    history?.ok?<>{panel("Last five appearances",history.lastFive??[],history.lastFiveSummary)}{panel("Against today's opponent",history.h2h??[],history.h2hSummary)}</>:
+    <div className="mt-3"><p className="text-xs text-amber-100">{history?.error??"No history found"}</p><button onClick={()=>setAttempt(a=>a+1)} className="mt-2 rounded-lg bg-white/10 px-3 py-2 text-xs font-bold">Retry history</button></div>}
+  <p className="mt-3 text-[0.56rem] leading-relaxed text-white/35">Individual match rows are distinct from smoothed model percentages. Missing stats are displayed as unavailable, not zero.</p>
+ </div>
+}
+function LikelihoodBoard({rows,allRows,category,fixture,inPlay}:{rows:Selection[];allRows:Selection[];category:Category;fixture:Fixture;inPlay:boolean}){
+ const[expanded,setExpanded]=useState<string|null>(null)
+ const label=categories.find(x=>x.id===category)?.label??"Likelihood"
+ const ranked=[...rows].sort((a,b)=>b.probability-a.probability).slice(0,10)
+ const evidence=(row:Selection)=>{
+   if(!inPlay)return marketEvidence(row)
+   if(row.market==="card")return "Fouls "+Number(row.liveFoulsCommitted??0)+" · fouled "+Number(row.liveFoulsDrawn??0)
+   if(row.market.startsWith("fouled"))return "Fouled "+Number(row.liveFoulsDrawn??0)+" already"
+   if(row.market.startsWith("foul"))return "Fouls "+Number(row.liveFoulsCommitted??0)+" already"
+   if(row.market.startsWith("sot")||row.market.startsWith("shot"))return "Shots "+Number(row.liveShots??0)+" · SOT "+Number(row.liveShotsOnTarget??0)
+   return row.currentCount!=null?"Live count "+row.currentCount:marketEvidence(row)
+ }
+ return <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]">
+  <div className="border-b border-white/8 px-3 py-3"><div className="flex items-center justify-between gap-3">
+   <div><p className="text-sm font-black">{label} likelihood</p><p className="mt-1 text-[0.5rem] text-white/30">{inPlay?"Remaining-match chance · tap player for earlier matches and H2H":"Model chance · tap any player for last five games and H2H"}</p></div>
+   <span className="rounded-full bg-white/6 px-2 py-1 text-[0.42rem] font-black text-white/35">{ranked.length} PLAYERS</span></div></div>
+  {ranked.length?ranked.map((row,i)=>{
+   const price=displayedBet365Odd(row),traffic=trafficFor(row,allRows)
+   const tone=traffic==="high"?"text-emerald-200":traffic==="average"?"text-amber-100":"text-rose-100/80"
+   const open=expanded===row.id
+   return <div key={row.id} className={i?"border-t border-white/[0.055]":""}>
+    <button type="button" onClick={()=>setExpanded(v=>v===row.id?null:row.id)} aria-expanded={open}
+      className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-3 py-3 text-left hover:bg-white/[0.025]">
+     <span className={"flex size-8 items-center justify-center rounded-full font-mono text-xs font-black "+(i===0?"bg-emerald-300 text-emerald-950":"bg-white/6 text-white/45")}>{i+1}</span>
+     <div className="min-w-0"><div className="flex flex-wrap items-center gap-1.5"><p className="truncate text-sm font-black">{row.player}</p><TeamBadge team={row.team} fixture={fixture}/></div>
+      <p className="mt-0.5 truncate text-[0.54rem] font-bold text-white/55">{row.label}</p>
+      {evidence(row)?<p className="mt-1 truncate text-[0.46rem] font-bold text-cyan-100/45">{evidence(row)}</p>:null}
+      <span className="mt-1 flex items-center gap-1 text-[0.52rem] font-bold text-emerald-200/65">{open?"Hide match history":"Last 5 · H2H"} <ChevronDown className={"size-3 transition "+(open?"rotate-180":"")}/></span>
+     </div>
+     <div className="min-w-[5.5rem] text-right"><p className={"font-mono text-lg font-black "+tone}>{percent(row.probability)}</p>
+      <p className="text-[0.4rem] font-black uppercase text-white/25">{inPlay?"remaining chance":"model chance"}</p>
+      {price?<p className={"mt-1 font-mono text-[0.48rem] font-black "+(price.state==="live"?"text-emerald-200":"text-amber-200/80")}>B365 {price.odd.toFixed(2)}{price.state==="reference"?" ref":""}</p>:null}</div>
+    </button>
+    {open?<PlayerHistoryDetails row={row} fixture={fixture} inPlay={inPlay}/>:null}
+   </div>
+  }):<p className="px-4 py-8 text-center text-sm text-white/35">No remaining player events in this market right now.</p>}
+ </div>
 }
 
 function SelectionRow({row,selected,onToggle,rank,traffic,bestAction=false,liveBet365=false,marketStatus="unknown",inPlay=false,fixture}:{row:Selection;selected:boolean;onToggle:()=>void;rank:number;traffic:Traffic;bestAction?:boolean;liveBet365?:boolean;marketStatus?:MarketStatus;inPlay?:boolean;fixture:Fixture}){
