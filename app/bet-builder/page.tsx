@@ -839,31 +839,67 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
   else if(canReach(livePool,"live",21))mode="live"
   else if(canReach(refPool,"reference",21))mode="reference"
 
-  const pool=choosePool(mode).slice(0,MAX_RESEARCH_BUILDER_LEGS)
-  const chosen:Selection[]=[]
-  let product=1
-  let raw=1
-  const addNext=()=>{
-    const next=pool[chosen.length]
-    if(!next)return false
-    chosen.push(next)
-    product*=oddFor(next,mode)
-    raw*=next.probability
-    return true
+  // Optimise each odds tier independently. Hull exposed a failure mode where the
+  // previous ladder inherited a weak selection from every smaller builder.
+  // Search bounded combinations and prefer the strongest joint hit probability,
+  // with a penalty for a particularly fragile leg and same-player dependence.
+  const pool=choosePool(mode).slice(0,22)
+  type Candidate={legs:Selection[];price:number;joint:number;weakest:number;players:Set<string>;families:Set<string>}
+  const optimise=(target:number):Candidate|null=>{
+    const required=Math.max(3,target)
+    let beam:Candidate[]=[{legs:[],price:1,joint:1,weakest:1,players:new Set(),families:new Set()}]
+    let best:Candidate|null=null
+    const quality=(c:Candidate)=>Math.log(Math.max(1e-12,c.joint))+
+      Math.log(Math.max(.1,c.weakest))*.22-
+      Math.max(0,c.legs.length-3)*.025
+    for(let depth=1;depth<=MAX_RESEARCH_BUILDER_LEGS;depth++){
+      const next:Candidate[]=[]
+      for(const state of beam){
+        const last=state.legs.length?pool.indexOf(state.legs[state.legs.length-1]):-1
+        for(let i=last+1;i<pool.length;i++){
+          const row=pool[i]
+          const player=normPlayer(row.player)
+          const fam=family(row.market)
+          if(player&&state.players.has(player))continue
+          if(state.families.has(player+"|"+fam))continue
+          const price=oddFor(row,mode)
+          if(!(price>1))continue
+          const players=new Set(state.players)
+          if(player)players.add(player)
+          const families=new Set(state.families)
+          families.add(player+"|"+fam)
+          const candidate:Candidate={
+            legs:[...state.legs,row],price:state.price*price,
+            joint:state.joint*row.probability,
+            weakest:Math.min(state.weakest,row.probability),
+            players,families
+          }
+          if(candidate.price>=required){
+            if(!best||quality(candidate)>quality(best))best=candidate
+          }else next.push(candidate)
+        }
+      }
+      if(best&&depth>=2)break
+      beam=next.sort((a,b)=>{
+        const aGap=Math.max(0,Math.log(required/a.price))
+        const bGap=Math.max(0,Math.log(required/b.price))
+        return (quality(b)-bGap*.12)-(quality(a)-aGap*.12)
+      }).slice(0,160)
+      if(!beam.length)break
+    }
+    return best
   }
 
   return configs.map(cfg=>{
-    if(cfg.id==="most-likely"){
-      while(product<3&&chosen.length<Math.min(pool.length,MAX_RESEARCH_BUILDER_LEGS))if(!addNext())break
-    }else{
-      while(product<cfg.targetDecimal&&chosen.length<pool.length)if(!addNext())break
-    }
-    const legs=[...chosen]
-    const reached=product>=Math.max(3,cfg.targetDecimal)
+    const found=optimise(cfg.targetDecimal)
+    const legs=found?.legs??[]
+    const product=found?.price??1
+    const raw=found?.joint??1
+    const reached=Boolean(found)
     if(!reached){
       // A missing bookmaker quote or an unreachable odds floor must not erase
       // the actual model picks: these are research predictions, not quoted bets.
-      const researchLegs=legs.length?legs:choosePool("model").slice(0,Math.min(5,MAX_RESEARCH_BUILDER_LEGS))
+      const researchLegs=choosePool("model").slice(0,Math.min(5,MAX_RESEARCH_BUILDER_LEGS))
       const joint=researchLegs.reduce((p,row)=>p*row.probability,1)
       const conservative=conservativeJoint(researchLegs,joint)
       return {
@@ -894,7 +930,7 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
       pricingBasis:livePriced?"bet365_singles_product" as const:refPriced?"bet365_reference_product" as const:"none" as const,
       note:cfg.id==="most-likely"
         ?"Highest-probability route from the current eligible selections. Its price is whatever the safest route naturally produces."
-        :`Highest-probability route that clears ${cfg.targetFractional}. It keeps every safer leg from the tier below and only adds the next-best selection.`
+        :`Independently optimised combination for ${cfg.targetFractional}, prioritising joint hit probability and avoiding weak inherited legs. Indicative singles product, not a verified Bet365 Bet Builder quote.`
     }
   })
 }
