@@ -82,7 +82,7 @@ function selectTop(samples:PriorSample[],policy:Policy,phase:"train"|"holdout",m
  const best=new Map<string,{date:string;fixture:string;p:number;hit:boolean}>()
  for(const row of samples){
    if(row.market!==market||row.history.length<policy.minHistory)continue
-   const p=predict(row.history,market,policy)
+   const p=predict(row.history,market,policy,row)
    const key=row.fixture
    const previous=best.get(key)
    if(!previous||p>previous.p)best.set(key,{date:row.date,fixture:key,p,hit:row.outcome})
@@ -100,7 +100,7 @@ export async function runPregameLearning(){
     review_examples jsonb NOT NULL DEFAULT '[]'::jsonb)`)
  await pool.query(`ALTER TABLE pregame_learning_runs ADD COLUMN IF NOT EXISTS review_examples jsonb NOT NULL DEFAULT '[]'::jsonb`)
  const query=await pool.query<HistoryRow>(`SELECT player_name,team,opponent,competition,
-     match_date::text,minutes,yellow_card,red_card,fouls_committed,fouls_drawn,shots,shots_on_target
+     match_date::text,minutes,yellow_card,red_card,fouls_committed,fouls_drawn,shots,shots_on_target,booking_reason,yellow_card_minute
      FROM player_h2h
      WHERE match_date >= current_date-interval '36 months'
        AND match_date < current_date AND player_name IS NOT NULL
@@ -111,7 +111,8 @@ export async function runPregameLearning(){
  const first=rows[0]?.match_date??null,last=rows[rows.length-1]?.match_date??null
  const dates=[...new Set(rows.map(r=>r.match_date))].sort()
  const boundary=dates[Math.max(0,Math.floor(dates.length*.8)-1)]??""
- const history=new Map<string,Record<Market,boolean[]>>()\n const behaviour=new Map<string,{nonFoulCards:boolean[];confirmedDissent:boolean[];lateCards:boolean[]}>()
+ const history=new Map<string,Record<Market,boolean[]>>()
+ const behaviour=new Map<string,{nonFoulCards:boolean[];confirmedDissent:boolean[];lateCards:boolean[]}>()
  const examples:PriorSample[]=[]
  const seen=new Set<string>()
  const fixtures=new Set<string>()
@@ -125,6 +126,8 @@ export async function runPregameLearning(){
      if(item.prior[item.market].length>30)item.prior[item.market].shift()
    }
    pending=[]
+   for(const item of pendingBehaviour)pushCapped(item.list,item.hit)
+   pendingBehaviour=[]
  }
  for(const row of rows){
    if(openDate!==row.match_date){
@@ -153,6 +156,11 @@ export async function runPregameLearning(){
      if(before[market].length>=4)examples.push({date:row.match_date,player:name,team:String(row.team),competition:league,fixture,market,outcome:hit,history:before[market],...observedConduct})
      pending.push({prior:past,market,hit})
    }
+   const booked=row.yellow_card===true||row.red_card===true
+   if(row.fouls_committed!=null)pendingBehaviour.push({list:conduct.nonFoulCards,hit:booked&&Number(row.fouls_committed)===0})
+   // An explicit reason, not zero fouls, is required to call it dissent.
+   pendingBehaviour.push({list:conduct.confirmedDissent,hit:booked&&/dissent/i.test(row.booking_reason??"")})
+   pendingBehaviour.push({list:conduct.lateCards,hit:row.yellow_card===true&&row.yellow_card_minute!=null&&Number(row.yellow_card_minute)>=80})
  }
  commitDay()
  const train=examples.filter(x=>x.date<=boundary)
