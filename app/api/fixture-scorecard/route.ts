@@ -1804,6 +1804,52 @@ function compactBuilderScorecard(payload:any){
   }
 }
 
+/**
+ * Resilient default endpoint: never force the UI to wait on the heavyweight
+ * research path when a fixture, XI and published bookmaker lines can be
+ * returned independently. The full scorer stays available with ?deep=1 for
+ * deliberate diagnosis and calibration, not ordinary match browsing.
+ */
+async function fastScorecard(input:{request:Request;date:string;home:string;away:string;competition:string}){
+  const base:any=await buildSnapshotScorecard({
+    date:input.date,home:input.home,away:input.away,competition:input.competition as any,
+  })
+  if(!base?.ok||!Array.isArray(base.players))throw Error("Fast player model has no available players")
+  const odds:any=await Promise.race([
+    oddsGET(input.request).then(async r=>r.ok?r.json():null).catch(()=>null),
+    new Promise(resolve=>setTimeout(()=>resolve(null),9000)),
+  ])
+  const names=base.players.map((p:any)=>String(p.name??""))
+  const quotes:OddSelection[]=(odds?.selections??[]).filter((o:any)=>
+    o.bookmaker==="Bet365"&&Number(o.odd)>1
+  )
+  const players=base.players.map((player:any)=>{
+    const markets:Record<string,any>={}
+    for(const [market,row] of Object.entries(player.markets??{}) as Array<[MarketKey,any]>){
+      const offer=findOdds(quotes,String(player.name),market,names)
+      const odd=offer?Number(offer.odd):null
+      markets[market]={...row,bookmakerOdds:odd,bookmakerName:odd!=null?"Bet365":null,
+        edge:odd!=null?Number(row.probability)-1/odd:null,
+        expectedValue:odd!=null?Number(row.probability)*odd-1:null,
+      }
+    }
+    return {...player,markets}
+  })
+  return {
+    ...base,players,playerCount:players.length,
+    snapshotFallback:true,
+    fallbackReason:"Fast historical snapshot because the full evidence service is temporarily slow. No claim of complete referee, opponent, or H2H enrichment.",
+    bookmaker:odds?.priceAvailable?"Bet365":null,
+    oddsSource:odds?.source??null,oddsCapturedAt:odds?.capturedAt??null,
+    oddsFreshness:odds?.priceAvailable?"LIVE":"UNKNOWN",
+    priceAvailable:Boolean(odds?.priceAvailable),
+    marketAvailability:odds?.marketAvailability??{},
+    bookmakerAvailability:odds?.bookmakerAvailability??{},
+    availableBets:odds?.availableBets??[],
+    eligibleBooks:odds?.priceAvailable?["Bet365"]:[],
+    riskBuilders:[],foulCardBuilders:[],slips:[],
+  }
+}
 export async function GET(request: Request) {
   const url = new URL(request.url)
   const date = url.searchParams.get("date") ?? ""
@@ -1812,6 +1858,17 @@ export async function GET(request: Request) {
   const competition = url.searchParams.get("competition") ?? "Premier League"
   const builderView = url.searchParams.get("view")==="builder"
   if (!date || !home || !away) return NextResponse.json({ ok: false, error: "Invalid fixture parameters" }, { status: 400 })
+  // Default to the bounded pre-match research path while the full research
+  // endpoint is being repaired. Avoid platform-level 300-second timeouts.
+  if(url.searchParams.get("deep")!=="1"){
+    try{
+      const payload=await fastScorecard({request,date,home,away,competition})
+      return scorecardJson(payload,builderView)
+    }catch(error){
+      return NextResponse.json({ok:false,error:"Fast scorecard currently unavailable. Please retry.",
+        fallbackAvailable:false},{status:503})
+    }
+  }
   if (!isDatabaseConfigured) {
     try {
       { const fallback=await buildVerifiedBet365SnapshotFallback({request,date,home,away,competition}); return scorecardJson(fallback,builderView) }
