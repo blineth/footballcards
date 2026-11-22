@@ -33,8 +33,13 @@ export default function TodayPage(){
   const results=await Promise.all(GAMES.map(async g=>{
    try{
     const params=new URLSearchParams({date:g.date,home:g.home,away:g.away,competition:"Premier League"})
-    const r=await fetch("/api/live-player-baseline?"+params,{cache:"no-store"})
-    return await r.json() as Baseline
+    const controller=new AbortController()
+    const timer=window.setTimeout(()=>controller.abort(),10_000)
+    try{
+      const r=await fetch("/api/live-player-baseline?"+params,{cache:"no-store",signal:controller.signal})
+      if(!r.ok)throw Error("Player feed returned "+r.status)
+      return await r.json() as Baseline
+    }finally{window.clearTimeout(timer)}
    }catch{return {ok:false} as Baseline}
   }))
   setData(results);setLoadedAt(new Date().toISOString());setLoading(false)
@@ -74,7 +79,7 @@ export default function TodayPage(){
       <p className="text-xs font-bold text-emerald-200">{g.kickoff} · Premier League</p><h2 className="mt-1 text-lg font-black">{g.home} v {g.away}</h2>
       <p className="mt-2 text-xs text-white/55">Lineups: {data[i]?.lineupsConfirmed?"Confirmed":data[i]?.lineupMode==="predicted"?"Predicted only":"Not verified"} · bookmaker prices: {data[i]?.priceAvailable?"Source reports prices":"Unverified"}</p>
       <p className="mt-1 text-xs text-white/40">{data[i]?.players?.length??0} players modelled</p>
-      {!data[i]?.ok&&data[i]?<p className="mt-1 text-xs text-rose-200">Player baseline not available</p>:null}
+      {!data[i]?.ok&&data[i]?<p className="mt-1 text-xs text-rose-200">Data request timed out. Retry using refresh, or open the Hull–Brighton match centre above.</p>:null}
       <div className="mt-3 space-y-2">{picks.filter(p=>p.game===i&&p.market!=="card").sort((a,b)=>b.p-a.p).slice(0,4).map((p,j)=><div key={j} className="flex items-center justify-between gap-2 rounded-lg bg-black/25 p-2">
        <div><p className="text-xs font-bold">{p.player}</p><p className="text-[0.56rem] text-white/40">{LABELS[p.market]} · evidence grade {p.confidence}</p></div><p className="font-mono text-sm font-black">{pct(p.p)}</p>
       </div>)}</div>
