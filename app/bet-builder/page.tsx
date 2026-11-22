@@ -207,7 +207,7 @@ function ledgerMarket(row:Selection){
   }
   return null
 }
-function ledgerLeg(row:Selection,fixture:Fixture){
+function ledgerLeg(row:Selection,fixture:Fixture,live:LiveData|null=null){
   const market=ledgerMarket(row)
   if(!market)return null
   return {
@@ -222,6 +222,11 @@ function ledgerLeg(row:Selection,fixture:Fixture){
     disciplineHeat:row.disciplineHeat??null,recentFouls10:row.recentFouls10??null,
     liveFouls:row.liveFoulsCommitted??null,liveFouled:row.liveFoulsDrawn??null,
     liveShots:row.liveShots??null,liveSot:row.liveShotsOnTarget??null,
+    aggressionSignals:row.liveAdjusted?row.aggressionSignals??[]:null,
+    aggressionEventMinute:row.liveAdjusted?row.lastAggressionMinute??null:null,
+    liveFeedSource:row.liveAdjusted?live?.source??null:null,
+    liveFeedUpdatedAt:row.liveAdjusted?live?.updatedAt??null:null,
+    liveModelMinute:row.liveAdjusted?live?.elapsed??null:null,
   }
 }
 function verifiedBet365Odd(s:Selection){
@@ -1249,7 +1254,7 @@ export default function BetBuilderPage(){
     const runs:any[]=[]
     if(builderMode!=="discipline"){
       for(const build of builders){
-        const legs=(build.legs??[]).map(row=>ledgerLeg(row,fixture)).filter(Boolean)
+        const legs=(build.legs??[]).map(row=>ledgerLeg(row,fixture,live)).filter(Boolean)
         if(!legs.length)continue
         runs.push({
           ...base,
@@ -1264,14 +1269,14 @@ export default function BetBuilderPage(){
         })
       }
     }else if(cardRiskRows.length){
-      const legs=cardRiskRows.slice(0,8).map(row=>ledgerLeg(row,fixture)).filter(Boolean)
+      const legs=cardRiskRows.slice(0,8).map(row=>ledgerLeg(row,fixture,live)).filter(Boolean)
       if(legs.length)runs.push({
         ...base,surface:"match_card_risk",
         slip:{id:"card-risk",title:"Live Card Risk",tier:"ranking",oddsTarget:null,combinedOdds:null,modelJointProbability:null,bookmaker:"Bet365"},
         legs,
       })
     }
-    const likelihoodLegs=visible.slice(0,20).map(row=>ledgerLeg(row,fixture)).filter(Boolean)
+    const likelihoodLegs=visible.slice(0,20).map(row=>ledgerLeg(row,fixture,live)).filter(Boolean)
     if(likelihoodLegs.length)runs.push({
       ...base,surface:inPlay?"match_likelihood_live":"match_likelihood",
       slip:{id:"likelihood-"+category,title:(inPlay?"Live ":"")+"Likelihood · "+category,tier:"ranking",oddsTarget:null,combinedOdds:null,modelJointProbability:null,bookmaker:"Bet365"},
