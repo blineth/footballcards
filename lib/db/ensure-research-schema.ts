@@ -21,6 +21,8 @@ export function ensureResearchSchema() {
     await pool.query(`ALTER TABLE player_h2h ADD COLUMN IF NOT EXISTS shots_on_target integer`)
     await pool.query(`ALTER TABLE player_h2h ADD COLUMN IF NOT EXISTS goals integer`)
     await pool.query(`ALTER TABLE player_h2h ADD COLUMN IF NOT EXISTS assists integer`)
+    await pool.query(`ALTER TABLE player_h2h ADD COLUMN IF NOT EXISTS booking_reason text`)
+    await pool.query(`ALTER TABLE player_h2h ADD COLUMN IF NOT EXISTS yellow_card_minute integer`)
     await pool.query(`ALTER TABLE player_baselines ADD COLUMN IF NOT EXISTS shots integer`)
     await pool.query(`ALTER TABLE player_baselines ADD COLUMN IF NOT EXISTS shots_on_target integer`)
     await pool.query(`ALTER TABLE player_baselines ADD COLUMN IF NOT EXISTS goals integer`)
