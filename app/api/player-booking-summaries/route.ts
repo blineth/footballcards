@@ -47,7 +47,7 @@ export async function POST(request:Request){
     SELECT player_name,team,opponent,match_date::text,yellow_card,minutes,starter,
       fouls_committed,fouls_drawn,shots,shots_on_target,goals,assists
     FROM player_h2h WHERE lower(player_name)=ANY($1::text[]) AND match_date<$2::date
-    AND (minutes IS NULL OR minutes>0)
+    AND (minutes>0 OR (minutes IS NULL AND starter IS DISTINCT FROM FALSE))
     ORDER BY match_date DESC`,[unique,date])
    const profiles=players.map(p=>{
      const matches=query.rows.filter(r=>norm(r.player_name)===norm(p.name))
@@ -57,7 +57,7 @@ export async function POST(request:Request){
        if(seen.has(key))return false
        seen.add(key);return true
      })
-     const recent=deduped.filter(r=>sameTeam(r.team??"",p.team)).slice(0,5)
+     const recent=deduped.slice(0,5)
      const opponent=sameTeam(p.team,home)?away:home
      const h2h=deduped.filter(r=>sameTeam(r.opponent,opponent))
      const market=String(p.market??"card")
