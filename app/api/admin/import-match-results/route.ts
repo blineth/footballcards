@@ -98,7 +98,7 @@ export async function GET(request:Request){
       fully_graded=true,won=t.won,graded_at=now()
       FROM (SELECT run_id,count(*) total,count(*) FILTER(WHERE graded_at IS NOT NULL) graded,bool_and(outcome IS TRUE) won
         FROM prediction_legs WHERE fixture_date=$1 GROUP BY run_id) t
-      WHERE r.id=t.run_id AND t.total=t.graded AND t.total>0 AND r.fully_graded=false`,[date])
+      WHERE r.id=t.run_id AND t.total=t.graded AND t.total>0 AND r.fully_graded=false AND NOT EXISTS (SELECT 1 FROM prediction_legs pending WHERE pending.run_id=r.id AND pending.graded_at IS NULL)`,[date])
     const legacy={graded:0,note:"Legacy grading remains on existing scheduled process"}
     return NextResponse.json({ok:true,date,offset,limit,totalFinished:finished.length,
       nextOffset:offset+selected.length<finished.length?offset+selected.length:null,
