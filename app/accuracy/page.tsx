@@ -8,6 +8,9 @@ type Signal={signal:string;graded:number;hits:number;avg_confidence:string|null}
 type Test={phase:string;market_group:string;split:string;threshold:number;graded:number;hits:number;avg_confidence:string|null}
 type Gap={phase:string;market_group:string;graded:number;no_sample:number;no_h2h:number;lineup_unconfirmed:number;no_feed_provenance:number;commentary_signals:number}
 type Timing={phase:string;timing_quality:string;selections:number}
+type LearningScore={market:string;model:string;phase:string;sample:number;hits:number;hitRate:number;brier:number;avgPredicted:number;distinctDates:number}
+type LearningRecommendation={market:string;candidate:string;baselineHoldout:LearningScore;candidateHoldout:LearningScore;training:LearningScore;adopted:boolean;reason:string}
+type LearningResponse={ok:boolean;available:boolean;run?:{id:number;created_at:string;status:string;source_rows:number;unique_fixtures:number;training_end:string;recommendations:LearningRecommendation[];methodology:string}}
 type Data={ok:boolean;error?:string;days:number;updatedAt:string;walkForward?:Test[];featureCoverage?:Gap[];timingQuality?:Timing[];
   phases:Rate[];markets:Rate[];confidence:Rate[];liveCardSignals:Signal[];
   coverage:{unique_saved:number;ungraded:number;match_days:number}}
@@ -26,6 +29,7 @@ export default function AccuracyPage(){
   const[days,setDays]=useState(30)
   const[data,setData]=useState<Data|null>(null)
   const[loading,setLoading]=useState(true)
+  const[learning,setLearning]=useState<LearningResponse|null>(null)
   const[tab,setTab]=useState<"pre-match"|"live">("pre-match")
   useEffect(()=>{let cancelled=false;setLoading(true)
     fetch("/api/admin/accuracy?days="+days,{cache:"no-store"})
@@ -34,6 +38,12 @@ export default function AccuracyPage(){
       .finally(()=>{if(!cancelled)setLoading(false)})
     return()=>{cancelled=true}
   },[days])
+  useEffect(()=>{let cancel=false
+    fetch("/api/admin/pregame-learning",{cache:"no-store"})
+     .then(async r=>r.json()).then(result=>{if(!cancel)setLearning(result)})
+     .catch(()=>{if(!cancel)setLearning({ok:false,available:false})})
+    return()=>{cancel=true}
+  },[])
   const live=data?.phases?.find(p=>p.phase==="live")
   const pre=data?.phases?.find(p=>p.phase==="pre-match")
   const markets=useMemo(()=>data?.markets?.filter(x=>x.phase===tab)??[],[data,tab])
@@ -71,6 +81,22 @@ export default function AccuracyPage(){
             <div><p className="text-sm font-bold">{x.band}</p><p className="text-[0.55rem] text-white/40">{x.hits}/{x.graded} · avg prediction {num(x.avg_confidence)}</p></div>
             <p className="font-mono text-lg font-black">{pct(x.hits,x.graded)}</p>
           </div>)}</div>
+        </section>
+        <section className="rounded-2xl border border-white/10 bg-white/[0.035] p-4">
+          <div className="flex items-center justify-between gap-2">
+            <div><p className="text-[0.56rem] font-black uppercase tracking-wider text-cyan-200">Daily historical learning</p>
+              <h2 className="mt-1 font-black">Pre-match replay · cards, fouls, shots</h2></div>
+            <span className="rounded-full border border-white/10 bg-black/20 px-2 py-1 text-[0.55rem] text-white/50">SHADOW MODE</span>
+          </div>
+          <p className="mt-2 text-xs leading-relaxed text-white/45">Every morning the system replays older matches using only earlier player appearances. It compares candidate recency weights with a baseline and validates against later fixtures before recommending a change. A proxy replay is not a replay of our entire production model.</p>
+          {learning?.available&&learning.run?<><p className="mt-3 text-[0.58rem] text-white/40">Last run {new Date(learning.run.created_at).toLocaleString("en-GB")} · {learning.run.source_rows} player-history rows · {learning.run.unique_fixtures} fixtures · training through {String(learning.run.training_end).slice(0,10)}</p>
+            <div className="mt-3 space-y-2">{(learning.run.recommendations??[]).map(x=><div key={x.market} className="rounded-xl bg-black/25 p-3">
+              <p className="text-sm font-black">{x.market==="card"?"Yellow cards":x.market==="fouled1"?"1+ foul drawn":x.market==="foul1"?"1+ foul committed":x.market==="foul2"?"2+ fouls committed":x.market==="shot1"?"1+ shot":x.market==="shot2"?"2+ shots":"1+ shot on target"}</p>
+              <p className="mt-1 text-[0.55rem] text-white/45">Candidate: {x.candidate} · holdout Brier baseline {x.baselineHoldout?.brier??"—"} vs challenger {x.candidateHoldout?.brier??"—"}</p>
+              <p className="mt-1 text-[0.55rem] text-white/55">Latest holdout: {x.candidateHoldout?.hits??0}/{x.candidateHoldout?.sample??0} ({pct(x.candidateHoldout?.hits??0,x.candidateHoldout?.sample??0)}) · {x.reason}</p>
+            </div>)}</div>
+          </>:<p className="mt-3 rounded-xl bg-black/25 p-3 text-xs text-white/45">Historical training is scheduled daily at 06:00 UTC. No completed learning run has been recorded yet, so no new candidate has been validated or promoted.</p>}
+          <p className="mt-3 text-[0.6rem] text-amber-100/70">Research stays separate from live recommendations until enough independent future evidence and bookmaker prices support an improvement.</p>
         </section>
         <section className="rounded-2xl border border-white/10 bg-white/[0.035] p-4">
           <h2 className="font-black">Reverse-engineering test · later matches held out</h2>
