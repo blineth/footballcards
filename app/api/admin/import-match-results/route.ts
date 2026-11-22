@@ -8,6 +8,10 @@ export const dynamic="force-dynamic"
 export const revalidate=0
 function ymd(v:string){return /^20\d{2}-\d{2}-\d{2}$/.test(v)}
 export async function GET(request:Request){
+  // Imports mutate history; reject unauthenticated public requests.
+  const secret=process.env.CRON_SECRET
+  if(!secret||request.headers.get("authorization")!=="Bearer "+secret)
+    return NextResponse.json({ok:false,error:"Unauthorized import"},{status:401})
   const params=new URL(request.url).searchParams
   const date=params.get("date")??""
   const offset=Math.max(0,Math.min(500,Number(params.get("offset")??0)||0))
@@ -26,7 +30,7 @@ export async function GET(request:Request){
       source text,updated_at timestamptz NOT NULL DEFAULT now(),
       PRIMARY KEY(fixture_date,home_team,away_team)
     )`)
-    for(const f of finished){
+    if(offset===0)for(const f of finished){
       if(f.score?.home==null||f.score?.away==null)continue
       await pool.query(`INSERT INTO match_result_audit
         (fixture_date,home_team,away_team,competition,home_score,away_score,source)
