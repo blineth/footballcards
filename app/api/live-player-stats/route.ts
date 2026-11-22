@@ -85,21 +85,31 @@ function applyCommentaryDiscipline(summary:any,map:Map<string,LivePlayerStat>,el
     const sig=disciplineSignal(raw)
     if(!sig)continue
     const minute=minuteFromEvent(ev)
+    // Never use a future event as evidence for a prediction made at an earlier minute.
+    if(minute!=null&&minute>elapsed+1)continue
     const key=(minute??-1)+"|"+raw.toLowerCase()
     if(seen.has(key))continue
     seen.add(key)
-    const names=new Set<string>()
-    for(const p of ev?.participants??[]){
-      const name=String(p?.athlete?.displayName??p?.athlete?.fullName??p?.name??"").trim()
-      if(name)names.add(norm(name))
+    const mentioned=[...map.values()].filter(p=>norm(raw).includes(norm(p.player)))
+    const participants=(ev?.participants??[])
+      .map((p:any)=>norm(String(p?.athlete?.displayName??p?.athlete?.fullName??p?.name??"")))
+      .filter((name:string)=>Boolean(name)&&map.has(name)) as string[]
+    // A challenge can name both offender and victim. Don't mark both players
+    // as aggressive: credit only a clearly identified actor, or omit the signal.
+    // A single participant may still be the victim in ambiguous prose; require
+    // a clear offender expression for multi-player commentary.
+    let actor:string|null=null
+    const namedActor=raw.match(/^(.+?)\s+(?:commits?|makes?|concedes?|is booked for|is cautioned for|protests?|argues?|shoves?|pushes?|fouls?|challenges?|tackles?)\b/i)
+    if(namedActor){
+      const candidate=norm(namedActor[1])
+      if(map.has(candidate))actor=candidate
     }
-    if(!names.size){
-      const lower=norm(raw)
-      for(const row of map.values())if(lower.includes(norm(row.player)))names.add(norm(row.player))
-    }
+    if(!actor&&participants.length===1&&mentioned.length<=1)actor=participants[0]
+    if(!actor&&mentioned.length===1&&participants.length<=1)actor=norm(mentioned[0].player)
+    if(!actor)continue
     const age=minute==null?0:Math.max(0,elapsed-minute)
     const recency=minute==null?.75:age<=5?1:age<=10?.88:age<=20?.62:.35
-    for(const name of names){
+    for(const name of [actor]){
       const row=map.get(name);if(!row)continue
       row.aggressionScore=Math.min(1,row.aggressionScore+sig.score*recency)
       if(!row.aggressionSignals.includes(sig.label))row.aggressionSignals.push(sig.label)
