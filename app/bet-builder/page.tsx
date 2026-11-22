@@ -1164,7 +1164,36 @@ export default function BetBuilderPage(){
 
   const preMatchRows=useMemo(()=>selectionsFrom(data),[data])
   const liveAdjustedRows=useMemo(()=>applyLive(preMatchRows,live,data),[preMatchRows,live,data])
-  const allRows=useMemo(()=>overlayVerifiedLiveBet365(liveAdjustedRows,liveOdds),[liveAdjustedRows,liveOdds])
+  // The 22 screenshot-confirmed starters for Liverpool v Manchester United.
+  // Restrict every player market and recommended builder to starters, rather than
+  // allowing squad members or predicted XI players into the betting shortlist.
+  const suppliedStartingXI=useMemo(()=>{
+    if(!fixture||fixture.date!=="2026-11-22"||
+      !sameTeamName(fixture.home,"Liverpool")||!sameTeamName(fixture.away,"Manchester United"))return null
+    return new Set([
+      "Alisson","Ronald Araújo","Jérémy Jacquet","Virgil van Dijk","Milos Kerkez",
+      "Dominik Szoboszlai","Alexis Mac Allister","Rio Ngumoha","Florian Wirtz",
+      "Bradley Barcola","Alexander Isak","Senne Lammens","Leny Yoro",
+      "Matthijs de Ligt","Lisandro Martínez","Diogo Dalot","Kobbie Mainoo",
+      "Youri Tielemans","Patrick Dorgu","Bruno Fernandes","Bryan Mbeumo","Matheus Cunha"
+    ].map(normPlayer))
+  },[fixture])
+  const allRows=useMemo(()=>{
+    const rows=overlayVerifiedLiveBet365(liveAdjustedRows,liveOdds)
+    if(!suppliedStartingXI)return rows
+    // Once play starts, substitutions supersede the original XI where the
+    // live feed explicitly identifies active players.
+    const activeLive=(live?.status==="live"||live?.status==="halftime")
+      ?(live.players??[]).filter(livePlayerIsActive):[]
+    const active=activeLive.length>=11
+      ?new Set(activeLive.map(p=>normPlayer(p.player)))
+      :suppliedStartingXI
+    return rows.filter(row=>{
+      const name=normPlayer(row.player)
+      return active.has(name)||[...active].some(x=>x.endsWith(" "+name)||name.endsWith(" "+x))
+    })
+  },[liveAdjustedRows,liveOdds,suppliedStartingXI,live])
+
   const visible=useMemo(()=>{
     const allowed=new Set(categories.find(x=>x.id===category)?.markets??[])
     const rows=allRows.filter(x=>allowed.has(x.market as MarketKey))
