@@ -58,14 +58,14 @@ export async function GET(request:Request){
           await pool.query(`INSERT INTO player_h2h
             (player_name,team,opponent,match_date,competition,minutes,
              fouls_committed,fouls_drawn,shots,shots_on_target,yellow_card,red_card,goals,assists,
-             external_match_id)
-            VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+             external_match_id,booking_reason,yellow_card_minute)
+            VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
             ON CONFLICT DO NOTHING`,
             [player.player,player.team,opponent,date,f.competition,
              player.minutes??null,player.foulsCommitted??null,player.foulsDrawn??null,
              player.shots??null,player.shotsOnTarget??null,Number(player.yellowCards??0)>0,
              Number(player.redCards??0)>0,player.goals??null,player.assists??null,
-             String(f.id??"")])
+             String(f.id??""),player.bookingReason??null,player.yellowCardMinute??null])
           imported++
         }
         const ref=String(data.referee?.name??"").trim()
