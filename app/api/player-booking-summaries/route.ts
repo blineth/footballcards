@@ -44,7 +44,8 @@ export async function POST(request:Request){
    // All known appearances before kickoff, including substitute appearances.
    // Crucially, no 12-match H2H or last-220-match cutoff.
    const query=await pool.query<Row&{minutes:number|null;starter:boolean|null}>(`
-    SELECT player_name,team,opponent,match_date::text,yellow_card,minutes,starter,\n      fouls_committed,fouls_drawn,shots,shots_on_target,goals,assists
+    SELECT player_name,team,opponent,match_date::text,yellow_card,minutes,starter,
+      fouls_committed,fouls_drawn,shots,shots_on_target,goals,assists
     FROM player_h2h WHERE lower(player_name)=ANY($1::text[]) AND match_date<$2::date
     AND (minutes IS NULL OR minutes>0)
     ORDER BY match_date DESC`,[unique,date])
@@ -59,7 +60,9 @@ export async function POST(request:Request){
      const recent=deduped.filter(r=>sameTeam(r.team??"",p.team)).slice(0,5)
      const opponent=sameTeam(p.team,home)?away:home
      const h2h=deduped.filter(r=>sameTeam(r.opponent,opponent))
-     const market=String(p.market??"card")\n     return {name:p.name,team:p.team,market,lastFive:marketSummary(recent,market),h2h:marketSummary(h2h,market),\n       cardLastFive:countBooked(recent),cardH2h:countBooked(h2h),
+     const market=String(p.market??"card")
+     return {name:p.name,team:p.team,market,lastFive:marketSummary(recent,market),h2h:marketSummary(h2h,market),
+       cardLastFive:countBooked(recent),cardH2h:countBooked(h2h),
        recordedRecent:recent.length,recordedH2h:h2h.length}
    })
    return NextResponse.json({ok:true,profiles,source:"player_h2h",cutoff:date},
