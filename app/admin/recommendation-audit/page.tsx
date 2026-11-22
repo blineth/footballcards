@@ -28,7 +28,7 @@ export default function RecommendationAudit(){
    .finally(()=>{if(!cancelled)setLoading(false)})
   return()=>{cancelled=true}
  },[date])
- const rows=useMemo(()=>(surface==="live"?data?.liveExamples:data?.examples??[]).filter(x=>{
+ const rows=useMemo(()=>((surface==="live"?data?.liveExamples:data?.examples)??[]).filter(x=>{
   const kind=x.market.startsWith("fouled")?"fouled":x.market.startsWith("foul")?"fouls":x.market.startsWith("shot")?"shots":x.market==="card"?"cards":x.market.startsWith("sot")?"sot":x.market
   return (market==="all"||market===kind)&&(mode==="all"||mode==="won"&&x.outcome===true||mode==="lost"&&x.outcome===false||mode==="pending"&&x.graded_at==null)
  }),[data,market,mode,surface])
