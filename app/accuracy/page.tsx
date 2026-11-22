@@ -159,6 +159,7 @@ export default function AccuracyPage(){
           <div className="mt-3 space-y-2">{(data.liveCardSignals??[]).map(x=><div key={x.signal} className="flex justify-between gap-3 rounded-xl bg-black/25 p-3"><div><p className="text-sm font-bold">{x.signal}</p><p className="text-[0.58rem] text-white/40">{x.hits}/{x.graded} · predicted {num(x.avg_confidence)}</p></div><p className="font-mono text-lg font-black">{pct(x.hits,x.graded)}</p></div>)}</div>
         </section>
         <p className="text-[0.67rem] leading-relaxed text-white/45">Coverage: {data.coverage?.unique_saved} unique logged selections, {data.coverage?.ungraded} still awaiting verifiable results. The scores reflect published picks, not bets placed at a bookmaker. Referee pressure, fouls, dissent and dangerous challenges are candidate predictive signals, not proof that a player will be booked.</p>
+        <Link href="/today" className="block rounded-xl border border-emerald-300/30 bg-emerald-300/10 px-4 py-3 text-center text-sm font-black text-emerald-100">View today’s Hull & Manchester United research slips</Link>
         <Link href="/admin/recommendation-audit" className="block rounded-xl bg-white/10 px-4 py-3 text-center text-sm font-black">Inspect individual picks versus results</Link>
       </>:null}
     </div>
