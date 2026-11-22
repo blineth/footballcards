@@ -66,7 +66,7 @@ export async function GET(request:Request){
              player.shots??null,player.shotsOnTarget??null,Number(player.yellowCards??0)>0,
              Number(player.redCards??0)>0,player.goals??null,player.assists??null,
              String(f.id??""),player.bookingReason??null,player.yellowCardMinute??null,player.foulsStatVerified===true])
-          if(player.bookingReason||player.yellowCardMinute!=null){
+          if(player.bookingReason||player.yellowCardMinute!=null||player.foulsStatVerified===true){
             await pool.query(`UPDATE player_h2h SET
               booking_reason=COALESCE($6,booking_reason),
               yellow_card_minute=COALESCE($7,yellow_card_minute),
