@@ -605,7 +605,7 @@ function broadBetToSelection(bet:AvailableBet,fixture:Fixture):Selection{
 const MAX_RESEARCH_BUILDER_LEGS=6 // Conservative suggested slip; Bet365 publishes an absolute maximum of 12.
 function buildBroadTargetBuilders(rows:Selection[]):RiskBuilder[]{
   const configs=[
-    {id:"broad-most-likely",title:"Most Likely",risk:"Safe" as const,targetFractional:"Best",targetDecimal:0},
+    {id:"broad-most-likely",title:"2/1 Minimum",risk:"Safe" as const,targetFractional:"2/1",targetDecimal:3},
     {id:"broad-3-1",title:"3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4},
     {id:"broad-5-1",title:"5/1",risk:"Safe" as const,targetFractional:"5/1",targetDecimal:6},
     {id:"broad-10-1",title:"10/1",risk:"Safe" as const,targetFractional:"10/1",targetDecimal:11},
@@ -687,12 +687,12 @@ function buildBroadTargetBuilders(rows:Selection[]):RiskBuilder[]{
 
   return configs.map(cfg=>{
     if(cfg.id==="broad-most-likely"){
-      while(chosen.length<Math.min(2,pool.length,MAX_RESEARCH_BUILDER_LEGS))if(!addNext())break
+      while(product<3&&chosen.length<Math.min(pool.length,MAX_RESEARCH_BUILDER_LEGS))if(!addNext())break
     }else{
       while(product<cfg.targetDecimal&&chosen.length<Math.min(pool.length,MAX_RESEARCH_BUILDER_LEGS))if(!addNext())break
     }
     const legs=[...chosen]
-    const reached=cfg.id==="broad-most-likely"?legs.length>=1:product>=cfg.targetDecimal
+    const reached=product>=Math.max(3,cfg.targetDecimal)
     if(!reached)return {
       id:cfg.id,title:cfg.title,risk:cfg.risk,targetFractional:cfg.targetFractional,targetDecimal:cfg.targetDecimal,
       legs:[],referenceProductOdds:null,averageLegProbability:null,minimumLegProbability:null,modelAllHitProbability:null,
@@ -716,7 +716,7 @@ function buildBroadTargetBuilders(rows:Selection[]):RiskBuilder[]{
 }
 function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuilder[]{
   const configs=[
-    {id:"most-likely",title:"Most Likely",risk:"Safe" as const,targetFractional:"Best",targetDecimal:0},
+    {id:"most-likely",title:"2/1 Minimum",risk:"Safe" as const,targetFractional:"2/1",targetDecimal:3},
     {id:"target-3-1",title:"3/1",risk:"Safe" as const,targetFractional:"3/1",targetDecimal:4},
     {id:"target-5-1",title:"5/1",risk:"Safe" as const,targetFractional:"5/1",targetDecimal:6},
     {id:"target-10-1",title:"10/1",risk:"Safe" as const,targetFractional:"10/1",targetDecimal:11},
@@ -854,12 +854,12 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
 
   return configs.map(cfg=>{
     if(cfg.id==="most-likely"){
-      while(chosen.length<Math.min(2,pool.length,MAX_RESEARCH_BUILDER_LEGS))if(!addNext())break
+      while(product<3&&chosen.length<Math.min(pool.length,MAX_RESEARCH_BUILDER_LEGS))if(!addNext())break
     }else{
       while(product<cfg.targetDecimal&&chosen.length<pool.length)if(!addNext())break
     }
     const legs=[...chosen]
-    const reached=cfg.id==="most-likely"?legs.length>=1:product>=cfg.targetDecimal
+    const reached=product>=Math.max(3,cfg.targetDecimal)
     if(!reached){
       // A missing bookmaker quote or an unreachable odds floor must not erase
       // the actual model picks: these are research predictions, not quoted bets.
@@ -1272,7 +1272,7 @@ export default function BetBuilderPage(){
   const playerBuilders=!inPlay&&serverBuilders.length?serverBuilders:clientRiskBuilders(allRows,true)
   const disciplineBuilders=!inPlay&&disciplineServerBuilders.length?disciplineServerBuilders:clientRiskBuilders(disciplineRows,true)
   const broadHasBuild=broadTargetBuilders.some(b=>b.legs?.length)
-  const builders=builderMode==="discipline"
+  const candidateBuilders=builderMode==="discipline"
     ?disciplineBuilders
     :builderMode==="player"
       ?playerBuilders
@@ -1281,6 +1281,7 @@ export default function BetBuilderPage(){
         :broadHasBuild
           ?broadTargetBuilders
           :playerBuilders
+  const builders=candidateBuilders.filter(b=>b.legs?.length&&b.referenceProductOdds!=null&&b.referenceProductOdds>=3 || (b.legs?.length&&b.referenceProductOdds==null))
   const bestAvailableBets=useMemo(()=>{
     const byFamily=new Map<string,Selection>()
     const candidates=[...broadRows,...verifiedPlayerRows]
@@ -1757,10 +1758,10 @@ function RiskCard({build,onUse,onTrack,liveBet365=false,inPlay=false,fixture,def
   const summary=betSummary(build)
   return <article className={"rounded-2xl border "+tone}>
     <button onClick={()=>setOpen(v=>!v)} className="flex w-full items-center justify-between gap-3 p-3 text-left">
-      <div className="min-w-0"><p className={"text-[0.48rem] font-black uppercase tracking-wide "+accent}>{build.id==="most-likely"?"RECOMMENDED":"ODDS FLOOR"}</p><div className="mt-1 flex flex-wrap items-baseline gap-2"><p className="text-base font-black">{build.title}</p>{build.referenceProductOdds?<span className="font-mono text-sm font-black text-white/55">{fractionalOdds(build.referenceProductOdds)} actual</span>:null}</div><p className="mt-1 text-[0.45rem] text-white/30">{build.legs.length?build.legs.length+" selections · "+percent(build.conservativeAllHitProbability,1)+" safety chance":build.note}</p></div>
+      <div className="min-w-0"><p className={"text-[0.48rem] font-black uppercase tracking-wide "+accent}>{build.id==="most-likely"||build.id==="broad-most-likely"?"2/1 MINIMUM":"ODDS TARGET"}</p><div className="mt-1 flex flex-wrap items-baseline gap-2"><p className="text-base font-black">{build.title}</p>{build.referenceProductOdds?<span className="font-mono text-sm font-black text-white/55">{fractionalOdds(build.referenceProductOdds)} singles estimate</span>:null}</div><p className="mt-1 text-[0.45rem] text-white/30">{build.legs.length?build.legs.length+" selections · "+percent(build.conservativeAllHitProbability,1)+" safety chance":build.note}</p></div>
       <ChevronDown className={"size-4 shrink-0 text-white/35 transition "+(open?"rotate-180":"")}/>
     </button>
-    {open&&build.legs.length?<div className="border-t border-white/7 p-3">{summary?<div className="mb-3 rounded-xl border border-cyan-300/10 bg-cyan-300/[0.04] p-2.5"><p className="text-[0.46rem] font-black uppercase tracking-wide text-cyan-200">Why this bet</p><p className="mt-1 text-[0.52rem] font-bold text-white/60">{summary.markets}</p>{summary.evidence?<p className="mt-1 text-[0.44rem] leading-relaxed text-white/35">{summary.evidence}. The ladder prioritises the highest-probability player events first and only adds more legs to clear this odds floor.</p>:<p className="mt-1 text-[0.44rem] leading-relaxed text-white/35">The ladder prioritises the highest-probability player events first and only adds more legs to clear this odds floor.</p>}</div>:null}<div className="flex flex-wrap items-center gap-1.5"><span className={"rounded-full px-2 py-1 text-[0.38rem] font-black "+(verified?(liveBet365?"bg-emerald-300/15 text-emerald-200":"bg-cyan-300/10 text-cyan-100"):"bg-amber-300/10 text-amber-100")}>{verified?(liveBet365?"LIVE BET365 LEGS":"VERIFIED BET365 LEGS"):referenceBet365?"BET365 REFERENCE LEGS":(inPlay?"LIVE MODEL ROUTE":"MODEL ANALYSIS ONLY")}</span><span className="text-[0.38rem] text-white/25">{verified?"final Bet Builder quote may differ":referenceBet365?"last captured Bet365 singles · not current live quotes":modelOnly?"Bet365 price unavailable · model still updating":"model fair odds"}</span></div><div className="mt-2 grid grid-cols-3 gap-1.5"><MiniStat label="Raw chance" value={percent(build.modelAllHitProbability,1)}/><MiniStat label="Safety chance" value={percent(build.conservativeAllHitProbability??build.modelAllHitProbability,1)}/><MiniStat label={verified?"Singles ref":referenceBet365?"B365 ref":"Model product"} value={fractionalOdds(build.referenceProductOdds)}/></div><div className="mt-2 space-y-1.5">{build.legs.map(l=>{const ev=marketEvidence(l);return <div key={keyOf(l)} className="rounded-lg bg-black/15 px-2 py-2"><div className="flex items-start justify-between gap-2"><div className="min-w-0 flex-1"><div className="flex min-w-0 items-center gap-1.5"><p className="min-w-0 truncate text-[0.5rem] text-white/65">{l.player} · {l.label}</p><TeamBadge team={l.team} fixture={fixture}/></div>{ev?<p className="mt-1 text-[0.42rem] font-bold text-cyan-100/55">{ev}</p>:null}<MarketHistoryBadge player={l.player} team={l.team} market={l.market} date={fixture.date} home={fixture.home} away={fixture.away} competition={fixture.competition}/></div><div className="shrink-0 text-right"><p className="font-mono text-[0.48rem] font-black text-white/55">{percent(l.probability)}</p></div></div></div>})}</div><div className="mt-3 grid grid-cols-2 gap-2"><button onClick={onUse} className="rounded-xl bg-white/8 px-3 py-2 text-[0.54rem] font-black text-white/55">{verified?"Use selections":referenceBet365?"View Bet365 refs":"View selections"}</button><button disabled={!verified} onClick={verified?onTrack:undefined} className={"rounded-xl px-3 py-2 text-[0.58rem] font-black "+(verified?"bg-white text-[#07120e]":"cursor-not-allowed bg-white/8 text-white/25")}>{verified?"Track research only":referenceBet365?"Bet365 refs only":"Awaiting Bet365 price"}</button></div></div>:open&&!build.legs.length?<div className="border-t border-white/7 p-3 text-[0.52rem] text-white/35">{build.note}</div>:null}
+    {open&&build.legs.length?<div className="border-t border-white/7 p-3">{summary?<div className="mb-3 rounded-xl border border-cyan-300/10 bg-cyan-300/[0.04] p-2.5"><p className="text-[0.46rem] font-black uppercase tracking-wide text-cyan-200">Why this bet</p><p className="mt-1 text-[0.52rem] font-bold text-white/60">{summary.markets}</p>{summary.evidence?<p className="mt-1 text-[0.44rem] leading-relaxed text-white/35">{summary.evidence}. The ladder prioritises the highest-probability player events first and only adds more legs to clear this odds floor.</p>:<p className="mt-1 text-[0.44rem] leading-relaxed text-white/35">The ladder prioritises the highest-probability player events first and only adds more legs to clear this odds floor.</p>}</div>:null}<div className="flex flex-wrap items-center gap-1.5"><span className={"rounded-full px-2 py-1 text-[0.38rem] font-black "+(verified?(liveBet365?"bg-emerald-300/15 text-emerald-200":"bg-cyan-300/10 text-cyan-100"):"bg-amber-300/10 text-amber-100")}>{verified?(liveBet365?"LIVE BET365 LEGS":"VERIFIED BET365 LEGS"):referenceBet365?"BET365 REFERENCE LEGS":(inPlay?"LIVE MODEL ROUTE":"MODEL ANALYSIS ONLY")}</span><span className="text-[0.38rem] text-white/25">{verified?"Indicative product of Bet365 singles; actual builder quote may differ":referenceBet365?"last captured Bet365 singles · not current live quotes":modelOnly?"Bet365 price unavailable · model still updating":"model fair odds"}</span></div><div className="mt-2 grid grid-cols-3 gap-1.5"><MiniStat label="Raw chance" value={percent(build.modelAllHitProbability,1)}/><MiniStat label="Safety chance" value={percent(build.conservativeAllHitProbability??build.modelAllHitProbability,1)}/><MiniStat label={verified?"Singles ref":referenceBet365?"B365 ref":"Model product"} value={fractionalOdds(build.referenceProductOdds)}/></div><div className="mt-2 space-y-1.5">{build.legs.map(l=>{const ev=marketEvidence(l);return <div key={keyOf(l)} className="rounded-lg bg-black/15 px-2 py-2"><div className="flex items-start justify-between gap-2"><div className="min-w-0 flex-1"><div className="flex min-w-0 items-center gap-1.5"><p className="min-w-0 truncate text-[0.5rem] text-white/65">{l.player} · {l.label}</p><TeamBadge team={l.team} fixture={fixture}/></div>{ev?<p className="mt-1 text-[0.42rem] font-bold text-cyan-100/55">{ev}</p>:null}<MarketHistoryBadge player={l.player} team={l.team} market={l.market} date={fixture.date} home={fixture.home} away={fixture.away} competition={fixture.competition}/></div><div className="shrink-0 text-right"><p className="font-mono text-[0.48rem] font-black text-white/55">{percent(l.probability)}</p></div></div></div>})}</div><div className="mt-3 grid grid-cols-2 gap-2"><button onClick={onUse} className="rounded-xl bg-white/8 px-3 py-2 text-[0.54rem] font-black text-white/55">{verified?"Use selections":referenceBet365?"View Bet365 refs":"View selections"}</button><button disabled={!verified} onClick={verified?onTrack:undefined} className={"rounded-xl px-3 py-2 text-[0.58rem] font-black "+(verified?"bg-white text-[#07120e]":"cursor-not-allowed bg-white/8 text-white/25")}>{verified?"Track research only":referenceBet365?"Bet365 refs only":"Awaiting Bet365 price"}</button></div></div>:open&&!build.legs.length?<div className="border-t border-white/7 p-3 text-[0.52rem] text-white/35">{build.note}</div>:null}
   </article>
 }
 function TrackBetModal({draft,fixture,onClose,onSaved}:{draft:TrackDraft;fixture:Fixture;onClose:()=>void;onSaved:()=>void}){
