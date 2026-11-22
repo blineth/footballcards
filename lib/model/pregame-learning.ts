@@ -45,6 +45,19 @@ function summarize(rows:Array<{date:string;fixture:string;p:number;hit:boolean}>
  value.fixtureCount=new Set(rows.map(x=>x.fixture)).size
  return value
 }
+type LearningPick={date:string;fixture:string;player:string;team:string;competition:string;market:Market;model:string;probability:number;hit:boolean;priorMatches:number;lastFiveHits:number;period:"train"|"holdout"}
+function getTopPicks(samples:PriorSample[],policy:Policy,period:"train"|"holdout",market:Market){
+ const best=new Map<string,LearningPick>()
+ for(const row of samples){
+  if(row.market!==market||row.history.length<policy.minHistory)continue
+  const p=predict(row.history,market,policy)
+  const old=best.get(row.fixture)
+  if(!old||p>old.probability)best.set(row.fixture,{date:row.date,fixture:row.fixture,player:row.player,team:row.team,
+     competition:row.competition,market,model:policy.id,probability:Number(p.toFixed(4)),
+     hit:row.outcome,priorMatches:row.history.length,lastFiveHits:row.history.slice(-5).filter(Boolean).length,period})
+ }
+ return [...best.values()]
+}
 function selectTop(samples:PriorSample[],policy:Policy,phase:"train"|"holdout",market:Market){
  const best=new Map<string,{date:string;fixture:string;p:number;hit:boolean}>()
  for(const row of samples){
@@ -63,7 +76,9 @@ export async function runPregameLearning(){
     id bigserial PRIMARY KEY, created_at timestamptz NOT NULL DEFAULT now(),
     status text NOT NULL, source_rows integer NOT NULL, unique_fixtures integer NOT NULL,
     first_date date,last_date date, training_end date, results jsonb NOT NULL,
-    recommendations jsonb NOT NULL, methodology text NOT NULL)`)
+    recommendations jsonb NOT NULL, methodology text NOT NULL,
+    review_examples jsonb NOT NULL DEFAULT '[]'::jsonb)`)
+ await pool.query(`ALTER TABLE pregame_learning_runs ADD COLUMN IF NOT EXISTS review_examples jsonb NOT NULL DEFAULT '[]'::jsonb`)
  const query=await pool.query<HistoryRow>(`SELECT player_name,team,opponent,competition,
      match_date::text,minutes,yellow_card,red_card,fouls_committed,fouls_drawn,shots,shots_on_target
      FROM player_h2h
@@ -118,6 +133,7 @@ export async function runPregameLearning(){
  const train=examples.filter(x=>x.date<=boundary)
  const holdout=examples.filter(x=>x.date>boundary)
  const results:Score[]=[]
+ const examplesAudit:LearningPick[]=[]
  const recommendations:Array<{market:Market;candidate:string;baselineHoldout:Score;candidateHoldout:Score;training:Score;adopted:boolean;reason:string}>=[]
  for(const market of MARKET_TYPES){
    const trainRows=POLICIES.map(policy=>selectTop(train,policy,"train",market))
@@ -127,6 +143,8 @@ export async function runPregameLearning(){
    const baseHoldout=selectTop(holdout,POLICIES[0],"holdout",market)
    const chosen=POLICIES.find(x=>x.id===champion.model)??POLICIES[0]
    const testedHoldout=selectTop(holdout,chosen,"holdout",market)
+   const holdoutPicks=getTopPicks(holdout,chosen,"holdout",market).sort((a,b)=>b.date.localeCompare(a.date))
+   examplesAudit.push(...holdoutPicks.filter(x=>!x.hit).slice(0,12),...holdoutPicks.filter(x=>x.hit).slice(0,8))
    results.push(...trainRows,baseHoldout,testedHoldout)
    const meetsSize=champion.sample>=200&&baseHoldout.sample>=80&&testedHoldout.sample>=80&&testedHoldout.distinctDates>=10
    const exceeds=champion.model!=="baseline"&&champion.brier+0.004<baseline.brier&&testedHoldout.brier+0.004<baseHoldout.brier
@@ -137,12 +155,12 @@ export async function runPregameLearning(){
  const status=dates.length<12||examples.length<200?"insufficient-history":"shadow-evaluated"
  const methodology="Chronological fixture-date split (first 80% train, last 20% holdout). For each player, league and fixture, rolling binary market rates use strictly earlier player matches only; fewer than four prior appearances are excluded. Candidate recency/prior weights are selected on training dates, then independently scored on held-out dates. Top single player per match and market, not every player, is graded. Baseline is an historical Bayesian proxy, not an exact replay of the website's old scoring engine; historical exact bookmaker odds and commentary are not reconstructed. Shadow research only; no automatic production promotion."
  const saved=await pool.query(`INSERT INTO pregame_learning_runs
-   (status,source_rows,unique_fixtures,first_date,last_date,training_end,results,recommendations,methodology)
-   VALUES($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9) RETURNING id,created_at`,
-   [status,rows.length,fixtures.size,first,last,boundary,JSON.stringify(results),JSON.stringify(recommendations),methodology])
+   (status,source_rows,unique_fixtures,first_date,last_date,training_end,results,recommendations,methodology,review_examples)
+   VALUES($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9,$10::jsonb) RETURNING id,created_at`,
+   [status,rows.length,fixtures.size,first,last,boundary,JSON.stringify(results),JSON.stringify(recommendations),methodology,JSON.stringify(examplesAudit)])
  return {id:saved.rows[0].id,createdAt:saved.rows[0].created_at,status,sourceRows:rows.length,
    uniqueFixtures:fixtures.size,matchDates:dates.length,trainingEnd:boundary,trainingSamples:train.length,holdoutSamples:holdout.length,
-   results,recommendations,methodology}
+   results,recommendations,reviewExamples:examplesAudit,methodology}
 }
 export async function latestPregameLearning(){
  if(!isDatabaseConfigured)return null
