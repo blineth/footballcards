@@ -12,7 +12,7 @@ export async function GET(request:Request){
   if(!isDatabaseConfigured)return NextResponse.json({ok:false,error:"Database unavailable"},{status:503})
   try{
     await ensureResearchSchema()
-    const [runs,market,examples,history,recs]=await Promise.all([
+    const [runs,market,examples,liveExamples,history,recs]=await Promise.all([
       pool.query(`SELECT count(DISTINCT r.id)::int runs,count(l.id)::int legs,
         count(l.id) FILTER(WHERE l.graded_at IS NOT NULL)::int graded,
         count(l.id) FILTER(WHERE l.outcome IS TRUE)::int won,
@@ -41,6 +41,28 @@ export async function GET(request:Request){
         ) h ON l.player_name IS NOT NULL
         WHERE l.fixture_date=$1 AND (r.live=false OR r.surface IN ('multi_match','multi_combined','acca','legacy_recommended'))
         ORDER BY r.captured_at ASC,l.leg_index ASC LIMIT 150`,[date]),
+      pool.query(`SELECT * FROM (
+        SELECT r.id AS run_id,r.surface,r.slip_title,r.tier,r.odds_target,r.live,r.live_minute,
+          r.captured_at,r.home_team AS run_home,r.away_team AS run_away,r.fully_graded,r.won AS slip_won,
+          l.leg_index,l.player_name,l.market,l.label,l.model_probability,l.bookmaker_odds,
+          l.fixture_date,l.home_team,l.away_team,l.graded_at,l.outcome,l.result_value,
+          l.live_current_count,l.live_fouls,l.live_fouled,
+          h.fouls_committed AS actual_fouls,h.fouls_drawn AS actual_fouled,
+          h.shots AS actual_shots,h.shots_on_target AS actual_sot,
+          h.yellow_card AS actual_yellow,h.red_card AS actual_red,h.minutes AS actual_minutes,
+          row_number() OVER (
+            PARTITION BY lower(coalesce(l.home_team,'')),lower(coalesce(l.away_team,'')),
+              lower(coalesce(l.player_name,'')),l.market,coalesce(l.threshold,-1)
+            ORDER BY r.captured_at ASC
+          ) AS unique_rank
+        FROM prediction_runs r JOIN prediction_legs l ON l.run_id=r.id
+        LEFT JOIN LATERAL (
+          SELECT h.* FROM player_h2h h
+          WHERE h.match_date=l.fixture_date AND lower(h.player_name)=lower(COALESCE(l.db_player_name,l.player_name))
+          ORDER BY (lower(coalesce(h.opponent,''))=lower(coalesce(l.opponent_team,''))) DESC,h.minutes DESC NULLS LAST LIMIT 1
+        ) h ON l.player_name IS NOT NULL
+        WHERE l.fixture_date=$1 AND r.live=true
+      ) distinct_live WHERE unique_rank=1 ORDER BY captured_at ASC LIMIT 200`,[date]),
       pool.query(`SELECT count(*)::int player_rows,count(DISTINCT player_name)::int players,
         count(DISTINCT opponent)::int opponents
         FROM player_h2h WHERE match_date=$1`,[date]),
@@ -48,7 +70,7 @@ export async function GET(request:Request){
         FROM recommendation_snapshots WHERE fixture_date=$1`,[date]),
     ])
     return NextResponse.json({ok:true,date,summary:runs.rows[0],markets:market.rows,
-      examples:examples.rows,playerHistory:history.rows[0],legacyRecommendations:recs.rows[0],
+      examples:examples.rows,liveExamples:liveExamples.rows,playerHistory:history.rows[0],legacyRecommendations:recs.rows[0],
       updatedAt:new Date().toISOString()},{headers:{"Cache-Control":"no-store"}})
   }catch(error){return NextResponse.json({ok:false,error:error instanceof Error?error.message:"Audit failed"},{status:500})}
 }
