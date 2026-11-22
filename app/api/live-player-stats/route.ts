@@ -10,7 +10,8 @@ type LivePlayerStat={
   goals:number;assists:number;yellowCards:number;redCards:number;starter:boolean;subbedOn:boolean;subbedOff:boolean;
   tackles:number;interceptions:number;blocks:number;duelsTotal:number;duelsWon:number;defensiveInterventions:number;
   recentFouls10:number;recentFouls15:number;recentFouled10:number;disciplineHeat:number;
-  aggressionScore:number;aggressionSignals:string[];lastAggressionMinute:number|null
+  aggressionScore:number;aggressionSignals:string[];lastAggressionMinute:number|null;
+  bookingReason:string|null;yellowCardMinute:number|null
 }
 type RefereeLiveContext={
   name:string|null;source:string|null;matches:number|null;historicalYellowsPerGame:number|null;historicalFoulsPerGame:number|null;
@@ -307,7 +308,7 @@ async function espnLive(input:{date:string;home:string;away:string;competition:C
             duelsWon:Math.max(espnStat(row,"duelsWon"),espnStat(row,"wonDuels")),
             defensiveInterventions:espnStat(row,"defensiveInterventions"),
             recentFouls10:0,recentFouls15:0,recentFouled10:0,disciplineHeat:0,
-            aggressionScore:0,aggressionSignals:[],lastAggressionMinute:null,
+            aggressionScore:0,aggressionSignals:[],lastAggressionMinute:null,bookingReason:null,yellowCardMinute:null,
             subbedOff:Boolean(row?.subbedOut),
           })
         }
@@ -346,7 +347,20 @@ async function espnLive(input:{date:string;home:string;away:string;competition:C
           for(const p of ev?.participants??[]){
             const name=String(p?.athlete?.displayName??p?.athlete?.fullName??"").trim()
             const row=map.get(norm(name));if(!row)continue
-            if(isYellow)row.yellowCards=Math.max(1,row.yellowCards)
+            if(isYellow){
+              row.yellowCards=Math.max(1,row.yellowCards)
+              const minute=minuteFromEvent(ev)
+              if(minute!=null)row.yellowCardMinute=Math.max(row.yellowCardMinute??0,minute)
+              // Only attach a cause when the booking event itself explicitly says so.
+              // An unrelated argument elsewhere in commentary is not a card reason.
+              if(/dissent|argu(?:ing|ed)? with (?:the )?referee|protest(?:ing|ed)? (?:the )?decision|abusive language/i.test(rawText)){
+                row.bookingReason="dissent (explicit booking event)"
+              }else if(/unsporting behaviour/i.test(rawText)){
+                row.bookingReason="unsporting behaviour (explicit booking event)"
+              }else if(/reckless|late challenge|tactical foul|professional foul/i.test(rawText)){
+                row.bookingReason="challenge/foul (explicit booking event)"
+              }
+            }
             if(isRed)row.redCards=Math.max(1,row.redCards)
           }
         }
