@@ -67,14 +67,15 @@ export async function GET(request:Request){
       fouls_committed,fouls_drawn,shots,shots_on_target,yellow_card,red_card,goals,assists,venue
       FROM player_h2h
       WHERE lower(player_name)=lower($1) AND match_date<$2::date
-      ORDER BY match_date DESC LIMIT 280`,[player,date])
+      AND (minutes IS NULL OR minutes>0) ORDER BY match_date DESC`,[player,date])
     const h2hSeen=new Set<string>()
-    const h2h=opponentRows.rows.filter(row=>{
+    const allH2h=opponentRows.rows.filter(row=>{
       if(!matchTeam(row.opponent,opposition))return false
       const key=[row.match_date,norm(row.opponent),norm(row.team)].join("|")
       if(h2hSeen.has(key))return false
       h2hSeen.add(key);return true
-    }).slice(0,12)
+    })
+    const h2h=allH2h.slice(0,12)
     const bookingSummary=(rows:Row[])=>({
       booked:rows.filter(row=>row.yellow_card===true).length,
       withKnownOutcome:rows.filter(row=>row.yellow_card!=null).length,
@@ -89,9 +90,9 @@ export async function GET(request:Request){
     })
     return NextResponse.json({ok:true,source:"player_h2h",player,team,opponent:opposition,
       market,cutoff:date,lastFive:lastFive.map(cast),h2h:h2h.map(cast),
-      lastFiveSummary:summarise(lastFive,market),h2hSummary:summarise(h2h,market),
-      lastFiveBookings:bookingSummary(lastFive),h2hBookings:bookingSummary(h2h),
-      h2hOpponent:opposition,
+      lastFiveSummary:summarise(lastFive,market),h2hSummary:summarise(allH2h,market),
+      lastFiveBookings:bookingSummary(lastFive),h2hBookings:bookingSummary(allH2h),
+      h2hOpponent:opposition,h2hTotalAppearances:allH2h.length,h2hDisplayed:h2h.length,
       note:"Only matches before this fixture. H2H searches across earlier seasons and clubs; a dash means the historical source did not record that statistic."},
       {headers:{"Cache-Control":"public, max-age=0, s-maxage=900, stale-while-revalidate=3600"}})
   }catch(e){
