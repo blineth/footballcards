@@ -10,11 +10,12 @@ type Leg={run_id:number;surface:string;slip_title:string;captured_at:string;home
   outcome:boolean|null;result_value:string|null;graded_at:string|null;actual_fouls:number|null;actual_fouled:number|null;
   actual_shots:number|null;actual_sot:number|null;actual_yellow:boolean|null;actual_red:boolean|null}
 type Audit={ok:boolean;error?:string;summary?:{runs:number;legs:number;graded:number;won:number;graded_slips:number;winning_slips:number};
-  playerHistory?:{player_rows:number};markets?:Market[];examples?:Leg[]}
+  playerHistory?:{player_rows:number};markets?:Market[];examples?:Leg[];liveExamples?:Leg[]}
 function dateYesterday(){const d=new Date();d.setUTCDate(d.getUTCDate()-1);return d.toISOString().slice(0,10)}
 export default function RecommendationAudit(){
  const[date,setDate]=useState(dateYesterday)
  const[market,setMarket]=useState("all")
+ const[surface,setSurface]=useState("pre")
  const[mode,setMode]=useState("all")
  const[data,setData]=useState<Audit|null>(null)
  const[loading,setLoading]=useState(false)
@@ -27,10 +28,10 @@ export default function RecommendationAudit(){
    .finally(()=>{if(!cancelled)setLoading(false)})
   return()=>{cancelled=true}
  },[date])
- const rows=useMemo(()=>(data?.examples??[]).filter(x=>{
+ const rows=useMemo(()=>(surface==="live"?data?.liveExamples:data?.examples??[]).filter(x=>{
   const kind=x.market.startsWith("fouled")?"fouled":x.market.startsWith("foul")?"fouls":x.market.startsWith("shot")?"shots":x.market==="card"?"cards":x.market.startsWith("sot")?"sot":x.market
   return (market==="all"||market===kind)&&(mode==="all"||mode==="won"&&x.outcome===true||mode==="lost"&&x.outcome===false||mode==="pending"&&x.graded_at==null)
- }),[data,market,mode])
+ }),[data,market,mode,surface])
  const s=data?.summary
  return <main className="min-h-screen bg-[#07120e] pb-24 text-white">
   <header className="border-b border-white/10 bg-[#07120e]"><div className="mx-auto max-w-5xl px-4 py-5">
@@ -45,7 +46,7 @@ export default function RecommendationAudit(){
    {s?<><section className="grid grid-cols-2 gap-2 sm:grid-cols-4">
     {[[ "Prediction runs",s.runs],["Selections saved",s.legs],["Graded",s.graded],["Winning selections",s.won]].map(([label,value])=><div key={String(label)} className="rounded-2xl border border-white/10 bg-white/[0.045] p-3"><p className="text-[0.52rem] text-white/45">{label}</p><p className="mt-1 text-xl font-black">{value}</p></div>)}
    </section>
-   <p className="text-xs leading-relaxed text-white/45">Each live update is kept as a timestamped snapshot. Repeated predictions are not independent bets. Missing results remain ungraded. The detailed list below shows the earliest 150 saved pre-match/accumulator selections; market totals cover the full date.</p>
+   <p className="text-xs leading-relaxed text-white/45">Each live update is kept as a timestamped snapshot. Repeated predictions are not independent bets. Missing results remain ungraded. The detailed list shows the earliest 150 pre-match selections or up to 200 distinct live player lines, depending on the tab. Market totals cover all saved snapshots for the date.</p>
    <section className="rounded-2xl border border-white/10 bg-white/[0.035] p-3"><h2 className="font-black">Accuracy by market</h2>
     <div className="mt-3 space-y-2">{(data?.markets??[]).map(x=><div key={x.market} className="grid grid-cols-[1fr_auto] gap-3 rounded-xl bg-black/20 p-3">
      <div><p className="text-xs font-black">{x.market}</p><p className="mt-0.5 text-[0.52rem] text-white/40">{x.graded}/{x.predictions} graded · predicted average {x.predicted_pct}%</p></div>
@@ -55,6 +56,8 @@ export default function RecommendationAudit(){
    <section className="rounded-2xl border border-white/10 bg-white/[0.035] p-3">
     <h2 className="font-black">Saved suggestions and results</h2>
     <div className="mt-3 flex flex-wrap gap-2">
+      <button onClick={()=>setSurface("pre")} className={"rounded-xl px-3 py-2 text-xs font-black "+(surface==="pre"?"bg-emerald-300 text-emerald-950":"bg-white/10 text-white/55")}>Pre-match / accas</button>
+      <button onClick={()=>setSurface("live")} className={"rounded-xl px-3 py-2 text-xs font-black "+(surface==="live"?"bg-emerald-300 text-emerald-950":"bg-white/10 text-white/55")}>Live picks</button>
       <select value={market} onChange={e=>setMarket(e.target.value)} className="rounded-xl border border-white/10 bg-[#16231c] px-3 py-2 text-xs">
        {["all","fouls","cards","shots","sot","fouled","homeWin","awayWin","bttsYes","goal1"].map(x=><option key={x} value={x}>{x==="all"?"All markets":x}</option>)}
       </select>
