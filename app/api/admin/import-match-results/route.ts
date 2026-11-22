@@ -20,6 +20,21 @@ export async function GET(request:Request){
     const board=await response.json()
     const fixtures=Object.values(board?.leagues??{}).flat() as any[]
     const finished=fixtures.filter(f=>f.status==="finished")
+    await pool.query(`CREATE TABLE IF NOT EXISTS match_result_audit (
+      fixture_date date NOT NULL,home_team text NOT NULL,away_team text NOT NULL,
+      competition text,home_score integer NOT NULL,away_score integer NOT NULL,
+      source text,updated_at timestamptz NOT NULL DEFAULT now(),
+      PRIMARY KEY(fixture_date,home_team,away_team)
+    )`)
+    for(const f of finished){
+      if(f.score?.home==null||f.score?.away==null)continue
+      await pool.query(`INSERT INTO match_result_audit
+        (fixture_date,home_team,away_team,competition,home_score,away_score,source)
+        VALUES($1,$2,$3,$4,$5,$6,$7)
+        ON CONFLICT(fixture_date,home_team,away_team) DO UPDATE
+        SET home_score=EXCLUDED.home_score,away_score=EXCLUDED.away_score,updated_at=now()`,
+        [date,f.home.name,f.away.name,f.competition,f.score.home,f.score.away,"finished fixture feed"])
+    }
     const selected=finished.slice(offset,offset+limit)
     const results=await Promise.all(selected.map(async f=>{
       const name=f.home.name+" v "+f.away.name
@@ -89,6 +104,27 @@ export async function GET(request:Request){
         AND (l.opponent_team IS NULL OR lower(l.opponent_team)=lower(h.opponent))
         AND (l.market='card' OR l.market LIKE 'fouled%' OR l.market LIKE 'foul%' OR l.market LIKE 'sot%' OR l.market LIKE 'shot%' OR l.market LIKE 'goal%' OR l.market LIKE 'assist%')
     `,[date])
+    const matchGraded=await pool.query(`UPDATE prediction_legs l SET
+      result_value=CASE
+        WHEN l.market='homeWin' THEN CASE WHEN m.home_score>m.away_score THEN 1 ELSE 0 END
+        WHEN l.market='awayWin' THEN CASE WHEN m.away_score>m.home_score THEN 1 ELSE 0 END
+        WHEN l.market='draw' THEN CASE WHEN m.away_score=m.home_score THEN 1 ELSE 0 END
+        WHEN l.market IN ('bttsYes','bttsNo') THEN CASE WHEN m.home_score>0 AND m.away_score>0 THEN 1 ELSE 0 END
+        ELSE 0 END,
+      outcome=CASE
+        WHEN l.market='homeWin' THEN m.home_score>m.away_score
+        WHEN l.market='awayWin' THEN m.away_score>m.home_score
+        WHEN l.market='draw' THEN m.home_score=m.away_score
+        WHEN l.market='bttsYes' THEN m.home_score>0 AND m.away_score>0
+        WHEN l.market='bttsNo' THEN m.home_score=0 OR m.away_score=0
+        ELSE NULL END,
+      graded_at=now()
+      FROM match_result_audit m
+      WHERE l.fixture_date=$1 AND m.fixture_date=$1 AND l.graded_at IS NULL
+        AND lower(l.home_team)=lower(m.home_team)
+        AND lower(l.away_team)=lower(m.away_team)
+        AND l.market IN ('homeWin','awayWin','draw','bttsYes','bttsNo')
+    `,[date])
     await pool.query(`UPDATE prediction_runs r SET
       fully_graded=true,won=t.won,graded_at=now()
       FROM (SELECT run_id,count(*) total,count(*) FILTER(WHERE graded_at IS NOT NULL) graded,bool_and(outcome IS TRUE) won
@@ -97,6 +133,6 @@ export async function GET(request:Request){
     const legacy={graded:0,note:"Legacy grading remains on existing scheduled process"}
     return NextResponse.json({ok:true,date,offset,limit,totalFinished:finished.length,
       nextOffset:offset+selected.length<finished.length?offset+selected.length:null,
-      results,graded:{graded:graded.rowCount??0},legacy,updatedAt:new Date().toISOString()},{headers:{"Cache-Control":"no-store"}})
+      results,graded:{player:graded.rowCount??0,match:matchGraded.rowCount??0},legacy,updatedAt:new Date().toISOString()},{headers:{"Cache-Control":"no-store"}})
   }catch(e){return NextResponse.json({ok:false,error:e instanceof Error?e.message:"Import failed"},{status:500})}
 }
