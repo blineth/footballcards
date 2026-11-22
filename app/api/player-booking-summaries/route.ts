@@ -12,7 +12,7 @@ function sameTeam(a:string,b:string){
 }
 function countBooked(rows:Row[]){
  const graded=rows.filter(r=>r.yellow_card!=null)
- return {booked:graded.filter(r=>r.yellow_card===true).length,total:graded.length}
+ return {booked:graded.filter(r=>r.yellow_card===true).length,total:rows.length,knownCardStatus:graded.length}
 }
 export async function POST(request:Request){
  let body:{date?:string;home?:string;away?:string;players?:InputPlayer[]}
