@@ -851,9 +851,8 @@ function clientRiskBuilders(rows:Selection[],strictVerifiedLive=false):RiskBuild
   // substitute fair/model odds as bookmaker prices for an odds-target slip.
   let mode:PriceMode="model"
   const livePool=choosePool("live")
-  const refPool=choosePool("reference")
+  // Never use cached/reference or model prices to construct displayed slips.
   if(livePool.length>=2)mode="live"
-  else if(refPool.length>=2)mode="reference"
 
   // Optimise each odds tier independently. Hull exposed a failure mode where the
   // previous ladder inherited a weak selection from every smaller builder.
@@ -1319,19 +1318,19 @@ export default function BetBuilderPage(){
     :[],[activeAvailableBets,fixture])
   const verifiedPlayerRows=useMemo(()=>allRows.filter(r=>verifiedBet365Odd(r)!=null),[allRows])
   const broadTargetBuilders=useMemo(()=>buildBroadTargetBuilders([...broadRows,...verifiedPlayerRows]),[broadRows,verifiedPlayerRows])
-  const playerBuilders=!inPlay&&serverBuilders.length?serverBuilders:clientRiskBuilders(allRows,true)
-  const disciplineBuilders=!inPlay&&disciplineServerBuilders.length?disciplineServerBuilders:clientRiskBuilders(disciplineRows,true)
+  const playerBuilders=clientRiskBuilders(allRows,true)
+  const disciplineBuilders=clientRiskBuilders(disciplineRows,true)
   const broadHasBuild=broadTargetBuilders.some(b=>b.legs?.length)
   const candidateBuilders=builderMode==="discipline"
     ?disciplineBuilders
     :builderMode==="player"
       ?playerBuilders
-      :!inPlay&&serverBuilders.length
-        ?serverBuilders
-        :broadHasBuild
-          ?broadTargetBuilders
-          :playerBuilders
-  const builders=candidateBuilders.filter(b=>b.legs?.length&&(b.referenceProductOdds==null||b.referenceProductOdds>=3))
+      :broadHasBuild
+        ?broadTargetBuilders
+        :playerBuilders
+  // Every displayed leg must have a current Bet365 single-market quote.
+  // A correlated combined price is still an ESTIMATE, never verified.
+  const builders=candidateBuilders.filter(b=>b.legs?.length>=2&&b.legs.every(leg=>verifiedBet365Odd(leg)!=null)&&b.referenceProductOdds!=null&&b.referenceProductOdds>=Math.max(3,b.targetDecimal))
   const bestAvailableBets=useMemo(()=>{
     const byFamily=new Map<string,Selection>()
     const candidates=[...broadRows,...verifiedPlayerRows]
@@ -1530,8 +1529,8 @@ export default function BetBuilderPage(){
           </div>
           {builderMode==="discipline"
             ?<CardRiskPanel rows={cardRiskRows} fixture={fixture} live={live} liveBet365={liveBet365}/>
-            :<div className="mt-4 space-y-2">{builders.length?builders.map((b,i)=><RiskCard key={b.id} build={b} liveBet365={liveBet365} inPlay={inPlay} onTrack={()=>trackBuild(b)} onUse={()=>useBuild(b)} fixture={fixture} defaultOpen={i===0}/>):<div className="sm:col-span-3 rounded-2xl border border-white/8 bg-black/20 p-4 text-center"><p className="text-xs font-black text-white/55">No target slip available yet</p><p className="mt-1 text-[0.5rem] text-white/25">{builderMode==="player"
-              ?"Not enough qualifying player-prop legs reach this target yet."
+            :<div className="mt-4 space-y-2">{builders.length?builders.map((b,i)=><RiskCard key={b.id} build={b} liveBet365={liveBet365} inPlay={inPlay} onTrack={()=>trackBuild(b)} onUse={()=>useBuild(b)} fixture={fixture} defaultOpen={i===0}/>):<div className="sm:col-span-3 rounded-2xl border border-white/8 bg-black/20 p-4 text-center"><p className="text-xs font-black text-white/55">No Bet365-priced slip available</p><p className="mt-1 text-[0.5rem] text-white/25">{builderMode==="player"
+              ?"Only selections with current Bet365 individual odds can appear. No eligible combination currently meets this estimated target yet."
               :"Not enough qualifying markets reach this target yet."}</p></div>}</div>}
         </section>
 
