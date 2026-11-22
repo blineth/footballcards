@@ -1428,7 +1428,7 @@ export default function BetBuilderPage(){
           <div className="px-1"><p className="font-black">{inPlay?"Live likelihood":"Player likelihood"}</p><p className="mt-1 text-[0.6rem] text-white/35">{inPlay?"What is most likely to happen from the current minute onward, using the live match state plus each player's history. Already-hit thresholds are removed automatically.":"Ranked player-event probabilities from the model. Bet365 prices are shown only as price context where we have them."}</p></div>
           <div className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none]"><div className="flex min-w-max gap-2 pb-1">{categories.filter(x=>x.id!=="popular").map(x=><button key={x.id} onClick={()=>setCategory(x.id)} className={"rounded-full border px-3.5 py-2.5 text-xs font-black "+(category===x.id?"border-emerald-300/30 bg-emerald-300 text-emerald-950":"border-white/8 bg-white/[0.04] text-white/50")}>{x.label}</button>)}</div></div>
 
-          <LikelihoodBoard rows={visible} allRows={allRows} category={category==="popular"?"fouls":category} fixture={fixture} inPlay={inPlay}/>
+          <LikelihoodBoard rows={visible} allRows={allRows} preMatchRows={preMatchRows} live={live} category={category==="popular"?"fouls":category} fixture={fixture} inPlay={inPlay}/>
         </section>
 
 
@@ -1838,11 +1838,28 @@ function PlayerHistoryDetails({row,fixture,inPlay}:{row:Selection;fixture:Fixtur
   <p className="mt-3 text-[0.56rem] leading-relaxed text-white/35">Yellow-card badges show recorded bookings regardless of the selected market. H2H includes available earlier seasons and clubs. Individual results differ from model estimates; unavailable stats are never assumed to be zero.</p>
  </div>
 }
-function LikelihoodBoard({rows,allRows,category,fixture,inPlay}:{rows:Selection[];allRows:Selection[];category:Category;fixture:Fixture;inPlay:boolean}){
+function LikelihoodBoard({rows,allRows,preMatchRows,live,category,fixture,inPlay}:{rows:Selection[];allRows:Selection[];preMatchRows:Selection[];live:LiveData|null;category:Category;fixture:Fixture;inPlay:boolean}){
  const[expanded,setExpanded]=useState<string|null>(null)
  const[summaries,setSummaries]=useState<Record<string,{lastFive:{hits:number;total:number;known:number;events:number;threshold:number};h2h:{hits:number;total:number;known:number;events:number;threshold:number};recordedRecent:number;recordedH2h:number}>>({})
  const label=categories.find(x=>x.id===category)?.label??"Likelihood"
- const ranked=[...rows].sort((a,b)=>b.probability-a.probability).slice(0,10)
+ // Include every current player once, prioritising their best remaining market.
+ const active=inPlay&&live?.players?.length?live.players.filter(livePlayerIsActive):null
+ const activeNames=active?new Set(active.map(p=>normPlayer(p.player)+"|"+teamNorm(p.team))):null
+ const ranked:Selection[]=[]
+ const rankedNames=new Set<string>()
+ for(const row of [...rows].sort((a,b)=>b.probability-a.probability)){
+   const key=normPlayer(row.player)+"|"+teamNorm(row.team)
+   if(activeNames&&!activeNames.has(key))continue
+   if(rankedNames.has(key))continue
+   rankedNames.add(key)
+   ranked.push(row)
+ }
+ const missing=active?.filter(p=>!rankedNames.has(normPlayer(p.player)+"|"+teamNorm(p.team)))??[]
+ const allowed=new Set(categories.find(c=>c.id===category)?.markets??["card"])
+ const fallbackMarket=(categories.find(c=>c.id===category)?.markets??["card"])[0]
+ const missingHistory=missing.map(stat=>({
+  stat,source:preMatchRows.find(r=>normPlayer(r.player)===normPlayer(stat.player)&&teamNorm(r.team)===teamNorm(stat.team)&&allowed.has(r.market as MarketKey))??null
+ }))
  const rosterKey=JSON.stringify(ranked.map(r=>[r.player,r.team,r.market]))
  useEffect(()=>{
   if(!rosterKey||rosterKey==="[]")return
@@ -1875,7 +1892,7 @@ function LikelihoodBoard({rows,allRows,category,fixture,inPlay}:{rows:Selection[
  return <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]">
   <div className="border-b border-white/8 px-3 py-3"><div className="flex items-center justify-between gap-3">
    <div><p className="text-sm font-black">{label} likelihood</p><p className="mt-1 text-[0.5rem] text-white/30">{inPlay?"Remaining-match chance · tap player for earlier matches and H2H":"Model chance · tap any player for last five games and H2H"}</p></div>
-   <span className="rounded-full bg-white/6 px-2 py-1 text-[0.42rem] font-black text-white/35">{ranked.length} PLAYERS</span></div></div>
+   <span className="rounded-full bg-white/6 px-2 py-1 text-[0.42rem] font-black text-white/35">{ranked.length+missing.length} {inPlay?"ON PITCH":"PLAYERS"}</span></div></div>
   {ranked.length?ranked.map((row,i)=>{
    const price=displayedBet365Odd(row),traffic=trafficFor(row,allRows)
    const tone=traffic==="high"?"text-emerald-200":traffic==="average"?"text-amber-100":"text-rose-100/80"
@@ -1907,7 +1924,24 @@ function LikelihoodBoard({rows,allRows,category,fixture,inPlay}:{rows:Selection[
     </button>
     {open?<PlayerHistoryDetails row={row} fixture={fixture} inPlay={inPlay}/>:null}
    </div>
-  }):<p className="px-4 py-8 text-center text-sm text-white/35">No remaining player events in this market right now.</p>}
+  }):!missing.length?<p className="px-4 py-8 text-center text-sm text-white/35">No remaining player events in this market right now.</p>:null}
+  {missingHistory.map(({stat,source},i)=>{
+    const key=normPlayer(stat.player)+"|"+teamNorm(stat.team)
+    const open=expanded==="missing|"+key
+    return <div key={"missing|"+key} className="border-t border-white/[0.055]">
+      <button type="button" onClick={()=>setExpanded(v=>v==="missing|"+key?null:"missing|"+key)}
+        className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-3 py-3 text-left">
+        <span className="flex size-8 items-center justify-center rounded-full bg-white/6 font-mono text-xs font-black text-white/45">{ranked.length+i+1}</span>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-1.5"><p className="truncate text-sm font-black">{stat.player}</p><TeamBadge team={stat.team} fixture={fixture}/></div>
+          <p className="mt-1 text-[0.55rem] text-white/50">{source&&countForMarket(stat,source.market)>=thresholdForMarket(source.market)?"Market threshold already reached":"No remaining model estimate"}</p>
+          <span className="mt-1 inline-flex items-center gap-1 text-[0.55rem] font-bold text-emerald-200/70">L5 · H2H <ChevronDown className={"size-3 transition "+(open?"rotate-180":"")}/></span>
+        </div>
+        <div className="text-right"><p className="text-xs font-black text-white/45">—</p><p className="text-[0.43rem] text-white/30">No remaining chance</p></div>
+      </button>
+      {open?(source?<PlayerHistoryDetails row={source} fixture={fixture} inPlay={inPlay}/>:<div className="border-t border-white/10 p-3"><MarketHistoryBadge player={stat.player} team={stat.team} market={fallbackMarket} date={fixture.date} home={fixture.home} away={fixture.away} competition={fixture.competition}/></div>):null}
+    </div>
+  })}
  </div>
 }
 
