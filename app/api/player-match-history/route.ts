@@ -51,9 +51,9 @@ export async function GET(request:Request){
     const result=await pool.query<Row>(`SELECT match_date::text,player_name,team,opponent,competition,minutes,
       fouls_committed,fouls_drawn,shots,shots_on_target,yellow_card,red_card,goals,assists,venue
       FROM player_h2h
-      WHERE lower(player_name)=lower($1) AND match_date<$4::date
+      WHERE lower(player_name)=lower($1) AND match_date<$2::date
         AND (minutes>0 OR (minutes IS NULL AND starter IS DISTINCT FROM FALSE))
-      ORDER BY match_date DESC LIMIT 60`,[player,team,competition,date])
+      ORDER BY match_date DESC LIMIT 60`,[player,date])
     const unique=new Set<string>()
     const history=result.rows.filter(row=>{
       const key=[row.match_date,norm(row.opponent),norm(row.team)].join("|")
