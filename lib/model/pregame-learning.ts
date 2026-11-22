@@ -103,12 +103,15 @@ export async function runPregameLearning(){
  await pool.query(`ALTER TABLE pregame_learning_runs ADD COLUMN IF NOT EXISTS player_profiles jsonb NOT NULL DEFAULT '[]'::jsonb`)
  const query=await pool.query<HistoryRow>(`SELECT player_name,team,opponent,competition,
      match_date::text,minutes,yellow_card,red_card,fouls_committed,fouls_drawn,shots,shots_on_target,booking_reason,yellow_card_minute
-     FROM player_h2h
-     WHERE match_date >= current_date-interval '36 months'
-       AND match_date < current_date AND player_name IS NOT NULL
-       AND competition IS NOT NULL AND team IS NOT NULL AND opponent IS NOT NULL
-     ORDER BY match_date,player_name,opponent
-     LIMIT 70000`)
+     FROM (
+       SELECT * FROM player_h2h
+       WHERE match_date >= current_date-interval '36 months'
+         AND match_date < current_date AND player_name IS NOT NULL
+         AND competition IS NOT NULL AND team IS NOT NULL AND opponent IS NOT NULL
+       ORDER BY match_date DESC,player_name,opponent
+       LIMIT 70000
+     ) recent
+     ORDER BY match_date,player_name,opponent`)
  const rows=query.rows
  const first=rows[0]?.match_date??null,last=rows[rows.length-1]?.match_date??null
  const dates=[...new Set(rows.map(r=>r.match_date))].sort()
@@ -158,7 +161,7 @@ export async function runPregameLearning(){
      if(before[market].length>=4)examples.push({date:row.match_date,player:name,team:String(row.team),competition:league,fixture,market,outcome:hit,history:before[market],...observedConduct})
      pending.push({prior:past,market,hit})
    }
-   const booked=row.yellow_card===true||row.red_card===true
+   const booked=row.yellow_card===true
    if(row.fouls_committed!=null)pendingBehaviour.push({list:conduct.nonFoulCards,hit:booked&&Number(row.fouls_committed)===0})
    // An explicit reason, not zero fouls, is required to call it dissent.
    pendingBehaviour.push({list:conduct.confirmedDissent,hit:booked&&/dissent/i.test(row.booking_reason??"")})
@@ -195,7 +198,7 @@ export async function runPregameLearning(){
    if(!watched.some(re=>re.test(String(row.player_name))))continue
    const key=String(row.player_name).toLowerCase()+"|"+String(row.team).toLowerCase()
    const old=observedByPlayer.get(key)??{player:row.player_name,team:String(row.team),matches:0,yellows:0,nonFoulBookings:0,zeroFoulAppearances:0,confirmedDissentBookings:0,lateBookings:0,knownReasons:0,knownMinutes:0}
-   const booked=row.yellow_card===true||row.red_card===true
+   const booked=row.yellow_card===true
    old.matches++
    if(booked)old.yellows++
    if(row.fouls_committed!=null&&Number(row.fouls_committed)===0){
