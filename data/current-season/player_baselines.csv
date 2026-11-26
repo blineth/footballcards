@@ -682,7 +682,7 @@ Nicolás Linares,Aldosivi,Argentine Liga Profesional,2026/27,4,4,259,0,0,0,0,6,3
 Nicolás Zalazar,Aldosivi,Argentine Liga Profesional,2026/27,8,6,566,0,0,1,0,3,8,7,0,0.477,0.159,1.1131,0.0,Center Right Defender,249300
 Néstor Breitenbruch,Aldosivi,Argentine Liga Profesional,2026/27,11,11,924,0,0,2,0,7,4,3,0,0.6818,0.1948,0.2922,0.0,Center Right Defender,206619
 Rodrigo González,Aldosivi,Argentine Liga Profesional,2026/27,8,4,323,0,1,3,0,10,2,2,1,2.7864,0.8359,0.5573,0.2786,Substitute,273948
-Santiago Moya,Aldosivi,Argentine Liga Profesional,2026/27,9,6,592,0,1,1,0,3,4,0,0,0.4561,0.152,0.0,0.0,Right Back,257734
+Santiago Moyano,Aldosivi,Argentine Liga Profesional,2026/27,9,6,592,0,1,1,0,3,4,0,0,0.4561,0.152,0.0,0.0,Right Back,257734
 Tomás Fernandez,Aldosivi,Argentine Liga Profesional,2026/27,9,5,553,2,3,2,0,11,5,14,8,1.7902,0.3255,2.2785,1.302,Center Left Forward,277593
 Alan Alcaraz,Argentinos Juniors,Argentine Liga Profesional,2026/27,4,0,92,0,0,0,0,3,2,5,3,2.9348,0.0,4.8913,2.9348,Substitute,422526
 Alan Lescano,Argentinos Juniors,Argentine Liga Profesional,2026/27,6,6,522,2,0,2,0,2,8,8,5,0.3448,0.3448,1.3793,0.8621,Right Midfielder,336485
@@ -824,35 +824,36 @@ Ramiro Hernandes,Belgrano (Córdoba),Argentine Liga Profesional,2026/27,17,7,758
 Ramiro Tulián,Belgrano (Córdoba),Argentine Liga Profesional,2026/27,4,0,53,0,0,0,0,1,0,1,0,1.6981,0.0,1.6981,0.0,Substitute,404542
 Santiago Longo,Belgrano (Córdoba),Argentine Liga Profesional,2026/27,12,5,463,0,0,2,0,14,3,4,1,2.7214,0.3888,0.7775,0.1944,Substitute,290766
 Thiago Cardozo,Belgrano (Córdoba),Argentine Liga Profesional,2026/27,14,14,1260,0,0,1,0,0,5,0,0,0.0,0.0714,0.0,0.0,Goalkeeper,194993
-Alan Velasco,Boca Juniors,Argentine Liga Profesional,2026/27,13,7,531,2,0,2,0,11,9,24,3,1.8644,0.339,4.0678,0.5085,Substitute,286516
+Adam Bareiro,Boca Juniors,Argentine Liga Profesional,2026/27,1,0,19,0,0,0,0,0,0,3,2,0.0,0.0,14.2105,9.4737,Substitute,252629
+Alan Velasco,Boca Juniors,Argentine Liga Profesional,2026/27,14,7,573,2,0,2,0,11,10,27,3,1.7277,0.3141,4.2408,0.4712,Substitute,286516
 Ayrton Costa,Boca Juniors,Argentine Liga Profesional,2026/27,6,4,360,0,0,4,0,5,2,2,1,1.25,1.0,0.5,0.25,Center Left Defender,286902
 Camilo Rey,Boca Juniors,Argentine Liga Profesional,2026/27,5,3,248,0,0,0,0,4,0,1,0,1.4516,0.0,0.3629,0.0,Center Midfielder,104506
 Carlos Palacios,Boca Juniors,Argentine Liga Profesional,2026/27,8,2,292,0,1,1,0,3,7,4,1,0.9247,0.3082,1.2329,0.3082,Substitute,202025
 Dylan Gorosito,Boca Juniors,Argentine Liga Profesional,2026/27,7,5,500,0,2,1,0,5,4,2,0,0.9,0.18,0.36,0.0,Right Back,371485
 Enner Valencia,Boca Juniors,Argentine Liga Profesional,2026/27,10,3,359,3,2,1,0,6,7,14,6,1.5042,0.2507,3.5097,1.5042,Substitute,171771
-Facundo Herrera,Boca Juniors,Argentine Liga Profesional,2026/27,8,6,518,1,0,4,0,5,1,3,2,0.8687,0.695,0.5212,0.3475,Center Left Defender,400357
+Facundo Herrera,Boca Juniors,Argentine Liga Profesional,2026/27,9,7,608,1,0,4,0,5,1,3,2,0.7401,0.5921,0.4441,0.2961,Center Left Defender,400357
 Jorge Figal,Boca Juniors,Argentine Liga Profesional,2026/27,3,3,270,0,0,1,0,0,1,1,0,0.0,0.3333,0.3333,0.0,Center Right Defender,189952
 Kevin Zenón,Boca Juniors,Argentine Liga Profesional,2026/27,4,2,160,1,0,1,0,1,3,7,5,0.5625,0.5625,3.9375,2.8125,Substitute,290593
-Lautaro Blanco,Boca Juniors,Argentine Liga Profesional,2026/27,15,14,1259,0,4,3,0,10,5,6,1,0.7149,0.2145,0.4289,0.0715,Left Back,290542
-Lautaro Di Lollo,Boca Juniors,Argentine Liga Profesional,2026/27,14,13,1183,2,1,3,0,11,5,10,4,0.8369,0.2282,0.7608,0.3043,Center Right Defender,341457
+Lautaro Blanco,Boca Juniors,Argentine Liga Profesional,2026/27,16,15,1349,0,4,3,0,12,7,6,1,0.8006,0.2001,0.4003,0.0667,Left Back,290542
+Lautaro Di Lollo,Boca Juniors,Argentine Liga Profesional,2026/27,15,14,1273,2,1,3,0,11,5,10,4,0.7777,0.2121,0.707,0.2828,Center Right Defender,341457
 Leandro Brey,Boca Juniors,Argentine Liga Profesional,2026/27,2,2,180,0,0,0,0,0,1,0,0,0.0,0.0,0.0,0.0,Goalkeeper,335580
-Leandro Lozano,Boca Juniors,Argentine Liga Profesional,2026/27,10,9,760,1,0,1,0,10,10,7,2,1.1842,0.1184,0.8289,0.2368,Right Back,338991
-Leandro Paredes,Boca Juniors,Argentine Liga Profesional,2026/27,11,9,782,0,1,4,0,9,19,15,4,1.0358,0.4604,1.7263,0.4604,Center Midfielder,153115
-Leonel Flores,Boca Juniors,Argentine Liga Profesional,2026/27,15,13,1086,3,2,2,0,10,22,36,11,0.8287,0.1657,2.9834,0.9116,Right Forward,400360
+Leandro Lozano,Boca Juniors,Argentine Liga Profesional,2026/27,11,10,850,1,1,2,0,12,10,7,2,1.2706,0.2118,0.7412,0.2118,Right Back,338991
+Leandro Paredes,Boca Juniors,Argentine Liga Profesional,2026/27,12,10,872,1,1,5,0,11,21,19,6,1.1353,0.5161,1.961,0.6193,Center Midfielder,153115
+Leonel Flores,Boca Juniors,Argentine Liga Profesional,2026/27,16,13,1105,3,2,2,0,11,23,38,13,0.8959,0.1629,3.095,1.0588,Right Forward,400360
 Malcom Braida,Boca Juniors,Argentine Liga Profesional,2026/27,3,3,270,0,0,2,0,7,5,0,0,2.3333,0.6667,0.0,0.0,Right Back,259166
 Marco Pellegrino,Boca Juniors,Argentine Liga Profesional,2026/27,8,6,562,0,0,1,0,2,5,3,0,0.3203,0.1601,0.4804,0.0,Center Left Defender,303633
 Matías Satas,Boca Juniors,Argentine Liga Profesional,2026/27,2,1,91,0,0,0,0,1,0,0,0,0.989,0.0,0.0,0.0,Left Back,403948
-Miguel Merentiel,Boca Juniors,Argentine Liga Profesional,2026/27,14,11,879,5,0,0,0,6,7,28,12,0.6143,0.0,2.8669,1.2287,Forward,260812
-Milton Delgado,Boca Juniors,Argentine Liga Profesional,2026/27,13,13,1070,0,1,4,0,20,20,9,2,1.6822,0.3364,0.757,0.1682,Left Midfielder,382978
+Miguel Merentiel,Boca Juniors,Argentine Liga Profesional,2026/27,15,12,950,6,0,0,0,6,8,29,13,0.5684,0.0,2.7474,1.2316,Forward,260812
+Milton Delgado,Boca Juniors,Argentine Liga Profesional,2026/27,14,14,1106,0,1,4,0,20,20,9,2,1.6275,0.3255,0.7324,0.1627,Left Midfielder,382978
 Milton Gimenez,Boca Juniors,Argentine Liga Profesional,2026/27,3,0,75,0,0,0,0,5,2,3,0,6.0,0.0,3.6,0.0,Substitute,310767
 Rodrigo Bacidalupe,Boca Juniors,Argentine Liga Profesional,2026/27,2,0,24,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Substitute,421348
-Rodrigo Battaglia,Boca Juniors,Argentine Liga Profesional,2026/27,1,1,90,0,0,0,0,2,0,0,0,2.0,0.0,0.0,0.0,Left Midfielder,152706
+Rodrigo Battaglia,Boca Juniors,Argentine Liga Profesional,2026/27,2,1,109,0,0,0,0,2,1,2,0,1.6514,0.0,1.6514,0.0,Left Midfielder,152706
 Santiago Ascacibar,Boca Juniors,Argentine Liga Profesional,2026/27,15,13,1184,3,2,2,0,18,20,33,12,1.3682,0.152,2.5084,0.9122,Right Midfielder,233734
-Sebastián Villa,Boca Juniors,Argentine Liga Profesional,2026/27,14,7,702,0,3,0,0,13,9,17,4,1.6667,0.0,2.1795,0.5128,Substitute,141790
-Tomás Aranda,Boca Juniors,Argentine Liga Profesional,2026/27,7,5,463,0,1,0,0,7,9,18,4,1.3607,0.0,3.4989,0.7775,Substitute,400359
-Tomás Belmonte,Boca Juniors,Argentine Liga Profesional,2026/27,7,2,208,1,1,2,0,3,2,3,1,1.2981,0.8654,1.2981,0.4327,Substitute,256199
-William Alarcón,Boca Juniors,Argentine Liga Profesional,2026/27,5,3,243,0,0,1,0,1,0,2,0,0.3704,0.3704,0.7407,0.0,Left Midfielder,274298
-Álvaro Montero,Boca Juniors,Argentine Liga Profesional,2026/27,14,14,1260,0,0,0,0,0,6,0,0,0.0,0.0,0.0,0.0,Goalkeeper,166323
+Sebastián Villa,Boca Juniors,Argentine Liga Profesional,2026/27,15,8,773,0,3,0,0,15,9,20,5,1.7464,0.0,2.3286,0.5821,Substitute,141790
+Tomás Aranda,Boca Juniors,Argentine Liga Profesional,2026/27,8,6,534,0,1,0,0,7,9,19,4,1.1798,0.0,3.2022,0.6742,Substitute,400359
+Tomás Belmonte,Boca Juniors,Argentine Liga Profesional,2026/27,8,3,298,1,1,2,0,3,4,5,2,0.906,0.604,1.5101,0.604,Substitute,256199
+William Alarcón,Boca Juniors,Argentine Liga Profesional,2026/27,6,3,255,0,0,1,0,1,0,2,0,0.3529,0.3529,0.7059,0.0,Substitute,274298
+Álvaro Montero,Boca Juniors,Argentine Liga Profesional,2026/27,15,15,1350,0,0,0,0,0,7,0,0,0.0,0.0,0.0,0.0,Goalkeeper,166323
 Ángel Romero,Boca Juniors,Argentine Liga Profesional,2026/27,6,2,232,2,0,0,0,1,4,5,2,0.3879,0.0,1.9397,0.7759,Substitute,193634
 Alan Aguerre,Central Córdoba (Santiago del Estero),Argentine Liga Profesional,2026/27,14,14,1193,0,0,0,0,0,6,0,0,0.0,0.0,0.0,0.0,Goalkeeper,149387
 Alan Laprida,Central Córdoba (Santiago del Estero),Argentine Liga Profesional,2026/27,3,0,46,0,0,0,0,1,4,0,0,1.9565,0.0,0.0,0.0,Substitute,407279
@@ -882,10 +883,10 @@ Lucas González,Central Córdoba (Santiago del Estero),Argentine Liga Profesiona
 Lucas Varaldo,Central Córdoba (Santiago del Estero),Argentine Liga Profesional,2026/27,6,1,182,0,0,1,0,4,3,3,0,1.978,0.4945,1.4835,0.0,Substitute,297758
 Marco Iacobellis,Central Córdoba (Santiago del Estero),Argentine Liga Profesional,2026/27,14,11,1015,1,1,2,0,22,26,34,10,1.9507,0.1773,3.0148,0.8867,Attacking Midfielder,292018
 Martín Francisco Cuitiño,Central Córdoba (Santiago del Estero),Argentine Liga Profesional,2026/27,7,1,175,1,0,0,0,7,1,6,2,3.6,0.0,3.0857,1.0286,Substitute,3108989
-Matias Vera,Central Córdoba (Santiago del Estero),Argentine Liga Profesional,2026/27,16,16,1403,0,0,2,0,14,7,9,2,0.8981,0.1283,0.5773,0.1283,Right Midfielder,218440
+Matías Vera,Central Córdoba (Santiago del Estero),Argentine Liga Profesional,2026/27,16,16,1403,0,0,2,0,14,7,9,2,0.8981,0.1283,0.5773,0.1283,Right Midfielder,218440
 Michael Santos,Central Córdoba (Santiago del Estero),Argentine Liga Profesional,2026/27,11,11,882,5,0,0,0,12,7,30,13,1.2245,0.0,3.0612,1.3265,Forward,131758
 Nicolás Garrido,Central Córdoba (Santiago del Estero),Argentine Liga Profesional,2026/27,4,3,303,0,0,1,0,4,0,1,0,1.1881,0.297,0.297,0.0,Center Left Defender,412316
-Santiago Moya,Central Córdoba (Santiago del Estero),Argentine Liga Profesional,2026/27,13,11,807,0,1,4,0,12,7,3,0,1.3383,0.4461,0.3346,0.0,Right Back,257734
+Santiago Moyano,Central Córdoba (Santiago del Estero),Argentine Liga Profesional,2026/27,13,11,807,0,1,4,0,12,7,3,0,1.3383,0.4461,0.3346,0.0,Right Back,257734
 Thiago Cravero,Central Córdoba (Santiago del Estero),Argentine Liga Profesional,2026/27,5,2,197,0,0,0,0,5,1,0,0,2.2843,0.0,0.0,0.0,Substitute,318767
 Yuri Casermeiro,Central Córdoba (Santiago del Estero),Argentine Liga Profesional,2026/27,8,3,377,0,0,4,0,6,0,2,1,1.4324,0.9549,0.4775,0.2387,Substitute,382884
 Aaron Molinas,Defensa y Justicia,Argentine Liga Profesional,2026/27,5,0,102,0,0,1,0,1,1,2,1,0.8824,0.8824,1.7647,0.8824,Substitute,303319
@@ -914,7 +915,7 @@ Ramiro Gagliardi,Defensa y Justicia,Argentine Liga Profesional,2026/27,1,0,12,0,
 Santiago Sosa,Defensa y Justicia,Argentine Liga Profesional,2026/27,16,16,1325,0,0,3,1,21,19,8,2,1.4264,0.2717,0.5434,0.1358,Right Midfielder,271473
 Thiago Lionel Martínez,Defensa y Justicia,Argentine Liga Profesional,2026/27,1,0,25,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Substitute,3107948
 Tiziano Perrota,Defensa y Justicia,Argentine Liga Profesional,2026/27,12,3,387,0,0,1,0,4,3,7,4,0.9302,0.2326,1.6279,0.9302,Substitute,406297
-Tomás Pérez,Defensa y Justicia,Argentine Liga Profesional,2026/27,5,0,58,1,0,0,0,1,0,4,2,1.5517,0.0,6.2069,3.1034,Substitute,361299
+Tomas Perez,Defensa y Justicia,Argentine Liga Profesional,2026/27,5,0,58,1,0,0,0,1,0,4,2,1.5517,0.0,6.2069,3.1034,Substitute,361299
 Valentín Loza,Defensa y Justicia,Argentine Liga Profesional,2026/27,14,11,1030,0,2,1,0,15,4,3,1,1.3107,0.0874,0.2621,0.0874,Right Back,418765
 Alexander Díaz,Deportivo Riestra,Argentine Liga Profesional,2026/27,15,10,815,3,0,2,0,21,17,18,9,2.319,0.2209,1.9877,0.9939,Forward,114767
 Antony Alonso,Deportivo Riestra,Argentine Liga Profesional,2026/27,15,12,877,2,1,1,0,10,5,16,6,1.0262,0.1026,1.642,0.6157,Left Midfielder,310778
@@ -1097,7 +1098,7 @@ Tomás Natanael Uribe Sanders,Huracán,Argentine Liga Profesional,2026/27,3,1,93
 Óscar Romero,Huracán,Argentine Liga Profesional,2026/27,7,0,150,0,0,2,0,4,3,5,0,2.4,1.2,3.0,0.0,Substitute,192234
 Chimy Ávila,Independiente,Argentine Liga Profesional,2026/27,9,7,538,0,0,1,0,6,12,16,2,1.0037,0.1673,2.6766,0.3346,Forward,217588
 Facundo Lionel Cruz,Independiente,Argentine Liga Profesional,2026/27,4,1,110,0,0,0,0,5,0,1,0,4.0909,0.0,0.8182,0.0,Substitute,3112632
-Facundo Valdez,Independiente,Argentine Liga Profesional,2026/27,1,0,45,0,0,0,0,1,0,1,0,2.0,0.0,2.0,0.0,Substitute,401383
+Facundo Valdéz,Independiente,Argentine Liga Profesional,2026/27,1,0,45,0,0,0,0,1,0,1,0,2.0,0.0,2.0,0.0,Substitute,401383
 Facundo Zabala,Independiente,Argentine Liga Profesional,2026/27,12,10,869,0,0,1,0,16,9,7,2,1.6571,0.1036,0.725,0.2071,Left Back,310003
 Felipe Tempone,Independiente,Argentine Liga Profesional,2026/27,9,3,337,1,0,0,0,4,3,12,7,1.0682,0.0,3.2047,1.8694,Substitute,420706
 Franco Calderon,Independiente,Argentine Liga Profesional,2026/27,2,1,95,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Substitute,285042
@@ -1123,35 +1124,35 @@ Ruben Martinez,Independiente,Argentine Liga Profesional,2026/27,7,0,120,0,0,1,0,
 Santiago Arias,Independiente,Argentine Liga Profesional,2026/27,13,9,851,0,0,3,0,9,16,3,1,0.9518,0.3173,0.3173,0.1058,Right Back,164756
 Santiago Mele,Independiente,Argentine Liga Profesional,2026/27,4,4,360,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Goalkeeper,203067
 Santiago Montiel,Independiente,Argentine Liga Profesional,2026/27,16,16,1375,3,4,5,0,12,25,40,9,0.7855,0.3273,2.6182,0.5891,Right Forward,307331
-Sebastián Valdez,Independiente,Argentine Liga Profesional,2026/27,8,8,693,0,0,2,0,5,4,4,1,0.6494,0.2597,0.5195,0.1299,Center Right Defender,236681
+Sebastian Valdez,Independiente,Argentine Liga Profesional,2026/27,8,8,693,0,0,2,0,5,4,4,1,0.6494,0.2597,0.5195,0.1299,Center Right Defender,236681
 Tomás Parmo,Independiente,Argentine Liga Profesional,2026/27,2,0,17,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Substitute,379664
 Alejo Osella,Independiente Rivadavia,Argentine Liga Profesional,2026/27,9,7,591,0,0,1,0,4,3,9,2,0.6091,0.1523,1.3706,0.3046,Center Left Defender,336665
 Alessandro Riep,Independiente Rivadavia,Argentine Liga Profesional,2026/27,4,1,156,0,0,0,0,0,1,0,0,0.0,0.0,0.0,0.0,Substitute,321195
-Alex Arce,Independiente Rivadavia,Argentine Liga Profesional,2026/27,13,11,1015,7,1,5,1,20,11,29,12,1.7734,0.532,2.5714,1.064,Center Right Forward,257754
+Alex Arce,Independiente Rivadavia,Argentine Liga Profesional,2026/27,14,12,1105,7,1,6,1,24,11,30,12,1.9548,0.5701,2.4434,0.9774,Center Right Forward,257754
 Alex Vigo,Independiente Rivadavia,Argentine Liga Profesional,2026/27,10,4,522,0,0,1,0,8,5,3,2,1.3793,0.1724,0.5172,0.3448,Right Back,276021
 Diego Crego,Independiente Rivadavia,Argentine Liga Profesional,2026/27,3,2,182,0,0,2,0,3,0,1,0,1.4835,0.989,0.4945,0.0,Left Back,290741
-Emmanuel Gómez Riga,Independiente Rivadavia,Argentine Liga Profesional,2026/27,1,1,90,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Goalkeeper,301990
-Ezequiel Bonifacio,Independiente Rivadavia,Argentine Liga Profesional,2026/27,3,1,116,0,0,1,0,1,1,1,1,0.7759,0.7759,0.7759,0.7759,Substitute,207235
-Fabrizio Sartori Prieto,Independiente Rivadavia,Argentine Liga Profesional,2026/27,14,11,845,1,0,0,0,11,9,19,6,1.1716,0.0,2.0237,0.6391,Center Right Forward,309496
-Gonzalo Rios,Independiente Rivadavia,Argentine Liga Profesional,2026/27,15,10,705,2,1,2,0,8,17,12,5,1.0213,0.2553,1.5319,0.6383,Right Midfielder,315719
-Ivan Villalba,Independiente Rivadavia,Argentine Liga Profesional,2026/27,13,11,1012,0,0,5,0,6,5,2,1,0.5336,0.4447,0.1779,0.0889,Center Right Defender,252053
+Emmanuel Gómez Riga,Independiente Rivadavia,Argentine Liga Profesional,2026/27,2,2,180,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Goalkeeper,301990
+Ezequiel Bonifacio,Independiente Rivadavia,Argentine Liga Profesional,2026/27,4,2,206,0,0,1,0,3,3,2,1,1.3107,0.4369,0.8738,0.4369,Substitute,207235
+Fabrizio Sartori Prieto,Independiente Rivadavia,Argentine Liga Profesional,2026/27,15,11,880,1,0,0,0,11,9,19,6,1.125,0.0,1.9432,0.6136,Center Right Forward,309496
+Gonzalo Rios,Independiente Rivadavia,Argentine Liga Profesional,2026/27,16,11,777,2,1,2,0,9,18,12,5,1.0425,0.2317,1.39,0.5792,Right Midfielder,315719
+Ivan Villalba,Independiente Rivadavia,Argentine Liga Profesional,2026/27,14,12,1102,0,0,5,0,6,5,3,1,0.49,0.4083,0.245,0.0817,Center Right Defender,252053
 José Florentín,Independiente Rivadavia,Argentine Liga Profesional,2026/27,16,15,1290,6,1,4,1,34,16,29,12,2.3721,0.3488,2.0233,0.8372,Left Midfielder,217153
-Juan Manuel Elordi,Independiente Rivadavia,Argentine Liga Profesional,2026/27,15,13,1190,1,2,3,0,12,4,12,3,0.9076,0.2269,0.9076,0.2269,Left Back,236006
+Juan Manuel Elordi,Independiente Rivadavia,Argentine Liga Profesional,2026/27,16,14,1280,1,2,3,0,12,4,12,3,0.8438,0.2109,0.8438,0.2109,Left Back,236006
 Kevin Vázquez,Independiente Rivadavia,Argentine Liga Profesional,2026/27,5,2,190,0,0,0,0,2,2,3,1,0.9474,0.0,1.4211,0.4737,Substitute,219074
-Leonard Costa,Independiente Rivadavia,Argentine Liga Profesional,2026/27,13,13,1108,0,0,2,0,6,5,5,1,0.4874,0.1625,0.4061,0.0812,Center Right Defender,358754
-Leonel Bucca,Independiente Rivadavia,Argentine Liga Profesional,2026/27,15,5,514,0,1,1,0,14,7,7,1,2.4514,0.1751,1.2257,0.1751,Substitute,290595
+Leonard Costa,Independiente Rivadavia,Argentine Liga Profesional,2026/27,14,14,1180,0,0,3,0,7,5,8,2,0.5339,0.2288,0.6102,0.1525,Center Right Defender,358754
+Leonel Bucca,Independiente Rivadavia,Argentine Liga Profesional,2026/27,16,5,532,0,1,2,0,16,7,7,1,2.7068,0.3383,1.1842,0.1692,Substitute,290595
 Luciano Gómez,Independiente Rivadavia,Argentine Liga Profesional,2026/27,7,6,421,0,1,1,0,2,7,2,1,0.4276,0.2138,0.4276,0.2138,Right Back,233841
 Luciano Sábato,Independiente Rivadavia,Argentine Liga Profesional,2026/27,1,1,67,0,0,1,0,1,0,2,1,1.3433,1.3433,2.6866,1.3433,Forward,417947
 Luis Díaz,Independiente Rivadavia,Argentine Liga Profesional,2026/27,5,0,67,1,0,0,0,3,4,3,2,4.0299,0.0,4.0299,2.6866,Substitute,341790
-Luis Sequeira,Independiente Rivadavia,Argentine Liga Profesional,2026/27,12,4,448,0,0,0,0,10,7,15,3,2.0089,0.0,3.0134,0.6027,Substitute,213509
-Matías Fernández,Independiente Rivadavia,Argentine Liga Profesional,2026/27,15,12,1044,2,4,4,0,11,19,37,10,0.9483,0.3448,3.1897,0.8621,Attacking Midfielder,185434
-Matías Reali,Independiente Rivadavia,Argentine Liga Profesional,2026/27,5,2,201,0,0,0,0,3,3,5,3,1.3433,0.0,2.2388,1.3433,Substitute,335510
+Luis Sequeira,Independiente Rivadavia,Argentine Liga Profesional,2026/27,13,5,503,0,0,0,0,10,7,16,4,1.7893,0.0,2.8628,0.7157,Substitute,213509
+Matías Fernández,Independiente Rivadavia,Argentine Liga Profesional,2026/27,16,13,1134,2,4,4,0,11,20,38,10,0.873,0.3175,3.0159,0.7937,Attacking Midfielder,185434
+Matías Reali,Independiente Rivadavia,Argentine Liga Profesional,2026/27,6,2,236,0,0,0,0,4,5,7,3,1.5254,0.0,2.6695,1.1441,Substitute,335510
 Maximiliano Salas,Independiente Rivadavia,Argentine Liga Profesional,2026/27,7,5,464,0,1,2,0,10,6,16,6,1.9397,0.3879,3.1034,1.1638,Substitute,233392
 Nicolás Bolcato,Independiente Rivadavia,Argentine Liga Profesional,2026/27,15,15,1350,0,0,0,0,0,4,0,0,0.0,0.0,0.0,0.0,Goalkeeper,414351
-Rodrigo Atencio,Independiente Rivadavia,Argentine Liga Profesional,2026/27,5,2,217,0,0,0,0,1,2,4,1,0.4147,0.0,1.659,0.4147,Substitute,338874
-Sheyko Studer,Independiente Rivadavia,Argentine Liga Profesional,2026/27,9,9,746,0,0,2,0,5,6,1,1,0.6032,0.2413,0.1206,0.1206,Center Left Defender,301978
+Rodrigo Atencio,Independiente Rivadavia,Argentine Liga Profesional,2026/27,6,3,272,0,0,0,0,2,2,5,1,0.6618,0.0,1.6544,0.3309,Substitute,338874
+Sheyko Studer,Independiente Rivadavia,Argentine Liga Profesional,2026/27,10,10,836,0,0,3,0,6,6,1,1,0.6459,0.323,0.1077,0.1077,Center Left Defender,301978
 Stefano Moreyra,Independiente Rivadavia,Argentine Liga Profesional,2026/27,4,0,75,0,0,0,0,3,0,1,0,3.6,0.0,1.2,0.0,Substitute,309424
-Tomás Bottari,Independiente Rivadavia,Argentine Liga Profesional,2026/27,16,13,1071,0,0,1,0,12,8,2,0,1.0084,0.084,0.1681,0.0,Center Midfielder,302053
+Tomás Bottari,Independiente Rivadavia,Argentine Liga Profesional,2026/27,17,13,1089,0,0,1,0,12,10,2,0,0.9917,0.0826,0.1653,0.0,Center Midfielder,302053
 Victorio Ramis,Independiente Rivadavia,Argentine Liga Profesional,2026/27,2,0,19,0,0,0,0,0,1,0,0,0.0,0.0,0.0,0.0,Substitute,205224
 Agustín Bravo,Instituto (Córdoba),Argentine Liga Profesional,2026/27,1,1,90,0,0,0,0,0,2,0,0,0.0,0.0,0.0,0.0,Center Defender,302030
 Agustín Massaccesi,Instituto (Córdoba),Argentine Liga Profesional,2026/27,9,3,406,0,0,1,0,8,11,2,0,1.7734,0.2217,0.4433,0.0,Substitute,379694
@@ -1190,7 +1191,7 @@ Gonzalo Pérez,Lanús,Argentine Liga Profesional,2026/27,9,4,477,0,1,1,0,5,1,4,0
 José Canale,Lanús,Argentine Liga Profesional,2026/27,9,9,689,0,0,1,0,5,3,2,0,0.6531,0.1306,0.2612,0.0,Center Left Defender,227682
 Lucas Besozzi,Lanús,Argentine Liga Profesional,2026/27,17,11,857,0,1,2,0,4,14,7,1,0.4201,0.21,0.7351,0.105,Attacking Midfielder Left,309456
 Marcelino Moreno,Lanús,Argentine Liga Profesional,2026/27,6,3,279,0,1,1,0,3,5,7,1,0.9677,0.3226,2.2581,0.3226,Substitute,199651
-Matias Sepulveda,Lanús,Argentine Liga Profesional,2026/27,14,7,665,0,3,2,0,15,17,12,5,2.0301,0.2707,1.6241,0.6767,Substitute,179904
+Matías Sepúlveda,Lanús,Argentine Liga Profesional,2026/27,14,7,665,0,3,2,0,15,17,12,5,2.0301,0.2707,1.6241,0.6767,Substitute,179904
 Nahuel Losada,Lanús,Argentine Liga Profesional,2026/27,17,17,1530,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Goalkeeper,199641
 Nicolás Morgantini,Lanús,Argentine Liga Profesional,2026/27,3,0,18,0,0,0,0,0,0,1,0,0.0,0.0,5.0,0.0,Substitute,276009
 Ramiro Carrera,Lanús,Argentine Liga Profesional,2026/27,12,5,463,1,1,3,1,12,9,22,8,2.3326,0.7775,4.2765,1.5551,Substitute,189810
@@ -1214,7 +1215,7 @@ Jerónimo Mattar,Newell's Old Boys,Argentine Liga Profesional,2026/27,15,6,621,1
 Josué Reinatti,Newell's Old Boys,Argentine Liga Profesional,2026/27,17,17,1530,0,0,0,0,0,3,0,0,0.0,0.0,0.0,0.0,Goalkeeper,361297
 Juan Ramírez,Newell's Old Boys,Argentine Liga Profesional,2026/27,14,5,422,0,1,2,0,5,8,9,3,1.0664,0.4265,1.9194,0.6398,Substitute,82010
 Lautaro Giannetti,Newell's Old Boys,Argentine Liga Profesional,2026/27,11,10,836,0,0,1,0,7,1,4,0,0.7536,0.1077,0.4306,0.0,Center Right Defender,172771
-Lautaro Ríos,Newell's Old Boys,Argentine Liga Profesional,2026/27,7,5,417,0,1,0,0,9,4,6,0,1.9424,0.0,1.295,0.0,Attacking Midfielder Left,309409
+Lautaro Rios,Newell's Old Boys,Argentine Liga Profesional,2026/27,7,5,417,0,1,0,0,9,4,6,0,1.9424,0.0,1.295,0.0,Attacking Midfielder Left,309409
 Luca Regiardo,Newell's Old Boys,Argentine Liga Profesional,2026/27,16,16,1401,1,0,7,0,17,11,4,1,1.0921,0.4497,0.257,0.0642,Left Midfielder,397602
 Lucas Carrizo,Newell's Old Boys,Argentine Liga Profesional,2026/27,11,11,965,0,0,3,0,9,17,3,0,0.8394,0.2798,0.2798,0.0,Center Left Defender,240430
 Lucas Gómez,Newell's Old Boys,Argentine Liga Profesional,2026/27,7,2,141,0,0,1,0,5,1,1,0,3.1915,0.6383,0.6383,0.0,Substitute,361411
@@ -1255,7 +1256,7 @@ Maximiliano Amarfil,Platense,Argentine Liga Profesional,2026/27,9,4,433,0,1,3,0,
 Nico López,Platense,Argentine Liga Profesional,2026/27,8,1,171,0,0,1,0,1,2,11,8,0.5263,0.5263,5.7895,4.2105,Substitute,123859
 Nicolas Retamar,Platense,Argentine Liga Profesional,2026/27,15,14,1120,3,1,1,0,7,14,21,9,0.5625,0.0804,1.6875,0.7232,Attacking Midfielder Right,310736
 Nicolás Sumavil,Platense,Argentine Liga Profesional,2026/27,1,1,90,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Goalkeeper,285022
-Pablo Thomaz,Platense,Argentine Liga Profesional,2026/27,8,6,530,0,0,0,1,10,10,3,0,1.6981,0.1698,0.5094,0.0,Right Midfielder,274441
+Pablo Ferreira,Platense,Argentine Liga Profesional,2026/27,8,6,530,0,0,0,1,10,10,3,0,1.6981,0.1698,0.5094,0.0,Right Midfielder,274441
 Santiago Dalmasso,Platense,Argentine Liga Profesional,2026/27,2,0,10,0,0,0,0,1,2,0,0,9.0,0.0,0.0,0.0,Substitute,382979
 Santiago Quirós,Platense,Argentine Liga Profesional,2026/27,2,1,116,0,0,0,0,1,1,0,0,0.7759,0.0,0.0,0.0,Left Back,357498
 Tomas Silva,Platense,Argentine Liga Profesional,2026/27,14,14,1170,0,0,4,0,13,12,2,1,1.0,0.3077,0.1538,0.0769,Left Back,335100
@@ -1336,7 +1337,7 @@ Giovanni Cantizano,Rosario Central,Argentine Liga Profesional,2026/27,12,7,655,1
 Guillermo Fernández,Rosario Central,Argentine Liga Profesional,2026/27,5,1,111,0,0,1,0,2,0,0,0,1.6216,0.8108,0.0,0.0,Substitute,172427
 Ignacio Ovando,Rosario Central,Argentine Liga Profesional,2026/27,15,15,1305,1,2,2,0,16,18,6,3,1.1034,0.1379,0.4138,0.2069,Center Right Defender,400123
 Jeremias Ledesma,Rosario Central,Argentine Liga Profesional,2026/27,15,15,1350,0,0,0,0,0,2,0,0,0.0,0.0,0.0,0.0,Goalkeeper,195621
-Juan Gimenez,Rosario Central,Argentine Liga Profesional,2026/27,6,2,182,0,1,1,0,2,0,1,0,0.989,0.4945,0.4945,0.0,Substitute,338923
+Juan Giménez,Rosario Central,Argentine Liga Profesional,2026/27,6,2,182,0,1,1,0,2,0,1,0,0.989,0.4945,0.4945,0.0,Substitute,338923
 Julián Fernández,Rosario Central,Argentine Liga Profesional,2026/27,10,5,503,3,0,0,0,3,12,14,5,0.5368,0.0,2.505,0.8946,Substitute,335238
 Jáminton Campaz,Rosario Central,Argentine Liga Profesional,2026/27,15,13,1174,4,2,0,0,10,16,39,15,0.7666,0.0,2.9898,1.1499,Attacking Midfielder Left,255295
 Luca Raffin,Rosario Central,Argentine Liga Profesional,2026/27,1,0,8,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Substitute,372662
@@ -1473,7 +1474,7 @@ Ignacio Isla,Unión (Santa Fe),Argentine Liga Profesional,2026/27,3,2,215,0,0,0,
 Joaquín Mosqueira,Unión (Santa Fe),Argentine Liga Profesional,2026/27,12,11,758,1,1,3,0,9,4,16,4,1.0686,0.3562,1.8997,0.4749,Center Midfielder,358259
 Juan Ludueña,Unión (Santa Fe),Argentine Liga Profesional,2026/27,16,16,1440,2,0,4,0,9,3,6,2,0.5625,0.25,0.375,0.125,Center Left Defender,346282
 Juan Pintado,Unión (Santa Fe),Argentine Liga Profesional,2026/27,13,6,701,0,2,1,0,7,3,2,0,0.8987,0.1284,0.2568,0.0,Right Back,270997
-Julián Palacio,Unión (Santa Fe),Argentine Liga Profesional,2026/27,14,13,1056,0,1,4,1,20,23,19,5,1.7045,0.4261,1.6193,0.4261,Right Midfielder,298859
+Julián Palacios,Unión (Santa Fe),Argentine Liga Profesional,2026/27,14,13,1056,0,1,4,1,20,23,19,5,1.7045,0.4261,1.6193,0.4261,Right Midfielder,298859
 Lautaro Vargas,Unión (Santa Fe),Argentine Liga Profesional,2026/27,5,5,358,0,0,1,0,2,3,4,1,0.5028,0.2514,1.0056,0.2514,Right Back,361298
 Lucas Menossi,Unión (Santa Fe),Argentine Liga Profesional,2026/27,11,10,910,3,1,3,0,10,6,11,6,0.989,0.2967,1.0879,0.5934,Center Right Midfielder,156284
 Lucas Santiago,Unión (Santa Fe),Argentine Liga Profesional,2026/27,14,14,1158,0,2,3,0,10,7,5,1,0.7772,0.2332,0.3886,0.0777,Left Back,3109245
@@ -2295,8 +2296,8 @@ Santos,Athletico Paranaense,Brazil Serie A,2026/27,6,6,540,0,0,1,0,0,3,0,0,0.0,0
 Stiven Mendoza,Athletico Paranaense,Brazil Serie A,2026/27,18,18,1487,2,1,2,0,6,9,26,7,0.3631,0.121,1.5736,0.4237,Left Midfielder,197049
 Alan Franco,Atlético-MG,Brazil Serie A,2026/27,8,7,562,0,0,3,0,9,7,2,1,1.4413,0.4804,0.3203,0.1601,Left Midfielder,262111
 Alan Minda,Atlético-MG,Brazil Serie A,2026/27,11,5,508,0,3,1,0,7,6,12,5,1.2402,0.1772,2.126,0.8858,Substitute,319422
-Alexsander,Atlético-MG,Brazil Serie A,2026/27,10,6,524,0,0,0,0,6,13,9,5,1.0305,0.0,1.5458,0.8588,Substitute,336386
-Bernard,Atlético-MG,Brazil Serie A,2026/27,13,11,842,4,1,0,0,12,9,20,6,1.2827,0.0,2.1378,0.6413,Attacking Midfielder Left,158272
+Alexsander,Atlético-MG,Brazil Serie A,2026/27,11,6,569,0,1,1,0,8,13,11,6,1.2654,0.1582,1.7399,0.949,Substitute,336386
+Bernard,Atlético-MG,Brazil Serie A,2026/27,14,12,932,4,1,0,0,12,9,23,6,1.1588,0.0,2.221,0.5794,Attacking Midfielder Left,158272
 Cauã Soares,Atlético-MG,Brazil Serie A,2026/27,3,1,115,0,0,0,0,3,3,3,1,2.3478,0.0,2.3478,0.7826,Substitute,417568
 Dudu,Atlético-MG,Brazil Serie A,2026/27,8,1,231,0,0,0,0,3,9,9,3,1.1688,0.0,3.5065,1.1688,Substitute,178349
 Fred,Atlético-MG,Brazil Serie A,2026/27,7,5,460,0,0,2,0,14,17,9,2,2.7391,0.3913,1.7609,0.3913,Attacking Midfielder,161559
@@ -2304,26 +2305,26 @@ Gabriel Delfim,Atlético-MG,Brazil Serie A,2026/27,10,10,900,0,0,0,0,0,5,0,0,0.0
 Gabriel Veneno,Atlético-MG,Brazil Serie A,2026/27,1,0,6,0,0,0,0,0,1,0,0,0.0,0.0,0.0,0.0,Substitute,410939
 Gustavo Scarpa,Atlético-MG,Brazil Serie A,2026/27,6,2,219,0,0,0,0,3,2,10,2,1.2329,0.0,4.1096,0.8219,Substitute,205074
 Gutte,Atlético-MG,Brazil Serie A,2026/27,1,0,23,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Substitute,3103553
-Igor Gomes,Atlético-MG,Brazil Serie A,2026/27,11,6,489,2,1,1,0,6,2,7,3,1.1043,0.184,1.2883,0.5521,Substitute,268472
+Igor Gomes,Atlético-MG,Brazil Serie A,2026/27,12,6,499,2,1,1,0,6,2,7,3,1.0822,0.1804,1.2625,0.5411,Substitute,268472
 Kauã Pascini,Atlético-MG,Brazil Serie A,2026/27,8,8,658,0,0,2,0,8,1,9,2,1.0942,0.2736,1.231,0.2736,Left Back,417569
-Kevin Castaño,Atlético-MG,Brazil Serie A,2026/27,11,5,522,0,0,2,0,7,7,3,1,1.2069,0.3448,0.5172,0.1724,Substitute,307756
+Kevin Castaño,Atlético-MG,Brazil Serie A,2026/27,12,6,567,0,0,2,0,7,7,4,1,1.1111,0.3175,0.6349,0.1587,Substitute,307756
 Lyanco,Atlético-MG,Brazil Serie A,2026/27,6,6,540,1,0,0,0,8,4,2,1,1.3333,0.0,0.3333,0.1667,Center Left Defender,220747
-Léo Duarte,Atlético-MG,Brazil Serie A,2026/27,6,4,462,0,0,0,0,2,2,5,2,0.3896,0.0,0.974,0.3896,Center Right Defender,234015
-Mamady Cissé,Atlético-MG,Brazil Serie A,2026/27,13,8,737,0,0,2,0,15,15,8,2,1.8318,0.2442,0.9769,0.2442,Substitute,417570
+Léo Duarte,Atlético-MG,Brazil Serie A,2026/27,7,5,542,0,0,0,0,3,3,7,2,0.4982,0.0,1.1624,0.3321,Center Right Defender,234015
+Mamady Cissé,Atlético-MG,Brazil Serie A,2026/27,14,9,794,0,0,2,0,16,15,10,2,1.8136,0.2267,1.1335,0.2267,Substitute,417570
 Mateo Casierra,Atlético-MG,Brazil Serie A,2026/27,9,4,510,1,1,0,0,1,4,17,5,0.1765,0.0,3.0,0.8824,Substitute,215934
 Maycon,Atlético-MG,Brazil Serie A,2026/27,11,7,597,0,1,0,0,5,2,3,1,0.7538,0.0,0.4523,0.1508,Substitute,233416
-Natanael,Atlético-MG,Brazil Serie A,2026/27,14,14,1194,0,1,2,0,13,18,12,4,0.9799,0.1508,0.9045,0.3015,Right Back,304699
+Natanael,Atlético-MG,Brazil Serie A,2026/27,15,15,1284,0,1,2,0,14,19,14,4,0.9813,0.1402,0.9813,0.2804,Right Back,304699
 Reiner,Atlético-MG,Brazil Serie A,2026/27,10,7,551,3,1,0,0,5,4,15,5,0.8167,0.0,2.4501,0.8167,Forward,286703
-Renan Lodi,Atlético-MG,Brazil Serie A,2026/27,12,10,935,1,1,2,0,14,15,18,5,1.3476,0.1925,1.7326,0.4813,Left Back,245858
-Ruan,Atlético-MG,Brazil Serie A,2026/27,6,6,503,1,0,1,0,3,1,5,3,0.5368,0.1789,0.8946,0.5368,Center Right Defender,268693
-Thiago Borbas,Atlético-MG,Brazil Serie A,2026/27,6,4,306,2,1,1,0,6,9,9,3,1.7647,0.2941,2.6471,0.8824,Forward,302628
-Tomás Cuello,Atlético-MG,Brazil Serie A,2026/27,10,8,729,3,1,2,0,8,14,21,9,0.9877,0.2469,2.5926,1.1111,Attacking Midfielder Right,252197
-Tomás Pérez,Atlético-MG,Brazil Serie A,2026/27,7,6,448,0,0,1,1,7,1,0,0,1.4062,0.4018,0.0,0.0,Right Midfielder,361299
-Victor Hugo,Atlético-MG,Brazil Serie A,2026/27,11,7,659,1,1,1,0,3,9,16,5,0.4097,0.1366,2.1851,0.6829,Attacking Midfielder,334382
+Renan Lodi,Atlético-MG,Brazil Serie A,2026/27,13,11,1025,1,1,2,0,16,17,20,5,1.4049,0.1756,1.7561,0.439,Left Back,245858
+Ruan,Atlético-MG,Brazil Serie A,2026/27,7,7,593,1,0,2,0,5,1,6,3,0.7589,0.3035,0.9106,0.4553,Center Right Defender,268693
+Thiago Borbas,Atlético-MG,Brazil Serie A,2026/27,7,5,371,2,1,1,1,11,10,11,3,2.6685,0.4852,2.6685,0.7278,Forward,302628
+Tomas Perez,Atlético-MG,Brazil Serie A,2026/27,8,7,538,0,0,2,1,9,1,0,0,1.5056,0.5019,0.0,0.0,Right Midfielder,361299
+Tomás Cuello,Atlético-MG,Brazil Serie A,2026/27,11,9,819,4,1,2,0,8,17,25,12,0.8791,0.2198,2.7473,1.3187,Attacking Midfielder Right,252197
+Victor Hugo,Atlético-MG,Brazil Serie A,2026/27,12,7,692,1,1,1,0,3,9,18,5,0.3902,0.1301,2.341,0.6503,Substitute,334382
 Vitor Hugo,Atlético-MG,Brazil Serie A,2026/27,14,7,654,2,0,2,0,10,1,9,3,1.3761,0.2752,1.2385,0.4128,Substitute,191995
 Vitão,Atlético-MG,Brazil Serie A,2026/27,9,9,774,1,0,1,0,8,1,3,2,0.9302,0.1163,0.3488,0.2326,Center Right Defender,398934
 Ángelo Preciado,Atlético-MG,Brazil Serie A,2026/27,7,6,527,0,2,3,0,11,7,5,2,1.8786,0.5123,0.8539,0.3416,Right Back,256560
-Éverson,Atlético-MG,Brazil Serie A,2026/27,7,7,630,0,0,0,0,1,2,0,0,0.1429,0.0,0.0,0.0,Goalkeeper,223953
+Éverson,Atlético-MG,Brazil Serie A,2026/27,8,8,720,0,0,0,0,1,2,0,0,0.125,0.0,0.0,0.0,Goalkeeper,223953
 Ademir,Bahia,Brazil Serie A,2026/27,14,6,576,1,0,1,0,8,13,17,4,1.25,0.1562,2.6562,0.625,Substitute,269675
 Alejo Veliz,Bahia,Brazil Serie A,2026/27,17,17,1477,4,1,1,0,23,24,45,11,1.4015,0.0609,2.742,0.6703,Forward,318291
 Caio Alexandre,Bahia,Brazil Serie A,2026/27,13,1,308,0,0,1,0,5,3,2,0,1.461,0.2922,0.5844,0.0,Substitute,299932
@@ -2426,31 +2427,31 @@ Yannick Bolasie,Chapecoense,Brazil Serie A,2026/27,12,6,663,1,2,1,0,14,7,19,10,1
 Ênio,Chapecoense,Brazil Serie A,2026/27,5,2,146,0,0,0,0,2,3,3,0,1.2329,0.0,1.8493,0.0,Substitute,301592
 Alex Santana,Corinthians,Brazil Serie A,2026/27,1,0,15,0,0,0,0,0,2,0,0,0.0,0.0,0.0,0.0,Substitute,196879
 Allan,Corinthians,Brazil Serie A,2026/27,10,7,650,0,1,1,0,12,3,4,2,1.6615,0.1385,0.5538,0.2769,Left Midfielder,223437
-André,Corinthians,Brazil Serie A,2026/27,10,8,675,1,2,1,0,11,5,12,2,1.4667,0.1333,1.6,0.2667,Left Midfielder,409662
+André,Corinthians,Brazil Serie A,2026/27,11,8,720,1,2,1,0,12,6,13,2,1.5,0.125,1.625,0.25,Left Midfielder,409662
 André Carrillo,Corinthians,Brazil Serie A,2026/27,11,6,506,0,0,2,0,9,5,6,0,1.6008,0.3557,1.0672,0.0,Substitute,148189
 André Ramalho,Corinthians,Brazil Serie A,2026/27,5,4,382,0,0,3,0,4,4,1,0,0.9424,0.7068,0.2356,0.0,Center Right Defender,194090
-Breno Bidon,Corinthians,Brazil Serie A,2026/27,16,14,1079,0,2,4,0,18,28,13,4,1.5014,0.3336,1.0843,0.3336,Attacking Midfielder Left,338898
+Breno Bidon,Corinthians,Brazil Serie A,2026/27,17,15,1169,0,2,4,0,19,30,14,5,1.4628,0.308,1.0778,0.3849,Attacking Midfielder Left,338898
 Charles,Corinthians,Brazil Serie A,2026/27,5,1,109,0,0,1,0,5,3,0,0,4.1284,0.8257,0.0,0.0,Substitute,240557
 Dieguinho,Corinthians,Brazil Serie A,2026/27,11,4,314,0,0,0,0,2,5,4,1,0.5732,0.0,1.1465,0.2866,Substitute,382944
-Fabrizio Angileri,Corinthians,Brazil Serie A,2026/27,9,8,673,1,1,2,0,7,4,8,1,0.9361,0.2675,1.0698,0.1337,Left Back,195756
+Fabrizio Angileri,Corinthians,Brazil Serie A,2026/27,10,9,763,1,2,2,0,9,5,8,1,1.0616,0.2359,0.9436,0.118,Left Back,195756
 Gabriel Paulista,Corinthians,Brazil Serie A,2026/27,9,9,761,0,0,4,0,6,5,5,0,0.7096,0.4731,0.5913,0.0,Center Right Defender,192226
 Gui Negão,Corinthians,Brazil Serie A,2026/27,9,1,242,1,0,1,0,4,4,5,2,1.4876,0.3719,1.8595,0.7438,Substitute,382959
-Gustavo Henrique,Corinthians,Brazil Serie A,2026/27,15,15,1350,4,1,1,0,7,6,12,7,0.4667,0.0667,0.8,0.4667,Center Left Defender,168981
-Hugo Souza,Corinthians,Brazil Serie A,2026/27,15,15,1350,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Goalkeeper,257051
+Gustavo Henrique,Corinthians,Brazil Serie A,2026/27,16,16,1440,4,1,1,0,8,7,12,7,0.5,0.0625,0.75,0.4375,Center Left Defender,168981
+Hugo Souza,Corinthians,Brazil Serie A,2026/27,16,16,1440,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Goalkeeper,257051
 Iago Machado,Corinthians,Brazil Serie A,2026/27,2,2,135,0,0,0,0,1,0,0,0,0.6667,0.0,0.0,0.0,Center Left Defender,421414
-Jesse Lingard,Corinthians,Brazil Serie A,2026/27,11,3,418,0,0,1,0,15,7,10,3,3.2297,0.2153,2.1531,0.6459,Substitute,169136
-João Pedro,Corinthians,Brazil Serie A,2026/27,5,3,314,0,0,0,0,2,2,1,1,0.5732,0.0,0.2866,0.2866,Center Right Defender,361471
-Kaio,Corinthians,Brazil Serie A,2026/27,16,12,1095,5,2,2,0,17,38,39,13,1.3973,0.1644,3.2055,1.0685,Attacking Midfielder Right,347456
+Jesse Lingard,Corinthians,Brazil Serie A,2026/27,12,3,426,0,0,1,0,16,7,10,3,3.3803,0.2113,2.1127,0.6338,Substitute,169136
+João Pedro,Corinthians,Brazil Serie A,2026/27,6,4,404,0,0,0,0,2,4,2,1,0.4455,0.0,0.4455,0.2228,Center Right Defender,361471
+Kaio,Corinthians,Brazil Serie A,2026/27,17,13,1177,6,2,2,0,18,43,42,14,1.3764,0.1529,3.2116,1.0705,Attacking Midfielder Right,347456
 Kauê Camargo,Corinthians,Brazil Serie A,2026/27,2,2,180,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Goalkeeper,361442
-Mateuzinho,Corinthians,Brazil Serie A,2026/27,15,14,1281,0,2,3,0,14,13,16,4,0.9836,0.2108,1.1241,0.281,Right Back,272533
-Matheus Bidu,Corinthians,Brazil Serie A,2026/27,14,12,1076,3,0,0,0,14,26,24,4,1.171,0.0,2.0074,0.3346,Left Back,287774
+Mateuzinho,Corinthians,Brazil Serie A,2026/27,16,15,1371,0,2,3,0,14,13,17,4,0.919,0.1969,1.116,0.2626,Right Back,272533
+Matheus Bidu,Corinthians,Brazil Serie A,2026/27,15,13,1166,3,0,0,0,15,27,26,4,1.1578,0.0,2.0069,0.3087,Left Back,287774
 Matheus Pereira,Corinthians,Brazil Serie A,2026/27,10,2,271,0,0,1,0,4,3,3,0,1.3284,0.3321,0.9963,0.0,Substitute,216098
-Memphis Depay,Corinthians,Brazil Serie A,2026/27,8,6,554,1,1,3,0,2,12,15,6,0.3249,0.4874,2.4368,0.9747,Forward,159255
-Pedro Milans,Corinthians,Brazil Serie A,2026/27,6,4,309,0,0,1,0,5,4,3,2,1.4563,0.2913,0.8738,0.5825,Right Back,359849
+Memphis Depay,Corinthians,Brazil Serie A,2026/27,9,7,636,1,1,3,0,2,12,16,6,0.283,0.4245,2.2642,0.8491,Forward,159255
+Pedro Milans,Corinthians,Brazil Serie A,2026/27,7,4,317,0,0,2,0,6,4,3,2,1.7035,0.5678,0.8517,0.5678,Right Back,359849
 Pedro Raúl,Corinthians,Brazil Serie A,2026/27,9,3,288,1,0,0,0,5,3,7,5,1.5625,0.0,2.1875,1.5625,Substitute,234070
-Raniele,Corinthians,Brazil Serie A,2026/27,10,9,792,1,0,4,0,10,13,8,2,1.1364,0.4545,0.9091,0.2273,Right Midfielder,236099
-Rodrigo Garro,Corinthians,Brazil Serie A,2026/27,13,11,937,1,1,8,0,21,31,25,6,2.0171,0.7684,2.4013,0.5763,Attacking Midfielder,270562
-Vitinho,Corinthians,Brazil Serie A,2026/27,6,2,264,0,4,1,0,8,4,12,2,2.7273,0.3409,4.0909,0.6818,Substitute,171652
+Raniele,Corinthians,Brazil Serie A,2026/27,11,10,837,1,0,4,0,10,13,8,2,1.0753,0.4301,0.8602,0.2151,Right Midfielder,236099
+Rodrigo Garro,Corinthians,Brazil Serie A,2026/27,14,11,966,1,1,8,0,21,33,26,7,1.9565,0.7453,2.4224,0.6522,Attacking Midfielder,270562
+Vitinho,Corinthians,Brazil Serie A,2026/27,7,3,325,0,4,1,0,8,5,16,2,2.2154,0.2769,4.4308,0.5538,Substitute,171652
 Yuri Alberto,Corinthians,Brazil Serie A,2026/27,9,8,689,3,0,0,1,11,3,32,11,1.4369,0.1306,4.18,1.4369,Forward,266666
 Zakaria Labyad,Corinthians,Brazil Serie A,2026/27,3,2,137,0,1,0,0,3,2,1,0,1.9708,0.0,0.6569,0.0,Attacking Midfielder Left,144324
 Breno,Coritiba,Brazil Serie A,2026/27,17,14,1164,1,1,1,1,6,24,14,3,0.4639,0.1546,1.0825,0.232,Attacking Midfielder Left,236324
@@ -2783,7 +2784,7 @@ Rony,Santos,Brazil Serie A,2026/27,17,3,555,1,0,0,0,11,15,22,7,1.7838,0.0,3.5676
 Thaciano,Santos,Brazil Serie A,2026/27,10,1,154,0,0,1,0,2,0,4,1,1.1688,0.5844,2.3377,0.5844,Substitute,218938
 Willian Arão,Santos,Brazil Serie A,2026/27,13,12,981,1,0,3,0,9,2,5,2,0.8257,0.2752,0.4587,0.1835,Center Left Defender,173621
 Álvaro Barreal,Santos,Brazil Serie A,2026/27,13,12,873,2,1,6,0,10,11,26,8,1.0309,0.6186,2.6804,0.8247,Attacking Midfielder Left,279454
-André Oliveira,São Paulo,Brazil Serie A,2026/27,6,1,159,0,0,2,0,3,4,3,1,1.6981,1.1321,1.6981,0.566,Substitute,270578
+André Silva,São Paulo,Brazil Serie A,2026/27,6,1,159,0,0,2,0,3,4,3,1,1.6981,1.1321,1.6981,0.566,Substitute,270578
 Artur,São Paulo,Brazil Serie A,2026/27,14,12,1012,2,1,1,0,6,20,38,12,0.5336,0.0889,3.3794,1.0672,Center Right Forward,236596
 Bezerra,São Paulo,Brazil Serie A,2026/27,1,0,8,0,0,0,0,1,0,0,0,11.25,0.0,0.0,0.0,Substitute,399079
 Buta,São Paulo,Brazil Serie A,2026/27,1,1,70,0,0,0,0,0,2,0,0,0.0,0.0,0.0,0.0,Right Midfielder,238897
@@ -3297,80 +3298,80 @@ Paul Bright Max Erevbenagie,Werder Bremen,Bundesliga,2026/27,5,0,58,0,0,0,0,2,0,
 Salim Musah,Werder Bremen,Bundesliga,2026/27,3,0,51,0,0,0,0,1,0,0,0,1.7647,0.0,0.0,0.0,Substitute,407196
 Senne Lynen,Werder Bremen,Bundesliga,2026/27,3,2,129,0,0,0,0,1,1,0,0,0.6977,0.0,0.0,0.0,Center Midfielder,270389
 Youri Regeer,Werder Bremen,Bundesliga,2026/27,9,9,765,0,0,2,0,7,6,8,3,0.8235,0.2353,0.9412,0.3529,Left Midfielder,297292
-Alex Cochrane,Birmingham City,Championship,2026/27,16,15,1379,2,2,4,0,15,14,8,3,0.979,0.2611,0.5221,0.1958,Left Back,251627
-August Priske,Birmingham City,Championship,2026/27,12,12,934,6,1,1,0,19,10,29,13,1.8308,0.0964,2.7944,1.2527,Forward,330460
-Bright Osayi-Samuel,Birmingham City,Championship,2026/27,14,12,1026,0,0,4,0,13,17,6,0,1.1404,0.3509,0.5263,0.0,Right Back,217071
-Carlos Vicente,Birmingham City,Championship,2026/27,15,9,864,2,0,3,0,12,16,19,4,1.25,0.3125,1.9792,0.4167,Attacking Midfielder Right,172019
+Alex Cochrane,Birmingham City,Championship,2026/27,17,16,1469,2,2,5,0,16,14,8,3,0.9803,0.3063,0.4901,0.1838,Left Back,251627
+August Priske,Birmingham City,Championship,2026/27,13,13,1014,7,1,1,0,20,11,32,15,1.7751,0.0888,2.8402,1.3314,Forward,330460
+Bright Osayi-Samuel,Birmingham City,Championship,2026/27,15,13,1116,0,0,4,0,13,20,7,0,1.0484,0.3226,0.5645,0.0,Right Back,217071
+Carlos Vicente,Birmingham City,Championship,2026/27,16,10,954,2,0,3,0,12,16,20,5,1.1321,0.283,1.8868,0.4717,Attacking Midfielder Right,172019
 Christoph Klarer,Birmingham City,Championship,2026/27,16,16,1440,0,1,4,0,24,13,7,1,1.5,0.25,0.4375,0.0625,Center Left Defender,263133
-Dael Fry,Birmingham City,Championship,2026/27,2,0,2,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Substitute,223792
-Demarai Gray,Birmingham City,Championship,2026/27,13,1,304,3,0,0,0,6,4,10,5,1.7763,0.0,2.9605,1.4803,Substitute,194403
+Dael Fry,Birmingham City,Championship,2026/27,3,1,92,0,0,0,0,0,0,2,1,0.0,0.0,1.9565,0.9783,Substitute,223792
+Demarai Gray,Birmingham City,Championship,2026/27,14,1,320,3,0,0,0,8,5,13,7,2.25,0.0,3.6562,1.9687,Substitute,194403
 Ethan Laird,Birmingham City,Championship,2026/27,12,4,417,0,0,2,0,9,9,8,2,1.9424,0.4317,1.7266,0.4317,Substitute,291434
-James Beadle,Birmingham City,Championship,2026/27,14,14,1215,0,0,0,0,0,9,0,0,0.0,0.0,0.0,0.0,Goalkeeper,329170
-Jay Stansfield,Birmingham City,Championship,2026/27,16,16,1356,4,1,3,0,29,3,43,21,1.9248,0.1991,2.854,1.3938,Attacking Midfielder,301248
-Jhon Solis,Birmingham City,Championship,2026/27,13,13,1005,0,2,3,0,15,11,11,3,1.3433,0.2687,0.9851,0.2687,Left Midfielder,285048
+James Beadle,Birmingham City,Championship,2026/27,15,15,1305,0,0,0,0,0,9,0,0,0.0,0.0,0.0,0.0,Goalkeeper,329170
+Jay Stansfield,Birmingham City,Championship,2026/27,17,17,1430,4,2,3,0,29,3,45,22,1.8252,0.1888,2.8322,1.3846,Attacking Midfielder,301248
+Jhon Solis,Birmingham City,Championship,2026/27,14,14,1079,0,2,4,0,17,13,12,3,1.418,0.3336,1.0009,0.2502,Left Midfielder,285048
 Kristoffer Lund,Birmingham City,Championship,2026/27,2,1,62,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Left Back,310466
-Liam Millar,Birmingham City,Championship,2026/27,12,12,855,4,3,2,0,3,13,18,10,0.3158,0.2105,1.8947,1.0526,Attacking Midfielder Left,271879
-Luis Vázquez,Birmingham City,Championship,2026/27,13,2,230,0,1,2,0,5,3,4,1,1.9565,0.7826,1.5652,0.3913,Substitute,285032
+Liam Millar,Birmingham City,Championship,2026/27,13,13,929,4,3,2,0,3,15,19,11,0.2906,0.1938,1.8407,1.0657,Attacking Midfielder Left,271879
+Luis Vázquez,Birmingham City,Championship,2026/27,14,2,240,0,1,2,0,6,3,5,1,2.25,0.75,1.875,0.375,Substitute,285032
 Marvin Ducksch,Birmingham City,Championship,2026/27,10,0,140,0,0,0,0,1,0,8,2,0.6429,0.0,5.1429,1.2857,Substitute,159150
-Max Bird,Birmingham City,Championship,2026/27,9,2,324,1,3,0,0,4,3,9,6,1.1111,0.0,2.5,1.6667,Substitute,251853
-Paik Seung-Ho,Birmingham City,Championship,2026/27,10,5,477,1,0,0,0,2,1,5,1,0.3774,0.0,0.9434,0.1887,Substitute,256598
+Max Bird,Birmingham City,Championship,2026/27,10,2,340,1,3,0,0,4,3,9,6,1.0588,0.0,2.3824,1.5882,Substitute,251853
+Paik Seung-Ho,Birmingham City,Championship,2026/27,11,5,493,1,0,0,0,2,1,5,1,0.3651,0.0,0.9128,0.1826,Substitute,256598
 Patrick Roberts,Birmingham City,Championship,2026/27,13,8,710,0,3,1,0,6,14,8,3,0.7606,0.1268,1.0141,0.3803,Attacking Midfielder Right,194118
-Phil Neumann,Birmingham City,Championship,2026/27,16,16,1431,2,0,3,0,14,17,13,5,0.8805,0.1887,0.8176,0.3145,Center Right Defender,238884
+Phil Neumann,Birmingham City,Championship,2026/27,17,17,1521,2,0,3,0,14,17,16,5,0.8284,0.1775,0.9467,0.2959,Center Right Defender,238884
 Ryan Allsop,Birmingham City,Championship,2026/27,3,2,225,0,1,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Goalkeeper,134929
-Taylor Gardner-Hickman,Birmingham City,Championship,2026/27,3,0,33,0,0,0,0,1,2,1,1,2.7273,0.0,2.7273,2.7273,Substitute,282892
-Tomoki Iwata,Birmingham City,Championship,2026/27,16,16,1415,0,2,0,0,15,1,18,2,0.9541,0.0,1.1449,0.1272,Right Midfielder,286056
+Taylor Gardner-Hickman,Birmingham City,Championship,2026/27,4,0,34,0,0,0,0,2,2,1,1,5.2941,0.0,2.6471,2.6471,Substitute,282892
+Tomoki Iwata,Birmingham City,Championship,2026/27,17,17,1505,0,2,0,0,18,2,19,2,1.0764,0.0,1.1362,0.1196,Right Midfielder,286056
 Adam Forshaw,Blackburn Rovers,Championship,2026/27,5,3,219,0,0,2,0,3,3,1,0,1.2329,0.8219,0.411,0.0,Substitute,143534
-Andri Gudjohnsen,Blackburn Rovers,Championship,2026/27,15,12,1028,11,1,2,0,13,16,24,13,1.1381,0.1751,2.1012,1.1381,Forward,326075
-Augustus Kargbo,Blackburn Rovers,Championship,2026/27,7,0,156,0,0,2,0,5,2,3,2,2.8846,1.1538,1.7308,1.1538,Substitute,277151
-Aynsley Pears,Blackburn Rovers,Championship,2026/27,4,4,360,0,0,0,0,0,1,0,0,0.0,0.0,0.0,0.0,Goalkeeper,243667
+Andri Gudjohnsen,Blackburn Rovers,Championship,2026/27,16,13,1101,11,1,2,0,13,17,25,13,1.0627,0.1635,2.0436,1.0627,Forward,326075
+Augustus Kargbo,Blackburn Rovers,Championship,2026/27,8,0,174,0,0,2,0,6,2,3,2,3.1034,1.0345,1.5517,1.0345,Substitute,277151
+Aynsley Pears,Blackburn Rovers,Championship,2026/27,5,5,450,0,0,0,0,0,1,0,0,0.0,0.0,0.0,0.0,Goalkeeper,243667
 Balazs Toth,Blackburn Rovers,Championship,2026/27,12,12,1080,0,0,0,0,0,6,0,0,0.0,0.0,0.0,0.0,Goalkeeper,305052
 Dion De Neve,Blackburn Rovers,Championship,2026/27,1,0,2,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Substitute,323976
 Frank Vare,Blackburn Rovers,Championship,2026/27,1,0,3,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Substitute,399475
-Gady Beyuku,Blackburn Rovers,Championship,2026/27,6,2,350,0,0,3,0,8,6,4,0,2.0571,0.7714,1.0286,0.0,Substitute,388566
-Harry Pickering,Blackburn Rovers,Championship,2026/27,12,11,974,0,2,3,0,8,10,4,0,0.7392,0.2772,0.3696,0.0,Left Back,241040
+Gady Beyuku,Blackburn Rovers,Championship,2026/27,7,3,440,0,0,3,0,9,8,5,1,1.8409,0.6136,1.0227,0.2045,Substitute,388566
+Harry Pickering,Blackburn Rovers,Championship,2026/27,13,12,1059,0,2,3,0,9,10,4,0,0.7649,0.255,0.3399,0.0,Left Back,241040
 Harvey Higgins,Blackburn Rovers,Championship,2026/27,2,0,26,0,0,0,0,2,0,0,0,6.9231,0.0,0.0,0.0,Substitute,3139111
 Harvey Pates,Blackburn Rovers,Championship,2026/27,1,0,10,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Substitute,3133277
-Hayden Carter,Blackburn Rovers,Championship,2026/27,12,8,821,0,0,3,0,4,0,6,0,0.4385,0.3289,0.6577,0.0,Substitute,243604
-Jake Garrett,Blackburn Rovers,Championship,2026/27,6,0,74,0,0,1,0,2,2,1,1,2.4324,1.2162,1.2162,1.2162,Substitute,324693
-Jayden Fevrier,Blackburn Rovers,Championship,2026/27,16,5,665,0,2,1,0,9,10,24,5,1.218,0.1353,3.2481,0.6767,Substitute,310324
-Kristi Montgomery,Blackburn Rovers,Championship,2026/27,15,15,1258,1,1,3,0,16,12,5,2,1.1447,0.2146,0.3577,0.1431,Left Midfielder,355361
+Hayden Carter,Blackburn Rovers,Championship,2026/27,13,9,911,0,0,4,0,4,0,9,0,0.3952,0.3952,0.8891,0.0,Center Right Defender,243604
+Jake Garrett,Blackburn Rovers,Championship,2026/27,7,0,75,0,0,1,0,2,2,1,1,2.4,1.2,1.2,1.2,Substitute,324693
+Jayden Fevrier,Blackburn Rovers,Championship,2026/27,17,6,738,0,2,1,0,11,10,26,5,1.3415,0.122,3.1707,0.6098,Substitute,310324
+Kristi Montgomery,Blackburn Rovers,Championship,2026/27,16,16,1348,1,1,4,0,19,14,7,2,1.2685,0.2671,0.4674,0.1335,Left Midfielder,355361
 Lucas Houghton,Blackburn Rovers,Championship,2026/27,1,0,1,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Substitute,3133275
 Mathias Jørgensen,Blackburn Rovers,Championship,2026/27,2,0,61,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Substitute,272267
-Moussa Baradji,Blackburn Rovers,Championship,2026/27,9,3,397,0,0,1,0,8,6,7,2,1.8136,0.2267,1.5869,0.4534,Substitute,387548
-Oladapo Afolayan,Blackburn Rovers,Championship,2026/27,16,16,1187,5,2,2,0,29,36,32,12,2.1988,0.1516,2.4263,0.9099,Attacking Midfielder Left,252916
+Moussa Baradji,Blackburn Rovers,Championship,2026/27,10,4,487,0,0,2,0,9,7,7,2,1.6632,0.3696,1.2936,0.3696,Substitute,387548
+Oladapo Afolayan,Blackburn Rovers,Championship,2026/27,17,17,1259,5,2,2,0,31,39,34,13,2.216,0.143,2.4305,0.9293,Attacking Midfielder Left,252916
 Ryan Alebiousu,Blackburn Rovers,Championship,2026/27,14,14,1165,0,0,0,0,5,3,11,2,0.3863,0.0,0.8498,0.1545,Right Back,307162
-Ryoya Morishita,Blackburn Rovers,Championship,2026/27,12,11,849,2,2,0,0,6,11,11,5,0.636,0.0,1.1661,0.53,Attacking Midfielder Right,303060
+Ryoya Morishita,Blackburn Rovers,Championship,2026/27,13,11,866,2,2,0,0,6,12,11,5,0.6236,0.0,1.1432,0.5196,Attacking Midfielder Right,303060
 Sam Morsy,Blackburn Rovers,Championship,2026/27,14,12,1073,0,1,5,0,19,11,9,2,1.5937,0.4194,0.7549,0.1678,Right Midfielder,138879
-Sean McLoughlin,Blackburn Rovers,Championship,2026/27,16,16,1440,1,2,4,0,11,9,8,1,0.6875,0.25,0.5,0.0625,Center Left Defender,274535
-Todd Cantwell,Blackburn Rovers,Championship,2026/27,16,16,1293,3,1,4,0,17,21,23,12,1.1833,0.2784,1.6009,0.8353,Attacking Midfielder,243380
+Sean McLoughlin,Blackburn Rovers,Championship,2026/27,17,17,1530,1,2,4,0,11,9,9,1,0.6471,0.2353,0.5294,0.0588,Center Left Defender,274535
+Todd Cantwell,Blackburn Rovers,Championship,2026/27,17,17,1383,4,1,4,0,18,24,27,14,1.1714,0.2603,1.757,0.9111,Attacking Midfielder,243380
 Tom Atcheson,Blackburn Rovers,Championship,2026/27,11,11,818,0,1,1,1,9,3,2,0,0.9902,0.22,0.22,0.0,Center Right Defender,369509
-Yuki Ohashi,Blackburn Rovers,Championship,2026/27,6,0,97,0,1,0,0,8,4,1,1,7.4227,0.0,0.9278,0.9278,Substitute,283613
-Yuri Ribeiro,Blackburn Rovers,Championship,2026/27,8,5,413,0,0,1,0,5,5,1,0,1.0896,0.2179,0.2179,0.0,Left Back,227224
-Akin Famewo,Bolton Wanderers,Championship,2026/27,12,11,838,0,0,2,0,7,10,8,1,0.7518,0.2148,0.8592,0.1074,Center Left Defender,241449
-Atsuki Ito,Bolton Wanderers,Championship,2026/27,10,4,434,2,1,0,0,4,3,9,3,0.8295,0.0,1.8664,0.6221,Substitute,304028
+Yuki Ohashi,Blackburn Rovers,Championship,2026/27,7,0,114,0,1,0,0,8,4,2,2,6.3158,0.0,1.5789,1.5789,Substitute,283613
+Yuri Ribeiro,Blackburn Rovers,Championship,2026/27,9,5,418,0,0,1,0,5,5,1,0,1.0766,0.2153,0.2153,0.0,Substitute,227224
+Akin Famewo,Bolton Wanderers,Championship,2026/27,13,12,883,0,0,3,0,8,10,8,1,0.8154,0.3058,0.8154,0.1019,Center Left Defender,241449
+Atsuki Ito,Bolton Wanderers,Championship,2026/27,11,5,524,2,1,0,0,4,4,10,3,0.687,0.0,1.7176,0.5153,Substitute,304028
 Ben Davies,Bolton Wanderers,Championship,2026/27,8,6,580,0,0,1,0,2,6,1,0,0.3103,0.1552,0.1552,0.0,Center Left Defender,219599
-Christian Forino Joseph,Bolton Wanderers,Championship,2026/27,10,9,801,0,0,1,0,2,10,10,4,0.2247,0.1124,1.1236,0.4494,Center Right Defender,326207
+Christian Forino Joseph,Bolton Wanderers,Championship,2026/27,11,9,846,0,0,1,0,2,11,10,4,0.2128,0.1064,1.0638,0.4255,Center Right Defender,326207
 David Watson,Bolton Wanderers,Championship,2026/27,1,0,11,0,0,0,0,1,0,0,0,8.1818,0.0,0.0,0.0,Substitute,103404
 Eoin Toal,Bolton Wanderers,Championship,2026/27,8,7,639,0,0,0,0,4,3,3,1,0.5634,0.0,0.4225,0.1408,Center Right Defender,260007
 Ethan Erhahon,Bolton Wanderers,Championship,2026/27,11,9,721,1,0,1,0,12,9,3,1,1.4979,0.1248,0.3745,0.1248,Left Midfielder,259884
-Gaizka Larrazabal,Bolton Wanderers,Championship,2026/27,15,13,1129,1,4,3,0,14,8,16,3,1.116,0.2391,1.2755,0.2391,Right Back,248860
-Gavin Bazunu,Bolton Wanderers,Championship,2026/27,8,8,720,0,0,0,0,0,2,0,0,0.0,0.0,0.0,0.0,Goalkeeper,275735
+Gaizka Larrazabal,Bolton Wanderers,Championship,2026/27,16,14,1216,1,4,3,0,15,8,16,3,1.1102,0.222,1.1842,0.222,Right Back,248860
+Gavin Bazunu,Bolton Wanderers,Championship,2026/27,9,9,810,0,0,0,0,1,3,0,0,0.1111,0.0,0.0,0.0,Goalkeeper,275735
 Jack Bonham,Bolton Wanderers,Championship,2026/27,8,8,720,0,0,0,0,1,2,0,0,0.125,0.0,0.0,0.0,Goalkeeper,169041
 Jayden Nelson,Bolton Wanderers,Championship,2026/27,6,0,127,0,0,1,0,5,2,6,3,3.5433,0.7087,4.252,2.126,Substitute,280612
 John Mcatee,Bolton Wanderers,Championship,2026/27,6,5,329,0,1,1,0,6,2,8,3,1.6413,0.2736,2.1884,0.8207,Attacking Midfielder,255851
-Josh Sheehan,Bolton Wanderers,Championship,2026/27,16,16,1418,2,0,4,1,20,20,26,9,1.2694,0.3173,1.6502,0.5712,Right Midfielder,187177
+Josh Sheehan,Bolton Wanderers,Championship,2026/27,17,17,1508,2,0,4,1,20,21,26,9,1.1936,0.2984,1.5517,0.5371,Right Midfielder,187177
 Kyliane Dong,Bolton Wanderers,Championship,2026/27,12,5,511,0,1,1,0,7,9,15,4,1.2329,0.1761,2.6419,0.7045,Substitute,346835
-Lewis Brunt,Bolton Wanderers,Championship,2026/27,10,7,694,0,0,1,0,4,6,3,1,0.5187,0.1297,0.389,0.1297,Substitute,294311
-Luca Stephenson,Bolton Wanderers,Championship,2026/27,5,5,414,0,0,3,0,10,2,2,1,2.1739,0.6522,0.4348,0.2174,Right Back,326228
-Max Conway,Bolton Wanderers,Championship,2026/27,15,11,1065,0,2,1,0,8,18,6,0,0.6761,0.0845,0.507,0.0,Left Back,308549
-Max Lott,Bolton Wanderers,Championship,2026/27,4,1,74,0,0,0,0,1,0,2,0,1.2162,0.0,2.4324,0.0,Substitute,409157
-Ruben Rodrigues,Bolton Wanderers,Championship,2026/27,13,7,664,2,1,1,0,12,21,20,10,1.6265,0.1355,2.7108,1.3554,Attacking Midfielder,12669
+Lewis Brunt,Bolton Wanderers,Championship,2026/27,11,8,784,0,0,1,0,5,6,3,1,0.574,0.1148,0.3444,0.1148,Substitute,294311
+Luca Stephenson,Bolton Wanderers,Championship,2026/27,6,6,504,0,0,3,0,12,3,3,1,2.1429,0.5357,0.5357,0.1786,Right Back,326228
+Max Conway,Bolton Wanderers,Championship,2026/27,16,12,1155,0,2,1,0,8,22,7,0,0.6234,0.0779,0.5455,0.0,Left Back,308549
+Max Lott,Bolton Wanderers,Championship,2026/27,5,1,77,0,0,0,0,1,0,2,0,1.1688,0.0,2.3377,0.0,Substitute,409157
+Ruben Rodrigues,Bolton Wanderers,Championship,2026/27,14,7,703,3,1,1,0,13,21,23,11,1.6643,0.128,2.9445,1.4083,Substitute,12669
 Ryan Hardie,Bolton Wanderers,Championship,2026/27,8,0,161,0,0,1,0,2,0,5,0,1.118,0.559,2.795,0.0,Substitute,190576
-Sam Dalby,Bolton Wanderers,Championship,2026/27,16,14,1220,7,0,0,0,12,14,24,13,0.8852,0.0,1.7705,0.959,Forward,243385
-Samuel Iling-Junior,Bolton Wanderers,Championship,2026/27,15,9,737,0,1,1,0,12,6,17,5,1.4654,0.1221,2.076,0.6106,Attacking Midfielder Right,341273
-Thelonius Bair,Bolton Wanderers,Championship,2026/27,8,2,232,2,1,1,0,4,1,10,3,1.5517,0.3879,3.8793,1.1638,Substitute,255625
-Thierry Gale,Bolton Wanderers,Championship,2026/27,16,12,996,3,2,2,0,5,5,25,9,0.4518,0.1807,2.259,0.8133,Attacking Midfielder Left,272245
-Xavier Simons,Bolton Wanderers,Championship,2026/27,10,7,602,1,0,0,0,7,5,7,3,1.0465,0.0,1.0465,0.4485,Right Midfielder,296411
+Sam Dalby,Bolton Wanderers,Championship,2026/27,17,14,1265,7,0,0,0,12,16,25,13,0.8538,0.0,1.7787,0.9249,Forward,243385
+Samuel Iling-Junior,Bolton Wanderers,Championship,2026/27,16,10,824,0,1,1,0,13,8,18,6,1.4199,0.1092,1.966,0.6553,Attacking Midfielder Right,341273
+Thelonius Bair,Bolton Wanderers,Championship,2026/27,9,3,277,2,1,1,0,5,1,12,3,1.6245,0.3249,3.8989,0.9747,Substitute,255625
+Thierry Gale,Bolton Wanderers,Championship,2026/27,17,12,999,3,2,2,0,5,5,25,9,0.4505,0.1802,2.2523,0.8108,Attacking Midfielder Left,272245
+Xavier Simons,Bolton Wanderers,Championship,2026/27,11,8,653,1,0,0,0,8,5,7,3,1.1026,0.0,0.9648,0.4135,Right Midfielder,296411
 Adam Randell,Bristol City,Championship,2026/27,10,7,519,0,0,0,1,2,8,1,0,0.3468,0.1734,0.1734,0.0,Left Midfielder,283189
 Bradley Collins,Bristol City,Championship,2026/27,6,6,540,0,0,0,0,0,3,0,0,0.0,0.0,0.0,0.0,Goalkeeper,243625
 Brian De Keersmaecker,Bristol City,Championship,2026/27,7,3,284,0,0,1,0,3,0,4,0,0.9507,0.3169,1.2676,0.0,Substitute,287353
@@ -3396,8 +3397,8 @@ Sam Tickle,Bristol City,Championship,2026/27,11,11,990,0,0,0,0,0,1,0,0,0.0,0.0,0
 Scott Twine,Bristol City,Championship,2026/27,14,12,935,5,0,1,0,10,22,22,10,0.9626,0.0963,2.1176,0.9626,Attacking Midfielder Left,236014
 Tomi Horvat,Bristol City,Championship,2026/27,8,0,153,0,0,0,0,3,0,3,2,1.7647,0.0,1.7647,1.1765,Substitute,289798
 Yu Hirakawa,Bristol City,Championship,2026/27,15,9,788,1,0,0,0,8,12,17,9,0.9137,0.0,1.9416,1.0279,Substitute,378851
-Aaron Ramsey,Burnley,Championship,2026/27,11,6,552,1,0,1,0,8,6,23,6,1.3043,0.163,3.75,0.9783,Substitute,332046
-Andreas Hountondji,Burnley,Championship,2026/27,10,5,444,2,0,0,0,3,2,13,6,0.6081,0.0,2.6351,1.2162,Substitute,317322
+Aaron Ramsey,Burnley,Championship,2026/27,12,7,614,1,0,1,0,8,8,25,7,1.1726,0.1466,3.6645,1.0261,Substitute,332046
+Andreas Hountondji,Burnley,Championship,2026/27,11,5,472,2,0,0,0,3,2,14,7,0.572,0.0,2.6695,1.3347,Substitute,317322
 Anel Ahmedhodzic,Burnley,Championship,2026/27,6,5,495,0,0,1,0,4,3,3,0,0.7273,0.1818,0.5455,0.0,Center Right Defender,245857
 Armando Broja,Burnley,Championship,2026/27,9,2,208,0,0,1,0,1,4,3,2,0.4327,0.4327,1.2981,0.8654,Substitute,291535
 Bashir Humphreys,Burnley,Championship,2026/27,2,2,152,0,0,0,0,4,3,0,0,2.3684,0.0,0.0,0.0,Left Back,325541
@@ -3406,23 +3407,23 @@ Dastan Satpaev,Burnley,Championship,2026/27,6,3,309,0,0,0,0,2,4,7,4,0.5825,0.0,2
 Grégoire Coudert,Burnley,Championship,2026/27,8,8,720,0,0,1,0,0,2,0,0,0.0,0.125,0.0,0.0,Goalkeeper,260239
 Hannibal Mejbri,Burnley,Championship,2026/27,5,4,244,0,0,1,0,8,7,2,0,2.9508,0.3689,0.7377,0.0,Right Midfielder,300007
 Hjalmar Ekdal,Burnley,Championship,2026/27,10,7,623,0,0,1,0,5,9,2,0,0.7223,0.1445,0.2889,0.0,Center Right Defender,290413
-Igor Julio,Burnley,Championship,2026/27,11,11,953,0,3,2,0,8,3,3,1,0.7555,0.1889,0.2833,0.0944,Center Left Defender,234143
+Igor Julio,Burnley,Championship,2026/27,12,12,1043,0,3,2,0,8,3,4,1,0.6903,0.1726,0.3452,0.0863,Center Left Defender,234143
 Jacob Bruun Larsen,Burnley,Championship,2026/27,9,8,605,2,2,0,0,1,4,13,5,0.1488,0.0,1.9339,0.7438,Attacking Midfielder Left,233073
-Jamie Vardy,Burnley,Championship,2026/27,8,4,364,1,1,0,0,4,1,7,2,0.989,0.0,1.7308,0.4945,Substitute,165648
-Jaydon Banel,Burnley,Championship,2026/27,4,2,171,1,1,0,0,2,4,3,2,1.0526,0.0,1.5789,1.0526,Substitute,333619
-Josh Cullen,Burnley,Championship,2026/27,4,1,158,0,0,1,0,2,3,0,0,1.1392,0.5696,0.0,0.0,Substitute,207146
+Jamie Vardy,Burnley,Championship,2026/27,9,4,380,1,1,0,0,4,1,8,2,0.9474,0.0,1.8947,0.4737,Substitute,165648
+Jaydon Banel,Burnley,Championship,2026/27,5,3,245,1,1,1,0,4,5,5,2,1.4694,0.3673,1.8367,0.7347,Substitute,333619
+Josh Cullen,Burnley,Championship,2026/27,5,2,248,0,0,1,0,3,4,0,0,1.0887,0.3629,0.0,0.0,Substitute,207146
 Josh Laurent,Burnley,Championship,2026/27,15,14,1246,1,1,5,1,25,11,14,3,1.8058,0.4334,1.0112,0.2167,Attacking Midfielder,190936
-Kyle Walker,Burnley,Championship,2026/27,14,14,1215,0,1,4,0,9,6,3,1,0.6667,0.2963,0.2222,0.0741,Right Back,129358
-Largie Ramazani,Burnley,Championship,2026/27,13,11,996,5,1,1,0,18,14,34,10,1.6265,0.0904,3.0723,0.9036,Attacking Midfielder Left,291435
-Lucas Pires,Burnley,Championship,2026/27,12,8,778,0,5,2,0,7,5,7,1,0.8098,0.2314,0.8098,0.1157,Left Back,285790
-Marcus Edwards,Burnley,Championship,2026/27,12,6,573,2,0,1,0,4,6,15,5,0.6283,0.1571,2.356,0.7853,Substitute,225552
-Max Alleyne,Burnley,Championship,2026/27,13,12,1084,0,1,1,0,6,5,3,1,0.4982,0.083,0.2491,0.083,Center Left Defender,347046
-Max Weiß,Burnley,Championship,2026/27,8,8,720,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Goalkeeper,329987
+Kyle Walker,Burnley,Championship,2026/27,15,15,1305,0,1,4,0,10,8,5,1,0.6897,0.2759,0.3448,0.069,Right Back,129358
+Largie Ramazani,Burnley,Championship,2026/27,14,12,1086,5,1,2,0,20,14,37,12,1.6575,0.1657,3.0663,0.9945,Attacking Midfielder Right,291435
+Lucas Pires,Burnley,Championship,2026/27,13,9,868,0,5,2,0,7,5,7,1,0.7258,0.2074,0.7258,0.1037,Left Back,285790
+Marcus Edwards,Burnley,Championship,2026/27,13,6,589,2,0,2,0,5,7,15,5,0.764,0.3056,2.292,0.764,Substitute,225552
+Max Alleyne,Burnley,Championship,2026/27,14,13,1174,0,1,2,0,7,7,3,1,0.5366,0.1533,0.23,0.0767,Center Left Defender,347046
+Max Weiß,Burnley,Championship,2026/27,9,9,810,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Goalkeeper,329987
 Mike Trésor,Burnley,Championship,2026/27,2,0,19,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Substitute,280895
 Oliver Sonne,Burnley,Championship,2026/27,12,7,646,0,0,3,0,8,6,5,1,1.1146,0.418,0.6966,0.1393,Right Back,322642
-Reo Hatate,Burnley,Championship,2026/27,12,10,750,1,2,2,0,11,11,8,1,1.32,0.24,0.96,0.12,Left Midfielder,288891
-Ugo Raghouber,Burnley,Championship,2026/27,10,5,484,1,0,2,0,5,7,8,2,0.9298,0.3719,1.4876,0.3719,Substitute,333319
-Zeki Amdouni,Burnley,Championship,2026/27,11,6,584,3,1,0,0,11,8,24,9,1.6952,0.0,3.6986,1.387,Substitute,320757
+Reo Hatate,Burnley,Championship,2026/27,13,11,812,1,2,2,0,11,11,8,1,1.2192,0.2217,0.8867,0.1108,Left Midfielder,288891
+Ugo Raghouber,Burnley,Championship,2026/27,11,5,512,1,0,3,0,6,8,8,2,1.0547,0.5273,1.4062,0.3516,Substitute,333319
+Zeki Amdouni,Burnley,Championship,2026/27,12,7,658,3,1,0,0,12,8,25,9,1.6413,0.0,3.4195,1.231,Forward,320757
 Zian Flemming,Burnley,Championship,2026/27,2,2,167,2,0,2,0,2,4,12,4,1.0778,1.0778,6.4671,2.1557,Forward,261598
 Alex Robertson,Cardiff City,Championship,2026/27,17,17,1493,1,2,4,0,10,22,20,7,0.6028,0.2411,1.2056,0.422,Right Midfielder,311181
 Callum Robinson,Cardiff City,Championship,2026/27,6,1,114,2,0,0,0,0,1,4,3,0.0,0.0,3.1579,2.3684,Substitute,194272
@@ -3550,31 +3551,31 @@ Sam Byram,Middlesbrough,Championship,2026/27,3,1,116,0,0,1,0,3,0,3,0,2.3276,0.77
 Sebastian Berhalter,Middlesbrough,Championship,2026/27,17,13,1128,3,3,3,0,19,12,26,8,1.516,0.2394,2.0745,0.6383,Left Midfielder,295771
 Tommy Conway,Middlesbrough,Championship,2026/27,15,8,742,1,4,1,0,4,13,18,4,0.4852,0.1213,2.1833,0.4852,Substitute,314791
 Will Lankshear,Middlesbrough,Championship,2026/27,15,13,1118,14,0,3,0,19,13,49,26,1.5295,0.2415,3.9445,2.093,Forward,349181
-Alfie Doughty,Millwall,Championship,2026/27,4,0,59,0,0,0,0,0,0,1,0,0.0,0.0,1.5254,0.0,Substitute,277559
+Alfie Doughty,Millwall,Championship,2026/27,5,1,134,0,0,0,0,2,0,2,0,1.3433,0.0,1.3433,0.0,Substitute,277559
 Alfie Massey,Millwall,Championship,2026/27,1,0,17,0,0,0,0,0,1,0,0,0.0,0.0,0.0,0.0,,388659
-Caleb Taylor,Millwall,Championship,2026/27,16,16,1440,2,2,1,0,9,8,18,6,0.5625,0.0625,1.125,0.375,Center Right Defender,308572
-Camiel Neghli,Millwall,Championship,2026/27,16,15,1381,3,3,2,0,17,5,25,7,1.1079,0.1303,1.6293,0.4562,Attacking Midfielder Left,310173
+Caleb Taylor,Millwall,Championship,2026/27,17,17,1530,2,2,1,0,9,11,20,7,0.5294,0.0588,1.1765,0.4118,Center Right Defender,308572
+Camiel Neghli,Millwall,Championship,2026/27,17,16,1471,3,3,2,0,17,5,26,7,1.0401,0.1224,1.5908,0.4283,Attacking Midfielder Left,310173
 Casper de Norre,Millwall,Championship,2026/27,5,5,352,0,0,1,0,4,0,3,0,1.0227,0.2557,0.767,0.0,Center Midfielder,225522
-Daniel Kelly,Millwall,Championship,2026/27,11,1,267,0,0,0,0,5,1,3,0,1.6854,0.0,1.0112,0.0,Substitute,227438
-Derek Mazou-Sacko,Millwall,Championship,2026/27,12,11,916,0,0,5,0,20,7,9,3,1.9651,0.4913,0.8843,0.2948,Left Midfielder,324659
-Elkan Baggott,Millwall,Championship,2026/27,6,1,158,0,0,0,0,0,2,2,1,0.0,0.0,1.1392,0.5696,Substitute,308555
+Daniel Kelly,Millwall,Championship,2026/27,12,1,312,0,0,1,0,6,1,4,0,1.7308,0.2885,1.1538,0.0,Substitute,227438
+Derek Mazou-Sacko,Millwall,Championship,2026/27,13,12,981,0,0,6,0,22,7,11,3,2.0183,0.5505,1.0092,0.2752,Left Midfielder,324659
+Elkan Baggott,Millwall,Championship,2026/27,7,1,173,0,0,0,0,2,2,2,1,1.0405,0.0,1.0405,0.5202,Substitute,308555
 Femi Azeez,Millwall,Championship,2026/27,1,1,28,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Right Forward,308402
 Filip Marschall,Millwall,Championship,2026/27,4,4,315,0,0,0,0,0,1,0,0,0.0,0.0,0.0,0.0,Goalkeeper,294318
-Jake Cooper,Millwall,Championship,2026/27,16,16,1431,2,1,3,0,21,11,11,4,1.3208,0.1887,0.6918,0.2516,Center Left Defender,190963
-Jenson Metcalfe,Millwall,Championship,2026/27,15,15,1190,1,2,5,1,27,25,14,2,2.042,0.4538,1.0588,0.1513,Right Midfielder,328018
-Jordi Osei-Tutu,Millwall,Championship,2026/27,10,7,604,0,0,2,0,8,11,6,2,1.1921,0.298,0.894,0.298,Right Back,267300
+Jake Cooper,Millwall,Championship,2026/27,17,17,1521,2,2,3,0,21,12,11,4,1.2426,0.1775,0.6509,0.2367,Center Left Defender,190963
+Jenson Metcalfe,Millwall,Championship,2026/27,16,16,1235,1,2,5,1,27,26,14,2,1.9676,0.4372,1.0202,0.1457,Right Midfielder,328018
+Jordi Osei-Tutu,Millwall,Championship,2026/27,11,8,694,0,0,2,0,10,13,6,2,1.2968,0.2594,0.7781,0.2594,Right Back,267300
 Josh Coburn,Millwall,Championship,2026/27,6,5,373,2,0,1,0,7,10,9,5,1.689,0.2413,2.1716,1.2064,Forward,316109
-Kyrell Lisbie,Millwall,Championship,2026/27,12,10,758,3,0,2,0,9,18,30,9,1.0686,0.2375,3.562,1.0686,Attacking Midfielder Left,374682
-Lukas Jensen,Millwall,Championship,2026/27,3,3,270,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Goalkeeper,272911
-Luke Cundle,Millwall,Championship,2026/27,12,4,500,2,1,0,0,3,3,5,4,0.54,0.0,0.9,0.72,Substitute,281730
-Lyndon Dykes,Millwall,Championship,2026/27,16,12,1014,4,2,3,0,21,5,24,7,1.8639,0.2663,2.1302,0.6213,Forward,207538
-Mark Sykes,Millwall,Championship,2026/27,14,8,836,1,0,2,0,4,5,10,4,0.4306,0.2153,1.0766,0.4306,Substitute,205701
+Kyrell Lisbie,Millwall,Championship,2026/27,13,10,803,3,0,3,0,11,18,33,10,1.2329,0.3362,3.6986,1.1208,Attacking Midfielder Left,374682
+Lukas Jensen,Millwall,Championship,2026/27,4,4,360,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Goalkeeper,272911
+Luke Cundle,Millwall,Championship,2026/27,13,4,525,2,1,0,0,3,3,5,4,0.5143,0.0,0.8571,0.6857,Substitute,281730
+Lyndon Dykes,Millwall,Championship,2026/27,17,12,1059,4,2,4,0,22,5,25,7,1.8697,0.3399,2.1246,0.5949,Forward,207538
+Mark Sykes,Millwall,Championship,2026/27,15,9,926,2,0,2,0,4,5,11,5,0.3888,0.1944,1.0691,0.486,Substitute,205701
 Mathis Servais,Millwall,Championship,2026/27,1,0,10,0,0,0,0,0,1,0,0,0.0,0.0,0.0,0.0,Substitute,314178
 Max Crocombe,Millwall,Championship,2026/27,10,9,855,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Goalkeeper,168747
-Mihailo Ivanovic,Millwall,Championship,2026/27,4,1,105,0,1,0,0,2,0,2,0,1.7143,0.0,1.7143,0.0,Substitute,359214
+Mihailo Ivanovic,Millwall,Championship,2026/27,5,2,150,0,1,0,0,2,0,2,0,1.2,0.0,1.2,0.0,Substitute,359214
 Romain Esse,Millwall,Championship,2026/27,7,2,204,0,0,0,0,6,3,9,1,2.6471,0.0,3.9706,0.4412,Substitute,356208
 Ryan Leonard,Millwall,Championship,2026/27,5,2,213,0,0,1,0,4,2,1,0,1.6901,0.4225,0.4225,0.0,Substitute,146223
-Taïryk Arconte,Millwall,Championship,2026/27,10,9,671,3,0,0,0,3,12,18,4,0.4024,0.0,2.4143,0.5365,Attacking Midfielder,315189
+Taïryk Arconte,Millwall,Championship,2026/27,11,10,716,3,0,0,0,3,12,20,5,0.3771,0.0,2.514,0.6285,Attacking Midfielder,315189
 Tristan Crama,Millwall,Championship,2026/27,5,3,264,0,0,2,0,4,5,3,0,1.3636,0.6818,1.0227,0.0,Right Back,353201
 Yanis Issoufou,Millwall,Championship,2026/27,5,0,109,0,0,0,0,3,2,1,0,2.4771,0.0,0.8257,0.0,Substitute,371561
 Zak Lovelace,Millwall,Championship,2026/27,8,0,151,0,1,0,0,1,1,3,2,0.596,0.0,1.7881,1.1921,Substitute,333022
@@ -3737,31 +3738,32 @@ Taylor Harwood-Bellis,Southampton,Championship,2026/27,1,1,90,0,0,0,0,0,2,2,0,0.
 Tom Fellows,Southampton,Championship,2026/27,9,5,409,1,0,1,0,4,8,4,1,0.8802,0.22,0.8802,0.22,Attacking Midfielder Right,308560
 Welington,Southampton,Championship,2026/27,8,4,380,2,0,0,0,3,5,5,3,0.7105,0.0,1.1842,0.7105,Left Back,300103
 Zach Abbott,Southampton,Championship,2026/27,4,3,305,0,0,1,0,4,1,2,1,1.1803,0.2951,0.5902,0.2951,Center Right Defender,348303
-Bae Jun-Ho,Stoke City,Championship,2026/27,8,5,433,0,0,1,0,4,7,2,0,0.8314,0.2079,0.4157,0.0,Substitute,362208
+Aaron Cresswell,Stoke City,Championship,2026/27,1,0,5,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Substitute,121473
+Bae Jun-Ho,Stoke City,Championship,2026/27,9,6,518,0,0,1,0,4,11,6,0,0.695,0.1737,1.0425,0.0,Center Left Forward,362208
 Ben Gibson,Stoke City,Championship,2026/27,1,1,90,0,0,0,0,4,0,2,1,4.0,0.0,2.0,1.0,Center Left Defender,147131
-Ben Johnson,Stoke City,Championship,2026/27,15,15,1350,1,0,0,0,14,13,12,7,0.9333,0.0,0.8,0.4667,Right Midfielder,9426
+Ben Johnson,Stoke City,Championship,2026/27,16,16,1440,1,0,0,0,14,14,13,8,0.875,0.0,0.8125,0.5,Right Midfielder,9426
 Ben Pearson,Stoke City,Championship,2026/27,3,0,17,0,0,0,0,0,1,0,0,0.0,0.0,0.0,0.0,Substitute,194822
-Ben Wilmot,Stoke City,Championship,2026/27,16,16,1395,3,0,1,0,16,7,12,4,1.0323,0.0645,0.7742,0.2581,Center Right Defender,246945
-Bosun Lawal,Stoke City,Championship,2026/27,11,9,738,0,0,3,0,11,3,6,0,1.3415,0.3659,0.7317,0.0,Center Defender,323201
+Ben Wilmot,Stoke City,Championship,2026/27,17,17,1485,3,0,1,0,16,8,12,4,0.9697,0.0606,0.7273,0.2424,Center Right Defender,246945
+Bosun Lawal,Stoke City,Championship,2026/27,12,10,828,0,0,3,0,11,4,6,0,1.1957,0.3261,0.6522,0.0,Center Defender,323201
 Djibril Soumaré,Stoke City,Championship,2026/27,16,15,1180,0,1,3,0,21,22,7,1,1.6017,0.2288,0.5339,0.0763,Center Right Midfielder,366358
 Eric Bocat,Stoke City,Championship,2026/27,12,10,858,2,2,1,0,3,10,13,3,0.3147,0.1049,1.3636,0.3147,Left Midfielder,301853
-Ethan Galbraith,Stoke City,Championship,2026/27,14,14,1260,3,4,6,0,19,17,17,8,1.3571,0.4286,1.2143,0.5714,Center Left Midfielder,163274
-George Hirst,Stoke City,Championship,2026/27,15,6,662,2,1,2,0,15,3,17,4,2.0393,0.2719,2.3112,0.5438,Substitute,241325
-Jack McGlynn,Stoke City,Championship,2026/27,12,10,887,5,2,1,0,7,7,20,10,0.7103,0.1015,2.0293,1.0147,Center Right Forward,303512
+Ethan Galbraith,Stoke City,Championship,2026/27,15,15,1333,3,4,6,0,19,17,21,9,1.2828,0.4051,1.4179,0.6077,Center Left Midfielder,163274
+George Hirst,Stoke City,Championship,2026/27,16,7,736,4,1,2,0,17,3,20,7,2.0788,0.2446,2.4457,0.856,Substitute,241325
+Jack McGlynn,Stoke City,Championship,2026/27,13,11,977,5,3,1,0,7,7,23,11,0.6448,0.0921,2.1187,1.0133,Center Right Forward,303512
 Junior Tchamadeu,Stoke City,Championship,2026/27,9,2,280,0,1,2,0,5,6,1,0,1.6071,0.6429,0.3214,0.0,Substitute,311116
-Justin Devenny,Stoke City,Championship,2026/27,12,10,779,2,0,1,0,11,10,14,5,1.2709,0.1155,1.6175,0.5777,Center Left Forward,291468
+Justin Devenny,Stoke City,Championship,2026/27,13,11,869,2,0,1,0,12,10,16,5,1.2428,0.1036,1.6571,0.5178,Center Left Forward,291468
 Lamine Cisse,Stoke City,Championship,2026/27,8,6,404,1,1,0,0,3,13,9,2,0.6683,0.0,2.005,0.4455,Forward,30173
 Luca Bombino,Stoke City,Championship,2026/27,12,5,538,0,1,1,1,9,15,5,2,1.5056,0.3346,0.8364,0.3346,Substitute,381072
-Luke Graham,Stoke City,Championship,2026/27,14,14,1260,1,0,3,0,17,19,5,1,1.2143,0.2143,0.3571,0.0714,Center Left Defender,40299
+Luke Graham,Stoke City,Championship,2026/27,15,15,1350,1,0,4,0,18,19,5,1,1.2,0.2667,0.3333,0.0667,Center Left Defender,40299
 Maksym Taloverov,Stoke City,Championship,2026/27,10,5,469,0,0,2,1,7,1,3,1,1.3433,0.5757,0.5757,0.1919,Substitute,326672
-Million Manhoef,Stoke City,Championship,2026/27,7,4,351,0,0,0,0,5,2,7,3,1.2821,0.0,1.7949,0.7692,Substitute,305628
-Róbert Bozeník,Stoke City,Championship,2026/27,12,4,478,1,1,2,0,20,7,15,3,3.7657,0.3766,2.8243,0.5649,Substitute,277100
-Sam Gallagher,Stoke City,Championship,2026/27,7,4,336,2,1,2,0,12,2,7,4,3.2143,0.5357,1.875,1.0714,Substitute,196098
+Million Manhoef,Stoke City,Championship,2026/27,8,5,416,0,1,0,0,5,3,9,3,1.0817,0.0,1.9471,0.649,Substitute,305628
+Róbert Bozeník,Stoke City,Championship,2026/27,13,4,494,1,1,2,0,22,8,16,3,4.0081,0.3644,2.915,0.5466,Substitute,277100
+Sam Gallagher,Stoke City,Championship,2026/27,8,4,353,2,1,2,0,12,3,7,4,3.0595,0.5099,1.7847,1.0198,Substitute,196098
 Sorba Thomas,Stoke City,Championship,2026/27,3,3,270,0,0,1,0,2,6,6,1,0.6667,0.3333,2.0,0.3333,Attacking Midfielder Left,250478
-Svante Ingelsson,Stoke City,Championship,2026/27,5,1,166,0,0,0,1,4,6,1,0,2.1687,0.5422,0.5422,0.0,Substitute,224342
+Svante Ingelsson,Stoke City,Championship,2026/27,6,1,191,0,0,0,1,5,6,1,0,2.356,0.4712,0.4712,0.0,Substitute,224342
 Tomás Rigo,Stoke City,Championship,2026/27,4,1,94,0,1,0,0,3,1,1,0,2.8723,0.0,0.9574,0.0,Substitute,310030
 Tyler Martin,Stoke City,Championship,2026/27,1,0,6,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Substitute,288231
-Viktor Johansson,Stoke City,Championship,2026/27,16,16,1440,0,0,1,0,0,2,0,0,0.0,0.0625,0.0,0.0,Goalkeeper,258902
+Viktor Johansson,Stoke City,Championship,2026/27,17,17,1530,0,0,1,0,0,4,0,0,0.0,0.0588,0.0,0.0,Goalkeeper,258902
 Adam Idah,Swansea City,Championship,2026/27,15,12,876,4,1,1,0,9,3,30,11,0.9247,0.1027,3.0822,1.1301,Forward,288958
 Ben Cabango,Swansea City,Championship,2026/27,15,13,1251,0,0,2,0,9,9,7,1,0.6475,0.1439,0.5036,0.0719,Center Right Defender,275596
 Elijah Just,Swansea City,Championship,2026/27,16,10,809,1,1,2,0,14,13,16,5,1.5575,0.2225,1.78,0.5562,Substitute,266555
@@ -3786,49 +3788,49 @@ Tiago Parente,Swansea City,Championship,2026/27,1,0,19,0,0,0,0,0,0,0,0,0.0,0.0,0
 Tom Iorpenda,Swansea City,Championship,2026/27,1,0,18,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Substitute,375565
 Zan Vipotnik,Swansea City,Championship,2026/27,17,3,550,3,1,0,0,3,7,20,9,0.4909,0.0,3.2727,1.4727,Substitute,322158
 Albert Eames,Watford,Championship,2026/27,3,1,133,0,0,0,0,1,3,0,0,0.6767,0.0,0.0,0.0,Substitute,381629
-Amin Nabizada,Watford,Championship,2026/27,13,8,596,3,0,4,0,9,11,13,6,1.3591,0.604,1.9631,0.906,Substitute,380187
-Branimir Mlacic,Watford,Championship,2026/27,9,5,519,0,0,3,0,7,4,3,2,1.2139,0.5202,0.5202,0.3468,Center Left Defender,406061
-Edo Kayembe,Watford,Championship,2026/27,16,12,1185,1,1,4,0,16,11,23,5,1.2152,0.3038,1.7468,0.3797,Right Midfielder,268986
-Edoardo Bove,Watford,Championship,2026/27,6,4,373,0,0,2,0,6,7,1,0,1.4477,0.4826,0.2413,0.0,Right Midfielder,308737
-Federico Ravaglia,Watford,Championship,2026/27,16,16,1440,0,0,0,0,0,6,1,1,0.0,0.0,0.0625,0.0625,Goalkeeper,245626
-Hector Kyprianou,Watford,Championship,2026/27,15,14,1282,1,0,5,0,17,15,15,5,1.1934,0.351,1.053,0.351,Left Midfielder,289365
-Iker Bravo,Watford,Championship,2026/27,16,14,1169,1,3,4,0,13,24,24,8,1.0009,0.308,1.8477,0.6159,Attacking Midfielder,330242
-Jordan Zemura,Watford,Championship,2026/27,13,8,754,1,0,3,0,13,10,10,2,1.5517,0.3581,1.1936,0.2387,Left Back,283171
+Amin Nabizada,Watford,Championship,2026/27,14,9,661,3,0,4,0,9,13,15,6,1.2254,0.5446,2.0424,0.8169,Substitute,380187
+Branimir Mlacic,Watford,Championship,2026/27,10,5,544,0,0,3,0,7,4,4,2,1.1581,0.4963,0.6618,0.3309,Substitute,406061
+Edo Kayembe,Watford,Championship,2026/27,17,12,1224,1,1,4,0,16,13,24,5,1.1765,0.2941,1.7647,0.3676,Right Midfielder,268986
+Edoardo Bove,Watford,Championship,2026/27,7,5,424,0,0,2,0,8,8,2,0,1.6981,0.4245,0.4245,0.0,Right Midfielder,308737
+Federico Ravaglia,Watford,Championship,2026/27,17,17,1530,0,0,0,0,0,6,1,1,0.0,0.0,0.0588,0.0588,Goalkeeper,245626
+Hector Kyprianou,Watford,Championship,2026/27,16,15,1372,1,0,5,0,18,15,15,5,1.1808,0.328,0.984,0.328,Left Midfielder,289365
+Iker Bravo,Watford,Championship,2026/27,17,15,1242,1,3,4,0,15,26,27,10,1.087,0.2899,1.9565,0.7246,Attacking Midfielder,330242
+Jordan Zemura,Watford,Championship,2026/27,14,9,815,1,0,3,1,15,12,10,2,1.6564,0.4417,1.1043,0.2209,Left Back,283171
 Krépin Diatta,Watford,Championship,2026/27,6,4,272,0,0,0,0,4,8,3,2,1.3235,0.0,0.9926,0.6618,Right Back,253992
 Kévin Keben,Watford,Championship,2026/27,15,15,1350,0,0,4,0,15,5,3,0,1.0,0.2667,0.2,0.0,Center Left Defender,313891
 Luca Kjerrumgaard,Watford,Championship,2026/27,12,7,550,2,0,0,0,6,5,10,3,0.9818,0.0,1.6364,0.4909,Substitute,345364
-Mamadou Doumbia,Watford,Championship,2026/27,16,8,824,1,0,2,0,18,1,15,7,1.966,0.2184,1.6383,0.7646,Substitute,137393
-Marc Bola,Watford,Championship,2026/27,8,5,421,0,0,0,0,2,5,7,1,0.4276,0.0,1.4964,0.2138,Left Back,249112
+Mamadou Doumbia,Watford,Championship,2026/27,17,9,914,1,0,2,0,18,2,16,7,1.7724,0.1969,1.5755,0.6893,Substitute,137393
+Marc Bola,Watford,Championship,2026/27,9,5,445,0,0,0,0,3,5,9,1,0.6067,0.0,1.8202,0.2022,Left Back,249112
 Martín Payero,Watford,Championship,2026/27,13,6,620,0,0,4,0,15,14,13,3,2.1774,0.5806,1.8871,0.4355,Substitute,262565
-Matthew Pollock,Watford,Championship,2026/27,16,16,1440,0,1,4,0,17,8,4,2,1.0625,0.25,0.25,0.125,Center Right Defender,281721
+Matthew Pollock,Watford,Championship,2026/27,17,17,1530,0,1,5,0,18,8,4,2,1.0588,0.2941,0.2353,0.1176,Center Right Defender,281721
 Michael Adu-Poku,Watford,Championship,2026/27,1,0,30,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Substitute,356941
 Myron Boadu,Watford,Championship,2026/27,7,5,376,2,1,1,0,2,7,8,3,0.4787,0.2394,1.9149,0.7181,Substitute,259143
-Omar-Haktab Traoré,Watford,Championship,2026/27,12,9,786,0,1,3,0,12,3,5,1,1.374,0.3435,0.5725,0.1145,Right Back,291914
-Othmane Maamma,Watford,Championship,2026/27,13,8,697,0,0,2,0,9,11,12,3,1.1621,0.2582,1.5495,0.3874,Attacking Midfielder Right,376535
-Rocco Vata,Watford,Championship,2026/27,11,2,263,0,1,0,0,3,3,9,4,1.0266,0.0,3.0798,1.3688,Substitute,324213
-Soumaila Coulibaly,Watford,Championship,2026/27,6,5,405,0,0,1,0,3,6,1,0,0.6667,0.2222,0.2222,0.0,Center Left Defender,10767
-Stephy Mavididi,Watford,Championship,2026/27,8,4,355,1,0,1,0,5,5,7,2,1.2676,0.2535,1.7746,0.507,Substitute,225549
-Aune Heggebo,West Bromwich Albion,Championship,2026/27,15,7,626,4,1,0,0,12,8,19,6,1.7252,0.0,2.7316,0.8626,Substitute,272749
-Barney Stewart,West Bromwich Albion,Championship,2026/27,12,3,320,1,0,0,0,3,6,5,2,0.8438,0.0,1.4062,0.5625,Substitute,398165
-Brayann Pereira,West Bromwich Albion,Championship,2026/27,9,9,752,0,0,2,1,12,14,3,0,1.4362,0.359,0.359,0.0,Right Back,332960
-Callum Styles,West Bromwich Albion,Championship,2026/27,16,16,1440,3,0,1,0,10,10,18,7,0.625,0.0625,1.125,0.4375,Left Back,236141
-Chris Mepham,West Bromwich Albion,Championship,2026/27,12,10,881,0,0,2,0,6,1,5,2,0.6129,0.2043,0.5108,0.2043,Center Right Defender,251509
-Conor Townsend,West Bromwich Albion,Championship,2026/27,4,2,220,0,0,0,0,1,2,0,0,0.4091,0.0,0.0,0.0,Substitute,168309
-Felix Horn Myhre,West Bromwich Albion,Championship,2026/27,13,10,848,3,2,0,0,8,11,12,5,0.8491,0.0,1.2736,0.5307,Substitute,251618
-George Campbell,West Bromwich Albion,Championship,2026/27,14,13,1122,0,0,2,0,8,9,4,0,0.6417,0.1604,0.3209,0.0,Center Left Defender,231066
-Harry Whitwell,West Bromwich Albion,Championship,2026/27,12,8,611,1,1,3,0,11,18,6,2,1.6203,0.4419,0.8838,0.2946,Right Midfielder,375954
+Omar-Haktab Traoré,Watford,Championship,2026/27,13,10,876,0,1,3,0,13,3,5,1,1.3356,0.3082,0.5137,0.1027,Right Back,291914
+Othmane Maamma,Watford,Championship,2026/27,14,8,722,0,0,2,0,10,11,12,3,1.2465,0.2493,1.4958,0.374,Substitute,376535
+Rocco Vata,Watford,Championship,2026/27,12,2,280,0,1,0,0,3,3,9,4,0.9643,0.0,2.8929,1.2857,Substitute,324213
+Soumaila Coulibaly,Watford,Championship,2026/27,7,6,470,0,0,1,0,3,7,1,0,0.5745,0.1915,0.1915,0.0,Center Left Defender,10767
+Stephy Mavididi,Watford,Championship,2026/27,9,5,421,1,0,1,0,8,5,8,3,1.7102,0.2138,1.7102,0.6413,Substitute,225549
+Aune Heggebo,West Bromwich Albion,Championship,2026/27,16,8,709,6,1,0,0,13,8,21,8,1.6502,0.0,2.6657,1.0155,Substitute,272749
+Barney Stewart,West Bromwich Albion,Championship,2026/27,13,3,327,1,0,0,0,3,6,6,3,0.8257,0.0,1.6514,0.8257,Substitute,398165
+Brayann Pereira,West Bromwich Albion,Championship,2026/27,10,10,842,0,0,3,1,15,14,3,0,1.6033,0.4276,0.3207,0.0,Right Back,332960
+Callum Styles,West Bromwich Albion,Championship,2026/27,17,17,1530,3,1,2,0,12,11,18,7,0.7059,0.1176,1.0588,0.4118,Left Back,236141
+Chris Mepham,West Bromwich Albion,Championship,2026/27,13,11,971,0,0,2,0,8,2,5,2,0.7415,0.1854,0.4634,0.1854,Center Right Defender,251509
+Conor Townsend,West Bromwich Albion,Championship,2026/27,5,2,221,0,0,0,0,1,2,0,0,0.4072,0.0,0.0,0.0,Substitute,168309
+Felix Horn Myhre,West Bromwich Albion,Championship,2026/27,14,11,938,4,2,0,0,9,12,13,6,0.8635,0.0,1.2473,0.5757,Center Left Forward,251618
+George Campbell,West Bromwich Albion,Championship,2026/27,15,14,1212,0,0,2,0,9,9,4,0,0.6683,0.1485,0.297,0.0,Center Left Defender,231066
+Harry Whitwell,West Bromwich Albion,Championship,2026/27,13,9,694,1,1,3,0,12,19,7,3,1.5562,0.389,0.9078,0.389,Right Midfielder,375954
 Isaac Price,West Bromwich Albion,Championship,2026/27,16,15,1342,7,3,2,0,7,20,46,21,0.4694,0.1341,3.0849,1.4083,Left Midfielder,317857
-Jayson Molumby,West Bromwich Albion,Championship,2026/27,15,13,1189,1,1,2,0,10,20,19,5,0.7569,0.1514,1.4382,0.3785,Center Right Midfielder,243465
-Jimmy Morgan,West Bromwich Albion,Championship,2026/27,16,13,1123,4,4,3,0,27,20,27,8,2.1638,0.2404,2.1638,0.6411,Center Left Forward,347415
-Kareem Tunde,West Bromwich Albion,Championship,2026/27,8,2,200,0,1,0,0,4,7,9,2,1.8,0.0,4.05,0.9,Substitute,415819
+Jayson Molumby,West Bromwich Albion,Championship,2026/27,16,14,1279,1,1,2,0,10,21,19,5,0.7037,0.1407,1.337,0.3518,Center Right Midfielder,243465
+Jimmy Morgan,West Bromwich Albion,Championship,2026/27,17,13,1143,4,4,3,0,29,23,28,8,2.2835,0.2362,2.2047,0.6299,Center Left Forward,347415
+Kareem Tunde,West Bromwich Albion,Championship,2026/27,9,3,270,0,1,0,0,6,8,12,4,2.0,0.0,4.0,1.3333,Substitute,415819
 Krystian Bielik,West Bromwich Albion,Championship,2026/27,1,0,1,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Substitute,212257
 Matthew Crowther,West Bromwich Albion,Championship,2026/27,1,0,1,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Substitute,3128726
-Max O'Leary,West Bromwich Albion,Championship,2026/27,16,16,1440,0,1,0,0,0,4,0,0,0.0,0.0,0.0,0.0,Goalkeeper,195607
-Nathaniel Phillips,West Bromwich Albion,Championship,2026/27,13,9,880,0,0,3,0,6,9,5,2,0.6136,0.3068,0.5114,0.2045,Center Right Defender,275109
+Max O'Leary,West Bromwich Albion,Championship,2026/27,17,17,1530,0,1,0,0,0,4,0,0,0.0,0.0,0.0,0.0,Goalkeeper,195607
+Nathaniel Phillips,West Bromwich Albion,Championship,2026/27,14,9,887,0,0,3,0,6,9,5,2,0.6088,0.3044,0.5073,0.2029,Center Right Defender,275109
 Nolan Galves,West Bromwich Albion,Championship,2026/27,6,5,465,0,0,0,0,3,6,0,0,0.5806,0.0,0.0,0.0,Right Back,330963
 Ousmane Diakite,West Bromwich Albion,Championship,2026/27,15,12,1149,0,0,4,0,12,23,20,1,0.9399,0.3133,1.5666,0.0783,Center Left Midfielder,228558
-Rabby Nzingoula,West Bromwich Albion,Championship,2026/27,16,9,874,1,0,4,0,18,22,13,3,1.8535,0.4119,1.3387,0.3089,Substitute,365932
-Tammer Bany,West Bromwich Albion,Championship,2026/27,3,0,27,0,0,0,0,2,0,2,0,6.6667,0.0,6.6667,0.0,Substitute,380144
+Rabby Nzingoula,West Bromwich Albion,Championship,2026/27,17,10,964,1,0,5,0,18,22,14,3,1.6805,0.4668,1.3071,0.2801,Substitute,365932
+Tammer Bany,West Bromwich Albion,Championship,2026/27,4,0,28,0,0,0,0,2,0,2,0,6.4286,0.0,6.4286,0.0,Substitute,380144
 Toby Collyer,West Bromwich Albion,Championship,2026/27,5,4,277,0,0,0,0,3,1,0,0,0.9747,0.0,0.0,0.0,Center Left Midfielder,308778
 Adama Boiro,West Ham United,Championship,2026/27,1,0,14,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Substitute,379707
 Airidas Golambeckis,West Ham United,Championship,2026/27,3,2,193,0,0,0,0,0,1,1,0,0.0,0.0,0.4663,0.0,Center Right Defender,386204
@@ -6386,7 +6388,7 @@ Orio Rey,Levante,La Liga,2026/27,12,8,769,0,0,1,0,11,4,3,0,1.2874,0.117,0.3511,0
 Paco Cortés,Levante,La Liga,2026/27,6,1,84,0,0,0,0,0,4,2,1,0.0,0.0,2.1429,1.0714,Substitute,384985
 Petar Ratkov,Levante,La Liga,2026/27,8,3,288,0,1,0,0,1,5,4,0,0.3125,0.0,1.25,0.0,Substitute,342136
 Roger Brugué,Levante,La Liga,2026/27,12,12,1009,5,1,0,0,10,11,29,10,0.892,0.0,2.5867,0.892,Right Midfielder,267591
-Thiago Fernandez,Levante,La Liga,2026/27,11,10,789,0,1,1,0,4,8,16,2,0.4563,0.1141,1.8251,0.2281,Left Midfielder,339195
+Thiago Fernández,Levante,La Liga,2026/27,11,10,789,0,1,1,0,4,8,16,2,0.4563,0.1141,1.8251,0.2281,Left Midfielder,339195
 Víctor García,Levante,La Liga,2026/27,11,3,400,0,0,1,0,8,8,2,0,1.8,0.225,0.45,0.0,Substitute,203680
 Yanis Kasonga Musuayi,Levante,La Liga,2026/27,4,1,125,0,0,1,0,3,1,1,0,2.16,0.72,0.72,0.0,Substitute,3102194
 Adam Aznou,Málaga,La Liga,2026/27,5,3,294,0,0,1,1,10,7,3,0,3.0612,0.6122,0.9184,0.0,Substitute,379032
@@ -8397,37 +8399,37 @@ Ollie Pearce,York City,League Two,2026/27,16,16,1367,7,4,3,0,12,15,35,13,0.7901,
 Ryan Fallowfield,York City,League Two,2026/27,15,13,1159,0,0,1,0,12,4,4,0,0.9318,0.0777,0.3106,0.0,Center Right Defender,240948
 Zak Johnson,York City,League Two,2026/27,13,13,1109,1,0,0,0,8,11,3,1,0.6492,0.0,0.2435,0.0812,Center Defender,329644
 Zech Medley,York City,League Two,2026/27,6,0,36,0,0,0,0,2,0,2,1,5.0,0.0,5.0,2.5,Substitute,280552
-Alan Cervantes,América,Liga MX,2026/27,12,9,791,0,0,3,1,13,11,6,1,1.4791,0.4551,0.6827,0.1138,Left Midfielder,228351
+Alan Cervantes,América,Liga MX,2026/27,13,10,881,0,0,4,1,17,11,8,2,1.7367,0.5108,0.8173,0.2043,Left Midfielder,228351
 Alejandro Cárdenas,América,Liga MX,2026/27,6,1,141,1,0,0,0,1,2,5,5,0.6383,0.0,3.1915,3.1915,Substitute,3102567
-Alejandro Zendejas,América,Liga MX,2026/27,8,7,549,2,1,1,0,5,10,11,5,0.8197,0.1639,1.8033,0.8197,Attacking Midfielder Right,212824
+Alejandro Zendejas,América,Liga MX,2026/27,9,8,625,2,1,1,0,6,11,14,7,0.864,0.144,2.016,1.008,Attacking Midfielder Right,212824
 Alexis Gutierrez,América,Liga MX,2026/27,8,3,261,0,0,0,0,3,2,12,2,1.0345,0.0,4.1379,0.6897,Substitute,265866
-Brian Rodríguez,América,Liga MX,2026/27,11,7,726,5,3,0,0,13,19,38,19,1.6116,0.0,4.7107,2.3554,Attacking Midfielder Left,144325
-Carlos Álvarez,América,Liga MX,2026/27,10,7,512,1,2,0,0,3,10,12,6,0.5273,0.0,2.1094,1.0547,Attacking Midfielder,3731
-Cristian Borja,América,Liga MX,2026/27,13,8,844,1,0,3,0,9,17,4,1,0.9597,0.3199,0.4265,0.1066,Left Back,132676
+Brian Rodríguez,América,Liga MX,2026/27,12,7,771,5,3,0,0,13,19,40,19,1.5175,0.0,4.6693,2.2179,Attacking Midfielder Left,144325
+Carlos Álvarez,América,Liga MX,2026/27,11,7,526,1,2,1,0,4,10,12,6,0.6844,0.1711,2.0532,1.0266,Attacking Midfielder,3731
+Cristian Borja,América,Liga MX,2026/27,14,8,866,1,0,3,0,10,17,4,1,1.0393,0.3118,0.4157,0.1039,Left Back,132676
 Dagoberto Espinoza,América,Liga MX,2026/27,14,12,970,0,2,1,0,18,9,5,1,1.6701,0.0928,0.4639,0.0928,Right Back,363021
 Derek Ramsés Jiménez García,América,Liga MX,2026/27,4,1,108,0,0,1,0,6,2,0,0,5.0,0.8333,0.0,0.0,Substitute,3143686
-Edwin Cerrillo,América,Liga MX,2026/27,10,4,375,0,0,2,0,12,5,5,1,2.88,0.48,1.2,0.24,Substitute,286198
+Edwin Cerrillo,América,Liga MX,2026/27,11,5,465,0,0,3,0,13,6,6,1,2.5161,0.5806,1.1613,0.1935,Substitute,286198
 Emilio Lara,América,Liga MX,2026/27,6,5,464,0,0,0,0,3,1,3,2,0.5819,0.0,0.5819,0.3879,Right Back,292414
 Fernando Tapia,América,Liga MX,2026/27,2,2,180,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Goalkeeper,49306
 Franco Rossano,América,Liga MX,2026/27,6,5,320,0,0,3,0,8,6,2,2,2.25,0.8438,0.5625,0.5625,Left Back,386254
 Henry Martín,América,Liga MX,2026/27,15,14,1165,11,3,2,0,13,16,29,19,1.0043,0.1545,2.2403,1.4678,Forward,93184
-Isaías Violante,América,Liga MX,2026/27,14,7,648,1,2,0,0,5,14,24,7,0.6944,0.0,3.3333,0.9722,Substitute,308956
-Israel Reyes,América,Liga MX,2026/27,12,9,812,0,0,3,0,7,3,9,2,0.7759,0.3325,0.9975,0.2217,Right Midfielder,290414
-Kevin Álvarez,América,Liga MX,2026/27,12,8,790,1,3,4,0,14,5,10,3,1.5949,0.4557,1.1392,0.3418,Left Back,195312
-Miguel Borja,América,Liga MX,2026/27,10,3,431,6,0,1,1,8,5,24,7,1.6705,0.4176,5.0116,1.4617,Substitute,167195
+Isaías Violante,América,Liga MX,2026/27,15,7,670,1,2,0,0,5,14,24,7,0.6716,0.0,3.2239,0.9403,Substitute,308956
+Israel Reyes,América,Liga MX,2026/27,13,10,902,0,0,4,0,12,3,10,2,1.1973,0.3991,0.9978,0.1996,Right Midfielder,290414
+Kevin Álvarez,América,Liga MX,2026/27,13,9,880,1,3,4,0,17,5,11,4,1.7386,0.4091,1.125,0.4091,Left Back,195312
+Miguel Borja,América,Liga MX,2026/27,11,4,521,6,0,1,1,8,5,26,8,1.382,0.3455,4.4914,1.382,Substitute,167195
 Miguel Vazquez,América,Liga MX,2026/27,7,7,630,0,0,0,0,8,4,2,0,1.1429,0.0,0.2857,0.0,Center Left Defender,311853
 Osvaldo Arriaga,América,Liga MX,2026/27,4,2,168,1,0,0,0,3,0,10,1,1.6071,0.0,5.3571,0.5357,Substitute,394111
 Patricio Salas,América,Liga MX,2026/27,2,0,35,0,0,0,0,2,1,2,1,5.1429,0.0,5.1429,2.5714,Substitute,115044
 Ramón Juarez,América,Liga MX,2026/27,8,7,638,0,1,1,0,7,2,9,1,0.9875,0.1411,1.2696,0.1411,Center Right Defender,307891
 Raphael Veiga,América,Liga MX,2026/27,9,8,589,1,2,2,0,11,7,24,9,1.6808,0.3056,3.6672,1.3752,Attacking Midfielder,236321
-Rodolfo Cota,América,Liga MX,2026/27,8,8,720,0,0,0,0,0,1,0,0,0.0,0.0,0.0,0.0,Goalkeeper,103729
-Santiago Bueno,América,Liga MX,2026/27,6,6,534,1,0,0,1,10,1,1,1,1.6854,0.1685,0.1685,0.1685,Center Right Defender,241225
-Santiago Ramos,América,Liga MX,2026/27,7,7,630,0,0,0,0,11,9,1,0,1.5714,0.0,0.1429,0.0,Center Left Defender,82782
+Rodolfo Cota,América,Liga MX,2026/27,9,9,810,0,0,0,0,0,1,0,0,0.0,0.0,0.0,0.0,Goalkeeper,103729
+Santiago Bueno,América,Liga MX,2026/27,7,7,602,1,0,0,1,10,1,1,1,1.495,0.1495,0.1495,0.1495,Center Right Defender,241225
+Santiago Ramos,América,Liga MX,2026/27,8,8,720,0,0,0,0,12,10,1,0,1.5,0.0,0.125,0.0,Center Left Defender,82782
 Sebastián Cáceres,América,Liga MX,2026/27,2,2,180,0,0,0,0,2,1,0,0,1.0,0.0,0.0,0.0,Center Left Defender,285756
 Ángel Malagón,América,Liga MX,2026/27,7,7,630,0,0,0,0,0,2,0,0,0.0,0.0,0.0,0.0,Goalkeeper,200101
-Érick Sánchez,América,Liga MX,2026/27,16,12,1114,2,2,5,0,16,20,30,6,1.2926,0.4039,2.4237,0.4847,Right Midfielder,129421
+Érick Sánchez,América,Liga MX,2026/27,17,13,1159,2,2,6,0,18,20,34,7,1.3978,0.4659,2.6402,0.5436,Right Midfielder,129421
 Ícaro ca Conceição,América,Liga MX,2026/27,6,3,278,1,0,1,0,5,7,5,1,1.6187,0.3237,1.6187,0.3237,Substitute,3102566
-Óscar Perea,América,Liga MX,2026/27,13,6,587,3,2,0,0,13,10,31,13,1.9932,0.0,4.753,1.9932,Substitute,336456
+Óscar Perea,América,Liga MX,2026/27,14,7,655,3,2,1,0,15,12,34,15,2.0611,0.1374,4.6718,2.0611,Substitute,336456
 Aarón Quirós,Atlante,Liga MX,2026/27,13,13,1038,0,0,3,1,21,14,5,1,1.8208,0.3468,0.4335,0.0867,Center Left Defender,317427
 Armando Escobar,Atlante,Liga MX,2026/27,8,3,295,0,0,0,0,6,6,4,1,1.8305,0.0,1.2203,0.3051,Substitute,240148
 Axl Padilla,Atlante,Liga MX,2026/27,1,0,8,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Substitute,422076
@@ -8456,33 +8458,33 @@ Santiago Naelson Garcia Altamirano,Atlante,Liga MX,2026/27,1,0,15,0,0,0,0,1,0,0,
 Walter Clar,Atlante,Liga MX,2026/27,11,6,525,0,0,1,0,4,1,8,3,0.6857,0.1714,1.3714,0.5143,Substitute,188034
 Walter Portales,Atlante,Liga MX,2026/27,16,16,1376,1,2,2,1,19,8,11,5,1.2427,0.1962,0.7195,0.327,Right Back,304158
 Óscar Jiménez,Atlante,Liga MX,2026/27,17,17,1530,0,0,0,0,0,2,0,0,0.0,0.0,0.0,0.0,Goalkeeper,176824
-Adonis Frias,Atlas,Liga MX,2026/27,8,8,667,0,0,1,1,15,8,4,1,2.024,0.2699,0.5397,0.1349,Center Right Defender,234447
+Adonis Frias,Atlas,Liga MX,2026/27,9,9,757,0,0,1,1,16,9,4,1,1.9022,0.2378,0.4756,0.1189,Center Right Defender,234447
 Adrián Mora,Atlas,Liga MX,2026/27,1,0,4,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Substitute,270210
-Aldo Rocha,Atlas,Liga MX,2026/27,8,6,489,1,0,3,0,8,7,4,2,1.4724,0.5521,0.7362,0.3681,Right Midfielder,178839
-Alfonso González,Atlas,Liga MX,2026/27,11,9,593,1,1,0,0,6,22,9,4,0.9106,0.0,1.3659,0.6071,Attacking Midfielder,12425
+Aldo Rocha,Atlas,Liga MX,2026/27,9,7,570,1,0,3,0,9,7,4,2,1.4211,0.4737,0.6316,0.3158,Left Midfielder,178839
+Alfonso González,Atlas,Liga MX,2026/27,12,9,616,1,1,0,0,6,23,10,4,0.8766,0.0,1.461,0.5844,Attacking Midfielder,12425
 Antonio Sánchez,Atlas,Liga MX,2026/27,1,1,90,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Goalkeeper,291114
-Camilo Vargas,Atlas,Liga MX,2026/27,16,16,1440,0,0,0,0,0,2,0,0,0.0,0.0,0.0,0.0,Goalkeeper,185147
+Camilo Vargas,Atlas,Liga MX,2026/27,17,17,1530,0,0,0,0,0,2,0,0,0.0,0.0,0.0,0.0,Goalkeeper,185147
 Duk,Atlas,Liga MX,2026/27,8,7,521,2,1,0,1,8,11,13,6,1.382,0.1727,2.2457,1.0365,Attacking Midfielder Right,342048
-Edgar Zaldivar,Atlas,Liga MX,2026/27,14,9,768,2,1,1,0,11,11,11,4,1.2891,0.1172,1.2891,0.4688,Substitute,234867
-Elías Montiel,Atlas,Liga MX,2026/27,9,7,619,1,0,0,0,4,8,7,2,0.5816,0.0,1.0178,0.2908,Center Right Midfielder,364455
-Florián Monzón,Atlas,Liga MX,2026/27,14,14,1213,5,1,2,0,15,12,31,10,1.1129,0.1484,2.3001,0.742,Forward,309574
+Edgar Zaldivar,Atlas,Liga MX,2026/27,15,10,835,2,1,1,0,11,12,12,4,1.1856,0.1078,1.2934,0.4311,Substitute,234867
+Elías Montiel,Atlas,Liga MX,2026/27,10,8,709,1,0,0,0,4,8,7,2,0.5078,0.0,0.8886,0.2539,Center Right Midfielder,364455
+Florián Monzón,Atlas,Liga MX,2026/27,15,15,1280,5,1,2,0,15,13,31,10,1.0547,0.1406,2.1797,0.7031,Forward,309574
 Gaddi Aguirre,Atlas,Liga MX,2026/27,7,4,433,0,0,0,0,3,2,6,0,0.6236,0.0,1.2471,0.0,Center Right Defender,233106
 Gustavo Ferrareis,Atlas,Liga MX,2026/27,5,3,313,0,1,1,0,10,3,2,0,2.8754,0.2875,0.5751,0.0,Right Back,213775
 Jesús Serrato,Atlas,Liga MX,2026/27,4,0,37,0,0,1,0,1,2,0,0,2.4324,2.4324,0.0,0.0,Substitute,383233
-Jorge Rodríguez,Atlas,Liga MX,2026/27,10,4,378,0,1,0,0,0,8,2,0,0.0,0.0,0.4762,0.0,Substitute,312586
-Jorge Sánchez,Atlas,Liga MX,2026/27,12,9,808,0,0,2,0,10,9,6,3,1.1139,0.2228,0.6683,0.3342,Right Back,178746
-José Lozano,Atlas,Liga MX,2026/27,4,0,68,0,0,0,0,0,3,0,0,0.0,0.0,0.0,0.0,Substitute,271502
+Jorge Rodríguez,Atlas,Liga MX,2026/27,11,4,411,0,1,0,0,0,8,2,0,0.0,0.0,0.438,0.0,Substitute,312586
+Jorge Sánchez,Atlas,Liga MX,2026/27,13,10,898,0,0,2,0,10,9,7,3,1.0022,0.2004,0.7016,0.3007,Right Back,178746
+José Lozano,Atlas,Liga MX,2026/27,5,0,77,0,0,0,0,0,3,0,0,0.0,0.0,0.0,0.0,Substitute,271502
 José Martín,Atlas,Liga MX,2026/27,8,2,208,2,0,0,0,4,1,6,3,1.7308,0.0,2.5962,1.2981,Substitute,407291
 Juanjo Purata,Atlas,Liga MX,2026/27,11,10,895,1,0,3,1,22,8,12,4,2.2123,0.4022,1.2067,0.4022,Center Left Defender,263224
-Kevin Zenón,Atlas,Liga MX,2026/27,7,6,581,2,5,0,0,4,16,16,8,0.6196,0.0,2.4785,1.2392,Attacking Midfielder Right,290593
-Luís Esteves,Atlas,Liga MX,2026/27,17,14,1256,5,4,2,0,15,18,29,11,1.0748,0.1433,2.078,0.7882,Attacking Midfielder Left,312549
-Manuel Capasso,Atlas,Liga MX,2026/27,13,12,1005,3,0,4,1,15,1,13,6,1.3433,0.4478,1.1642,0.5373,Center Right Defender,225440
-Milton Valenzuela,Atlas,Liga MX,2026/27,15,11,1040,0,1,2,2,14,16,6,4,1.2115,0.3462,0.5192,0.3462,Left Back,233688
+Kevin Zenón,Atlas,Liga MX,2026/27,8,7,671,2,5,0,0,5,17,20,11,0.6706,0.0,2.6826,1.4754,Attacking Midfielder Right,290593
+Luís Esteves,Atlas,Liga MX,2026/27,18,15,1337,5,4,2,0,15,18,31,12,1.0097,0.1346,2.0868,0.8078,Attacking Midfielder Left,312549
+Manuel Capasso,Atlas,Liga MX,2026/27,14,13,1095,3,0,4,1,16,1,14,7,1.3151,0.411,1.1507,0.5753,Center Right Defender,225440
+Milton Valenzuela,Atlas,Liga MX,2026/27,16,12,1097,0,1,2,2,16,17,6,4,1.3127,0.3282,0.4923,0.3282,Left Back,233688
 Paulo Ramírez,Atlas,Liga MX,2026/27,14,9,769,0,1,0,0,6,1,7,1,0.7022,0.0,0.8192,0.117,Center Left Midfielder,388094
 Rodrigo Schlegel,Atlas,Liga MX,2026/27,7,7,630,0,0,1,0,7,7,3,0,1.0,0.1429,0.4286,0.0,Center Left Defender,255476
-Ryan Mmaee,Atlas,Liga MX,2026/27,13,10,836,3,0,1,0,12,13,27,7,1.2919,0.1077,2.9067,0.7536,Center Left Forward,219646
+Ryan Mmaee,Atlas,Liga MX,2026/27,14,10,859,3,0,2,0,13,13,28,7,1.362,0.2095,2.9336,0.7334,Center Left Forward,219646
 Sergio Hernandez,Atlas,Liga MX,2026/27,15,5,683,0,1,3,0,14,12,8,0,1.8448,0.3953,1.0542,0.0,Substitute,386935
-Víctor Ríos,Atlas,Liga MX,2026/27,9,4,375,1,0,3,0,8,1,3,1,1.92,0.72,0.72,0.24,Substitute,366679
+Víctor Ríos,Atlas,Liga MX,2026/27,10,4,384,1,0,3,0,8,1,3,1,1.875,0.7031,0.7031,0.2344,Substitute,366679
 Aldo Cruz,Atlético de San Luis,Liga MX,2026/27,15,11,1086,0,0,2,0,4,4,1,0,0.3315,0.1657,0.0829,0.0,Center Left Defender,263221
 Anderson Duarte,Atlético de San Luis,Liga MX,2026/27,16,13,999,0,2,1,0,18,17,18,6,1.6216,0.0901,1.6216,0.5405,Left Midfielder,359828
 Andrés Sánchez,Atlético de San Luis,Liga MX,2026/27,7,7,572,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Goalkeeper,210848
@@ -8617,31 +8619,31 @@ Sebastian Vegas,León,Liga MX,2026/27,11,11,817,0,0,4,0,18,8,6,4,1.9829,0.4406,0
 Sebastián Fierro,León,Liga MX,2026/27,1,0,45,0,0,0,0,0,1,0,0,0.0,0.0,0.0,0.0,Substitute,290894
 Aldo De Nigris,Monterrey,Liga MX,2026/27,4,0,137,0,0,0,0,3,6,5,0,1.9708,0.0,3.2847,0.0,Substitute,145261
 Carlos Salcedo,Monterrey,Liga MX,2026/27,11,11,837,0,0,3,3,8,7,4,1,0.8602,0.6452,0.4301,0.1075,Center Left Defender,184299
-Cesar Garza,Monterrey,Liga MX,2026/27,10,10,740,1,0,3,0,8,6,3,2,0.973,0.3649,0.3649,0.2432,Right Midfielder,375061
-Cristian Reyes,Monterrey,Liga MX,2026/27,1,0,23,0,0,0,0,2,1,0,0,7.8261,0.0,0.0,0.0,Substitute,379211
+Cesar Garza,Monterrey,Liga MX,2026/27,11,10,745,1,0,3,0,8,7,3,2,0.9664,0.3624,0.3624,0.2416,Right Midfielder,375061
+Cristian Reyes,Monterrey,Liga MX,2026/27,2,0,32,0,0,0,0,2,1,0,0,5.625,0.0,0.0,0.0,Substitute,379211
 Daniel Aceves,Monterrey,Liga MX,2026/27,9,6,518,0,0,2,0,7,1,4,0,1.2162,0.3475,0.695,0.0,Center Left Defender,310213
 Diego Rossi,Monterrey,Liga MX,2026/27,16,14,1140,6,3,2,0,9,13,31,15,0.7105,0.1579,2.4474,1.1842,Attacking Midfielder,235817
 Esteban Andrada,Monterrey,Liga MX,2026/27,10,10,900,0,0,0,0,0,3,0,0,0.0,0.0,0.0,0.0,Goalkeeper,138328
-Fidel Ambríz,Monterrey,Liga MX,2026/27,12,4,456,0,1,1,0,12,3,6,2,2.3684,0.1974,1.1842,0.3947,Substitute,298860
-Gerardo Arteaga,Monterrey,Liga MX,2026/27,15,14,1246,0,0,1,1,7,6,6,2,0.5056,0.1445,0.4334,0.1445,Left Back,245848
-Hugo Cuypers,Monterrey,Liga MX,2026/27,15,13,1129,6,1,0,0,14,15,28,16,1.116,0.0,2.2321,1.2755,Forward,235511
+Fidel Ambríz,Monterrey,Liga MX,2026/27,13,4,501,0,1,1,0,12,4,8,3,2.1557,0.1796,1.4371,0.5389,Substitute,298860
+Gerardo Arteaga,Monterrey,Liga MX,2026/27,16,15,1336,0,0,1,1,7,6,6,2,0.4716,0.1347,0.4042,0.1347,Left Back,245848
+Hugo Cuypers,Monterrey,Liga MX,2026/27,16,14,1210,6,1,0,0,14,17,29,16,1.0413,0.0,2.157,1.1901,Forward,235511
 Iker Fimbres,Monterrey,Liga MX,2026/27,9,1,176,0,0,0,0,3,1,6,0,1.5341,0.0,3.0682,0.0,Substitute,365476
-Jesús Corona,Monterrey,Liga MX,2026/27,14,12,869,2,2,1,0,8,25,17,6,0.8285,0.1036,1.7606,0.6214,Attacking Midfielder Left,117977
-Jorge Rodríguez,Monterrey,Liga MX,2026/27,10,4,447,1,0,0,0,9,6,2,1,1.8121,0.0,0.4027,0.2013,Substitute,79608
-Luca Orellano,Monterrey,Liga MX,2026/27,15,7,781,3,0,1,0,7,19,31,16,0.8067,0.1152,3.5723,1.8438,Substitute,276305
-Lucas Ocampos,Monterrey,Liga MX,2026/27,15,14,1173,7,3,2,0,11,26,52,18,0.844,0.1535,3.9898,1.3811,Attacking Midfielder Left,159263
-Luis Cárdenas,Monterrey,Liga MX,2026/27,7,7,630,0,0,1,0,1,0,0,0,0.1429,0.1429,0.0,0.0,Goalkeeper,190907
-Luis Reyes,Monterrey,Liga MX,2026/27,6,1,123,0,0,0,0,3,7,3,2,2.1951,0.0,2.1951,1.4634,Substitute,215559
+Jesús Corona,Monterrey,Liga MX,2026/27,15,13,946,2,2,1,0,9,29,17,6,0.8562,0.0951,1.6173,0.5708,Attacking Midfielder Left,117977
+Jorge Rodríguez,Monterrey,Liga MX,2026/27,11,5,537,1,0,0,0,9,7,2,1,1.5084,0.0,0.3352,0.1676,Substitute,79608
+Luca Orellano,Monterrey,Liga MX,2026/27,16,8,826,3,0,1,0,7,20,32,16,0.7627,0.109,3.4867,1.7433,Substitute,276305
+Lucas Ocampos,Monterrey,Liga MX,2026/27,16,15,1263,7,3,2,0,11,31,54,18,0.7838,0.1425,3.848,1.2827,Attacking Midfielder Left,159263
+Luis Cárdenas,Monterrey,Liga MX,2026/27,8,8,720,0,0,1,0,1,0,0,0,0.125,0.125,0.0,0.0,Goalkeeper,190907
+Luis Reyes,Monterrey,Liga MX,2026/27,7,1,136,0,0,0,0,3,7,3,2,1.9853,0.0,1.9853,1.3235,Substitute,215559
 Omar Gálvez,Monterrey,Liga MX,2026/27,2,1,88,0,0,0,0,0,3,2,1,0.0,0.0,2.0455,1.0227,Attacking Midfielder Left,417642
-Orbelín Pineda,Monterrey,Liga MX,2026/27,14,12,1047,1,3,1,1,13,28,14,3,1.1175,0.1719,1.2034,0.2579,Left Midfielder,207011
+Orbelín Pineda,Monterrey,Liga MX,2026/27,15,13,1137,1,3,1,1,14,31,14,3,1.1082,0.1583,1.1082,0.2375,Left Midfielder,207011
 Paxon Levi Ruffin Tamez,Monterrey,Liga MX,2026/27,2,0,32,0,0,1,0,2,0,1,0,5.625,2.8125,2.8125,0.0,Substitute,3143802
-Ricardo Chávez,Monterrey,Liga MX,2026/27,15,14,1098,0,2,5,0,28,15,10,2,2.2951,0.4098,0.8197,0.1639,Right Back,202106
+Ricardo Chávez,Monterrey,Liga MX,2026/27,16,15,1108,0,2,5,1,29,15,10,2,2.3556,0.4874,0.8123,0.1625,Right Back,202106
 Roberto de la Rosa,Monterrey,Liga MX,2026/27,7,2,253,2,0,1,0,3,0,10,4,1.0672,0.3557,3.5573,1.4229,Substitute,261137
 Stefan Medina,Monterrey,Liga MX,2026/27,7,2,229,0,0,1,1,6,1,1,0,2.3581,0.786,0.393,0.0,Substitute,146989
 Uros Djurdjevic,Monterrey,Liga MX,2026/27,5,1,85,0,0,1,0,3,0,5,0,3.1765,1.0588,5.2941,0.0,Substitute,195220
-Víctor Guzmán,Monterrey,Liga MX,2026/27,13,13,1165,0,0,0,0,16,2,7,1,1.2361,0.0,0.5408,0.0773,Center Right Defender,290348
+Víctor Guzmán,Monterrey,Liga MX,2026/27,14,14,1255,0,0,0,0,17,2,9,1,1.2191,0.0,0.6454,0.0717,Center Right Defender,290348
 Érick Aguirre,Monterrey,Liga MX,2026/27,7,3,279,0,0,0,0,5,1,1,0,1.6129,0.0,0.3226,0.0,Substitute,194666
-Óliver Torres,Monterrey,Liga MX,2026/27,16,11,1096,0,6,4,0,15,10,10,4,1.2318,0.3285,0.8212,0.3285,Right Midfielder,173233
+Óliver Torres,Monterrey,Liga MX,2026/27,17,12,1181,0,6,4,0,16,11,10,4,1.2193,0.3048,0.7621,0.3048,Right Midfielder,173233
 Agustín Oliveros,Necaxa,Liga MX,2026/27,15,15,1271,0,0,0,1,6,9,14,2,0.4249,0.0708,0.9913,0.1416,Center Left Defender,303329
 Alexis Peña,Necaxa,Liga MX,2026/27,8,6,563,0,1,0,0,2,1,5,1,0.3197,0.0,0.7993,0.1599,Center Defender,224736
 Carlos Vargas,Necaxa,Liga MX,2026/27,10,10,598,0,0,0,0,11,2,7,0,1.6555,0.0,1.0535,0.0,Left Midfielder,74070
@@ -8807,7 +8809,7 @@ Alan Franco,Tigres UANL,Liga MX,2026/27,14,13,1133,0,0,1,1,11,4,6,2,0.8738,0.158
 Antonio De María Y Campos,Tigres UANL,Liga MX,2026/27,2,0,5,0,0,0,0,0,0,1,0,0.0,0.0,18.0,0.0,Substitute,395876
 César Araujo,Tigres UANL,Liga MX,2026/27,14,9,854,0,0,2,0,17,17,6,0,1.7916,0.2108,0.6323,0.0,Left Midfielder,291218
 Diego Lainez,Tigres UANL,Liga MX,2026/27,16,14,1158,0,1,1,1,16,34,26,6,1.2435,0.1554,2.0207,0.4663,Attacking Midfielder Right,253830
-Diego Ramirez,Tigres UANL,Liga MX,2026/27,1,0,3,0,0,0,0,0,0,1,0,0.0,0.0,30.0,0.0,Substitute,16756
+Diego Ramírez,Tigres UANL,Liga MX,2026/27,1,0,3,0,0,0,0,0,0,1,0,0.0,0.0,30.0,0.0,Substitute,16756
 Diego Sánchez,Tigres UANL,Liga MX,2026/27,15,10,849,1,0,0,0,8,18,14,3,0.8481,0.0,1.4841,0.318,Attacking Midfielder Left,380171
 Edgar Joshimar Villavicencio Ávila,Tigres UANL,Liga MX,2026/27,1,0,45,0,0,0,0,0,2,0,0,0.0,0.0,0.0,0.0,Substitute,3131443
 Emiliano Gomez,Tigres UANL,Liga MX,2026/27,9,5,479,0,1,0,0,3,7,10,4,0.5637,0.0,1.8789,0.7516,Substitute,271439
@@ -8853,33 +8855,33 @@ Rafael Fernández,Tijuana,Liga MX,2026/27,14,14,1210,0,2,2,0,17,7,3,0,1.2645,0.1
 Ramiro Árciga,Tijuana,Liga MX,2026/27,17,13,985,1,0,2,0,16,13,11,2,1.4619,0.1827,1.0051,0.1827,Right Midfielder,360957
 Unai Bilbao,Tijuana,Liga MX,2026/27,10,5,586,0,0,1,0,4,2,3,0,0.6143,0.1536,0.4608,0.0,Substitute,222363
 Ángel Zapata,Tijuana,Liga MX,2026/27,10,4,394,0,0,2,0,5,6,2,0,1.1421,0.4569,0.4569,0.0,Substitute,304337
-Alexis Vega,Toluca,Liga MX,2026/27,15,13,941,5,2,3,0,13,30,29,11,1.2434,0.2869,2.7736,1.0521,Attacking Midfielder Left,229487
-Antonio Briseño,Toluca,Liga MX,2026/27,2,0,11,0,0,0,0,2,0,0,0,16.3636,0.0,0.0,0.0,Substitute,159279
+Alexis Vega,Toluca,Liga MX,2026/27,16,14,1015,5,2,4,0,14,30,30,12,1.2414,0.3547,2.6601,1.064,Attacking Midfielder Left,229487
+Antonio Briseño,Toluca,Liga MX,2026/27,3,0,16,0,0,1,0,2,0,0,0,11.25,5.625,0.0,0.0,Substitute,159279
 Axel Yair Cervantes González,Toluca,Liga MX,2026/27,1,0,14,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Substitute,5334113
 Brian García,Toluca,Liga MX,2026/27,10,6,593,0,2,1,0,3,3,5,2,0.4553,0.1518,0.7589,0.3035,Left Back,275897
-Bruno Méndez,Toluca,Liga MX,2026/27,11,10,877,0,1,2,0,6,8,3,0,0.6157,0.2052,0.3079,0.0,Center Right Defender,269902
+Bruno Méndez,Toluca,Liga MX,2026/27,12,11,967,0,1,2,0,7,9,3,0,0.6515,0.1861,0.2792,0.0,Center Right Defender,269902
 Carlos Eduardo Carrillo Madrigales,Toluca,Liga MX,2026/27,1,0,15,0,0,0,0,0,0,1,1,0.0,0.0,6.0,6.0,Substitute,3102561
 Diego Zaragoza,Toluca,Liga MX,2026/27,8,8,534,0,0,1,1,11,4,6,3,1.8539,0.3371,1.0112,0.5056,Right Back,233104
 Edgar López,Toluca,Liga MX,2026/27,1,1,58,1,1,0,0,1,0,3,1,1.5517,0.0,4.6552,1.5517,Forward,261094
 Edher Guadalupe Segura Téllez,Toluca,Liga MX,2026/27,1,1,90,0,0,0,0,0,0,2,0,0.0,0.0,2.0,0.0,Sweeper,3142131
-Everardo López,Toluca,Liga MX,2026/27,13,11,978,1,1,0,1,17,1,3,1,1.5644,0.092,0.2761,0.092,Center Left Defender,338878
+Everardo López,Toluca,Liga MX,2026/27,14,11,1023,1,1,0,1,17,1,4,1,1.4956,0.088,0.3519,0.088,Center Left Defender,338878
 Federico Pereira,Toluca,Liga MX,2026/27,14,14,1215,0,0,1,1,21,16,13,2,1.5556,0.1481,0.963,0.1481,Center Left Defender,288735
-Federico Viñas,Toluca,Liga MX,2026/27,14,9,822,8,1,0,0,11,25,42,13,1.2044,0.0,4.5985,1.4234,Substitute,295847
-Fernando Arce,Toluca,Liga MX,2026/27,8,4,347,0,0,1,0,5,4,4,0,1.2968,0.2594,1.0375,0.0,Substitute,202164
-Franco Romero,Toluca,Liga MX,2026/27,14,13,1114,0,0,4,0,13,10,7,0,1.0503,0.3232,0.5655,0.0,Right Midfielder,128422
-Helinho,Toluca,Liga MX,2026/27,15,11,943,4,8,5,0,7,16,41,20,0.6681,0.4772,3.913,1.9088,Attacking Midfielder Right,266679
+Federico Viñas,Toluca,Liga MX,2026/27,15,9,838,8,1,0,0,12,26,43,13,1.2888,0.0,4.6181,1.3962,Substitute,295847
+Fernando Arce,Toluca,Liga MX,2026/27,9,4,363,0,0,1,0,6,4,4,0,1.4876,0.2479,0.9917,0.0,Substitute,202164
+Franco Romero,Toluca,Liga MX,2026/27,15,14,1204,0,0,4,0,13,10,8,0,0.9718,0.299,0.598,0.0,Right Midfielder,128422
+Helinho,Toluca,Liga MX,2026/27,16,12,1020,6,8,5,0,7,17,44,22,0.6176,0.4412,3.8824,1.9412,Attacking Midfielder Right,266679
 Hugo González,Toluca,Liga MX,2026/27,8,7,644,0,0,0,1,1,1,0,0,0.1398,0.1398,0.0,0.0,Goalkeeper,163150
-Jesús Angulo,Toluca,Liga MX,2026/27,16,8,677,1,1,0,0,6,7,18,7,0.7976,0.0,2.3929,0.9306,Substitute,282615
-Jesús Gallardo,Toluca,Liga MX,2026/27,14,12,1150,2,1,3,0,25,6,18,5,1.9565,0.2348,1.4087,0.3913,Left Back,132098
-Jorge Díaz,Toluca,Liga MX,2026/27,15,7,716,1,1,0,0,4,16,19,7,0.5028,0.0,2.3883,0.8799,Substitute,269177
-Luan,Toluca,Liga MX,2026/27,9,5,499,0,0,0,0,7,5,3,2,1.2625,0.0,0.5411,0.3607,Center Right Defender,158275
-Luis García,Toluca,Liga MX,2026/27,9,9,794,0,0,0,0,0,3,1,0,0.0,0.0,0.1134,0.0,Goalkeeper,184845
-Nicolás Castro,Toluca,Liga MX,2026/27,15,10,989,1,4,2,0,6,9,30,10,0.546,0.182,2.73,0.91,Substitute,57149
+Jesús Angulo,Toluca,Liga MX,2026/27,17,9,722,1,1,0,0,6,9,19,8,0.7479,0.0,2.3684,0.9972,Substitute,282615
+Jesús Gallardo,Toluca,Liga MX,2026/27,15,13,1240,2,1,3,0,26,6,20,6,1.8871,0.2177,1.4516,0.4355,Left Back,132098
+Jorge Díaz,Toluca,Liga MX,2026/27,16,7,729,1,1,0,0,4,16,19,7,0.4938,0.0,2.3457,0.8642,Substitute,269177
+Luan,Toluca,Liga MX,2026/27,10,6,584,0,0,0,0,8,5,3,2,1.2329,0.0,0.4623,0.3082,Center Right Defender,158275
+Luis García,Toluca,Liga MX,2026/27,10,10,884,0,0,0,0,0,3,1,0,0.0,0.0,0.1018,0.0,Goalkeeper,184845
+Nicolás Castro,Toluca,Liga MX,2026/27,16,11,1079,1,5,2,0,7,9,33,10,0.5839,0.1668,2.7525,0.8341,Left Midfielder,57149
 Oswaldo Virgen,Toluca,Liga MX,2026/27,2,1,81,1,1,0,0,0,0,6,2,0.0,0.0,6.6667,2.2222,Midfielder,398704
-Paulinho,Toluca,Liga MX,2026/27,11,8,785,5,0,0,0,10,9,36,13,1.1465,0.0,4.1274,1.4904,Forward,189480
+Paulinho,Toluca,Liga MX,2026/27,12,9,859,5,0,0,0,10,11,42,14,1.0477,0.0,4.4005,1.4668,Forward,189480
 Pável Pérez,Toluca,Liga MX,2026/27,8,2,239,0,0,0,0,3,4,3,0,1.1297,0.0,1.1297,0.0,Substitute,324719
 Ronaldo Dimas,Toluca,Liga MX,2026/27,1,1,90,0,0,0,0,1,0,0,0,1.0,0.0,0.0,0.0,Goalkeeper,337128
-Santiago Simón,Toluca,Liga MX,2026/27,8,5,496,0,0,0,0,2,2,2,1,0.3629,0.0,0.3629,0.1815,Right Back,297057
+Santiago Simón,Toluca,Liga MX,2026/27,9,6,586,0,0,0,0,2,2,2,1,0.3072,0.0,0.3072,0.1536,Right Back,297057
 Sebastián Aceves,Toluca,Liga MX,2026/27,2,1,91,0,0,0,0,1,0,0,0,0.989,0.0,0.0,0.0,Right Back,407351
 Víctor Guzmán,Toluca,Liga MX,2026/27,10,3,360,0,0,0,0,8,3,6,0,2.0,0.0,1.5,0.0,Substitute,219470
 Érick Gutiérrez,Toluca,Liga MX,2026/27,10,7,562,1,0,0,0,11,6,6,2,1.7616,0.0,0.9609,0.3203,Left Midfielder,194311
@@ -13265,29 +13267,29 @@ Thierry Correia,Venezia,Serie A,2026/27,5,3,192,0,0,1,0,5,3,5,1,2.3438,0.4688,2.
 Thorir Johann Helgason,Venezia,Serie A,2026/27,7,3,297,0,0,0,0,4,1,3,1,1.2121,0.0,0.9091,0.303,Substitute,275227
 Toma Basic,Venezia,Serie A,2026/27,8,6,506,1,0,1,0,1,6,7,3,0.1779,0.1779,1.2451,0.5336,Center Left Midfielder,221057
 Toni Fernández,Venezia,Serie A,2026/27,3,0,60,0,0,1,0,2,0,0,0,3.0,1.5,0.0,0.0,Substitute,388285
-Alberto Cerri,Arezzo,Serie B,2026/27,10,5,449,0,0,1,0,17,8,11,3,3.4076,0.2004,2.2049,0.6013,Substitute,184881
+Alberto Cerri,Arezzo,Serie B,2026/27,11,6,510,0,0,1,0,21,10,11,3,3.7059,0.1765,1.9412,0.5294,Forward,184881
 Alessandro Arena,Arezzo,Serie B,2026/27,11,9,621,1,1,1,0,8,9,14,4,1.1594,0.1449,2.029,0.5797,Right Midfielder,366228
-Alessandro Nunziante,Arezzo,Serie B,2026/27,12,12,1080,0,0,0,0,0,6,0,0,0.0,0.0,0.0,0.0,Goalkeeper,362555
-Alessandro Renzi,Arezzo,Serie B,2026/27,10,10,900,0,0,1,0,13,11,4,2,1.3,0.1,0.4,0.2,Right Back,363050
+Alessandro Nunziante,Arezzo,Serie B,2026/27,13,13,1170,0,0,0,0,1,7,0,0,0.0769,0.0,0.0,0.0,Goalkeeper,362555
+Alessandro Renzi,Arezzo,Serie B,2026/27,11,11,990,0,0,1,0,14,12,4,2,1.2727,0.0909,0.3636,0.1818,Right Back,363050
 Andrea Cagnano,Arezzo,Serie B,2026/27,6,2,273,0,0,2,0,3,10,0,0,0.989,0.6593,0.0,0.0,Substitute,291332
-Artur Ionita,Arezzo,Serie B,2026/27,12,10,924,1,0,2,0,17,1,13,5,1.6558,0.1948,1.2662,0.487,Center Left Midfielder,133688
-Camillo Tavernelli,Arezzo,Serie B,2026/27,10,8,727,1,2,0,0,2,8,17,6,0.2476,0.0,2.1045,0.7428,Left Midfielder,307958
-Emiliano Pattarello,Arezzo,Serie B,2026/27,11,3,426,1,0,0,0,3,11,14,4,0.6338,0.0,2.9577,0.8451,Substitute,3099514
-Gennaro Iaccarino,Arezzo,Serie B,2026/27,8,6,509,0,0,2,0,8,6,3,0,1.4145,0.3536,0.5305,0.0,Center Right Midfielder,388695
+Artur Ionita,Arezzo,Serie B,2026/27,13,10,946,1,0,3,0,17,1,13,5,1.6173,0.2854,1.2368,0.4757,Center Left Midfielder,133688
+Camillo Tavernelli,Arezzo,Serie B,2026/27,11,9,817,1,2,1,0,3,10,20,7,0.3305,0.1102,2.2032,0.7711,Left Midfielder,307958
+Emiliano Pattarello,Arezzo,Serie B,2026/27,12,4,494,1,0,0,0,4,14,14,4,0.7287,0.0,2.5506,0.7287,Substitute,3099514
+Gennaro Iaccarino,Arezzo,Serie B,2026/27,9,7,599,0,0,2,0,8,8,4,0,1.202,0.3005,0.601,0.0,Center Right Midfielder,388695
 Gian Marco Ferrari,Arezzo,Serie B,2026/27,2,1,91,0,0,0,0,0,4,1,0,0.0,0.0,0.989,0.0,Center Left Defender,207823
 Julián Illanes,Arezzo,Serie B,2026/27,7,7,579,0,0,2,1,7,7,2,0,1.0881,0.4663,0.3109,0.0,Center Left Defender,208379
-Kevin Leone,Arezzo,Serie B,2026/27,3,2,119,0,0,0,0,1,1,3,0,0.7563,0.0,2.2689,0.0,Substitute,366933
-Leonardo Mancuso,Arezzo,Serie B,2026/27,7,2,269,2,0,0,0,0,4,10,3,0.0,0.0,3.3457,1.0037,Substitute,207297
+Kevin Leone,Arezzo,Serie B,2026/27,4,3,187,0,0,0,0,3,3,4,1,1.4439,0.0,1.9251,0.4813,Left Midfielder,366933
+Leonardo Mancuso,Arezzo,Serie B,2026/27,8,2,298,2,0,0,0,1,4,11,3,0.302,0.0,3.3221,0.906,Substitute,207297
 Luca Chierico,Arezzo,Serie B,2026/27,6,3,295,1,0,1,0,2,5,5,1,0.6102,0.3051,1.5254,0.3051,Substitute,307863
 Marco Olivieri,Arezzo,Serie B,2026/27,3,2,150,0,0,0,0,2,2,0,0,1.2,0.0,0.0,0.0,Left Forward,261025
 Marlon Mena,Arezzo,Serie B,2026/27,1,1,90,0,0,0,0,1,2,0,0,1.0,0.0,0.0,0.0,Right Back,145165
-Matteo Gilli,Arezzo,Serie B,2026/27,10,10,831,0,0,1,0,10,15,7,1,1.083,0.1083,0.7581,0.1083,Center Right Defender,3099515
-Mattia Sala,Arezzo,Serie B,2026/27,12,9,810,0,0,2,0,13,18,12,4,1.4444,0.2222,1.3333,0.4444,Center Right Midfielder,380983
+Matteo Gilli,Arezzo,Serie B,2026/27,11,11,921,0,0,2,0,12,17,7,1,1.1726,0.1954,0.684,0.0977,Center Right Defender,3099515
+Mattia Sala,Arezzo,Serie B,2026/27,13,10,900,0,0,2,0,13,18,14,4,1.3,0.2,1.4,0.4,Center Right Midfielder,380983
 Mattia Viviani,Arezzo,Serie B,2026/27,5,2,160,0,0,1,0,5,4,1,0,2.8125,0.5625,0.5625,0.0,Substitute,272207
-Mauro Coppolaro,Arezzo,Serie B,2026/27,9,7,747,0,0,0,0,2,6,1,0,0.241,0.0,0.1205,0.0,Center Left Defender,201339
+Mauro Coppolaro,Arezzo,Serie B,2026/27,10,8,837,0,0,0,0,4,6,1,0,0.4301,0.0,0.1075,0.0,Center Left Defender,201339
 Muhamed Djamanca,Arezzo,Serie B,2026/27,2,0,18,0,0,0,0,2,1,0,0,10.0,0.0,0.0,0.0,Substitute,346532
-Pietro Cianci,Arezzo,Serie B,2026/27,10,5,417,2,1,1,0,6,6,5,2,1.295,0.2158,1.0791,0.4317,Substitute,346528
-Samuele Righetti,Arezzo,Serie B,2026/27,11,10,852,0,1,1,0,17,16,10,1,1.7958,0.1056,1.0563,0.1056,Left Back,293416
+Pietro Cianci,Arezzo,Serie B,2026/27,11,5,439,2,1,1,0,8,6,7,2,1.6401,0.205,1.4351,0.41,Substitute,346528
+Samuele Righetti,Arezzo,Serie B,2026/27,12,11,942,0,1,1,0,20,16,12,1,1.9108,0.0955,1.1465,0.0955,Left Back,293416
 Shaka Mawuli,Arezzo,Serie B,2026/27,11,6,492,0,1,3,0,16,7,5,1,2.9268,0.5488,0.9146,0.1829,Substitute,251367
 Abdoul Guiebre,Ascoli,Serie B,2026/27,13,13,1154,0,2,5,0,19,20,18,4,1.4818,0.3899,1.4038,0.312,Left Back,308060
 Andrea Oliveri,Ascoli,Serie B,2026/27,11,4,452,0,1,0,0,3,12,8,0,0.5973,0.0,1.5929,0.0,Substitute,329737
@@ -13405,34 +13407,34 @@ Mihajlo Ilic,Cesena,Serie B,2026/27,11,11,920,0,0,3,0,12,6,6,1,1.1739,0.2935,0.5
 Riccardo Pagano,Cesena,Serie B,2026/27,12,12,997,0,1,2,0,14,6,21,2,1.2638,0.1805,1.8957,0.1805,Center Midfielder,362865
 Vittorio Magni,Cesena,Serie B,2026/27,4,0,79,0,0,1,0,2,1,0,0,2.2785,1.1392,0.0,0.0,Substitute,365845
 Xavello Djave Lyam Druiventak,Cesena,Serie B,2026/27,12,8,621,0,2,0,0,11,7,9,4,1.5942,0.0,1.3043,0.5797,Substitute,3111586
-Adin Licina,Cremonese,Serie B,2026/27,9,6,504,1,1,2,0,4,7,9,1,0.7143,0.3571,1.6071,0.1786,Attacking Midfielder Right,388139
+Adin Licina,Cremonese,Serie B,2026/27,10,7,576,1,1,2,0,4,8,12,1,0.625,0.3125,1.875,0.1562,Attacking Midfielder Right,388139
 Adrian Lickunas,Cremonese,Serie B,2026/27,2,1,135,0,0,0,0,2,1,0,0,1.3333,0.0,0.0,0.0,Right Midfielder,412139
 Alberto Grassi,Cremonese,Serie B,2026/27,5,3,311,0,0,0,0,4,4,2,1,1.1576,0.0,0.5788,0.2894,Substitute,209869
 Alessandro Vogliacco,Cremonese,Serie B,2026/27,8,6,412,0,0,1,0,3,1,4,1,0.6553,0.2184,0.8738,0.2184,Right Back,278779
-Andrea Fulignati,Cremonese,Serie B,2026/27,8,8,720,0,0,1,0,0,4,0,0,0.0,0.125,0.0,0.0,Goalkeeper,180863
-Dachi Lordkipanidze,Cremonese,Serie B,2026/27,4,1,157,0,1,0,0,3,1,1,0,1.7197,0.0,0.5732,0.0,Substitute,388553
-David Stuckler,Cremonese,Serie B,2026/27,3,0,84,1,0,1,0,0,3,6,2,0.0,1.0714,6.4286,2.1429,Substitute,386272
+Andrea Fulignati,Cremonese,Serie B,2026/27,9,9,810,0,0,1,0,0,4,0,0,0.0,0.1111,0.0,0.0,Goalkeeper,180863
+Dachi Lordkipanidze,Cremonese,Serie B,2026/27,5,2,202,0,1,0,0,4,1,1,0,1.7822,0.0,0.4455,0.0,Substitute,388553
+David Stuckler,Cremonese,Serie B,2026/27,4,1,156,1,0,1,0,1,5,7,2,0.5769,0.5769,4.0385,1.1538,Substitute,386272
 Fabio Gerli,Cremonese,Serie B,2026/27,5,5,423,0,0,1,0,6,6,7,3,1.2766,0.2128,1.4894,0.6383,Right Midfielder,207884
 Federico Agazzi,Cremonese,Serie B,2026/27,4,4,360,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Goalkeeper,340138
-Federico Baschirotto,Cremonese,Serie B,2026/27,9,8,745,0,0,1,0,3,3,1,1,0.3624,0.1208,0.1208,0.1208,Center Right Defender,324225
+Federico Baschirotto,Cremonese,Serie B,2026/27,10,9,835,0,0,1,0,3,3,4,1,0.3234,0.1078,0.4311,0.1078,Center Right Defender,324225
 Federico Bonazzoli,Cremonese,Serie B,2026/27,10,9,651,6,2,2,1,7,16,32,13,0.9677,0.4147,4.424,1.7972,Forward,197062
 Fellipe Jack,Cremonese,Serie B,2026/27,4,1,85,0,0,0,0,1,1,0,0,1.0588,0.0,0.0,0.0,Substitute,384367
 Francesco Folino,Cremonese,Serie B,2026/27,1,0,27,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Substitute,386293
 Gabriel Herzuah,Cremonese,Serie B,2026/27,1,0,8,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Substitute,3144056
-Giuseppe Pezzella,Cremonese,Serie B,2026/27,7,7,513,1,0,0,1,4,2,1,1,0.7018,0.1754,0.1754,0.1754,Left Back,224249
-Jari Vandeputte,Cremonese,Serie B,2026/27,11,11,791,0,3,1,0,15,6,10,4,1.7067,0.1138,1.1378,0.4551,Attacking Midfielder Left,197345
-Manuel De Luca,Cremonese,Serie B,2026/27,8,2,271,0,0,0,0,6,4,8,3,1.9926,0.0,2.6568,0.9963,Substitute,154423
-Marco Nasti,Cremonese,Serie B,2026/27,11,3,417,2,0,2,0,16,6,20,8,3.4532,0.4317,4.3165,1.7266,Substitute,340706
+Giuseppe Pezzella,Cremonese,Serie B,2026/27,8,8,603,1,0,0,1,4,3,1,1,0.597,0.1493,0.1493,0.1493,Left Back,224249
+Jari Vandeputte,Cremonese,Serie B,2026/27,12,11,836,0,3,2,0,18,6,11,4,1.9378,0.2153,1.1842,0.4306,Attacking Midfielder Left,197345
+Manuel De Luca,Cremonese,Serie B,2026/27,9,2,278,0,0,0,0,6,4,8,3,1.9424,0.0,2.5899,0.9712,Substitute,154423
+Marco Nasti,Cremonese,Serie B,2026/27,12,4,462,2,0,2,0,17,8,22,9,3.3117,0.3896,4.2857,1.7532,Substitute,340706
 Matteo Bianchetti,Cremonese,Serie B,2026/27,6,6,540,0,0,1,0,9,4,2,1,1.5,0.1667,0.3333,0.1667,Center Right Defender,163990
-Michele Collocolo,Cremonese,Serie B,2026/27,7,3,241,1,0,0,0,3,0,2,1,1.1203,0.0,0.7469,0.3734,Substitute,277475
-Milan Djuric,Cremonese,Serie B,2026/27,2,0,28,0,0,0,0,0,2,0,0,0.0,0.0,0.0,0.0,Substitute,116477
-Morten Thorsby,Cremonese,Serie B,2026/27,10,8,694,0,1,0,0,5,5,7,3,0.6484,0.0,0.9078,0.389,Attacking Midfielder,202686
+Michele Collocolo,Cremonese,Serie B,2026/27,8,4,324,1,0,0,0,3,0,5,1,0.8333,0.0,1.3889,0.2778,Substitute,277475
+Milan Djuric,Cremonese,Serie B,2026/27,3,0,46,0,0,0,0,1,2,0,0,1.9565,0.0,0.0,0.0,Substitute,116477
+Morten Thorsby,Cremonese,Serie B,2026/27,11,8,712,0,1,0,0,5,5,7,3,0.632,0.0,0.8848,0.3792,Substitute,202686
 Salvatore Elia,Cremonese,Serie B,2026/27,10,4,535,0,0,0,0,14,10,3,1,2.3551,0.0,0.5047,0.1682,Substitute,272618
-Sebastiano Luperto,Cremonese,Serie B,2026/27,11,10,969,0,1,0,0,3,10,5,2,0.2786,0.0,0.4644,0.1858,Center Left Defender,192573
-Simone Lottici Tessadri,Cremonese,Serie B,2026/27,8,5,506,0,0,1,0,4,5,4,0,0.7115,0.1779,0.7115,0.0,Right Midfielder,421697
+Sebastiano Luperto,Cremonese,Serie B,2026/27,12,11,1059,0,1,0,0,3,11,6,2,0.255,0.0,0.5099,0.17,Center Left Defender,192573
+Simone Lottici Tessadri,Cremonese,Serie B,2026/27,9,5,551,0,0,1,0,4,5,5,0,0.6534,0.1633,0.8167,0.0,Substitute,421697
 Simone Pontisso,Cremonese,Serie B,2026/27,4,4,246,0,0,1,0,2,2,1,0,0.7317,0.3659,0.3659,0.0,Left Midfielder,215682
-Tommaso Barbieri,Cremonese,Serie B,2026/27,6,5,413,0,1,1,1,6,6,3,0,1.3075,0.4358,0.6538,0.0,Right Back,297783
-Tommaso Berti,Cremonese,Serie B,2026/27,12,9,821,2,1,2,0,3,11,12,5,0.3289,0.2192,1.3155,0.5481,Substitute,323983
+Tommaso Barbieri,Cremonese,Serie B,2026/27,7,6,503,0,1,1,1,6,6,4,0,1.0736,0.3579,0.7157,0.0,Right Back,297783
+Tommaso Berti,Cremonese,Serie B,2026/27,13,10,911,2,1,2,0,3,11,16,5,0.2964,0.1976,1.5807,0.494,Substitute,323983
 Yuri Rocchetti,Cremonese,Serie B,2026/27,4,3,189,0,0,0,0,1,1,1,0,0.4762,0.0,0.4762,0.0,Left Back,369882
 Andrea Orlandi,Empoli,Serie B,2026/27,2,0,22,0,0,0,0,0,1,0,0,0.0,0.0,0.0,0.0,Substitute,79852
 Bohdan Popov,Empoli,Serie B,2026/27,11,6,588,3,0,1,0,8,11,11,4,1.2245,0.1531,1.6837,0.6122,Center Right Forward,388611
@@ -13514,81 +13516,81 @@ Saná Fernandes,Juve Stabia,Serie B,2026/27,9,0,161,0,1,0,0,3,5,4,0,1.677,0.0,2.
 Terrence Douglas,Juve Stabia,Serie B,2026/27,9,8,699,0,2,0,0,7,13,1,0,0.9013,0.0,0.1288,0.0,Left Back,287173
 Thomas Battistella,Juve Stabia,Serie B,2026/27,10,4,396,0,1,2,0,8,12,15,3,1.8182,0.4545,3.4091,0.6818,Substitute,286990
 Tommaso Maggioni,Juve Stabia,Serie B,2026/27,10,9,845,0,0,0,0,1,10,2,0,0.1065,0.0,0.213,0.0,Right Back,323747
-Alessio Castellini,Mantova,Serie B,2026/27,12,12,1065,0,5,3,0,20,5,15,5,1.6901,0.2535,1.2676,0.4225,Center Left Defender,387007
+Alessio Castellini,Mantova,Serie B,2026/27,13,13,1155,0,5,4,0,21,6,17,6,1.6364,0.3117,1.3247,0.4675,Center Left Defender,387007
 Andrea Meroni,Mantova,Serie B,2026/27,2,0,71,0,0,0,0,0,2,0,0,0.0,0.0,0.0,0.0,Substitute,277182
-Bodin Tomasevic,Mantova,Serie B,2026/27,12,12,982,1,0,3,0,16,4,8,2,1.4664,0.2749,0.7332,0.1833,Center Right Defender,364410
+Bodin Tomasevic,Mantova,Serie B,2026/27,13,13,1072,1,0,3,0,17,6,10,2,1.4272,0.2519,0.8396,0.1679,Center Right Defender,364410
 David Wieser,Mantova,Serie B,2026/27,3,0,99,0,0,0,0,1,2,0,0,0.9091,0.0,0.0,0.0,Substitute,309596
-Davide Bragantini,Mantova,Serie B,2026/27,11,5,519,1,2,0,0,9,8,14,6,1.5607,0.0,2.4277,1.0405,Substitute,357236
-Eman Kospo,Mantova,Serie B,2026/27,1,0,8,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Substitute,403581
+Davide Bragantini,Mantova,Serie B,2026/27,12,6,597,2,2,0,0,10,11,19,9,1.5075,0.0,2.8643,1.3568,Substitute,357236
+Eman Kospo,Mantova,Serie B,2026/27,2,0,13,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Substitute,403581
 Ettore Gliozzi,Mantova,Serie B,2026/27,10,7,509,2,1,0,0,5,14,18,6,0.8841,0.0,3.1827,1.0609,Forward,192461
-Fahem Benaissa-Yahia,Mantova,Serie B,2026/27,12,12,1080,1,1,2,0,19,10,5,1,1.5833,0.1667,0.4167,0.0833,Left Midfielder,379808
+Fahem Benaissa-Yahia,Mantova,Serie B,2026/27,13,13,1165,1,2,2,0,20,11,5,1,1.5451,0.1545,0.3863,0.0773,Left Midfielder,379808
 Federico Chinetti,Mantova,Serie B,2026/27,2,0,35,0,0,0,0,1,0,1,0,2.5714,0.0,2.5714,0.0,Substitute,377848
 Filippo Vesentini,Mantova,Serie B,2026/27,3,1,124,0,0,0,0,0,6,3,2,0.0,0.0,2.1774,1.4516,Substitute,3100042
 Flavio Paoletti,Mantova,Serie B,2026/27,2,0,16,0,0,0,0,1,0,0,0,5.625,0.0,0.0,0.0,Substitute,356575
-Francesco Bardi,Mantova,Serie B,2026/27,12,12,1080,0,0,1,0,0,1,0,0,0.0,0.0833,0.0,0.0,Goalkeeper,138836
-Francesco Ruocco,Mantova,Serie B,2026/27,12,12,897,5,0,0,0,14,20,28,10,1.4047,0.0,2.8094,1.0033,Center Left Forward,323137
-Ismael Cajazzo,Mantova,Serie B,2026/27,7,0,159,0,0,1,0,5,3,3,2,2.8302,0.566,1.6981,1.1321,Substitute,3105904
+Francesco Bardi,Mantova,Serie B,2026/27,13,13,1170,0,0,1,0,0,1,0,0,0.0,0.0769,0.0,0.0,Goalkeeper,138836
+Francesco Ruocco,Mantova,Serie B,2026/27,13,13,952,5,0,0,0,14,21,29,10,1.3235,0.0,2.7416,0.9454,Center Left Forward,323137
+Ismael Cajazzo,Mantova,Serie B,2026/27,8,0,171,0,0,1,0,5,4,3,2,2.6316,0.5263,1.5789,1.0526,Substitute,3105904
 Jean-Pierre Mboyo,Mantova,Serie B,2026/27,6,1,136,1,0,0,0,3,1,4,4,1.9853,0.0,2.6471,2.6471,Substitute,405772
 Jonathan Silva,Mantova,Serie B,2026/27,6,6,495,0,0,1,0,9,3,2,0,1.6364,0.1818,0.3636,0.0,Right Midfielder,367744
-Lorenzo Ignacchiti,Mantova,Serie B,2026/27,11,8,630,0,1,0,0,4,9,9,4,0.5714,0.0,1.2857,0.5714,Center Left Midfielder,362896
-Matteo Spinaccè,Mantova,Serie B,2026/27,4,0,110,1,0,1,0,6,1,4,2,4.9091,0.8182,3.2727,1.6364,Substitute,402511
-Nicolò Radaelli,Mantova,Serie B,2026/27,2,1,71,0,0,1,0,1,0,0,0,1.2676,1.2676,0.0,0.0,Right Midfielder,285165
-Rachid Kouda,Mantova,Serie B,2026/27,11,7,682,0,0,2,0,6,19,9,4,0.7918,0.2639,1.1877,0.5279,Center Left Midfielder,365697
+Lorenzo Ignacchiti,Mantova,Serie B,2026/27,12,8,665,0,1,0,0,4,9,9,4,0.5414,0.0,1.218,0.5414,Center Left Midfielder,362896
+Matteo Spinaccè,Mantova,Serie B,2026/27,5,1,195,2,0,1,0,11,2,7,5,5.0769,0.4615,3.2308,2.3077,Substitute,402511
+Nicolò Radaelli,Mantova,Serie B,2026/27,3,2,126,0,0,1,0,2,2,0,0,1.4286,0.7143,0.0,0.0,Right Midfielder,285165
+Rachid Kouda,Mantova,Serie B,2026/27,12,8,772,1,1,2,0,7,23,14,5,0.8161,0.2332,1.6321,0.5829,Center Left Midfielder,365697
 Rares Ilie,Mantova,Serie B,2026/27,12,10,723,2,2,0,0,11,10,18,8,1.3693,0.0,2.2407,0.9959,Center Right Forward,322795
 Sambaly Keïta,Mantova,Serie B,2026/27,1,0,8,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Substitute,378019
-Simone Trimboli,Mantova,Serie B,2026/27,8,8,720,0,0,3,0,13,23,9,1,1.625,0.375,1.125,0.125,Center Right Midfielder,285718
-Stefano Cella,Mantova,Serie B,2026/27,12,12,1062,0,1,5,0,22,5,0,0,1.8644,0.4237,0.0,0.0,Center Defender,282649
-Tommaso Del Lungo,Mantova,Serie B,2026/27,7,4,340,0,1,1,0,5,4,1,0,1.3235,0.2647,0.2647,0.0,Substitute,363070
-Vanja Vlahovic,Mantova,Serie B,2026/27,8,2,260,2,1,0,0,4,3,12,3,1.3846,0.0,4.1538,1.0385,Substitute,322245
-Alessandro Bianco,Modena,Serie B,2026/27,12,12,965,0,1,4,0,17,14,20,6,1.5855,0.3731,1.8653,0.5596,Center Left Midfielder,251776
-Andrea Belotti,Modena,Serie B,2026/27,9,4,449,7,0,2,0,4,11,16,9,0.8018,0.4009,3.2071,1.804,Substitute,170755
-Antonio Imputato,Modena,Serie B,2026/27,8,4,476,0,0,1,0,5,12,7,0,0.9454,0.1891,1.3235,0.0,Substitute,357340
-Bryant Nieling,Modena,Serie B,2026/27,12,12,1068,0,0,0,0,6,3,10,4,0.5056,0.0,0.8427,0.3371,Center Left Defender,346826
+Simone Trimboli,Mantova,Serie B,2026/27,9,9,810,0,0,4,0,17,24,11,2,1.8889,0.4444,1.2222,0.2222,Center Right Midfielder,285718
+Stefano Cella,Mantova,Serie B,2026/27,13,13,1152,0,1,5,0,23,5,0,0,1.7969,0.3906,0.0,0.0,Center Defender,282649
+Tommaso Del Lungo,Mantova,Serie B,2026/27,8,4,375,0,1,1,0,5,4,1,0,1.2,0.24,0.24,0.0,Substitute,363070
+Vanja Vlahovic,Mantova,Serie B,2026/27,9,2,265,2,1,0,0,4,3,12,3,1.3585,0.0,4.0755,1.0189,Substitute,322245
+Alessandro Bianco,Modena,Serie B,2026/27,13,13,1055,1,1,4,0,19,14,21,7,1.6209,0.3412,1.7915,0.5972,Center Left Midfielder,251776
+Andrea Belotti,Modena,Serie B,2026/27,10,5,531,7,0,2,0,4,15,21,9,0.678,0.339,3.5593,1.5254,Substitute,170755
+Antonio Imputato,Modena,Serie B,2026/27,9,5,566,0,0,1,0,5,15,8,0,0.7951,0.159,1.2721,0.0,Right Midfielder,357340
+Bryant Nieling,Modena,Serie B,2026/27,13,13,1158,0,0,0,0,6,3,10,4,0.4663,0.0,0.7772,0.3109,Center Left Defender,346826
 Daniel Tonoli,Modena,Serie B,2026/27,8,8,675,0,3,1,0,8,8,13,3,1.0667,0.1333,1.7333,0.4,Right Back,366433
-Daniele Montevago,Modena,Serie B,2026/27,10,1,152,3,1,0,0,4,3,13,8,2.3684,0.0,7.6974,4.7368,Substitute,336352
+Daniele Montevago,Modena,Serie B,2026/27,11,1,160,3,1,0,0,6,3,13,8,3.375,0.0,7.3125,4.5,Substitute,336352
 Davide Adorni,Modena,Serie B,2026/27,2,2,179,0,0,0,0,2,2,1,0,1.0056,0.0,0.5028,0.0,Center Left Defender,260178
 Diego Ronco,Modena,Serie B,2026/27,1,0,1,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Substitute,368299
-Folly Nador,Modena,Serie B,2026/27,10,10,860,0,0,0,0,13,8,3,0,1.3605,0.0,0.314,0.0,Center Defender,330422
-Francesco Folino,Modena,Serie B,2026/27,9,5,536,0,0,1,0,15,6,1,0,2.5187,0.1679,0.1679,0.0,Center Right Defender,386293
+Folly Nador,Modena,Serie B,2026/27,11,11,950,0,0,0,0,13,9,3,0,1.2316,0.0,0.2842,0.0,Center Defender,330422
+Francesco Folino,Modena,Serie B,2026/27,10,6,626,0,0,1,0,18,8,1,0,2.5879,0.1438,0.1438,0.0,Center Right Defender,386293
 Francesco Zampano,Modena,Serie B,2026/27,7,7,477,0,0,1,0,8,2,8,2,1.5094,0.1887,1.5094,0.3774,Left Back,188930
-Gastón Brugman,Modena,Serie B,2026/27,12,11,922,0,4,2,0,11,5,9,2,1.0738,0.1952,0.8785,0.1952,Attacking Midfielder,156228
-Giacomo Olzer,Modena,Serie B,2026/27,11,8,611,2,1,3,0,14,11,15,3,2.0622,0.4419,2.2095,0.4419,Right Forward,303814
-Giuseppe Ambrosino,Modena,Serie B,2026/27,12,12,1012,4,3,2,0,13,23,45,13,1.1561,0.1779,4.002,1.1561,Center Left Forward,331279
+Gastón Brugman,Modena,Serie B,2026/27,13,12,975,0,4,2,0,11,5,9,2,1.0154,0.1846,0.8308,0.1846,Attacking Midfielder,156228
+Giacomo Olzer,Modena,Serie B,2026/27,12,8,648,2,1,3,0,15,11,16,4,2.0833,0.4167,2.2222,0.5556,Substitute,303814
+Giuseppe Ambrosino,Modena,Serie B,2026/27,13,13,1102,4,3,3,0,14,26,48,13,1.1434,0.245,3.9201,1.0617,Center Left Forward,331279
 Guiseppe Caso,Modena,Serie B,2026/27,8,8,620,3,2,1,0,2,13,23,8,0.2903,0.1452,3.3387,1.1613,Left Forward,292236
-Kleis Bozhanaj,Modena,Serie B,2026/27,7,0,81,1,0,2,0,4,2,6,1,4.4444,2.2222,6.6667,1.1111,Substitute,343973
-Leandro Chichizola,Modena,Serie B,2026/27,12,12,1080,0,0,0,0,0,3,0,0,0.0,0.0,0.0,0.0,Goalkeeper,129881
+Kleis Bozhanaj,Modena,Serie B,2026/27,8,0,119,1,0,2,0,6,4,6,1,4.5378,1.5126,4.5378,0.7563,Substitute,343973
+Leandro Chichizola,Modena,Serie B,2026/27,13,13,1170,0,0,0,0,0,3,0,0,0.0,0.0,0.0,0.0,Goalkeeper,129881
 Luca Bacchin,Modena,Serie B,2026/27,5,0,103,0,0,0,0,2,3,2,0,1.7476,0.0,1.7476,0.0,Substitute,3100684
 Martino Odero,Modena,Serie B,2026/27,1,0,4,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Substitute,3101690
-Paulo Azzi,Modena,Serie B,2026/27,10,6,591,0,0,0,0,3,4,7,2,0.4569,0.0,1.066,0.3046,Substitute,198799
+Paulo Azzi,Modena,Serie B,2026/27,11,7,643,0,0,0,0,3,4,7,2,0.4199,0.0,0.9798,0.2799,Left Midfielder,198799
 Pedro Mendes,Modena,Serie B,2026/27,1,1,62,0,0,0,0,1,2,2,0,1.4516,0.0,2.9032,0.0,Center Left Midfielder,296162
-Simone Santoro,Modena,Serie B,2026/27,11,9,835,1,0,1,0,9,18,18,5,0.9701,0.1078,1.9401,0.5389,Center Right Midfielder,263700
+Simone Santoro,Modena,Serie B,2026/27,12,10,925,1,0,1,0,9,18,19,5,0.8757,0.0973,1.8486,0.4865,Center Right Midfielder,263700
 Stenio Zanetti Toledo,Modena,Serie B,2026/27,2,0,35,0,0,1,0,2,1,0,0,5.1429,2.5714,0.0,0.0,Substitute,304439
 Wisdom Acquah,Modena,Serie B,2026/27,7,0,88,0,0,0,0,1,0,0,0,1.0227,0.0,0.0,0.0,Substitute,417402
-Alessandro Capelli,Padova,Serie B,2026/27,11,6,597,1,1,3,0,9,3,7,2,1.3568,0.4523,1.0553,0.3015,Substitute,387014
+Alessandro Capelli,Padova,Serie B,2026/27,12,6,618,1,1,3,0,9,3,7,2,1.3107,0.4369,1.0194,0.2913,Substitute,387014
 Alessandro Dellavalle,Padova,Serie B,2026/27,10,10,900,0,0,4,0,12,5,5,1,1.2,0.4,0.5,0.1,Center Right Defender,346142
-Alessandro Seghetti,Padova,Serie B,2026/27,9,1,201,0,0,0,0,7,2,5,3,3.1343,0.0,2.2388,1.3433,Substitute,359679
-Alessandro Sorrentino,Padova,Serie B,2026/27,12,12,1080,0,0,1,0,0,2,0,0,0.0,0.0833,0.0,0.0,Goalkeeper,291578
+Alessandro Seghetti,Padova,Serie B,2026/27,10,2,280,0,0,0,0,9,5,6,3,2.8929,0.0,1.9286,0.9643,Substitute,359679
+Alessandro Sorrentino,Padova,Serie B,2026/27,13,13,1170,0,0,1,0,0,2,0,0,0.0,0.0769,0.0,0.0,Goalkeeper,291578
 Antonio Barreca,Padova,Serie B,2026/27,1,0,31,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Substitute,201365
 Carlo Faedo,Padova,Serie B,2026/27,1,0,11,0,0,0,0,1,0,0,0,8.1818,0.0,0.0,0.0,,387016
-Christian Pastina,Padova,Serie B,2026/27,9,9,756,2,0,2,0,10,3,7,3,1.1905,0.2381,0.8333,0.3571,Center Left Defender,288351
-Emanuele Zuelli,Padova,Serie B,2026/27,12,11,970,1,0,1,0,11,7,14,3,1.0206,0.0928,1.299,0.2784,Attacking Midfielder,300982
-Enrico Silletti,Padova,Serie B,2026/27,3,2,183,0,0,0,0,1,0,0,0,0.4918,0.0,0.0,0.0,Center Right Defender,3099462
+Christian Pastina,Padova,Serie B,2026/27,10,10,846,2,0,2,0,11,4,8,3,1.1702,0.2128,0.8511,0.3191,Center Left Defender,288351
+Emanuele Zuelli,Padova,Serie B,2026/27,13,11,991,1,0,1,0,11,7,15,3,0.999,0.0908,1.3623,0.2725,Attacking Midfielder,300982
+Enrico Silletti,Padova,Serie B,2026/27,4,3,273,0,0,0,0,1,0,1,0,0.3297,0.0,0.3297,0.0,Center Right Defender,3099462
 Filippo Sgarbi,Padova,Serie B,2026/27,4,4,311,0,0,0,0,1,2,2,1,0.2894,0.0,0.5788,0.2894,Center Right Defender,231422
-Francesco Di Mariano,Padova,Serie B,2026/27,6,2,216,0,0,0,0,3,6,4,1,1.25,0.0,1.6667,0.4167,Substitute,195998
+Francesco Di Mariano,Padova,Serie B,2026/27,7,2,227,0,0,0,0,3,7,4,1,1.1894,0.0,1.5859,0.3965,Substitute,195998
 Gabriele Artistico,Padova,Serie B,2026/27,7,6,522,3,1,0,0,4,7,13,6,0.6897,0.0,2.2414,1.0345,Center Left Forward,300009
 Gianluca Caprari,Padova,Serie B,2026/27,5,4,269,0,0,1,0,3,7,4,1,1.0037,0.3346,1.3383,0.3346,Center Left Forward,156792
-Giovanni Giunti,Padova,Serie B,2026/27,8,6,518,0,1,5,0,11,3,6,3,1.9112,0.8687,1.0425,0.5212,Substitute,346866
+Giovanni Giunti,Padova,Serie B,2026/27,9,7,597,1,1,5,0,11,4,7,4,1.6583,0.7538,1.0553,0.603,Substitute,346866
 Kevin Lasagna,Padova,Serie B,2026/27,6,2,248,0,0,0,0,2,2,9,1,0.7258,0.0,3.2661,0.3629,Substitute,207819
-Kevin Varas Marcillo,Padova,Serie B,2026/27,7,3,339,1,1,0,0,2,5,5,2,0.531,0.0,1.3274,0.531,Substitute,366443
-Lorenzo Carissoni,Padova,Serie B,2026/27,11,9,833,0,2,0,1,16,6,1,1,1.7287,0.108,0.108,0.108,Right Midfielder,241354
-Luca Moro,Padova,Serie B,2026/27,11,9,733,0,0,0,0,4,15,17,2,0.4911,0.0,2.0873,0.2456,Center Left Forward,278778
-Luca Zanimacchia,Padova,Serie B,2026/27,2,1,80,0,0,0,0,0,3,1,1,0.0,0.0,1.125,1.125,Left Midfielder,241718
-Marco Pompetti,Padova,Serie B,2026/27,11,8,692,1,1,0,0,10,11,8,3,1.3006,0.0,1.0405,0.3902,Center Right Midfielder,251733
-Matteo Cocchi,Padova,Serie B,2026/27,11,8,680,0,2,3,0,11,9,10,2,1.4559,0.3971,1.3235,0.2647,Left Midfielder,387835
+Kevin Varas Marcillo,Padova,Serie B,2026/27,8,4,424,1,1,0,0,3,7,6,2,0.6368,0.0,1.2736,0.4245,Substitute,366443
+Lorenzo Carissoni,Padova,Serie B,2026/27,12,10,923,0,2,0,1,19,7,1,1,1.8527,0.0975,0.0975,0.0975,Right Midfielder,241354
+Luca Moro,Padova,Serie B,2026/27,12,10,823,0,0,0,0,5,18,20,2,0.5468,0.0,2.1871,0.2187,Center Left Forward,278778
+Luca Zanimacchia,Padova,Serie B,2026/27,3,2,149,0,0,0,0,1,4,1,1,0.604,0.0,0.604,0.604,Left Midfielder,241718
+Marco Pompetti,Padova,Serie B,2026/27,12,9,782,1,1,0,0,10,15,8,3,1.1509,0.0,0.9207,0.3453,Center Right Midfielder,251733
+Matteo Cocchi,Padova,Serie B,2026/27,12,8,691,0,2,3,0,12,9,10,2,1.563,0.3907,1.3025,0.2605,Left Midfielder,387835
 Matteo Lovato,Padova,Serie B,2026/27,9,9,810,0,0,1,0,5,5,1,1,0.5556,0.1111,0.1111,0.1111,Center Defender,287986
-Mattia Bortolussi,Padova,Serie B,2026/27,7,2,153,0,0,0,0,1,4,2,0,0.5882,0.0,1.1765,0.0,Substitute,213122
+Mattia Bortolussi,Padova,Serie B,2026/27,8,2,158,0,0,0,0,1,4,2,0,0.5696,0.0,1.1392,0.0,Substitute,213122
 Nicolas Galazzi,Padova,Serie B,2026/27,7,0,108,1,0,0,0,1,4,2,2,0.8333,0.0,1.6667,1.6667,Substitute,308288
-Pietro Fusi,Padova,Serie B,2026/27,11,8,641,1,0,4,0,26,6,9,1,3.6505,0.5616,1.2637,0.1404,Center Left Midfielder,387018
+Pietro Fusi,Padova,Serie B,2026/27,12,9,710,1,1,5,0,27,9,12,2,3.4225,0.6338,1.5211,0.2535,Center Left Midfielder,387018
 Alessandro Gabrielloni,Palermo,Serie B,2026/27,11,1,196,0,1,1,0,2,6,5,2,0.9184,0.4592,2.2959,0.9184,Substitute,323143
 Antonio Palumbo,Palermo,Serie B,2026/27,5,4,387,2,1,1,0,3,2,15,7,0.6977,0.2326,3.4884,1.6279,Attacking Midfielder,207843
 Claudio Gomes,Palermo,Serie B,2026/27,5,0,101,0,0,0,0,0,1,2,0,0.0,0.0,1.7822,0.0,Substitute,265922
@@ -13614,57 +13616,57 @@ Pietro Ceccaroni,Palermo,Serie B,2026/27,12,11,1000,0,0,0,0,15,6,2,0,1.35,0.0,0.
 Tommaso Augello,Palermo,Serie B,2026/27,13,13,1159,1,2,1,0,7,6,3,1,0.5436,0.0777,0.233,0.0777,Left Back,260197
 Tommaso Cassandro,Palermo,Serie B,2026/27,13,9,911,1,1,1,0,11,14,10,1,1.0867,0.0988,0.9879,0.0988,Right Back,307957
 Alessandro Confente,Pisa,Serie B,2026/27,11,11,990,0,0,1,0,0,3,0,0,0.0,0.0909,0.0,0.0,Goalkeeper,233560
-Andrea Petagna,Pisa,Serie B,2026/27,10,5,435,0,0,0,0,6,6,10,2,1.2414,0.0,2.069,0.4138,Forward,181098
-Andrea Primasso,Pisa,Serie B,2026/27,9,8,655,0,1,4,0,15,9,6,1,2.0611,0.5496,0.8244,0.1374,Center Defender,387353
-Antonio Caracciolo,Pisa,Serie B,2026/27,7,3,319,0,0,1,0,6,3,1,0,1.6928,0.2821,0.2821,0.0,Substitute,144600
+Andrea Petagna,Pisa,Serie B,2026/27,11,5,458,0,0,0,0,7,7,10,2,1.3755,0.0,1.9651,0.393,Substitute,181098
+Andrea Primasso,Pisa,Serie B,2026/27,10,9,745,0,1,4,0,18,11,6,1,2.1745,0.4832,0.7248,0.1208,Center Defender,387353
+Antonio Caracciolo,Pisa,Serie B,2026/27,8,3,389,0,0,2,0,10,3,1,0,2.3136,0.4627,0.2314,0.0,Substitute,144600
 Arturo Calabresi,Pisa,Serie B,2026/27,10,8,584,2,0,5,0,9,3,4,3,1.387,0.7705,0.6164,0.4623,Center Right Defender,194758
 Daniel Denoon,Pisa,Serie B,2026/27,1,0,26,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Substitute,390613
-Emanuele Rao,Pisa,Serie B,2026/27,9,2,272,1,1,0,0,3,7,11,3,0.9926,0.0,3.6397,0.9926,Substitute,357855
-Felipe Loyola,Pisa,Serie B,2026/27,6,4,327,0,0,2,0,4,4,4,2,1.1009,0.5505,1.1009,0.5505,Center Right Midfielder,320555
-Filippo Pittarello,Pisa,Serie B,2026/27,10,7,699,5,1,1,0,12,26,23,9,1.5451,0.1288,2.9614,1.1588,Forward,346590
+Emanuele Rao,Pisa,Serie B,2026/27,10,2,280,1,1,0,0,3,7,11,3,0.9643,0.0,3.5357,0.9643,Substitute,357855
+Felipe Loyola,Pisa,Serie B,2026/27,7,4,350,0,0,3,0,6,5,4,2,1.5429,0.7714,1.0286,0.5143,Substitute,320555
+Filippo Pittarello,Pisa,Serie B,2026/27,11,8,766,5,1,2,0,13,27,25,9,1.5274,0.235,2.9373,1.0574,Forward,346590
 Francesco Coppola,Pisa,Serie B,2026/27,3,1,145,1,0,1,0,0,2,2,2,0.0,0.6207,1.2414,1.2414,Substitute,154425
 Gabriele Piccinini,Pisa,Serie B,2026/27,5,0,90,0,0,1,0,4,3,3,1,4.0,1.0,3.0,1.0,Substitute,324253
 Giuseppe Leone,Pisa,Serie B,2026/27,9,8,607,1,0,0,0,4,7,6,2,0.5931,0.0,0.8896,0.2965,Center Right Midfielder,297231
 Ichem Ferrah,Pisa,Serie B,2026/27,2,0,38,0,0,0,0,0,0,2,2,0.0,0.0,4.7368,4.7368,Substitute,356226
-Isak Vural,Pisa,Serie B,2026/27,7,4,327,0,0,2,0,5,9,5,1,1.3761,0.5505,1.3761,0.2752,Substitute,340184
-Matteo Tramoni,Pisa,Serie B,2026/27,10,9,680,3,5,0,0,7,6,25,9,0.9265,0.0,3.3088,1.1912,Center Left Forward,260237
-Mehdi Léris,Pisa,Serie B,2026/27,11,10,836,1,1,2,1,14,11,16,6,1.5072,0.323,1.7225,0.6459,Left Midfielder,256212
-Omar Correia,Pisa,Serie B,2026/27,12,11,1019,1,2,0,0,8,13,16,4,0.7066,0.0,1.4132,0.3533,Center Left Midfielder,345782
-Rosen Bozhinov,Pisa,Serie B,2026/27,9,4,444,0,1,1,0,4,2,2,1,0.8108,0.2027,0.4054,0.2027,Substitute,382742
-Samuele Angori,Pisa,Serie B,2026/27,11,11,990,0,0,1,0,9,11,12,3,0.8182,0.0909,1.0909,0.2727,Center Left Defender,324765
+Isak Vural,Pisa,Serie B,2026/27,8,5,394,0,0,2,0,5,9,6,1,1.1421,0.4569,1.3706,0.2284,Substitute,340184
+Matteo Tramoni,Pisa,Serie B,2026/27,11,10,762,3,5,0,0,8,6,28,9,0.9449,0.0,3.3071,1.063,Center Left Forward,260237
+Mehdi Léris,Pisa,Serie B,2026/27,12,11,926,1,1,3,1,15,13,16,6,1.4579,0.3888,1.5551,0.5832,Left Midfielder,256212
+Omar Correia,Pisa,Serie B,2026/27,13,12,1109,1,2,0,0,8,14,18,4,0.6492,0.0,1.4608,0.3246,Center Left Midfielder,345782
+Rosen Bozhinov,Pisa,Serie B,2026/27,10,5,464,0,1,1,0,5,2,2,1,0.9698,0.194,0.3879,0.194,Substitute,382742
+Samuele Angori,Pisa,Serie B,2026/27,12,12,1072,0,0,1,0,10,13,12,3,0.8396,0.084,1.0075,0.2519,Center Left Defender,324765
 Simone Canestrelli,Pisa,Serie B,2026/27,8,5,429,1,1,0,0,7,3,3,2,1.4685,0.0,0.6294,0.4196,Substitute,267942
-Simone Scuffet,Pisa,Serie B,2026/27,1,1,90,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Goalkeeper,181784
-Simone Zanon,Pisa,Serie B,2026/27,11,8,658,0,2,1,0,9,7,7,3,1.231,0.1368,0.9574,0.4103,Right Midfielder,277459
-Stefano Moreo,Pisa,Serie B,2026/27,9,8,674,2,2,0,0,10,3,15,6,1.3353,0.0,2.003,0.8012,Center Right Forward,207874
-Tommaso Marras,Pisa,Serie B,2026/27,8,4,454,3,1,1,0,3,7,20,9,0.5947,0.1982,3.9648,1.7841,Substitute,388857
+Simone Scuffet,Pisa,Serie B,2026/27,2,2,180,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Goalkeeper,181784
+Simone Zanon,Pisa,Serie B,2026/27,12,8,666,0,2,1,0,10,8,7,3,1.3514,0.1351,0.9459,0.4054,Right Midfielder,277459
+Stefano Moreo,Pisa,Serie B,2026/27,10,9,764,2,2,0,0,10,3,18,8,1.178,0.0,2.1204,0.9424,Center Right Forward,207874
+Tommaso Marras,Pisa,Serie B,2026/27,9,5,544,4,1,1,0,3,7,25,12,0.4963,0.1654,4.136,1.9853,Substitute,388857
 Tomás Esteves,Pisa,Serie B,2026/27,2,0,38,0,0,0,0,0,1,0,0,0.0,0.0,0.0,0.0,Substitute,291045
 Alessandro Bellemo,Sampdoria,Serie B,2026/27,1,1,57,0,0,0,0,0,1,0,0,0.0,0.0,0.0,0.0,Left Midfielder,192254
 Alessandro Di Pardo,Sampdoria,Serie B,2026/27,9,9,795,0,0,0,0,5,10,3,0,0.566,0.0,0.3396,0.0,Right Back,276252
 Alex Ferrari,Sampdoria,Serie B,2026/27,4,2,182,0,0,1,0,2,4,2,0,0.989,0.4945,0.989,0.0,Substitute,186302
-Andrey Krastev,Sampdoria,Serie B,2026/27,5,5,450,0,0,0,0,0,1,0,0,0.0,0.0,0.0,0.0,Goalkeeper,400246
-Antoine Makoumbou,Sampdoria,Serie B,2026/27,10,10,825,0,0,1,0,3,5,3,1,0.3273,0.1091,0.3273,0.1091,Left Midfielder,269143
-Bjorn Meijer,Sampdoria,Serie B,2026/27,1,0,22,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Substitute,304618
+Andrey Krastev,Sampdoria,Serie B,2026/27,6,6,540,0,0,0,0,0,1,0,0,0.0,0.0,0.0,0.0,Goalkeeper,400246
+Antoine Makoumbou,Sampdoria,Serie B,2026/27,11,11,915,0,0,1,0,4,5,3,1,0.3934,0.0984,0.2951,0.0984,Left Midfielder,269143
+Bjorn Meijer,Sampdoria,Serie B,2026/27,2,1,67,0,0,0,0,1,0,0,0,1.3433,0.0,0.0,0.0,Substitute,304618
 Danel Sinani,Sampdoria,Serie B,2026/27,5,3,268,0,0,0,0,2,5,10,3,0.6716,0.0,3.3582,1.0075,Right Forward,259453
-Fabio Depaoli,Sampdoria,Serie B,2026/27,6,3,182,0,0,0,0,4,6,4,1,1.978,0.0,1.978,0.4945,Substitute,233409
-Filippo Delli Carri,Sampdoria,Serie B,2026/27,10,10,900,0,0,2,0,6,6,5,1,0.6,0.2,0.5,0.1,Center Left Defender,250672
+Fabio Depaoli,Sampdoria,Serie B,2026/27,7,3,203,0,0,0,0,6,6,4,1,2.6601,0.0,1.7734,0.4433,Substitute,233409
+Filippo Delli Carri,Sampdoria,Serie B,2026/27,11,11,990,0,0,2,0,9,6,5,1,0.8182,0.1818,0.4545,0.0909,Center Left Defender,250672
 Francesco Conti,Sampdoria,Serie B,2026/27,2,0,61,0,0,0,0,2,2,0,0,2.9508,0.0,0.0,0.0,Substitute,150713
-Gennaro Tutino,Sampdoria,Serie B,2026/27,12,7,658,3,0,1,0,10,11,16,8,1.3678,0.1368,2.1884,1.0942,Forward,194752
+Gennaro Tutino,Sampdoria,Serie B,2026/27,13,8,720,3,0,1,0,10,12,17,9,1.25,0.125,2.125,1.125,Forward,194752
 Karim Diop,Sampdoria,Serie B,2026/27,1,0,1,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Substitute,409636
-Kevin Mbabu,Sampdoria,Serie B,2026/27,6,3,300,0,2,2,0,8,1,0,0,2.4,0.6,0.0,0.0,Substitute,176497
-Liam Henderson,Sampdoria,Serie B,2026/27,12,12,997,2,0,4,0,29,9,25,9,2.6179,0.3611,2.2568,0.8124,Right Midfielder,107568
-Lorenzo Insigne,Sampdoria,Serie B,2026/27,6,5,361,4,1,2,0,2,5,14,6,0.4986,0.4986,3.4903,1.4958,Center Left Forward,139028
-Lorenzo Mezzotero,Sampdoria,Serie B,2026/27,5,2,211,2,0,1,0,3,2,2,2,1.2796,0.4265,0.8531,0.8531,Substitute,3135643
-Luca Ravanelli,Sampdoria,Serie B,2026/27,4,3,265,0,0,0,0,2,2,0,0,0.6792,0.0,0.0,0.0,Center Left Defender,219216
+Kevin Mbabu,Sampdoria,Serie B,2026/27,7,4,375,0,3,3,0,9,1,0,0,2.16,0.72,0.0,0.0,Right Back,176497
+Liam Henderson,Sampdoria,Serie B,2026/27,13,13,1066,2,0,5,0,35,9,25,9,2.955,0.4221,2.1107,0.7598,Right Midfielder,107568
+Lorenzo Insigne,Sampdoria,Serie B,2026/27,7,5,389,4,2,2,0,2,6,15,7,0.4627,0.4627,3.4704,1.6195,Substitute,139028
+Lorenzo Mezzotero,Sampdoria,Serie B,2026/27,6,3,301,4,0,1,0,4,4,8,4,1.196,0.299,2.392,1.196,Substitute,3135643
+Luca Ravanelli,Sampdoria,Serie B,2026/27,5,4,355,0,0,0,0,3,2,0,0,0.7606,0.0,0.0,0.0,Center Right Defender,219216
 Manuel Cicconi,Sampdoria,Serie B,2026/27,11,9,921,0,0,5,0,17,6,8,1,1.6612,0.4886,0.7818,0.0977,Left Back,231847
 Mattia Viti,Sampdoria,Serie B,2026/27,2,2,180,0,0,0,0,0,4,0,0,0.0,0.0,0.0,0.0,Center Left Defender,299990
-Oliver Abildgaard,Sampdoria,Serie B,2026/27,9,7,640,0,0,0,1,17,16,17,2,2.3906,0.1406,2.3906,0.2812,Center Midfielder,223561
+Oliver Abildgaard,Sampdoria,Serie B,2026/27,10,8,730,0,0,0,1,19,19,19,2,2.3425,0.1233,2.3425,0.2466,Center Midfielder,223561
 Peter Vindahl Jensen,Sampdoria,Serie B,2026/27,7,7,630,0,0,0,0,0,1,0,0,0.0,0.0,0.0,0.0,Goalkeeper,238403
 Salvatore Esposito,Sampdoria,Serie B,2026/27,3,2,160,0,0,0,0,0,3,2,0,0.0,0.0,1.125,0.0,Center Midfielder,272510
-Stefan Gartenmann,Sampdoria,Serie B,2026/27,11,9,859,0,1,2,0,15,12,2,0,1.5716,0.2095,0.2095,0.0,Center Right Defender,221715
-Tjas Begic,Sampdoria,Serie B,2026/27,12,7,743,1,3,2,0,10,15,15,6,1.2113,0.2423,1.817,0.7268,Substitute,326761
-Tobias Lauritsen,Sampdoria,Serie B,2026/27,7,5,399,0,2,0,0,7,5,10,6,1.5789,0.0,2.2556,1.3534,Forward,223138
+Stefan Gartenmann,Sampdoria,Serie B,2026/27,12,9,904,0,1,2,0,15,13,2,0,1.4934,0.1991,0.1991,0.0,Center Right Defender,221715
+Tjas Begic,Sampdoria,Serie B,2026/27,13,8,812,1,3,2,0,12,17,16,6,1.33,0.2217,1.7734,0.665,Substitute,326761
+Tobias Lauritsen,Sampdoria,Serie B,2026/27,8,5,414,0,2,0,0,7,5,11,6,1.5217,0.0,2.3913,1.3043,Forward,223138
 Yann Karamoh,Sampdoria,Serie B,2026/27,8,1,142,0,0,1,0,2,2,3,0,1.2676,0.6338,1.9014,0.0,Substitute,225555
-Yari Verschaeren,Sampdoria,Serie B,2026/27,10,8,645,1,2,0,0,6,9,14,6,0.8372,0.0,1.9535,0.8372,Substitute,283658
+Yari Verschaeren,Sampdoria,Serie B,2026/27,11,8,666,1,2,0,0,6,9,14,6,0.8108,0.0,1.8919,0.8108,Substitute,283658
 Alessandro Plizzari,Sudtirol,Serie B,2026/27,13,13,1170,0,0,0,0,0,1,0,0,0.0,0.0,0.0,0.0,Goalkeeper,245632
 Aljosa Vasic,Sudtirol,Serie B,2026/27,11,9,671,2,2,2,1,16,17,13,4,2.1461,0.4024,1.7437,0.5365,Left Midfielder,309562
 Andrea Giorgini,Sudtirol,Serie B,2026/27,13,13,1170,1,0,1,0,2,2,6,3,0.1538,0.0769,0.4615,0.2308,Center Defender,357410
@@ -13691,29 +13693,29 @@ Simone Tronchin,Sudtirol,Serie B,2026/27,13,13,1133,0,1,2,0,20,11,11,1,1.5887,0.
 Vasco Lopes,Sudtirol,Serie B,2026/27,12,11,766,1,1,3,1,17,20,26,8,1.9974,0.47,3.0548,0.9399,Right Midfielder,318629
 Alessandro Di Bitonto,US Avellino,Serie B,2026/27,1,1,58,0,0,0,0,0,0,3,0,0.0,0.0,4.6552,0.0,Center Right Defender,3101737
 Andrea Favilli,US Avellino,Serie B,2026/27,8,3,333,0,3,1,0,8,10,11,2,2.1622,0.2703,2.973,0.5405,Substitute,214765
-Armando Izzo,US Avellino,Serie B,2026/27,12,11,1018,1,1,2,0,7,11,6,3,0.6189,0.1768,0.5305,0.2652,Center Right Defender,165490
-Brando Moruzzi,US Avellino,Serie B,2026/27,12,12,988,2,2,1,0,9,5,20,7,0.8198,0.0911,1.8219,0.6377,Left Midfielder,366967
+Armando Izzo,US Avellino,Serie B,2026/27,13,12,1108,1,1,2,0,7,12,6,3,0.5686,0.1625,0.4874,0.2437,Center Right Defender,165490
+Brando Moruzzi,US Avellino,Serie B,2026/27,13,12,1008,2,2,1,0,9,5,21,8,0.8036,0.0893,1.875,0.7143,Left Midfielder,366967
 Daniel Fila,US Avellino,Serie B,2026/27,1,1,11,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Forward,326599
-Dimitris Sounas,US Avellino,Serie B,2026/27,11,1,253,0,1,0,0,4,3,1,0,1.4229,0.0,0.3557,0.0,Substitute,178725
+Dimitris Sounas,US Avellino,Serie B,2026/27,12,2,343,0,1,0,0,4,3,1,0,1.0496,0.0,0.2624,0.0,Substitute,178725
 Emanuele Adamo,US Avellino,Serie B,2026/27,2,0,25,1,0,0,0,0,0,1,1,0.0,0.0,3.6,3.6,Substitute,308284
-Filippo Missori,US Avellino,Serie B,2026/27,10,9,810,0,0,1,0,5,6,12,2,0.5556,0.1111,1.3333,0.2222,Right Midfielder,330043
+Filippo Missori,US Avellino,Serie B,2026/27,11,10,900,0,0,1,0,5,7,12,2,0.5,0.1,1.2,0.2,Right Midfielder,330043
 Giacomo Faticanti,US Avellino,Serie B,2026/27,5,1,135,0,0,1,0,3,1,2,0,2.0,0.6667,1.3333,0.0,Substitute,340707
 Lorenco Simic,US Avellino,Serie B,2026/27,3,3,225,0,0,2,0,3,3,0,0,1.2,0.8,0.0,0.0,Center Defender,238975
 Luca Di Maggio,US Avellino,Serie B,2026/27,10,6,598,1,0,2,0,10,15,13,3,1.505,0.301,1.9565,0.4515,Center Right Midfielder,387441
-Luca Palmiero,US Avellino,Serie B,2026/27,8,6,402,0,0,2,0,8,7,3,0,1.791,0.4478,0.6716,0.0,Attacking Midfielder,277463
-Luca Pandolfi,US Avellino,Serie B,2026/27,7,1,118,1,0,0,0,4,4,7,3,3.0508,0.0,5.339,2.2881,Substitute,291598
-Marco Sala,US Avellino,Serie B,2026/27,4,0,83,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Substitute,107105
-Martin Palumbo,US Avellino,Serie B,2026/27,12,11,900,1,5,2,0,8,2,19,5,0.8,0.2,1.9,0.5,Center Right Midfielder,303938
-Michael Venturi,US Avellino,Serie B,2026/27,10,9,855,0,0,3,0,7,9,5,0,0.7368,0.3158,0.5263,0.0,Center Defender,278809
-Michele Besaggio,US Avellino,Serie B,2026/27,12,11,907,3,0,4,0,15,22,7,4,1.4884,0.3969,0.6946,0.3969,Center Left Midfielder,346839
-Patrick Enrici,US Avellino,Serie B,2026/27,11,11,979,0,0,1,0,9,10,5,1,0.8274,0.0919,0.4597,0.0919,Center Left Defender,303917
-Raffaele Russo,US Avellino,Serie B,2026/27,12,11,975,5,2,0,0,10,26,21,12,0.9231,0.0,1.9385,1.1077,Center Left Forward,363870
+Luca Palmiero,US Avellino,Serie B,2026/27,9,7,487,0,0,2,0,10,9,3,0,1.848,0.3696,0.5544,0.0,Attacking Midfielder,277463
+Luca Pandolfi,US Avellino,Serie B,2026/27,8,2,188,1,0,0,0,4,4,12,6,1.9149,0.0,5.7447,2.8723,Substitute,291598
+Marco Sala,US Avellino,Serie B,2026/27,5,1,153,0,0,0,0,1,1,0,0,0.5882,0.0,0.0,0.0,Substitute,107105
+Martin Palumbo,US Avellino,Serie B,2026/27,13,11,905,1,5,2,0,8,2,19,5,0.7956,0.1989,1.8895,0.4972,Center Right Midfielder,303938
+Michael Venturi,US Avellino,Serie B,2026/27,11,9,887,0,0,3,0,8,9,5,0,0.8117,0.3044,0.5073,0.0,Center Defender,278809
+Michele Besaggio,US Avellino,Serie B,2026/27,13,12,997,3,1,4,0,15,22,8,4,1.3541,0.3611,0.7222,0.3611,Center Left Midfielder,346839
+Patrick Enrici,US Avellino,Serie B,2026/27,12,12,1069,0,0,1,0,9,10,6,1,0.7577,0.0842,0.5051,0.0842,Center Left Defender,303917
+Raffaele Russo,US Avellino,Serie B,2026/27,13,11,1007,6,2,0,0,10,26,24,13,0.8937,0.0,2.145,1.1619,Center Left Forward,363870
 Sebastiano Di Paolo,US Avellino,Serie B,2026/27,2,0,12,0,0,0,0,1,0,0,0,7.5,0.0,0.0,0.0,Substitute,418443
 Thomas Berenbruch,US Avellino,Serie B,2026/27,1,0,14,0,0,0,0,1,0,0,0,6.4286,0.0,0.0,0.0,Substitute,387830
-Tomasso Martinelli,US Avellino,Serie B,2026/27,12,12,1080,0,0,1,0,0,6,0,0,0.0,0.0833,0.0,0.0,Goalkeeper,367167
-Tommaso Biasci,US Avellino,Serie B,2026/27,10,2,215,0,0,0,0,6,2,7,3,2.5116,0.0,2.9302,1.2558,Substitute,184744
-Tommaso Cancellotti,US Avellino,Serie B,2026/27,6,3,254,0,0,0,0,2,3,0,0,0.7087,0.0,0.0,0.0,Substitute,175254
-Walid Cheddira,US Avellino,Serie B,2026/27,10,7,634,5,0,0,0,8,12,25,13,1.1356,0.0,3.5489,1.8454,Center Right Forward,292241
+Tomasso Martinelli,US Avellino,Serie B,2026/27,13,13,1170,0,0,1,0,0,7,0,0,0.0,0.0769,0.0,0.0,Goalkeeper,367167
+Tommaso Biasci,US Avellino,Serie B,2026/27,11,3,273,0,0,0,0,7,2,8,3,2.3077,0.0,2.6374,0.989,Substitute,184744
+Tommaso Cancellotti,US Avellino,Serie B,2026/27,7,4,312,0,0,1,0,4,4,0,0,1.1538,0.2885,0.0,0.0,Substitute,175254
+Walid Cheddira,US Avellino,Serie B,2026/27,11,7,654,5,0,0,0,9,12,25,13,1.2385,0.0,3.4404,1.789,Center Right Forward,292241
 Alessandro Bellemo,Vicenza,Serie B,2026/27,10,8,704,0,0,2,0,7,10,5,1,0.8949,0.2557,0.6392,0.1278,Attacking Midfielder,192254
 Alessandro Pietrelli,Vicenza,Serie B,2026/27,8,3,263,1,0,0,0,6,2,6,2,2.0532,0.0,2.0532,0.6844,Substitute,346479
 Andrea Papetti,Vicenza,Serie B,2026/27,5,4,382,0,1,1,0,9,11,1,0,2.1204,0.2356,0.2356,0.0,Center Right Defender,303576
@@ -13757,7 +13759,7 @@ Mattia Alborghetti,Virtus Entella,Serie B,2026/27,10,10,820,1,0,2,0,14,4,3,2,1.5
 Mattia Tirelli,Virtus Entella,Serie B,2026/27,12,6,467,2,0,1,0,9,10,8,6,1.7345,0.1927,1.5418,1.1563,Substitute,418603
 Mattia Valori,Virtus Entella,Serie B,2026/27,1,0,3,0,0,0,0,0,0,0,0,0.0,0.0,0.0,0.0,Substitute,3127970
 Niccolò Squizzato,Virtus Entella,Serie B,2026/27,12,11,798,0,0,2,0,17,2,9,0,1.9173,0.2256,1.015,0.0,Attacking Midfielder,297217
-Nicolas Previtali,Virtus Entella,Serie B,2026/27,8,5,463,0,0,0,0,2,4,2,1,0.3888,0.0,0.3888,0.1944,Substitute,265782
+Nicolás Previtali,Virtus Entella,Serie B,2026/27,8,5,463,0,0,0,0,2,4,2,1,0.3888,0.0,0.3888,0.1944,Substitute,265782
 Riccardo Turicchia,Virtus Entella,Serie B,2026/27,2,1,92,0,0,0,0,0,1,1,0,0.0,0.0,0.9783,0.0,Substitute,340703
 Stefano Di Mario,Virtus Entella,Serie B,2026/27,13,13,1108,0,1,2,0,12,18,13,3,0.9747,0.1625,1.056,0.2437,Left Midfielder,366988
 Tommaso Annoni,Virtus Entella,Serie B,2026/27,9,4,379,1,0,1,0,4,8,4,2,0.9499,0.2375,0.9499,0.4749,Substitute,3127967

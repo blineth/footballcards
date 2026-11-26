@@ -2,7 +2,7 @@
   "source": "ESPN public match-summary player statistics",
   "season": "2026/27",
   "from": "2026-07-01",
-  "to": "2026-11-25",
+  "to": "2026-11-26",
   "competitions": [
     {
       "competition": "Premier League",
@@ -11,7 +11,7 @@
     },
     {
       "competition": "Championship",
-      "completed_matches": 200,
+      "completed_matches": 204,
       "failures": []
     },
     {
@@ -41,7 +41,7 @@
     },
     {
       "competition": "Serie B",
-      "completed_matches": 126,
+      "completed_matches": 130,
       "failures": []
     },
     {
@@ -116,17 +116,17 @@
     },
     {
       "competition": "Liga MX",
-      "completed_matches": 153,
+      "completed_matches": 155,
       "failures": []
     },
     {
       "competition": "Argentine Liga Profesional",
-      "completed_matches": 247,
+      "completed_matches": 248,
       "failures": []
     },
     {
       "competition": "Brazil Serie A",
-      "completed_matches": 183,
+      "completed_matches": 184,
       "failures": []
     },
     {
@@ -165,7 +165,7 @@
       "failures": [
         {
           "stage": "scoreboard",
-          "error": "pol.1 scoreboard months failed: [{'month': '202611', 'error': 'Failed https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202611&limit=500: 400 Client Error: Bad Request for url: https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202611&limit=500'}, {'month': '202607', 'error': 'Failed https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202607&limit=500: 400 Client Error: Bad Request for url: https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202607&limit=500'}, {'month': '202610', 'error': 'Failed https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202610&limit=500: 400 Client Error: Bad Request for url: https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202610&limit=500'}, {'month': '202609', 'error': 'Failed https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202609&limit=500: 400 Client Error: Bad Request for url: https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202609&limit=500'}, {'month': '202608', 'error': 'Failed https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202608&limit=500: 400 Client Error: Bad Request for url: https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202608&limit=500'}]"
+          "error": "pol.1 scoreboard months failed: [{'month': '202611', 'error': 'Failed https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202611&limit=500: 400 Client Error: Bad Request for url: https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202611&limit=500'}, {'month': '202609', 'error': 'Failed https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202609&limit=500: 400 Client Error: Bad Request for url: https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202609&limit=500'}, {'month': '202607', 'error': 'Failed https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202607&limit=500: 400 Client Error: Bad Request for url: https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202607&limit=500'}, {'month': '202610', 'error': 'Failed https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202610&limit=500: 400 Client Error: Bad Request for url: https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202610&limit=500'}, {'month': '202608', 'error': 'Failed https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202608&limit=500: 400 Client Error: Bad Request for url: https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202608&limit=500'}]"
         }
       ]
     },
@@ -176,20 +176,20 @@
     }
   ],
   "totals": {
-    "player_match_rows": 124749,
-    "player_baselines": 14627,
+    "player_match_rows": 125121,
+    "player_baselines": 14629,
     "league_two_players": 583,
-    "goals": 11363,
-    "assists": 7928,
-    "shots": 109019,
-    "shots_on_target": 36325,
-    "yellows": 14974,
-    "fouls_committed": 95560,
-    "fouls_drawn": 91477
+    "goals": 11387,
+    "assists": 7943,
+    "shots": 109377,
+    "shots_on_target": 36432,
+    "yellows": 15028,
+    "fouls_committed": 95847,
+    "fouls_drawn": 91744
   },
   "neon_sync": {
     "h2h": {
-      "rows": 124749,
+      "rows": 125121,
       "competitions": {
         "2. Bundesliga": {
           "rows": 3365,
@@ -200,7 +200,7 @@
           "chunks": 2
         },
         "Argentine Liga Profesional": {
-          "rows": 7685,
+          "rows": 7716,
           "chunks": 10
         },
         "Austrian Bundesliga": {
@@ -212,7 +212,7 @@
           "chunks": 5
         },
         "Brazil Serie A": {
-          "rows": 5801,
+          "rows": 5830,
           "chunks": 8
         },
         "Bundesliga": {
@@ -220,7 +220,7 @@
           "chunks": 4
         },
         "Championship": {
-          "rows": 6221,
+          "rows": 6347,
           "chunks": 8
         },
         "Danish Superliga": {
@@ -260,7 +260,7 @@
           "chunks": 8
         },
         "Liga MX": {
-          "rows": 4805,
+          "rows": 4867,
           "chunks": 7
         },
         "Ligue 1": {
@@ -300,8 +300,8 @@
           "chunks": 5
         },
         "Serie B": {
-          "rows": 3980,
-          "chunks": 5
+          "rows": 4104,
+          "chunks": 6
         },
         "Swedish Allsvenskan": {
           "rows": 4618,
@@ -314,7 +314,7 @@
       }
     },
     "player_baselines": {
-      "rows": 14627,
+      "rows": 14629,
       "competitions": {
         "2. Bundesliga": {
           "rows": 427,
@@ -325,7 +325,7 @@
           "chunks": 1
         },
         "Argentine Liga Profesional": {
-          "rows": 859,
+          "rows": 860,
           "chunks": 2
         },
         "Austrian Bundesliga": {
@@ -345,7 +345,7 @@
           "chunks": 1
         },
         "Championship": {
-          "rows": 612,
+          "rows": 613,
           "chunks": 1
         },
         "Danish Superliga": {
