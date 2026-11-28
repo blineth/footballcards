@@ -2,41 +2,41 @@
   "source": "ESPN public match-summary player statistics",
   "season": "2026/27",
   "from": "2026-07-01",
-  "to": "2026-11-27",
+  "to": "2026-11-28",
   "competitions": [
     {
       "competition": "Premier League",
-      "completed_matches": 110,
+      "completed_matches": 111,
       "failures": []
     },
     {
       "competition": "Championship",
-      "completed_matches": 204,
+      "completed_matches": 207,
       "failures": []
     },
     {
       "competition": "League One",
-      "completed_matches": 186,
-      "failures": []
-    },
-    {
-      "competition": "League Two",
       "completed_matches": 188,
       "failures": []
     },
     {
+      "competition": "League Two",
+      "completed_matches": 190,
+      "failures": []
+    },
+    {
       "competition": "La Liga",
-      "completed_matches": 129,
+      "completed_matches": 130,
       "failures": []
     },
     {
       "competition": "La Liga 2",
-      "completed_matches": 162,
+      "completed_matches": 163,
       "failures": []
     },
     {
       "competition": "Serie A",
-      "completed_matches": 120,
+      "completed_matches": 121,
       "failures": []
     },
     {
@@ -46,17 +46,17 @@
     },
     {
       "competition": "Bundesliga",
-      "completed_matches": 90,
+      "completed_matches": 91,
       "failures": []
     },
     {
       "competition": "2. Bundesliga",
-      "completed_matches": 108,
+      "completed_matches": 113,
       "failures": []
     },
     {
       "competition": "Ligue 1",
-      "completed_matches": 99,
+      "completed_matches": 100,
       "failures": []
     },
     {
@@ -66,27 +66,27 @@
     },
     {
       "competition": "Eredivisie",
-      "completed_matches": 117,
+      "completed_matches": 118,
       "failures": []
     },
     {
       "competition": "Eerste Divisie",
-      "completed_matches": 160,
+      "completed_matches": 168,
       "failures": []
     },
     {
       "competition": "Primeira Liga",
-      "completed_matches": 98,
+      "completed_matches": 99,
       "failures": []
     },
     {
       "competition": "Belgian Pro League",
-      "completed_matches": 108,
+      "completed_matches": 109,
       "failures": []
     },
     {
       "competition": "Turkish Super Lig",
-      "completed_matches": 108,
+      "completed_matches": 110,
       "failures": []
     },
     {
@@ -96,7 +96,7 @@
     },
     {
       "competition": "Austrian Bundesliga",
-      "completed_matches": 78,
+      "completed_matches": 79,
       "failures": []
     },
     {
@@ -106,12 +106,12 @@
     },
     {
       "competition": "Danish Superliga",
-      "completed_matches": 90,
+      "completed_matches": 91,
       "failures": []
     },
     {
       "competition": "MLS",
-      "completed_matches": 303,
+      "completed_matches": 305,
       "failures": []
     },
     {
@@ -126,22 +126,22 @@
     },
     {
       "competition": "Brazil Serie A",
-      "completed_matches": 185,
+      "completed_matches": 186,
       "failures": []
     },
     {
       "competition": "Saudi Pro League",
-      "completed_matches": 109,
+      "completed_matches": 112,
       "failures": []
     },
     {
       "competition": "J League",
-      "completed_matches": 157,
+      "completed_matches": 162,
       "failures": []
     },
     {
       "competition": "A-League Men",
-      "completed_matches": 29,
+      "completed_matches": 30,
       "failures": []
     },
     {
@@ -165,7 +165,7 @@
       "failures": [
         {
           "stage": "scoreboard",
-          "error": "pol.1 scoreboard months failed: [{'month': '202611', 'error': 'Failed https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202611&limit=500: 400 Client Error: Bad Request for url: https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202611&limit=500'}, {'month': '202610', 'error': 'Failed https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202610&limit=500: 400 Client Error: Bad Request for url: https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202610&limit=500'}, {'month': '202608', 'error': 'Failed https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202608&limit=500: 400 Client Error: Bad Request for url: https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202608&limit=500'}, {'month': '202607', 'error': 'Failed https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202607&limit=500: 400 Client Error: Bad Request for url: https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202607&limit=500'}, {'month': '202609', 'error': 'Failed https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202609&limit=500: 400 Client Error: Bad Request for url: https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202609&limit=500'}]"
+          "error": "pol.1 scoreboard months failed: [{'month': '202610', 'error': 'Failed https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202610&limit=500: 400 Client Error: Bad Request for url: https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202610&limit=500'}, {'month': '202607', 'error': 'Failed https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202607&limit=500: 400 Client Error: Bad Request for url: https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202607&limit=500'}, {'month': '202611', 'error': 'Failed https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202611&limit=500: 400 Client Error: Bad Request for url: https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202611&limit=500'}, {'month': '202609', 'error': 'Failed https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202609&limit=500: 400 Client Error: Bad Request for url: https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202609&limit=500'}, {'month': '202608', 'error': 'Failed https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202608&limit=500: 400 Client Error: Bad Request for url: https://site.api.espn.com/apis/site/v2/sports/soccer/pol.1/scoreboard?dates=202608&limit=500'}]"
         }
       ]
     },
@@ -176,27 +176,27 @@
     }
   ],
   "totals": {
-    "player_match_rows": 125399,
-    "player_baselines": 14634,
+    "player_match_rows": 126620,
+    "player_baselines": 14639,
     "league_two_players": 583,
-    "goals": 11413,
-    "assists": 7955,
-    "shots": 109573,
-    "shots_on_target": 36489,
-    "yellows": 15065,
-    "fouls_committed": 96069,
-    "fouls_drawn": 91958
+    "goals": 11522,
+    "assists": 8021,
+    "shots": 110718,
+    "shots_on_target": 36853,
+    "yellows": 15214,
+    "fouls_committed": 96959,
+    "fouls_drawn": 92813
   },
   "neon_sync": {
     "h2h": {
-      "rows": 125399,
+      "rows": 126620,
       "competitions": {
         "2. Bundesliga": {
-          "rows": 3365,
+          "rows": 3521,
           "chunks": 5
         },
         "A-League Men": {
-          "rows": 884,
+          "rows": 911,
           "chunks": 2
         },
         "Argentine Liga Profesional": {
@@ -204,35 +204,35 @@
           "chunks": 10
         },
         "Austrian Bundesliga": {
-          "rows": 2425,
+          "rows": 2454,
           "chunks": 4
         },
         "Belgian Pro League": {
-          "rows": 3364,
+          "rows": 3392,
           "chunks": 5
         },
         "Brazil Serie A": {
-          "rows": 5862,
+          "rows": 5894,
           "chunks": 8
         },
         "Bundesliga": {
-          "rows": 2822,
+          "rows": 2853,
           "chunks": 4
         },
         "Championship": {
-          "rows": 6347,
-          "chunks": 8
+          "rows": 6438,
+          "chunks": 9
         },
         "Danish Superliga": {
-          "rows": 2834,
+          "rows": 2865,
           "chunks": 4
         },
         "Eerste Divisie": {
-          "rows": 4987,
+          "rows": 5078,
           "chunks": 7
         },
         "Eredivisie": {
-          "rows": 3658,
+          "rows": 3686,
           "chunks": 5
         },
         "Greek Super League": {
@@ -240,23 +240,23 @@
           "chunks": 3
         },
         "J League": {
-          "rows": 4969,
+          "rows": 5129,
           "chunks": 7
         },
         "La Liga": {
-          "rows": 4084,
+          "rows": 4115,
           "chunks": 6
         },
         "La Liga 2": {
-          "rows": 5148,
+          "rows": 5180,
           "chunks": 7
         },
         "League One": {
-          "rows": 5486,
+          "rows": 5547,
           "chunks": 7
         },
         "League Two": {
-          "rows": 5637,
+          "rows": 5694,
           "chunks": 8
         },
         "Liga MX": {
@@ -264,7 +264,7 @@
           "chunks": 7
         },
         "Ligue 1": {
-          "rows": 3094,
+          "rows": 3124,
           "chunks": 4
         },
         "Ligue 2": {
@@ -272,7 +272,7 @@
           "chunks": 5
         },
         "MLS": {
-          "rows": 9408,
+          "rows": 9465,
           "chunks": 12
         },
         "Norwegian Eliteserien": {
@@ -280,15 +280,15 @@
           "chunks": 5
         },
         "Premier League": {
-          "rows": 3397,
+          "rows": 3427,
           "chunks": 5
         },
         "Primeira Liga": {
-          "rows": 3106,
+          "rows": 3138,
           "chunks": 4
         },
         "Saudi Pro League": {
-          "rows": 3375,
+          "rows": 3467,
           "chunks": 5
         },
         "Scottish Premiership": {
@@ -296,7 +296,7 @@
           "chunks": 4
         },
         "Serie A": {
-          "rows": 3810,
+          "rows": 3842,
           "chunks": 5
         },
         "Serie B": {
@@ -308,13 +308,13 @@
           "chunks": 6
         },
         "Turkish Super Lig": {
-          "rows": 3391,
+          "rows": 3454,
           "chunks": 5
         }
       }
     },
     "player_baselines": {
-      "rows": 14634,
+      "rows": 14639,
       "competitions": {
         "2. Bundesliga": {
           "rows": 427,
@@ -337,7 +337,7 @@
           "chunks": 1
         },
         "Brazil Serie A": {
-          "rows": 611,
+          "rows": 612,
           "chunks": 1
         },
         "Bundesliga": {
@@ -365,11 +365,11 @@
           "chunks": 1
         },
         "J League": {
-          "rows": 557,
+          "rows": 559,
           "chunks": 1
         },
         "La Liga": {
-          "rows": 494,
+          "rows": 496,
           "chunks": 1
         },
         "La Liga 2": {
